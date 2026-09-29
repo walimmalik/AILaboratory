@@ -32,7 +32,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 - Records go through the record service (`apps/api/src/records`), never raw inserts: it enforces versions, history, links and names. See `docs/architecture/core-records.md`.
 - Tests use PGlite (in-memory Postgres), so `pnpm test` needs no Docker.
 - Pure domain logic (units, volume math, plate geometry, variable evaluation) lives in `packages/domain` with unit tests, no I/O.
-- Numbers agents rely on (volumes, concentrations, dilutions, droplet counts, feasibility, totals) come from calculator operations backed by `packages/domain`, never from the model's own arithmetic. See ADR 0023.
+- Numbers agents rely on (volumes, concentrations, dilutions, droplet counts, feasibility, totals) come from calculator operations backed by `packages/domain`, never from the model's own arithmetic. See ADR 0024.
 - Each module owns its tables. Other modules go through operations.
 - Every operation has tests for valid input, invalid input and permission.
 - Every record carries `org_id` and `lab_id`.

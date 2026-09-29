@@ -1,4 +1,4 @@
-# 0023: Lab calculators, a toolkit of deterministic tools for agents
+# 0024: Lab calculators, a toolkit of deterministic tools for agents
 
 - Status: accepted
 - Date: 2026-09-29
