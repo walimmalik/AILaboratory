@@ -9,6 +9,8 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --filter @ailab/web...
 COPY packages packages
 COPY apps/web apps/web
+# The in-app Wiki page bundles the project wiki at build time.
+COPY docs/wiki docs/wiki
 RUN pnpm --filter @ailab/web build
 
 FROM nginx:1.29-alpine

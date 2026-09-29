@@ -13,6 +13,7 @@ import { RecordsPage } from './pages/Records.tsx';
 import { ReviewPage } from './pages/ReviewInbox.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
+import { WikiPage } from './pages/Wiki.tsx';
 import { meQuery } from './session.ts';
 
 const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({ component: Outlet });
@@ -73,9 +74,20 @@ const record = createRoute({
   component: RecordPage,
 });
 
+const wiki = createRoute({
+  getParentRoute: () => app,
+  path: '/wiki',
+  component: WikiPage,
+});
+const wikiPage = createRoute({
+  getParentRoute: () => app,
+  path: '/wiki/$page',
+  component: WikiPage,
+});
+
 const routeTree = root.addChildren([
   signIn,
-  app.addChildren([index, activity, review, labware, vendors, records, record]),
+  app.addChildren([index, activity, review, labware, vendors, records, record, wiki, wikiPage]),
 ]);
 
 export function makeRouter(queryClient: QueryClient) {

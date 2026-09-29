@@ -995,3 +995,48 @@ table.checks td.mark {
   padding-left: 18px;
   font-size: 13px;
 }
+
+/* The project wiki (Wiki.tsx): prose at reading width, tables as elsewhere. */
+.wiki-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+}
+.wiki-pages a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.wiki-pages a[aria-current="page"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.block.wiki .body {
+  max-width: 88ch;
+  line-height: 1.55;
+}
+.block.wiki .body h2 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  margin: 22px 0 8px;
+}
+.block.wiki .body h3 {
+  font-size: 14px;
+  margin: 16px 0 6px;
+}
+.block.wiki .body p,
+.block.wiki .body ul,
+.block.wiki .body ol {
+  margin: 0 0 10px;
+}
+.block.wiki .body code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.block.wiki .body pre {
+  overflow-x: auto;
+  font-size: 12px;
+}
+.block.wiki .body a {
+  color: var(--accent);
+}

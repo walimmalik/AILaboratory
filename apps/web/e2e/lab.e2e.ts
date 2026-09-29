@@ -274,3 +274,15 @@ test('a failing check links to its section, where a person fills in the value an
   await expect(geometry.getByText(/measured · calipers/).first()).toBeVisible();
   await expect(readiness.getByText('Length, width or height is missing')).toHaveCount(0);
 });
+
+test('the wiki is readable in the app, with links between its pages', async ({ page }) => {
+  await signIn(page);
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Wiki' })
+    .click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('AILaboratory wiki');
+  await page.getByRole('article').getByRole('link', { name: 'Roadmap and status' }).click();
+  await expect(page).toHaveURL(/\/wiki\/roadmap$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Roadmap/);
+});
