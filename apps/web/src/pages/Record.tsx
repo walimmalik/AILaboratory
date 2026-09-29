@@ -2,6 +2,7 @@ import type { RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
+import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
   linksQuery,
@@ -46,13 +47,21 @@ export function RecordPage() {
       <div className="page-head">
         <div>
           <div className="crumbs">
-            lab / <Link to="/records">records</Link> / <b>{r.name}</b>
+            lab /{' '}
+            {kindPage(r.kind) ? (
+              <Link to={kindPage(r.kind)?.path ?? '/records'}>
+                {kindPage(r.kind)?.title.toLowerCase()}
+              </Link>
+            ) : (
+              <Link to="/records">records</Link>
+            )}{' '}
+            / <b>{r.name}</b>
           </div>
           <h1>
             <span className="mono">{r.name}</span> {r.label}
           </h1>
           <p className="lede">
-            {r.kind} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
+            {kindNoun(r.kind)} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
             <span className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>
               {actorLabel(r.updatedBy, me)}
             </span>

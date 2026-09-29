@@ -41,6 +41,7 @@ export const decidedProposalsQuery = queryOptions({
 });
 
 export const recordsQuery = (filters: {
+  kind?: string;
   search?: string;
   status?: 'draft' | 'active' | 'archived';
 }) =>
@@ -49,6 +50,7 @@ export const recordsQuery = (filters: {
     queryFn: async () =>
       (
         await api.run(recordsList, {
+          ...(filters.kind ? { kind: filters.kind } : {}),
           ...(filters.search ? { search: filters.search } : {}),
           ...(filters.status ? { status: filters.status } : {}),
           limit: 200,

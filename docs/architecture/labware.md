@@ -36,6 +36,10 @@ Everything is optional except `family`, so an agent can draft what it knows; the
 - Liquid height is computed for flat-bottomed wells only; other bottoms are refused as not modelled.
 - The Opentrons export uses the type's load name, or one made from its label, in the `custom_beta` namespace. Hamilton labware files are referenced by name only (L6).
 
+## In the app
+
+Library › Labware lists the types with a family filter (plates, tip racks, reservoirs, tubes…) and their format, manufacturer, catalog number and maximum volume. Vendors have their own page.
+
 ## Seed
 
 `pnpm --filter @ailab/api seed` loads the seed lab's labware as drafts, running as the agent "Seed loader" for the only user (or `--user`). It is safe to run again: types whose label already exists are left alone. Entries that aren't labware (the Mantis chip) are skipped with the reason.

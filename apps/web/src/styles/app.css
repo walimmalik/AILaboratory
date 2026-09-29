@@ -163,6 +163,9 @@ a {
   color: var(--agent);
   font-weight: 600;
 }
+.nav .nav-foot {
+  margin-top: auto;
+}
 
 .page {
   overflow-y: auto;
