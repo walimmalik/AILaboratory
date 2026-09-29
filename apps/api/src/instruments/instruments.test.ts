@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type {
   Actor,
   EquipmentKindAttributes,
@@ -20,6 +21,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { instrumentKinds } from './kinds.ts';
+import { loadSeedInstruments, readSeedInstruments } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -241,5 +243,148 @@ describe('instruments.resolve', () => {
       }),
     );
     expect(hidden).toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('seed instrument library', () => {
+  const seedFile = (name: string) =>
+    readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+
+  it('drafts every kind once, with sources, and they resolve', async () => {
+    const kinds = readSeedInstruments(
+      await seedFile('instrument-library.yaml'),
+      await seedFile('instruments.yaml'),
+    );
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    const report = await loadSeedInstruments(registry, seeder, kinds);
+    expect(report.created).toHaveLength(kinds.length);
+    expect((await loadSeedInstruments(registry, seeder, kinds)).existing).toHaveLength(
+      kinds.length,
+    );
+
+    const all = [
+      ...(
+        await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+          kind: 'instrument_kind',
+          limit: 200,
+        })
+      ).records,
+      ...(
+        await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+          kind: 'equipment_kind',
+          limit: 200,
+        })
+      ).records,
+    ];
+    // No seed kind fails a blocker; what is left is for a person to confirm.
+    for (const record of all) {
+      const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+      const blockers = state.checks.filter((c) => !c.passed && c.severity === 'blocker');
+      expect([record.label, blockers.map((c) => c.message)]).toEqual([record.label, []]);
+    }
+    const byLabel = new Map(all.map((r) => [r.label, r]));
+    const flexKind = byLabel.get('Opentrons Flex') as RecordEnvelope;
+    expect(flexKind.evidence.mounts).toMatchObject({ source: 'datasheet' });
+    expect(byLabel.get('Lab bench (manual work)')?.evidence.capabilities).toMatchObject({
+      source: 'assumed',
+    });
+
+    const id = (label: string) => (byLabel.get(label) as RecordEnvelope).id;
+    const slot = (s: string) => ({ on: 'slot', slot: s });
+    const flexResult = await run<ResolvedConfiguration>(agent, 'instruments.resolve', {
+      instrumentKind: flexKind.id,
+      configuration: {
+        equipment: [
+          {
+            id: 'left',
+            kind: id('Flex 8-Channel Pipette (1000 uL)'),
+            mount: 'pipettes',
+            placement: slot('left'),
+          },
+          {
+            id: 'right',
+            kind: id('Flex 1-Channel Pipette (50 uL)'),
+            mount: 'pipettes',
+            placement: slot('right'),
+          },
+          {
+            id: 'gripper',
+            kind: id('Flex Gripper GEN1'),
+            mount: 'gripper',
+            placement: { on: 'fixed' },
+          },
+          { id: 'tc', kind: id('Thermocycler Module GEN2'), mount: 'deck', placement: slot('B1') },
+          { id: 'temp', kind: id('Temperature Module GEN2'), mount: 'deck', placement: slot('C1') },
+          { id: 'hs', kind: id('Heater-Shaker Module GEN1'), mount: 'deck', placement: slot('D1') },
+          { id: 'mag', kind: id('Magnetic Block GEN1'), mount: 'deck', placement: slot('C2') },
+          { id: 'chute', kind: id('Flex Waste Chute'), mount: 'deck', placement: slot('D3') },
+        ],
+      },
+    });
+    expect(flexResult.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(new Set(flexResult.capabilities.map((c) => c.capability))).toEqual(
+      new Set([
+        'transfer',
+        'move_labware',
+        'thermocycle',
+        'heat',
+        'cool',
+        'shake',
+        'magnetic_separation',
+      ]),
+    );
+
+    const starResult = await run<ResolvedConfiguration>(agent, 'instruments.resolve', {
+      instrumentKind: id('Hamilton Microlab STAR'),
+      configuration: {
+        equipment: [
+          {
+            id: 'channels',
+            kind: id('STAR 1000 uL channels (8)'),
+            mount: 'channels',
+            placement: { on: 'fixed' },
+          },
+          {
+            id: 'head',
+            kind: id('CO-RE 96 Probe Head'),
+            mount: 'head',
+            placement: { on: 'fixed' },
+          },
+          {
+            id: 'gripper',
+            kind: id('STAR CO-RE Gripper'),
+            mount: 'gripper',
+            placement: { on: 'fixed' },
+          },
+          {
+            id: 'tips',
+            kind: id('Tip carrier TIP_CAR_480'),
+            mount: 'tracks',
+            placement: { on: 'rail', track: 1 },
+          },
+          {
+            id: 'plates-1',
+            kind: id('Plate carrier PLT_CAR_L5AC'),
+            mount: 'tracks',
+            placement: { on: 'rail', track: 7 },
+          },
+          {
+            id: 'plates-2',
+            kind: id('Plate carrier PLT_CAR_L5AC'),
+            mount: 'tracks',
+            placement: { on: 'rail', track: 13 },
+          },
+        ],
+      },
+    });
+    expect(starResult.valid).toBe(true);
+    expect(starResult.sites).toHaveLength(15);
   });
 });

@@ -10,6 +10,7 @@ Instrument kinds, equipment kinds, the capability catalog and resolving a config
 | Operations: `instruments.capabilities`, `instruments.resolve` | `packages/schema/src/operations/instruments.ts`, `apps/api/src/instruments/operations.ts` |
 | Kinds `instrument_kind` and `equipment_kind`, with sections and readiness checks | `apps/api/src/instruments/kinds.ts` |
 | Resolver | `packages/domain/src/instruments.ts` |
+| Seed loader for `seed/instrument-library.yaml` (sources from `seed/instruments.yaml`) | `apps/api/src/instruments/seed.ts`, `apps/api/src/seed.ts` |
 | Skill | `skills/instruments/SKILL.md` |
 
 ## Model
@@ -43,3 +44,7 @@ Parents are placed before their children, so nothing is placed on equipment that
 
 - Capabilities mean what the catalog says; kinds only add limits (I5).
 - Every check names its source. Blockers: mount and slot names unique, sites on real mounts and slots, capability sites listed, extra slots only for allowed slots. Warnings: limits the catalog expects, manufacturer and model, a kind that can do nothing, a manual station set to machine.
+
+## Seed
+
+`seed/instrument-library.yaml` holds the lab's instrument and equipment kinds in the library's shape. Each entry names its research entry in `seed/instruments.yaml`, whose first source URL becomes datasheet evidence for every attribute except those the entry lists under `assumed` (estimates and layout choices nobody has checked yet), which load as assumed. Manual stations have no research entry, so all their values are assumed. The loader creates what the lab doesn't have yet, matched by kind and label, and leaves the rest alone.
