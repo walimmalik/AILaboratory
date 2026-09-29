@@ -1,0 +1,78 @@
+import { z } from 'zod';
+import { OperationErrorBody } from './operation.ts';
+
+export const ConversationId = z.string().regex(/^cnv_[0-9A-HJKMNP-TV-Z]{26}$/, 'must be a cnv_ ID');
+
+/** Where the person was when they asked, so the assistant knows what "this" means. */
+export const PageContext = z.object({
+  /** The app path, e.g. "/records/wdg_…". */
+  path: z.string().max(500),
+  title: z.string().max(200).optional(),
+});
+export type PageContext = z.infer<typeof PageContext>;
+
+/** idle: waiting for the person. running: the model is working. failed: the last run stopped with an error. */
+export const ConversationStatus = z.enum(['idle', 'running', 'failed']);
+
+/** One conversation with the in-app assistant, without its messages. */
+export const ConversationSummary = z.object({
+  id: ConversationId,
+  title: z.string(),
+  status: ConversationStatus,
+  /** The name the assistant acts under in the ledger, e.g. "deepseek-chat" or "Claude". */
+  agentName: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  error: z.string().optional(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type ConversationSummary = z.infer<typeof ConversationSummary>;
+
+export const ToolCall = z.object({
+  id: z.string(),
+  operationId: z.string(),
+  input: z.unknown(),
+});
+export type ToolCall = z.infer<typeof ToolCall>;
+
+const base = { id: z.string(), at: z.iso.datetime() };
+
+/** A message in a conversation. Tool messages are the results of the operations the assistant ran. */
+export const AssistantMessage = z.discriminatedUnion('role', [
+  z.object({ ...base, role: z.literal('user'), text: z.string(), page: PageContext.optional() }),
+  z.object({
+    ...base,
+    role: z.literal('assistant'),
+    text: z.string(),
+    toolCalls: z.array(ToolCall),
+    model: z.string(),
+  }),
+  z.object({
+    ...base,
+    role: z.literal('tool'),
+    toolCallId: z.string(),
+    operationId: z.string(),
+    /** done, preview, proposed (waits for a person), or failed. */
+    outcome: z.enum(['done', 'preview', 'proposed', 'failed']),
+    /** The operation's result, or its error. */
+    result: z.unknown(),
+    error: OperationErrorBody.optional(),
+  }),
+]);
+export type AssistantMessage = z.infer<typeof AssistantMessage>;
+
+export const Conversation = ConversationSummary.extend({ messages: z.array(AssistantMessage) });
+export type Conversation = z.infer<typeof Conversation>;
+
+/** What the assistant runs on, as configured on the server. */
+export const AssistantSetup = z.discriminatedUnion('configured', [
+  z.object({
+    configured: z.literal(true),
+    provider: z.string(),
+    model: z.string(),
+    agentName: z.string(),
+  }),
+  z.object({ configured: z.literal(false), reason: z.string() }),
+]);
+export type AssistantSetup = z.infer<typeof AssistantSetup>;

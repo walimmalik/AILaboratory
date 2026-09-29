@@ -4,6 +4,8 @@ import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { Assistant } from './assistant/assistant.ts';
+import { findConversation, toSummary } from './assistant/store.ts';
 import { resolveContext, resolveSession, SESSION_DAYS, signIn, signOut } from './auth.ts';
 import type { Db } from './db/client.ts';
 import { labs, users } from './db/schema.ts';
@@ -18,6 +20,8 @@ export interface AppDependencies {
   db: Db;
   kinds?: KindRegistry;
   bus?: ActivityBus;
+  /** The in-app assistant and its model; without one, asking it is refused with a message. */
+  assistant?: Assistant;
 }
 
 type Env = { Variables: { ctx: RecordContext } };
@@ -34,8 +38,9 @@ export function createApp({
   db,
   kinds = new KindRegistry(),
   bus = new ActivityBus(),
+  assistant = new Assistant({ reason: 'No model is set up' }),
 }: AppDependencies) {
-  const registry = createRegistry(db, kinds, bus);
+  const registry = createRegistry(db, kinds, bus, assistant);
   const app = new Hono<Env>();
 
   app.get('/health', (c) => c.json({ status: 'ok', service: 'api' }));
@@ -140,6 +145,36 @@ export function createApp({
       });
       const closed = new Promise<void>((resolve) => stream.onAbort(resolve));
       await stream.writeSSE({ event: 'ready', data: '{}' });
+      while (!stream.aborted) {
+        await Promise.race([stream.sleep(25_000), closed]);
+        if (!stream.aborted) await stream.writeSSE({ event: 'ping', data: '{}' });
+      }
+      unsubscribe();
+    });
+  });
+
+  /** One conversation with the assistant, live: each new message and status change as it happens. */
+  app.get('/v1/assistant/conversations/:id/stream', async (c) => {
+    const ctx = c.get('ctx');
+    let conversation: Awaited<ReturnType<typeof findConversation>>;
+    try {
+      conversation = await findConversation(db, ctx, c.req.param('id'));
+    } catch (error) {
+      const body = toErrorBody(error);
+      return c.json(body, httpStatus(body.code));
+    }
+    c.header('Cache-Control', 'no-cache, no-transform');
+    c.header('X-Accel-Buffering', 'no');
+    return streamSSE(c, async (stream) => {
+      const unsubscribe = assistant.bus.subscribe(conversation.id, (event) => {
+        void stream.writeSSE({ event: event.type, data: JSON.stringify(event) });
+      });
+      const closed = new Promise<void>((resolve) => stream.onAbort(resolve));
+      // The state now, so a client that connects mid-run knows where things stand.
+      await stream.writeSSE({
+        event: 'ready',
+        data: JSON.stringify({ type: 'status', conversation: toSummary(conversation) }),
+      });
       while (!stream.aborted) {
         await Promise.race([stream.sleep(25_000), closed]);
         if (!stream.aborted) await stream.writeSSE({ event: 'ping', data: '{}' });

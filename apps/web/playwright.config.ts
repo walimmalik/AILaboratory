@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * End-to-end tests against a real API and Postgres. They need DATABASE_URL, a bootstrapped lab and
  * E2E_EMAIL / E2E_PASSWORD for its first user (CI sets these up; see .github/workflows/ci.yml).
- * The API runs with AILAB_TEST_KINDS=1 so the test-only "widget" kind exists.
+ * The API runs with AILAB_TEST_KINDS=1 so the test-only "widget" kind exists, and with the scripted
+ * model so the assistant runs without a network or a key.
  */
 export default defineConfig({
   testDir: 'e2e',
@@ -26,7 +27,7 @@ export default defineConfig({
     {
       command: 'pnpm --filter @ailab/api exec tsx --conditions=source src/index.ts',
       url: 'http://localhost:3001/health',
-      env: { AILAB_TEST_KINDS: '1', API_PORT: '3001' },
+      env: { AILAB_TEST_KINDS: '1', API_PORT: '3001', AGENT_PROVIDER: 'scripted' },
       reuseExistingServer: !process.env.CI,
     },
     {

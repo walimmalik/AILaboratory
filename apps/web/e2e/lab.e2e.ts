@@ -97,3 +97,34 @@ test('agents edit drafts directly, with no review', async ({ page, request }) =>
   await expect(row).toBeVisible();
   await expect(row).toContainText('done');
 });
+
+test('the assistant runs an operation for you, and the ledger links back to the conversation', async ({
+  page,
+}) => {
+  await signIn(page);
+  const label = `Reservoir ${Date.now()}`;
+  const ask = page.getByLabel('Ask the assistant');
+  await ask.fill(`/op records.create ${JSON.stringify({ kind: 'widget', label, attributes })}`);
+  await ask.press('Enter');
+
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  const created = panel.getByRole('link', { name: /^WDG-\d+$/ });
+  await expect(created).toBeVisible();
+  await expect(panel.getByText(/^Done:/)).toBeVisible();
+  const name = (await created.textContent()) ?? '';
+
+  // Replies continue the same conversation.
+  const reply = panel.getByLabel('Message the assistant');
+  await reply.fill('thanks');
+  await reply.press('Enter');
+  await expect(panel.getByText('You said: thanks')).toBeVisible();
+
+  // The change is in the ledger under the assistant's name, and opens the conversation.
+  await panel.getByRole('button', { name: 'New' }).click();
+  await expect(panel.getByText('You said: thanks')).toBeHidden();
+  await page
+    .getByRole('row', { name: new RegExp(`Test assistant for you created ${name}`) })
+    .click();
+  await page.getByRole('button', { name: 'open in the assistant' }).click();
+  await expect(panel.getByText('You said: thanks')).toBeVisible();
+});

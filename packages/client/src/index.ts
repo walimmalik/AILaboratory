@@ -1,5 +1,7 @@
 import {
   ActivityEntry,
+  AssistantMessage,
+  ConversationSummary,
   Me,
   type OperationContract,
   OperationErrorBody,
@@ -125,6 +127,35 @@ export function createClient(options: ClientOptions) {
     return () => source.close();
   }
 
+  /**
+   * Streams one assistant conversation as it happens: each new message, and each status change
+   * (running, idle, failed). `onStatus` fires first with the state at connection time.
+   */
+  function subscribeConversation(
+    conversationId: string,
+    handlers: {
+      onMessage: (message: AssistantMessage) => void;
+      onStatus: (conversation: ConversationSummary) => void;
+    },
+  ): () => void {
+    const source = new EventSource(
+      `${baseUrl}/v1/assistant/conversations/${encodeURIComponent(conversationId)}/stream`,
+    );
+    const status = (event: Event) => {
+      const data = JSON.parse((event as MessageEvent<string>).data) as { conversation?: unknown };
+      const parsed = ConversationSummary.safeParse(data.conversation);
+      if (parsed.success) handlers.onStatus(parsed.data);
+    };
+    source.addEventListener('ready', status);
+    source.addEventListener('status', status);
+    source.addEventListener('message', (event) => {
+      const data = JSON.parse((event as MessageEvent<string>).data) as { message?: unknown };
+      const parsed = AssistantMessage.safeParse(data.message);
+      if (parsed.success) handlers.onMessage(parsed.data);
+    });
+    return () => source.close();
+  }
+
   async function health(): Promise<boolean> {
     try {
       return (await request(`${baseUrl}/health`)).ok;
@@ -133,7 +164,7 @@ export function createClient(options: ClientOptions) {
     }
   }
 
-  return { call, run, me, signIn, signOut, subscribeActivity, health };
+  return { call, run, me, signIn, signOut, subscribeActivity, subscribeConversation, health };
 }
 
 export type Client = ReturnType<typeof createClient>;
