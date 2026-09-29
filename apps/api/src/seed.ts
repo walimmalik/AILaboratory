@@ -1,0 +1,72 @@
+import { readFile } from 'node:fs/promises';
+import { parseArgs } from 'node:util';
+import { contextFor } from './auth.ts';
+import { connect } from './db/client.ts';
+import { users } from './db/schema.ts';
+import { labwareKinds } from './labware/kinds.ts';
+import { loadSeedLabware } from './labware/seed.ts';
+import { ActivityBus, createRegistry } from './operations/index.ts';
+import { KindRegistry } from './records/kinds.ts';
+
+/**
+ * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review. Runs as
+ * the agent "Seed loader" on behalf of a user, so every value shows where it came from. Safe to run
+ * again: types the lab already has are left alone.
+ *
+ *   pnpm --filter @ailab/api seed
+ */
+const { values } = parseArgs({
+  args: process.argv.slice(2).filter((arg) => arg !== '--'),
+  options: { user: { type: 'string' } },
+});
+
+const url = process.env.DATABASE_URL;
+if (!url) {
+  console.error('DATABASE_URL is not set');
+  process.exit(1);
+}
+
+const connection = await connect(url);
+await connection.migrate();
+const all = await connection.db
+  .select({ id: users.id, name: users.displayName, orgId: users.orgId })
+  .from(users);
+const user = values.user
+  ? all.find((u) => u.id === values.user)
+  : all.length === 1
+    ? all[0]
+    : undefined;
+if (!user) {
+  console.error(
+    all.length === 0
+      ? 'No users yet. Run the bootstrap command first.'
+      : `Pass --user with one of: ${all.map((u) => `${u.id} (${u.name})`).join(', ')}`,
+  );
+  await connection.close();
+  process.exit(1);
+}
+
+const ctx = await contextFor(
+  connection.db,
+  { type: 'agent', agentName: 'Seed loader', onBehalfOf: user.id },
+  user.orgId,
+);
+if (!ctx) {
+  console.error('That user has no lab');
+  await connection.close();
+  process.exit(1);
+}
+
+const kinds = new KindRegistry();
+for (const kind of labwareKinds) kinds.register(kind);
+const registry = createRegistry(connection.db, kinds, new ActivityBus());
+
+const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');
+const report = await loadSeedLabware(registry, ctx, yaml);
+console.log(
+  `Labware types: ${report.created.length} drafted, ${report.existing.length} already there.`,
+);
+for (const line of report.created) console.log(`  + ${line}`);
+for (const skip of report.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
+console.log('Drafts wait on the Review page for you to confirm.');
+await connection.close();

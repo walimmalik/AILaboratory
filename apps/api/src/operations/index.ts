@@ -1,5 +1,6 @@
 import { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
+import { labwareOperations } from '../labware/operations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import { ActivityBus } from './activity.ts';
 import { assistantOperations } from './assistant-operations.ts';
@@ -23,6 +24,7 @@ export function createRegistry(
     ...recordOperations,
     ...proposalOperations,
     ...reviewOperations,
+    ...labwareOperations,
     ...assistantOperations,
   );
 }

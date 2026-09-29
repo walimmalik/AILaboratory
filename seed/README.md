@@ -9,7 +9,7 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | File | What it holds | Loaded by |
 | --- | --- | --- |
 | `lab.yaml` | The demo lab: org, lab, rooms, storage locations, people | 006 / 010 |
-| `labware.yaml` | Labware types (plates, tubes, reservoirs, tip racks) | 007 |
+| `labware.yaml` | Labware types (plates, tubes, reservoirs, tip racks) | 007 (`pnpm --filter @ailab/api seed`) |
 | `instruments.yaml` | Instrument kinds, then the demo lab's registered instruments and their configurations | 008 |
 | `reagents.yaml` | Reagent products and kits | 009 |
 | `entities.yaml` | Cell lines, plasmids, compounds, enzymes | 010 |

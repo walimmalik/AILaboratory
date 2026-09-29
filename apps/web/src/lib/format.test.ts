@@ -36,6 +36,17 @@ describe('plain language', () => {
     expect(formatValue({ value: '50', unit: 'uL' })).toBe('50 µL');
     expect(formatValue({ value: '3', unit: 'furlongs' })).toBe('3 furlongs');
     expect(formatValue(undefined)).toBe('—');
+    expect(formatValue(true)).toBe('yes');
+    expect(
+      formatValue({
+        sbs: true,
+        length: { value: '127.8', unit: 'mm' },
+        topHeight: { value: '9', unit: 'mm' },
+      }),
+    ).toBe('sbs yes · length 127.8 mm · top height 9 mm');
+    expect(formatValue({ layout: 'grid', well: { depth: { value: '5', unit: 'mm' } } })).toBe(
+      'layout grid · well (depth 5 mm)',
+    );
   });
 });
 

@@ -12,7 +12,8 @@
     "db:migrate": "tsx --env-file-if-exists=../../.env --conditions=source src/db/migrate.ts",
     "bootstrap": "tsx --env-file-if-exists=../../.env --conditions=source src/bootstrap.ts",
     "token": "tsx --env-file-if-exists=../../.env --conditions=source src/token.ts",
-    "password": "tsx --env-file-if-exists=../../.env --conditions=source src/password.ts"
+    "password": "tsx --env-file-if-exists=../../.env --conditions=source src/password.ts",
+    "seed": "tsx --env-file-if-exists=../../.env --conditions=source src/seed.ts"
   },
   "dependencies": {
     "@ailab/domain": "workspace:*",
@@ -23,6 +24,7 @@
     "drizzle-orm": "0.45.3",
     "hono": "4.13.11",
     "pg": "8.23.0",
+    "yaml": "2.9.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

@@ -50,7 +50,11 @@ export async function resolveContext(db: Db, token: string): Promise<RecordConte
   return contextFor(db, actor, row.orgId);
 }
 
-async function contextFor(db: Db, actor: Actor, orgId: string): Promise<RecordContext | undefined> {
+export async function contextFor(
+  db: Db,
+  actor: Actor,
+  orgId: string,
+): Promise<RecordContext | undefined> {
   // One lab per org for now; lab selection arrives with multi-lab support.
   const [lab] = await db
     .select({ id: labs.id })
