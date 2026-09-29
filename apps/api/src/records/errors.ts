@@ -2,10 +2,12 @@ export type RecordErrorCode =
   | 'not_found'
   | 'unknown_kind'
   | 'invalid_attributes'
+  | 'invalid_input'
   | 'invalid_state'
   | 'version_conflict'
   | 'invalid_link'
-  | 'linked';
+  | 'linked'
+  | 'not_ready';
 
 /** A refused record operation, with a message fit to show a person or an agent. */
 export class RecordError extends Error {

@@ -36,6 +36,7 @@ const statusByCode: Record<OperationErrorCode, number> = {
   invalid_state: 409,
   version_conflict: 409,
   linked: 409,
+  not_ready: 409,
   internal: 500,
 };
 

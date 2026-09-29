@@ -13,4 +13,37 @@ export const widget = defineKind({
     partOf: recordIdOf('wdg').optional(),
   }),
   links: (a) => (a.partOf ? [{ toId: a.partOf, relation: 'part_of' }] : []),
+  sections: [
+    { id: 'appearance', title: 'Appearance', fields: ['color'] },
+    { id: 'volume', title: 'Volume', fields: ['volume', 'partOf'] },
+  ],
+  checks: [
+    {
+      id: 'volume_positive',
+      label: 'Volume is more than zero',
+      severity: 'blocker',
+      source: 'Widget test spec',
+      section: 'volume',
+      fix: 'Set the volume the widget holds',
+      test: (a) => Number(a.volume.value) > 0 || `Volume is ${a.volume.value} ${a.volume.unit}`,
+    },
+    {
+      id: 'color_known',
+      label: 'Color is known',
+      severity: 'warning',
+      source: 'Widget test spec',
+      section: 'appearance',
+      fix: 'Check the widget and name its color',
+      test: (a) => a.color.trim().toLowerCase() !== 'unknown' || 'Color is unknown',
+    },
+  ],
+});
+
+/** A test-only kind with no sections: records of it are confirmed as a whole. */
+export const gadget = defineKind({
+  kind: 'gadget',
+  idPrefix: 'gdg',
+  namePrefix: 'GDG',
+  nameWidth: 4,
+  attributes: z.object({ color: z.string() }),
 });

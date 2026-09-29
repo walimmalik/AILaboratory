@@ -143,7 +143,7 @@ describe('MCP', () => {
     ]);
   });
 
-  it('runs operations as the agent, and proposes changes to active records', async () => {
+  it('runs operations as the agent, and proposes archiving', async () => {
     const created = await rpc('tools/call', {
       name: 'run_operation',
       arguments: {
@@ -157,14 +157,14 @@ describe('MCP', () => {
       output: { createdBy: { type: 'agent', agentName: 'Claude' } },
     });
 
-    const activate = await rpc('tools/call', {
+    const archive = await rpc('tools/call', {
       name: 'run_operation',
       arguments: {
-        operation: 'records.activate',
+        operation: 'records.archive',
         input: { id: result.structuredContent.output.id, expectedVersion: 1 },
       },
     });
-    expect((await activate.json()).result.structuredContent.status).toBe('proposed');
+    expect((await archive.json()).result.structuredContent.status).toBe('proposed');
   });
 
   it('returns refusals as tool errors the agent can act on', async () => {
