@@ -11,8 +11,8 @@ import { KindRegistry } from './records/kinds.ts';
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review. Runs as
  * the agent "Seed loader" on behalf of a user, so every value shows where it came from. Safe to run
- * again: types the lab already has are left alone, except that drafts it made get well positions the
- * seed has gained since, while nobody else has changed their wells.
+ * again: types the lab already has are left alone, except that types it made get well positions the
+ * seed has gained since, while nobody else has changed their wells (confirmed types as a proposal).
  *
  *   pnpm --filter @ailab/api seed
  */
@@ -66,10 +66,11 @@ const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.ur
 const definitions = await readDefinitions(new URL('../../../seed/opentrons/', import.meta.url));
 const report = await loadSeedLabware(registry, ctx, yaml, definitions);
 console.log(
-  `Labware types: ${report.created.length} drafted, ${report.updated.length} updated, ${report.existing.length} already there.`,
+  `Labware types: ${report.created.length} drafted, ${report.updated.length} updated, ${report.proposed.length} proposed for review, ${report.existing.length} already there.`,
 );
 for (const line of report.created) console.log(`  + ${line}`);
 for (const line of report.updated) console.log(`  ~ ${line} (well positions)`);
+for (const line of report.proposed) console.log(`  ? ${line} (well positions, confirmed type: approve on Review)`);
 for (const skip of report.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
