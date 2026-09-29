@@ -40,6 +40,8 @@ Everything is optional except `family`, so an agent can draft what it knows; the
 
 Library › Labware lists the types with a family filter (plates, tip racks, reservoirs, tubes…) and their format, manufacturer, catalog number and maximum volume. Vendors have their own page.
 
+A labware type's page draws it to scale: from above, with its wells named, and one well cut through its centre, filled to the maximum volume when the bottom is flat. What the record doesn't give is drawn dashed and listed under the drawing (the SBS size, the standard spacing, a well size), so a draft still has a picture without the picture claiming values nobody entered.
+
 ## Seed
 
 `pnpm --filter @ailab/api seed` loads the seed lab's labware as drafts, running as the agent "Seed loader" for the only user (or `--user`). It is safe to run again: types whose label already exists are left alone. Entries that aren't labware (the Mantis chip) are skipped with the reason.

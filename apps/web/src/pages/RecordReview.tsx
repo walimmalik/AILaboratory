@@ -25,10 +25,13 @@ export function ReviewBlocks({
   record,
   readiness,
   renderValue,
+  aside,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
   renderValue: (value: unknown) => ReactNode;
+  /** Shown between the readiness block and the sections, e.g. a labware drawing. */
+  aside?: ReactNode;
 }) {
   const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
   const blocked = readiness.checks.some((c) => !c.passed && c.severity === 'blocker');
@@ -51,6 +54,7 @@ export function ReviewBlocks({
   return (
     <>
       <ReadinessBlock record={record} readiness={readiness} titles={titles} onFix={fix} />
+      {aside}
       {readiness.sections.map((section) => (
         <SectionBlock
           key={section.id}

@@ -260,6 +260,10 @@ test('a failing check links to its section, where a person fills in the value an
   // Failing checks come first; passing ones are folded away.
   await expect(readiness.getByText('Length, width or height is missing')).toBeVisible();
   await expect(readiness.getByText(/checks pass/)).toBeVisible();
+  // The drawing fills in the SBS size and spacing for the picture, and says so.
+  const drawing = page.getByRole('region', { name: 'Drawing' });
+  await expect(drawing.getByText('127.76 mm × 85.48 mm · wells 4.5 mm apart')).toBeVisible();
+  await expect(drawing.getByText(/Wells drawn 4.5 mm apart/)).toBeVisible();
 
   await readiness.getByRole('button', { name: 'Fix in geometry' }).first().click();
   await geometry.getByRole('textbox', { name: 'height', exact: true }).first().fill('30.5');
