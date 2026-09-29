@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { KindCheck, KindSection } from './design.ts';
 import type { RecordLink } from './record.ts';
 
 /**
@@ -15,6 +16,12 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
   nameWidth: number;
   attributes: A;
   links?: (attributes: z.infer<A>) => Omit<RecordLink, 'fromId'>[];
+  /**
+   * Draft and confirm (plan 004c): groups of attributes a person confirms one by one. Kinds with
+   * sections can only be activated once every section is confirmed and no blocker check fails.
+   */
+  sections?: KindSection[];
+  checks?: KindCheck<z.infer<A>>[];
 }
 
 export function defineKind<A extends z.ZodType>(definition: KindDefinition<A>): KindDefinition<A> {

@@ -19,7 +19,8 @@
         "activate",
         "archive",
         "unarchive",
-        "restore"
+        "restore",
+        "confirm_section"
       ]
     },
     "actor": {
@@ -124,6 +125,178 @@
             "type": "string"
           },
           "additionalProperties": {}
+        },
+        "evidence": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "assumed",
+                  "person",
+                  "datasheet",
+                  "imported",
+                  "measured",
+                  "calculated"
+                ]
+              },
+              "by": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "user"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "userId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "agent"
+                      },
+                      "agentName": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "onBehalfOf": {
+                        "type": "string",
+                        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+                      },
+                      "sessionRef": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "agentName",
+                      "onBehalfOf"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "note": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "by",
+              "at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "reviews": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "confirmedBy": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "user"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "userId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "agent"
+                      },
+                      "agentName": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "onBehalfOf": {
+                        "type": "string",
+                        "pattern": "^usr_[0-9A-HJKMNP-TV-Z]{26}$"
+                      },
+                      "sessionRef": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "agentName",
+                      "onBehalfOf"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "confirmedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "values": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "confirmedBy",
+              "confirmedAt",
+              "version",
+              "values"
+            ],
+            "additionalProperties": false
+          }
         },
         "createdAt": {
           "type": "string",
@@ -244,6 +417,8 @@
         "status",
         "version",
         "attributes",
+        "evidence",
+        "reviews",
         "createdAt",
         "createdBy",
         "updatedAt",
