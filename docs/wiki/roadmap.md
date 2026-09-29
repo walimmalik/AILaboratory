@@ -39,12 +39,12 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | 015 Twin port | echo650-twin twins into `packages/twin`, bound to the instrument registry | Not started | |
 | 016 Transfer designer | Transfer plans, deterministic option tools, deck layouts, worklists, run logs | Locked; needs real worklist examples from Wali's laptop first | |
 | 017 Experiment designer | Assay templates, custom builder, the designer, factorial designs | Locked | |
+| [018 Workflow creator](../plans/018-workflow-creator.md) | Workflows as one-work-unit graphs chaining SOPs and transfer plans, labware paths, timing windows and handling rules with sources, the schedule request for 019 | Locked; after 012, 014a and 016a | 018a to 018c |
 
 ## Later
 
 | Plan | Delivers |
 | --- | --- |
-| 018 Workflow creator | Link SOP steps and experiments into workflows, Gantt views |
 | 019 Scheduler and orchestrator | echo650 scheduler and exposure kernel, science-aware constraint pruning, twin simulation, booking |
 | 020 Analysis | Templates, statistics, charts, agent analysis |
 | 021 Lab notebook | Entries on top of the event log plus free writing |
