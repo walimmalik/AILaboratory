@@ -42,7 +42,19 @@ export const users = pgTable('users', {
     .references(() => orgs.id),
   displayName: text('display_name').notNull(),
   email: text('email').unique(),
+  /** scrypt hash for web sign-in; null until a password is set. */
+  passwordHash: text('password_hash'),
   createdAt: createdAt(),
+});
+
+/** Web sign-in sessions, carried in an HttpOnly cookie. Only a SHA-256 hash of the session token is stored. */
+export const sessions = pgTable('sessions', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id),
+  createdAt: createdAt(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 });
 
 /** Bearer tokens. Only a SHA-256 hash is stored. A token with an agent name acts as that agent on behalf of the user. */
@@ -188,6 +200,7 @@ export const activity = pgTable(
       .$type<'succeeded' | 'failed' | 'proposed' | 'approved' | 'rejected'>()
       .notNull(),
     recordIds: jsonb('record_ids').$type<string[]>().notNull(),
+    recordNames: jsonb('record_names').$type<Record<string, string>>().notNull().default({}),
     proposalId: text('proposal_id'),
     input: jsonb('input').notNull(),
     error: jsonb('error').$type<OperationErrorBody>(),

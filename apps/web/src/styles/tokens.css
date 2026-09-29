@@ -1,0 +1,74 @@
+/* Bench console tokens (plan 004). Every color has a day and a night value.
+   Accent (teal) is for actions and selection; agent ink (violet) marks anything an agent did or
+   proposed that no person has confirmed; semantic colors are for state only. */
+:root {
+  --ground: #eef0ec;
+  --panel: #f8f9f6;
+  --field: #ffffff;
+  --rule: #d5dad4;
+  --ink: #1a211e;
+  --ink-2: #4a5550;
+  --ink-3: #75817b;
+  --accent: #0e6f68;
+  --accent-soft: rgba(14, 111, 104, 0.1);
+  --agent: #6746c3;
+  --agent-soft: rgba(103, 70, 195, 0.1);
+  --ok: #2f7d4f;
+  --warn: #9a6200;
+  --warn-soft: rgba(154, 98, 0, 0.1);
+  --crit: #b3402f;
+  --crit-soft: rgba(179, 64, 47, 0.1);
+  --grid: rgba(14, 111, 104, 0.05);
+  --lamp-off: #c3cbc6;
+  --font-display: "Martian Mono Variable", "IBM Plex Mono", Consolas, monospace;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --radius: 4px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0f1413;
+    --panel: #151c1a;
+    --field: #1b2321;
+    --rule: #2a3431;
+    --ink: #dfe6e2;
+    --ink-2: #a7b3ad;
+    --ink-3: #74807a;
+    --accent: #5cc2b3;
+    --accent-soft: rgba(92, 194, 179, 0.12);
+    --agent: #b7a0ff;
+    --agent-soft: rgba(183, 160, 255, 0.13);
+    --ok: #74c792;
+    --warn: #e0b060;
+    --warn-soft: rgba(224, 176, 96, 0.13);
+    --crit: #ef8676;
+    --crit-soft: rgba(239, 134, 118, 0.13);
+    --grid: rgba(92, 194, 179, 0.045);
+    --lamp-off: #36423e;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0f1413;
+  --panel: #151c1a;
+  --field: #1b2321;
+  --rule: #2a3431;
+  --ink: #dfe6e2;
+  --ink-2: #a7b3ad;
+  --ink-3: #74807a;
+  --accent: #5cc2b3;
+  --accent-soft: rgba(92, 194, 179, 0.12);
+  --agent: #b7a0ff;
+  --agent-soft: rgba(183, 160, 255, 0.13);
+  --ok: #74c792;
+  --warn: #e0b060;
+  --warn-soft: rgba(224, 176, 96, 0.13);
+  --crit: #ef8676;
+  --crit-soft: rgba(239, 134, 118, 0.13);
+  --grid: rgba(92, 194, 179, 0.045);
+  --lamp-off: #36423e;
+  color-scheme: dark;
+}

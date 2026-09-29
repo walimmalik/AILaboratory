@@ -1,8 +1,12 @@
 import type { OperationErrorBody } from '@ailab/schema';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { streamSSE } from 'hono/streaming';
-import { resolveContext } from './auth.ts';
+import { z } from 'zod';
+import { resolveContext, resolveSession, SESSION_DAYS, signIn, signOut } from './auth.ts';
 import type { Db } from './db/client.ts';
+import { labs, users } from './db/schema.ts';
 import { describeOperation, openApiDocument } from './operations/describe.ts';
 import { httpStatus, toErrorBody } from './operations/errors.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -20,8 +24,11 @@ type Env = { Variables: { ctx: RecordContext } };
 
 const unauthorized: OperationErrorBody = {
   code: 'unauthorized',
-  message: 'A valid API token is required (Authorization: Bearer <token>)',
+  message: 'Sign in, or send a valid API token (Authorization: Bearer <token>)',
 };
+
+export const SESSION_COOKIE = 'ailab_session';
+const LoginBody = z.object({ email: z.string().min(1), password: z.string().min(1) });
 
 export function createApp({
   db,
@@ -33,18 +40,64 @@ export function createApp({
 
   app.get('/health', (c) => c.json({ status: 'ok', service: 'api' }));
 
-  /** Everything below requires a bearer token. */
+  app.post('/auth/login', async (c) => {
+    const body = LoginBody.safeParse(await c.req.json().catch(() => undefined));
+    if (!body.success) {
+      return c.json({ code: 'invalid_input', message: 'Send {"email", "password"}' }, 400);
+    }
+    const token = await signIn(db, body.data.email, body.data.password);
+    if (!token) return c.json({ code: 'unauthorized', message: 'Wrong email or password' }, 401);
+    setCookie(c, SESSION_COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'Strict',
+      secure: new URL(c.req.url).protocol === 'https:',
+      path: '/',
+      maxAge: SESSION_DAYS * 24 * 60 * 60,
+    });
+    return c.json({ signedIn: true });
+  });
+
+  app.post('/auth/logout', async (c) => {
+    const token = getCookie(c, SESSION_COOKIE);
+    if (token) await signOut(db, token);
+    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    return c.json({ signedIn: false });
+  });
+
+  /** Everything below requires a bearer token or a session cookie. */
   app.use('*', async (c, next) => {
     const header = c.req.header('authorization') ?? '';
-    const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
-    const ctx = token ? await resolveContext(db, token) : undefined;
+    const bearer = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
+    const session = bearer ? undefined : getCookie(c, SESSION_COOKIE);
+    const ctx = bearer
+      ? await resolveContext(db, bearer)
+      : session
+        ? await resolveSession(db, session)
+        : undefined;
     if (!ctx) return c.json(unauthorized, 401);
+    // Cookie-authenticated writes must be JSON, which a cross-site form cannot send.
+    const safe = c.req.method === 'GET' || c.req.method === 'HEAD';
+    if (session && !safe && !c.req.header('content-type')?.startsWith('application/json')) {
+      return c.json({ code: 'forbidden', message: 'Requests must be JSON' }, 403);
+    }
     c.set('ctx', ctx);
     await next();
   });
 
-  /** Who the token acts as. */
-  app.get('/me', (c) => c.json(c.get('ctx')));
+  /** Who the caller acts as, with display names for the UI. */
+  app.get('/me', async (c) => {
+    const ctx = c.get('ctx');
+    const userId = ctx.actor.type === 'user' ? ctx.actor.userId : ctx.actor.onBehalfOf;
+    const [user] = await db
+      .select({ id: users.id, displayName: users.displayName, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+    const [lab] = await db
+      .select({ id: labs.id, name: labs.name })
+      .from(labs)
+      .where(eq(labs.id, ctx.labId));
+    return c.json({ ...ctx, user, lab });
+  });
 
   app.get('/v1/operations', (c) => c.json({ operations: registry.list().map(describeOperation) }));
 

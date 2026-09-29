@@ -147,6 +147,7 @@ export class OperationRegistry {
           operationId: id,
           outcome: 'proposed',
           recordIds: touched(operation, input, preview),
+          nameHints: nameHints(preview),
           proposalId: proposal.id,
           input,
           durationMs: Date.now() - started,
@@ -164,6 +165,7 @@ export class OperationRegistry {
         operationId: id,
         outcome: operation.outcome?.(output) ?? 'succeeded',
         recordIds: touched(operation, input, output),
+        nameHints: nameHints(output),
         ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
         input,
         durationMs: Date.now() - started,
@@ -228,4 +230,10 @@ function touched(
     ? operation.touches(input, output)
     : [(input as { id?: unknown })?.id, (output as { id?: unknown } | undefined)?.id];
   return [...new Set(ids.filter((id): id is string => RecordId.safeParse(id).success))];
+}
+
+/** A record envelope's readable name, so the ledger can name records that no longer (or don't yet) exist. */
+function nameHints(output: unknown): Record<string, string> {
+  const { id, name } = (output ?? {}) as { id?: unknown; name?: unknown };
+  return typeof id === 'string' && typeof name === 'string' ? { [id]: name } : {};
 }

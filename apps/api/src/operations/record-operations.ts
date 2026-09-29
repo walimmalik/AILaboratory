@@ -6,6 +6,7 @@ import {
   recordsGet,
   recordsHistory,
   recordsLinks,
+  recordsList,
   recordsRestore,
   recordsUnarchive,
   recordsUpdate,
@@ -36,6 +37,9 @@ export const recordOperations = [
   }),
   implement(recordsGet, {
     run: (ctx, input, deps) => service(deps).get(ctx, input.id),
+  }),
+  implement(recordsList, {
+    run: async (ctx, input, deps) => ({ records: await service(deps).list(ctx, input) }),
   }),
   implement(recordsUpdate, {
     agentPolicy: proposeIfActive,

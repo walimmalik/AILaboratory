@@ -56,7 +56,7 @@ jobs:
         run: pnpm --filter @ailab/api db:migrate
       - name: Bootstrap is idempotent
         run: |
-          pnpm --filter @ailab/api bootstrap | grep -v "API token"
+          pnpm --filter @ailab/api bootstrap | grep -v -e "API token" -e "Password"
           pnpm --filter @ailab/api bootstrap | grep "Already bootstrapped"
 
   python:

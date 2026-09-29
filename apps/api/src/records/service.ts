@@ -8,7 +8,7 @@ import {
   type RecordStatus,
   type RecordVersion,
 } from '@ailab/schema';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
@@ -32,6 +32,16 @@ export interface CreateRecordInput {
   /** New records start as drafts unless created active. */
   status?: 'draft' | 'active';
   reason?: string;
+}
+
+export interface ListRecordsInput {
+  kind?: string | undefined;
+  status?: RecordStatus | undefined;
+  /** Matches label or readable name, case-insensitively. */
+  search?: string | undefined;
+  limit?: number | undefined;
+  /** Only records changed before this time (for paging). */
+  before?: string | undefined;
 }
 
 export interface UpdateRecordInput {
@@ -90,6 +100,32 @@ export class RecordService {
 
   async get(ctx: RecordContext, id: string): Promise<RecordEnvelope> {
     return toEnvelope(await findRecord(this.db, ctx, id));
+  }
+
+  /** Records in the lab, most recently changed first. Archived records are left out unless asked for. */
+  async list(ctx: RecordContext, input: ListRecordsInput = {}): Promise<RecordEnvelope[]> {
+    const statuses = input.status ? [input.status] : (['draft', 'active'] as const);
+    const search = input.search?.trim();
+    const rows = await this.db
+      .select()
+      .from(records)
+      .where(
+        and(
+          eq(records.labId, ctx.labId),
+          input.kind ? eq(records.kind, input.kind) : undefined,
+          inArray(records.status, [...statuses]),
+          search
+            ? or(
+                ilike(records.label, `%${escapeLike(search)}%`),
+                ilike(records.name, `%${escapeLike(search)}%`),
+              )
+            : undefined,
+          input.before ? lt(records.updatedAt, new Date(input.before)) : undefined,
+        ),
+      )
+      .orderBy(desc(records.updatedAt), desc(records.id))
+      .limit(input.limit ?? 50);
+    return rows.map(toEnvelope);
   }
 
   async update(ctx: RecordContext, id: string, input: UpdateRecordInput): Promise<RecordEnvelope> {
@@ -426,6 +462,10 @@ async function writeVersion(
     snapshot,
   });
   return snapshot;
+}
+
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function toEnvelope(row: RecordRow): RecordEnvelope {

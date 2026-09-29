@@ -33,3 +33,17 @@ describe('client', () => {
     expect((error as ApiError).status).toBe(404);
   });
 });
+
+describe('sign-in', () => {
+  it('posts credentials as JSON and surfaces a refusal', async () => {
+    const { calls, fetch } = fakeFetch(401, {
+      code: 'unauthorized',
+      message: 'Wrong email or password',
+    });
+    const client = createClient({ baseUrl: '/api', fetch });
+    const error = await client.signIn('w@example.org', 'secret').catch((e: unknown) => e);
+    expect((error as ApiError).message).toBe('Wrong email or password');
+    expect(calls[0]?.url).toBe('/api/auth/login');
+    expect(calls[0]?.init?.headers).toMatchObject({ 'content-type': 'application/json' });
+  });
+});

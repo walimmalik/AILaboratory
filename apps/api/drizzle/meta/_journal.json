@@ -15,6 +15,13 @@
       "when": 1790705648236,
       "tag": "0001_operations_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790707209038,
+      "tag": "0002_web_sessions_ledger_names",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=../../.env --conditions=source src/db/migrate.ts",
     "bootstrap": "tsx --env-file-if-exists=../../.env --conditions=source src/bootstrap.ts",
-    "token": "tsx --env-file-if-exists=../../.env --conditions=source src/token.ts"
+    "token": "tsx --env-file-if-exists=../../.env --conditions=source src/token.ts",
+    "password": "tsx --env-file-if-exists=../../.env --conditions=source src/password.ts"
   },
   "dependencies": {
     "@ailab/domain": "workspace:*",
