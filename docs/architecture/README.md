@@ -11,3 +11,4 @@ The system-level architecture is in [plan 000](../plans/000-foundation-architect
 | Draft and confirm (evidence, sections, readiness, Review page) | [core-records.md](core-records.md), ADRs 0021 and 0022 | 004c, 004d |
 | Lab memory | not yet written | 005 |
 | Labware types, vendors, Opentrons import and export, seed loader | [labware.md](labware.md) | 007 |
+| Instrument and equipment kinds, capability catalog, configuration resolver | [instruments.md](instruments.md) | 008 |
