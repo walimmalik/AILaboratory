@@ -7,6 +7,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 - Work happens in small numbered plans (`docs/plans/NNN-name.md`). Each plan lists its design decisions up front; the owner (Wali) chooses them before implementation starts. Do not start a plan whose decisions are open.
 - Every design decision is recorded as an ADR in `docs/decisions/` (use `0000-template.md`).
 - One living doc per module in `docs/architecture/`, updated in the same PR as the code it describes.
+- The wiki in `docs/wiki/` summarizes the rules, decisions, data model and status of every plan, linking to the sources. Update the pages a PR affects when a plan is locked or a module lands.
 - No per-ticket handoff, verification or review files in the tree. That history belongs in PR descriptions.
 - Ask about consequential choices; don't ask about routine implementation details.
 
