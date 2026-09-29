@@ -56,6 +56,17 @@ Pure logic in `packages/domain/transfers`: solving target concentrations into vo
 - **Report view:** the imported instrument report on the plate map, failed and short wells marked.
 - **Worklist formats:** the example file beside the drafted columns, confirmed like any design.
 
+## Dilution optimizer (added 2026-09-29, O1 answered by Wali)
+
+Wali's lab app today has a dilution optimizer: it works out intermediate dilution plates so each point of every curve is hit despite the Echo's 2.5 nL droplet, and its workflow builds those plates and their transfers for you. 016 builds the same thing.
+
+- **A deterministic tool the agent calls.** It is one of the lab calculators (ADR 0024): the toolkit of deterministic read operations every agent has, indexed by one skill. `transfers.optimize_dilution` (in `packages/domain/transfers`, exposed as a read operation next to `transfers.dilution_options`) does all the math. The agent calls it, chooses between the options it returns when there is more than one, and explains the choice; it never computes volumes itself (T2).
+- **What it solves (O1, as Wali described it).** Inputs: every compound on the destination plates with its stock concentration and its curve points (014 series), the final well volume, the maximum DMSO percentage in the well, the accuracy tolerance, the dispensing instrument's droplet size and range, and the intermediate plate type (dead volume and maximum working volume, since each intermediate well must be prepared with enough volume for every draw plus its dead volume and must not overflow). For each compound and each point it decides whether the point can be dispensed from the source plate or needs an intermediate dilution, then groups all compounds' intermediate dilutions into the minimum number of intermediate plates and wells. The DMSO limit and the plate volumes are hard limits; within them it optimizes accuracy, then the number of plates, then the number of wells. It reports, per point, the source well, droplets, backfill, achieved concentration and error, and per intermediate well what to put in it and how much is drawn from it.
+- **Real drafts.** The result becomes intermediate plate maps (014) and the transfers that make and use them (this plan), drafted and waiting for confirm like any other design. Intermediate plates become real containers in inventory (010) when the plan runs.
+- **Workflows pick it up.** The workflow creator (018) receives the intermediate plates and their transfer steps automatically, through its "code builds the draft" path (W2).
+- **Starting point.** echo650-twin's `src/agent/science/dose-response.js` has the two simple cases (a series pre-made on the source plate, and direct dispense with DMSO backfill that fails loudly when a point is out of reach); they are ported as the degenerate cases. If the lab app's optimizer code or rules can be shared, its logic is ported, and one of its results becomes a test case.
+- **Defaults (O2, O3; say if wrong):** accuracy tolerance ±5% per point, set on the assay template and changeable per experiment, with the achieved concentration stored in the well so analysis uses the real value; intermediate plates are made by a preparation step in the transfer plan (diluent, then stock), with the instrument picked by `transfers.options`, and can be reused while within their stability window.
+
 ## Round 3 answers
 
 Wali chose A for T1 to T6 on 2026-09-29, with these notes:
@@ -87,7 +98,7 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution, source volumes, tip counting), the four recommendation operations, transfer plan operations, reservations.
+- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution optimizer, source volumes, tip counting), the recommendation operations, transfer plan operations, reservations.
 - **016b:** Echo pick list writer and transfer and survey report import, Opentrons protocol writer checked in the simulator, deck layouts, against the examples in `seed/worklists/`.
 - **016c:** worklist format records and the generic CSV writer: Hamilton STAR and Vantage, Mantis, PreciseDrop, FeliX.
 - **016d:** transfer plan page, deck view, loading list, report view, agent drafting, skill.
