@@ -9,6 +9,8 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Agent** | Any AI acting on behalf of a person: the in-app assistant, Claude Code over MCP, or another model with a token |
 | **Agent ink** | The violet used for values an agent set that nobody has confirmed |
 | **Agent policy** | Whether an operation lets agents act directly, makes them propose, or decides per call |
+| **Analysis** | An analysis template (or custom steps) applied to runs and plates: measurements, exclusions, results, graphs and a drafted conclusion; confirmed by a person (plan 020) |
+| **Analysis template** | The steps an assay's data goes through (import, normalize, fit, quality, hit call, graphs), written against plate-map roles and groups (plan 020) |
 | **Assumed** | An agent set this value without naming a source. Stays marked until confirmed |
 | **Assay template** | A ready-made experiment design for one assay (ELISA, dose-response…), plan 017 |
 | **Booking** | An instrument, station or person held for a time, from a schedule or made on the calendar page (plan 019) |
@@ -26,8 +28,10 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Draft** | A record in `draft` status: agents edit it freely until a person confirms it |
 | **Entity** | What something is: a plasmid, a cell line, a compound. Has a kind with typed fields |
 | **Evidence** | Where a value came from: assumed, stated, person, datasheet, imported, measured, calculated |
+| **Exclusion** | A well, point or plate left out of an analysis, with a reason and who decided; never deleted. Outlier tests only propose them (plan 020) |
 | **Experiment** | One question and its design inside a campaign; executed as runs |
 | **Handling rule** | A typed constraint from the science (max time out of the incubator, light sensitive, freeze-thaw limit), with a source, enforced or advice |
+| **Import format** | How to read one instrument export (Spark, qTOWER3, CSV) into measurements matched to the plate map (plan 020) |
 | **Kind** | A record type (`labware_type`), and in the data model the reusable definition layer (the Corning 3570) |
 | **Kind, Instance, State** | The rule that definitions, real things and their changing state stay separate |
 | **Lab memory** | Conventions, preferences, quirks and lessons agents read and propose; people confirm (plan 005) |
@@ -37,6 +41,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Liquid type** | Platform-neutral behaviour of a liquid: aqueous, DMSO, 50% glycerol, serum… |
 | **Lot** | One batch of a product, bought or made from a recipe, with expiry and CoA values |
 | **Manual station** | A bench, hood or hand pipette modeled as an instrument a person operates |
+| **Method catalog** | The vetted, versioned statistical methods in the science service that every analysis number comes from (plan 020) |
 | **Mount** | A named place on an instrument where equipment attaches: a slot, a rail, a surface |
 | **Open question** | Something a source leaves unclear, recorded on a draft; blocks confirm until answered |
 | **Operation** | A named, typed capability (`records.create`), the only way to read or change data |
@@ -62,6 +67,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Timing model** | How long an instrument's method takes, built from parts (per dispense, move, tip pickup) fitted from instrument logs; also calibrates the twin (plan 019) |
 | **Transfer plan** | How liquid gets from sources to targets: transfers, instruments, liquid classes, decks, worklists (plan 016) |
 | **Twin** | A digital simulation of an instrument, sharing capability contracts with the real hardware |
+| **View** | A saved exploration over results across runs, experiments or sets, with linked charts (plan 020) |
 | **Walk-away time** | The part of an instrument step that needs no person (plan 019) |
 | **Work unit** | What one workflow graph describes: one assay plate (or tube) and everything that happens to it; a run repeats it (plan 018) |
 | **Workcell** | An arrangement of instruments and pods served by a transport robot (plan 008d) |
@@ -69,3 +75,4 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Workflow** | The steps of one or more SOPs and transfer plans in order, with labware paths, waits and timing windows (plan 018) |
 | **Workflow template** | A reusable workflow for an assay or routine, written against roles and capabilities; applied to a new experiment's documents (plan 018) |
 | **Worklist** | A file an instrument's own software runs (Echo CSV, Opentrons protocol) |
+| **Z'** (Z prime) | Plate quality from the positive and neutral controls: 1 − 3(SDp + SDn) / abs(meanp − meann). The lab's bar is 0.5 or more |
