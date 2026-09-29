@@ -47,6 +47,7 @@ So 019 ports the kernel, the exposure kernel and the pending re-planner for the 
 | State | **Booking** (`bkg_`, `BKG-0001`) | An instrument, station or person held for a time: from a confirmed schedule (tentative while the schedule is a draft), made directly on the calendar page (S7), maintenance, or an absence. One booking operation for all of them |
 | Instance | **Person profile** (on the lab member) | Working hours, absences (as bookings), training per instrument kind or station, which the scheduler uses to pick who (S4) |
 | Instance | **Travel table** (`trt_`, one per lab) | Travel times between places (010 locations, instrument load points, the workcell's hotels), estimated until run records replace them (S3) |
+| State | **Duration statistics** (derived, per lab) | For each repeatable action, keyed by what makes it repeatable (action or capability, instrument, method or worklist shape, labware type, and for transfers the transfer count and volume band): number of observations, mean, standard deviation, percentiles, the last few values and the logs they came from. Recomputed from logs, never typed (S13 later note) |
 | Part | **Step time split** | Per step, person time (set up, load, unload, check) and walk-away time, from the instrument kind or method, with source (S5) |
 
 Durations keep 018's sources (measured, simulated, transfer plan, SOP) and add **stated by a person** (S13 note), each with its spread.
@@ -66,6 +67,7 @@ Pure logic in `packages/scheduler` (TypeScript, no I/O): the ported event-driven
 | `people.set_hours`, `people.set_training`, `travel.set_time` | proposed |
 | `schedules.prep_list`, `schedules.loading_card`, `schedules.cellario_export` | read |
 | `runs.record_actual` feeds live following (013); `schedules.forecast` | read |
+| `durations.stats`, `durations.explain` (learned mean, standard deviation, observations and their logs per repeatable action), `durations.exclude` (leave one run out, with a reason) | read calculators; exclude is people, agents propose |
 
 ## Defaults I'm assuming (say if any is wrong)
 
@@ -127,6 +129,13 @@ Wali chose A for S13 to S18 on 2026-09-29, with these notes.
   - **One question per request, in lab words:** "what matters most here?" with *balanced* (the default order), *finish soonest*, *safest for the cells*, *keep evenings and weekends free*. It moves one tier up and never above the hard rules. A deadline or priority is the other input.
   - **The agent helps** by reading the options and recommending one with a reason tied to the request ("you said results by Friday, and the fastest option keeps only 3 min margin on the cells, so I'd take option 2"), by setting that one question from plain language ("I need this before the group meeting" becomes a deadline), and by running what-ifs ("what if Jordan does the seeding?"). It uses lab memory for standing preferences ("the lab avoids weekend reads"), proposed and confirmed like any memory.
 
+- **S13 later note (Wali, 2026-09-29): the scheduler learns.** Repeatable, well-documented actions get their durations from what really happened, with a standard deviation, and get better over time:
+  - **Where the numbers come from:** machine logs first, because they are precise and nobody has to type them: Cellario's run log (every workcell action with start and end), the device gateway (022) and instrument reports (016's Echo transfer report, Hamilton and Opentrons run logs as they are imported), and derived robot moves inside the workcell. Checklist ticks (013 E7) count for manual steps and carries, marked coarse because a tick isn't the moment the work ended.
+  - **What is learned:** duration statistics per repeatable action, keyed by what makes it repeat (the Spark luminescence read of a 384-well plate, an Echo run of about 3,000 transfers from a 384PP source, a FlexPod move from the Cytomat to the Spark). Mean, standard deviation and percentiles, with the number of observations shown beside every figure.
+  - **How the scheduler uses them:** a learned duration replaces the estimate once it has enough observations (default 5), and until then blends with its prior (the stated, simulated or transfer-plan figure). The spread in stress cases (S13) is the learned one (default mean plus two standard deviations), so steps the lab does often get tight, trustworthy plans and new ones stay cautious.
+  - **Keeping it honest:** aborted, paused or failed runs are left out and listed; values far outside the spread are flagged, not silently averaged; recent runs weigh more so a drift (a slower reader after service) shows up, and a clear shift raises a readiness note ("Spark reads are 20% slower since 12 Oct") that can become a lab memory. Nobody edits the statistics; a person can exclude a run with a reason.
+  - This is code, not the agent: `durations.stats` and `durations.explain` are read calculators (ADR 0024). The math lives in `packages/scheduler` (019a); importing logs into it arrives with 019e.
+
 ## Round 3 questions: uncertainty, live runs, views, setup, objective, split
 
 Recommended option starred. Asked 2026-09-29.
@@ -142,8 +151,8 @@ Recommended option starred. Asked 2026-09-29.
 
 ## Split
 
-- **019a:** `packages/scheduler` (ported kernel, exposure kernel and pending re-planner, adapted per S6), the schedule document, `schedules.draft`, `options`, `what_if`, `explain`, `check`, stress cases and the objective order, tested on schedule requests from 018a for the ELISA and the compound screen.
+- **019a:** `packages/scheduler` (including the duration statistics math) (ported kernel, exposure kernel and pending re-planner, adapted per S6), the schedule document, `schedules.draft`, `options`, `what_if`, `explain`, `check`, stress cases and the objective order, tested on schedule requests from 018a for the ELISA and the compound screen.
 - **019b:** people (hours, absences, training), bookings, the calendar page where people book instruments and actions, the iCal feed.
 - **019c:** the two levels: workcell segments with the workcell scheduler, carries with the travel table, the Cellario export.
 - **019d:** the schedule page (Gantt lanes by instrument, person and plate, option cards, simulation playback on the 2D decks, confirm), prep lists and loading cards; 3D playback when 015 lands.
-- **019e:** live following from checklist ticks and instrument logs, forecasts, re-planning the pending part.
+- **019e:** live following from checklist ticks and instrument logs, forecasts, re-planning the pending part, and learning duration statistics from Cellario, gateway and instrument logs.
