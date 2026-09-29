@@ -392,6 +392,8 @@ describe('seed labware', () => {
     const once = await loadSeedLabware(registry, loader, text, await seedDefinitions());
     expect(once.updated).toEqual([]);
 
+    expect(once.proposed).toEqual([]);
+
     const { records } = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
       kind: 'vendor',
       limit: 50,
@@ -402,5 +404,38 @@ describe('seed labware', () => {
       search: 'EIA/RIA',
     });
     expect(types[0]).toMatchObject({ status: 'draft', createdBy: { agentName: 'Seed loader' } });
+  });
+
+  it('proposes new seed wells for a type a person already confirmed, once', async () => {
+    const loader: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    const text = await seedFile();
+    await loadSeedLabware(registry, loader, text);
+    const { records } = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+      kind: 'labware_type',
+      search: 'Flex Tips, 50 uL',
+    });
+    let tips = records[0] as RecordEnvelope;
+    for (const section of ['identity', 'geometry', 'volumes', 'instruments']) {
+      tips = await run<RecordEnvelope>(person, 'records.confirm_section', {
+        id: tips.id,
+        expectedVersion: tips.version,
+        section,
+      });
+    }
+    expect(tips.status).toBe('active');
+
+    const report = await loadSeedLabware(registry, loader, text, await seedDefinitions());
+    expect(report.proposed).toEqual([expect.stringContaining('opentrons-991-00104')]);
+    const unchanged = await run<RecordEnvelope>(person, 'records.get', { id: tips.id });
+    expect(unchanged.attributes.wells).not.toHaveProperty('a1');
+    const again = await loadSeedLabware(registry, loader, text, await seedDefinitions());
+    expect(again.proposed).toEqual([]);
   });
 });

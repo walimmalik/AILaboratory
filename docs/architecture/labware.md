@@ -48,7 +48,7 @@ A labware type's page draws it to scale: from above, with its wells named, and o
 
 `pnpm --filter @ailab/api seed` loads the seed lab's labware as drafts, running as the agent "Seed loader" for the only user (or `--user`). It is safe to run again: types whose label already exists are left alone. Entries that aren't labware (the Mantis chip) are skipped with the reason.
 
-The seed rarely says where wells sit. When an entry's Opentrons load name is verified and `seed/opentrons/` holds that definition (Apache-2.0, copied from Opentrons shared-data), the loader takes the pitch and A1 offset from it, and the well size too unless the seed's own is verified; the wells cite the definition's URL as datasheet evidence. A rerun gives drafts it made earlier the newer wells, as long as the draft's wells still cite the seed (nobody has changed them).
+The seed rarely says where wells sit. When an entry's Opentrons load name is verified and `seed/opentrons/` holds that definition (Apache-2.0, copied from Opentrons shared-data), the loader takes the pitch and A1 offset from it, and the well size too unless the seed's own is verified; the wells cite the definition's URL as datasheet evidence. A rerun gives types it made earlier the newer wells, as long as nobody entered or measured them (their evidence still cites the seed, or the standard positions below, which the labware's own definition supersedes). A draft changes at once; a confirmed type gets a proposal on the Review page for a person to approve, and a rerun doesn't propose it twice.
 
 ## Standard positions
 

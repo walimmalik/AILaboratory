@@ -5,6 +5,7 @@ import {
   LabwareFamily,
   LabwareTypeAttributes,
   OpentronsDefinition,
+  type Proposal,
   type RecordEnvelope,
   type WellLayout,
 } from '@ailab/schema';
@@ -12,6 +13,7 @@ import { parse } from 'yaml';
 import { z } from 'zod';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
+import { SBS_POSITIONS_REFERENCE } from './operations.ts';
 
 /**
  * Turns the reviewed seed file `seed/labware.yaml` (plan 006) into labware type drafts (plan 007).
@@ -326,14 +328,16 @@ export interface SeedReport {
   existing: string[];
   /** Drafts the loader made earlier whose well positions it has filled in since. */
   updated: string[];
+  /** Confirmed types it made earlier whose new well positions wait on a person's review. */
+  proposed: string[];
   skipped: SeedSkip[];
 }
 
 /**
  * Creates a draft for every seed labware type the lab doesn't have yet (matched by label), through
- * the same operations people and agents use. Vendors are matched by name or created as drafts. A draft
+ * the same operations people and agents use. Vendors are matched by name or created as drafts. A type
  * it made earlier gets newer seed wells only while nobody else has changed them (their evidence still
- * cites the seed).
+ * cites the seed): a draft at once, a confirmed type as a proposal on the Review page.
  */
 export async function loadSeedLabware(
   registry: OperationRegistry,
@@ -352,26 +356,41 @@ export async function loadSeedLabware(
   const existing = new Map((await list('labware_type')).map((r) => [r.label, r]));
   const vendors = new Map((await list('vendor')).map((v) => [v.label.toLowerCase(), v.id]));
   const reason = 'Seed lab (plan 006), loaded by plan 007';
-  const report: SeedReport = { created: [], existing: [], updated: [], skipped };
+  const report: SeedReport = { created: [], existing: [], updated: [], proposed: [], skipped };
+  // Records that already wait on a person for a seed change, so a rerun doesn't ask twice.
+  const pending = new Set(
+    (await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' })).proposals
+      .filter((p) => p.operationId === 'records.update')
+      .map((p) => (p.input as { id?: string }).id),
+  );
   for (const type of types) {
     const earlier = existing.get(type.label);
     if (earlier) {
       const wells = type.attributes.wells;
-      const seedOwned = earlier.evidence.wells?.note?.startsWith('Seed data') ?? false;
+      // Wells nobody entered or measured: still the seed's, or the standard SBS positions, which
+      // the labware's own Opentrons definition supersedes.
+      const was = earlier.evidence.wells;
+      const seedOwned =
+        (was?.note?.startsWith('Seed data') ?? false) || was?.reference === SBS_POSITIONS_REFERENCE;
       if (
-        earlier.status === 'draft' &&
+        earlier.status !== 'archived' &&
         seedOwned &&
         wells &&
-        !sameValue(earlier.attributes.wells, wells)
+        !sameValue(earlier.attributes.wells, wells) &&
+        !pending.has(earlier.id)
       ) {
-        await run('records.update', {
+        // A draft changes at once; a confirmed type becomes a proposal for a person to confirm.
+        const result = await registry.execute(ctx, 'records.update', {
           id: earlier.id,
           expectedVersion: earlier.version,
           attributes: { ...earlier.attributes, wells },
           evidence: { wells: type.evidence.wells },
           reason: 'Well positions from the seed (Opentrons definition)',
         });
-        report.updated.push(`${earlier.name} ${type.key}`);
+        const line = `${earlier.name} ${type.key}`;
+        if (result.status === 'proposed') report.proposed.push(line);
+        else if (result.status === 'done') report.updated.push(line);
+        else throw new Error(`records.update was ${result.status}`);
       } else {
         report.existing.push(type.key);
       }
