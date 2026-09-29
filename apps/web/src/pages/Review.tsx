@@ -52,7 +52,8 @@ function useInvalidate(id: string) {
 function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readiness: Readiness }) {
   const invalidate = useInvalidate(record.id);
   const confirm = useMutation({
-    mutationFn: () => api.run(recordsActivate, { id: record.id, expectedVersion: readiness.version }),
+    mutationFn: () =>
+      api.run(recordsActivate, { id: record.id, expectedVersion: readiness.version }),
     onSuccess: invalidate,
   });
   const draft = record.status === 'draft';
