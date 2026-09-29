@@ -14,6 +14,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
+import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { StatusChip } from './StatusChip.tsx';
@@ -86,7 +87,14 @@ export function RecordPage() {
       )}
 
       {readiness && readiness.sections.length > 0 ? (
-        <ReviewBlocks record={r} readiness={readiness} renderValue={renderValue} />
+        <ReviewBlocks
+          record={r}
+          readiness={readiness}
+          renderValue={renderValue}
+          aside={
+            r.kind === 'labware_type' ? <LabwareDrawing attributes={r.attributes} /> : undefined
+          }
+        />
       ) : (
         <section className="block">
           <header>

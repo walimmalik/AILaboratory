@@ -1,6 +1,6 @@
 # 007: Labware library
 
-- Status: round 1 accepted by Wali 2026-09-29 (L1 to L6 all as recommended). 007a built (ADR 0023): records operations replace the draft, update, get, search and confirm operations listed below. 007b in progress: Library pages (Labware, Vendors) in the menu; values edited in place from the review, with a "Fix in …" link on each failing check.
+- Status: round 1 accepted by Wali 2026-09-29 (L1 to L6 all as recommended). 007a built (ADR 0023): records operations replace the draft, update, get, search and confirm operations listed below. 007b in progress: Library pages (Labware, Vendors) in the menu; values edited in place from the review, with a "Fix in …" link on each failing check; type pages drawn to scale from above and in cross-section.
 - Depends on: 002 (records), 003 (operations), 004c (draft-and-confirm framework)
 - Feeds: 008 (which labware fits which instrument site), 009 (liquid classes), 010 (physical plates and tubes), 012 (SOP variables such as dead volume), 014 (plate maps), 016 (transfers and worklists)
 
