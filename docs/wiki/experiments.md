@@ -1,6 +1,6 @@
 # Experiments and designers
 
-The scientific frame (013, locked) and the designers that fill it (014, 016, 017, in planning). The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
+The scientific frame (013) and the designers that fill it (014, 016, 017). All four are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
 
 ## Campaigns, experiments and runs (plan 013)
 
@@ -20,11 +20,11 @@ The scientific frame (013, locked) and the designers that fill it (014, 016, 017
 - **Visibility**: everyone in the lab sees everything; owners and contributors drive "my work" filters.
 - A concluded experiment can propose lab memories ("edge wells evaporate at 48 h").
 
-## The designers (in planning)
+## The designers
 
-The plan files are in the project folder while their rounds run and come to `docs/plans` once locked. Rounds 1 and 2 are answered; round 3 (transfers) is asked; round 4 (templates and designer) is not asked yet. Don't build from this section.
+Locked 2026-09-29, all four rounds as recommended. The plan files come into `docs/plans` in their own docs PR.
 
-### How they fit together (round 1, answered)
+### How they fit together (round 1)
 
 - Three linked documents, each with its own draft and confirm: the **experiment** (filled by the designer), its **plate maps**, its **transfer plans**. One ask drafts all three and Review shows them together, but each confirms on its own, because plate maps and transfers are also needed without an experiment (library reformats, cherry-picks) and transfer plans are often confirmed on the day.
 - A plate map states **intended contents only** ("CMP-0003, 1.1 µM, 25 µL, 0.1% DMSO"). How to get there is the transfer plan's job, so one map runs on the Echo or the STAR unchanged.
@@ -33,7 +33,7 @@ The plan files are in the project folder while their rounds run and come to `doc
 - The transfer plan picks the physical containers and holds the reservations.
 - Upstream changes redraft downstream drafts; confirmed documents are marked "out of date" with a one-click redraft.
 
-### Plate maps (plan 014, round 2 answered)
+### Plate maps (plan 014)
 
 - Every placement strategy: in order (row-wise or column-wise), randomized within a plate, balanced across plates, and edge wells left out or filled with buffer. Each stores its seed and settings so the map rebuilds exactly.
 - The lab makes its own layout templates, from scratch or by saving a plate map as a template. Seed templates come from `seed/assays.yaml`.
@@ -43,13 +43,24 @@ The plan files are in the project folder while their rounds run and come to `doc
 - Small edits by hand (select wells, pick a role or subject); bigger ones through the agent.
 - Wells carry analysis groups (curve per compound, Z' per plate), so analysis doesn't guess.
 
-### Transfers (plan 016, round 3 asked)
+### Transfers (plan 016)
 
-Recommended, awaiting Wali: code solves the transfers exactly and the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates); code lists feasible instruments with their cost and the agent picks with a reason, switchable in one click; Echo CSV and Opentrons protocols first (checked in the Opentrons simulator), then CSV worklists for existing Hamilton methods, Mantis, PreciseDrop and FeliX, never Venus methods; Echo transfer reports imported and matched to the plan; default tip rules; deck layouts drafted and checked against the instrument's configuration.
+- Code in `packages/domain/transfers` solves targets and sources into exact transfers; the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates) and explains it.
+- **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations.
+- **Worklists from real examples.** Before 016a starts, one real file per instrument comes from Wali's laptop (Echo pick list and its reports, an Opentrons protocol, the Hamilton STAR and Vantage import CSV, Mantis, PreciseDrop), each a golden-file test. Echo and Opentrons writers are code; Hamilton, Mantis and PreciseDrop CSVs are **worklist format** records an agent drafts from an example and a person confirms, so a new lab method is data, not code. Never Venus methods.
+- Echo transfer reports are imported and matched to the plan; failed wells are flagged and the ledger records what really happened.
+- **Tips belong to the protocol.** Each instrument method declares how it handles tips; the plan counts tips and cost from that and warns on clashes. Default tip rules apply only where we write the protocol (Opentrons).
+- Deck layouts are drafted per instrument step and checked against the configuration; a missing module becomes a proposed configuration change with its time cost.
 
-### Experiment designer (plan 017, not asked yet)
+### Experiment designer (plan 017)
 
-Assay templates tying SOPs, a layout, defaults, readouts, controls, quality criteria and analysis together; a custom builder driven by conversation; a designer that asks only the essentials and fills the rest from conventions and lab memory, marked assumed; feasibility up front (instruments, stock after reservations, liquid classes, plate and tip counts, rough time).
+- An **assay template** is a versioned, confirmed record: the digital SOPs it combines, the layout template, default role bindings, the few essential inputs, controls, readouts, quality criteria (Z' at least 0.5), the analysis plan and the usual next assay.
+- The **custom builder** is the agent drafting that same record from a conversation, SOPs and past experiments; any experiment can be saved as a template. No block editor.
+- The **designer** asks only the template's essential inputs (ELISA: which samples and their dilution), fills the rest from the template and lab memory, marked assumed, and drafts the experiment, plate maps and transfer plans together.
+- Templates name capabilities and roles, not instruments; the designer binds them with 016's tools and says plainly what the lab can't do.
+- Conditions are factors with levels. Full factorial and one-factor-at-a-time first; fractional factorial and response-surface designs later through the science service.
+- Replicates and control counts come from template rules with reasons; plates, tips, reagent against stock and rough time are totalled before confirm. Power analysis waits for analysis (020).
+- Order: ELISA, then compound screen and dose-response, Dual-Glo, pNPP. Plasmid assembly waits for the workflow creator (018).
 
 ## The lab's assays
 

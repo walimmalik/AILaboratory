@@ -57,7 +57,7 @@ The **Review** page lists everything waiting for a person: drafts (with the sect
 - **Mark what is assumed.** Anything an agent guessed stays in agent ink until a person confirms it. Unknown values stay unknown.
 - **Open questions (012-G6).** Where a source is unclear (contradictions, "about 1 µL", missing values), the digitizer records an open question with the passages involved and a suggested answer. Open questions block confirm until a person answers or accepts.
 - **AI review loop (012-G11).** Before a person sees a digitized SOP, a reviewer model checks it against the source. It fixes only what the source settles, each fix a tracked change with a reason and a passage, and asks an open question where the source is ambiguous. Two rounds by default. The review never confirms anything.
-- **Downstream changes (in planning, P6).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
+- **Downstream changes (P6, plans 014 to 017).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
 
 ## Lab memory (plan 005, not started)
 

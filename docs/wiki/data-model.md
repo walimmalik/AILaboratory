@@ -85,8 +85,8 @@ Built kinds: only the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KIN
 | Experiment | `exp_` | `EXP-0001` | 013 |
 | Run | `run_` | `RUN-0001` | 013 |
 | Set | `set_` | `SET-001` | 013 |
-| Layout template | `lyt_` | `LYT-0001` | 014, in planning |
-| Plate map | `pmp_` | `PMP-0001` | 014, in planning |
+| Layout template | `lyt_` | `LYT-0001` | 014 |
+| Plate map | `pmp_` | `PMP-0001` | 014 |
 
 The seed's placeholder `DL` + 6 digit barcodes are replaced by container names (010-V5).
 
@@ -141,4 +141,4 @@ Rules flow: entity kinds and products carry them, an entity can tighten its kind
 
 ## Design documents
 
-Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, and (in planning) layout templates, plate maps and transfer plans. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).
+Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, layout templates, plate maps, transfer plans, worklist formats and assay templates. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).

@@ -2,7 +2,7 @@
 
 The short version of everything decided so far: the rules, the decisions, the data model and what each module will do. It is a map, not the source of truth. Each page links to the plan, ADR or architecture doc that holds the full reasoning, and where the two disagree, those win.
 
-Last brought up to date: 2026-09-29, after plan 013 was locked and while the designer plans (014, 016, 017) were still being asked.
+Last brought up to date: 2026-09-29, after the designer plans (014, 016, 017) were locked.
 
 ## Pages
 
@@ -16,7 +16,7 @@ Last brought up to date: 2026-09-29, after plan 013 was locked and while the des
 | [Architecture](architecture.md) | Services, packages, the operation registry and its doors, the in-app assistant |
 | [Registries](registries.md) | Labware (007), instruments (008), reagents and liquid classes (009), inventory (010) |
 | [SOPs and the library](sops.md) | The SOP and literature library (011) and digital SOPs (012) |
-| [Experiments and designers](experiments.md) | Campaigns, experiments and runs (013); plate maps, transfers and the experiment designer (014, 016, 017, in planning) |
+| [Experiments and designers](experiments.md) | Campaigns, experiments and runs (013); plate maps, transfers and the experiment designer (014, 016, 017) |
 | [Web app and design system](ui.md) | The bench console look, layout rules and what Wali does not want to see |
 | [Glossary](glossary.md) | Lab and app words as this project uses them |
 
@@ -32,7 +32,7 @@ Last brought up to date: 2026-09-29, after plan 013 was locked and while the des
 | SOP and literature test set | [docs/sop-library](../sop-library) |
 | UI screenshots | [docs/screens](../screens) |
 
-Plans 014, 016 and 017 are still in the project files while their question rounds run; they come into `docs/plans` in one PR once locked.
+Plans 014, 016 and 017 are locked and come into `docs/plans` in their own docs PR.
 
 ## Keeping it current
 

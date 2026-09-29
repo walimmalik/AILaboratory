@@ -35,10 +35,10 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [011 SOP and literature library](../plans/011-sop-library.md) | File store, documents, parsing, hybrid search, mining mentions | Locked; after 009a | 011a to 011d |
 | [012 Digital SOPs](../plans/012-digital-sops.md) | Structured SOPs with typed steps and variables, the digitizer, AI review loop, benchmark | Locked; after 011 | 012a to 012d |
 | [013 Campaigns and experiments](../plans/013-campaigns-and-experiments.md) | Campaigns, experiments, runs, sets, protocol binding, run recording | Locked; after 012 (013a can start after 010a) | 013a to 013d |
-| 014 Plate map designer | Layout templates, plate maps, the plate editor | In planning: rounds 1 (P) and 2 (M) answered | 014a, 014b |
+| 014 Plate map designer | Layout templates, plate maps, the plate editor | Locked | 014a, 014b |
 | 015 Twin port | echo650-twin twins into `packages/twin`, bound to the instrument registry | Not started | |
-| 016 Transfer designer | Transfer plans, instrument choice, deck layouts, worklists, run logs | In planning: round 3 (T1 to T6) asked, not answered | |
-| 017 Experiment designer | Assay templates, custom builder, the designer | In planning: round 4 not asked yet | |
+| 016 Transfer designer | Transfer plans, deterministic option tools, deck layouts, worklists, run logs | Locked; needs real worklist examples from Wali's laptop first | |
+| 017 Experiment designer | Assay templates, custom builder, the designer, factorial designs | Locked | |
 
 ## Later
 
