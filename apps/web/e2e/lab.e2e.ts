@@ -171,6 +171,7 @@ test('an agent drafts a record, a person reviews it section by section and confi
   await expect(readiness.getByText('Volume changed since it was confirmed')).toBeVisible();
 
   await volume.getByRole('button', { name: 'Confirm volume' }).click();
+  await expect(volume.getByText(/confirmed by you/)).toBeVisible();
   await appearance.getByRole('button', { name: 'Confirm appearance' }).click();
   await expect(readiness.getByText('ready to confirm')).toBeVisible();
   await confirmRecord.click();

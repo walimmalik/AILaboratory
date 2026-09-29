@@ -35,6 +35,7 @@ export function ReviewBlocks({
         <SectionBlock
           key={section.id}
           record={record}
+          version={readiness.version}
           section={section}
           renderValue={renderValue}
         />
@@ -51,7 +52,7 @@ function useInvalidate(id: string) {
 function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readiness: Readiness }) {
   const invalidate = useInvalidate(record.id);
   const confirm = useMutation({
-    mutationFn: () => api.run(recordsActivate, { id: record.id, expectedVersion: record.version }),
+    mutationFn: () => api.run(recordsActivate, { id: record.id, expectedVersion: readiness.version }),
     onSuccess: invalidate,
   });
   const draft = record.status === 'draft';
@@ -158,10 +159,13 @@ function Checks({ checks }: { checks: CheckResult[] }) {
 
 function SectionBlock({
   record,
+  version,
   section,
   renderValue,
 }: {
   record: RecordEnvelope;
+  /** The version the readiness report describes: what the person is looking at and confirming. */
+  version: number;
   section: ReadinessSection;
   renderValue: (value: unknown) => ReactNode;
 }) {
@@ -171,7 +175,7 @@ function SectionBlock({
     mutationFn: () =>
       api.run(recordsConfirmSection, {
         id: record.id,
-        expectedVersion: record.version,
+        expectedVersion: version,
         section: section.id,
       }),
     onSuccess: invalidate,
