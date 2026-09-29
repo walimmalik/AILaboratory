@@ -56,6 +56,17 @@ Pure logic in `packages/domain/transfers`: solving target concentrations into vo
 - **Report view:** the imported instrument report on the plate map, failed and short wells marked.
 - **Worklist formats:** the example file beside the drafted columns, confirmed like any design.
 
+## Dilution optimizer (added 2026-09-29, O1 to O3 asked)
+
+Wali's lab app today has a dilution optimizer: it works out an intermediate dilution plate so each target concentration is hit by a dilution instead of an impossible droplet count, and its workflow builds that plate and its transfers for you. 016 builds the same thing:
+
+- **Deterministic code, not the agent.** `transfers.optimize_dilution` (behind `transfers.dilution_options`, in `packages/domain/transfers`) takes the target concentrations (a 014 series), the stocks available, the instrument's droplet or volume resolution and range, the solvent limit, dead volumes and a tolerance, and returns ranked options: which intermediate concentrations to make, how to make each, and per target which well, how many droplets and how much backfill, with the achieved concentration and its error at every point. The agent only chooses between the options and explains the choice.
+- **Real drafts.** The chosen option becomes an intermediate plate map (014) and the transfers that make and use it (this plan), both drafted and waiting for confirm like any other design. The intermediate plate becomes a real container in inventory (010) when the plan runs.
+- **Workflows pick it up.** The workflow creator (018) receives the intermediate plate and its transfer steps automatically, through its "code builds the draft" path (W2).
+- **Starting point.** echo650-twin's `src/agent/science/dose-response.js` already has the two simple cases (a series pre-made on the source plate, and direct dispense with DMSO backfill that fails loudly when a point is out of reach); they are ported as the degenerate cases. If the lab app's optimizer code or rules can be shared, its logic is ported rather than reinvented, and one of its results becomes a test case.
+
+Open questions (asked 2026-09-29): O1 what it solves for (recommended: fewest intermediate concentrations shared by every compound on the plate, ranked options), O2 the default tolerance (recommended: ±5% per point, set on the assay template, achieved concentration stored in the well), O3 how the intermediate plate is made (recommended: a preparation step in the transfer plan, instrument picked by `transfers.options`, reusable while within its stability window).
+
 ## Round 3 answers
 
 Wali chose A for T1 to T6 on 2026-09-29, with these notes:
@@ -87,7 +98,7 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution, source volumes, tip counting), the four recommendation operations, transfer plan operations, reservations.
+- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution optimizer, source volumes, tip counting), the recommendation operations, transfer plan operations, reservations.
 - **016b:** Echo pick list writer and transfer and survey report import, Opentrons protocol writer checked in the simulator, deck layouts, against the examples in `seed/worklists/`.
 - **016c:** worklist format records and the generic CSV writer: Hamilton STAR and Vantage, Mantis, PreciseDrop, FeliX.
 - **016d:** transfer plan page, deck view, loading list, report view, agent drafting, skill.
