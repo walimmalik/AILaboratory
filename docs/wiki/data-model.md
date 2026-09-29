@@ -131,6 +131,9 @@ flowchart LR
   RUN -- uses --> LOT
   EXP -. 014 .-> PMP[Plate map]
   PMP -. 016 .-> TP[Transfer plan]
+  EXP -. 018 .-> WF[Workflow]
+  WF -- steps from --> SOP
+  WF -- sessions from --> TP
 ```
 
 ## Handling rules and constraints
@@ -141,4 +144,4 @@ Rules flow: entity kinds and products carry them, an entity can tighten its kind
 
 ## Design documents
 
-Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, layout templates, plate maps, transfer plans, worklist formats and assay templates. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).
+Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, layout templates, plate maps, transfer plans, worklist formats, assay templates, workflows and workflow templates. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).
