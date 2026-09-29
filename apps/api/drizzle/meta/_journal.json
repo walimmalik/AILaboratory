@@ -8,6 +8,13 @@
       "when": 1790704394328,
       "tag": "0000_core_records",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790705648236,
+      "tag": "0001_operations_activity",
+      "breakpoints": true
     }
   ]
 }

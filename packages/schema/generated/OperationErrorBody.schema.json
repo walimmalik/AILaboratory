@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "unauthorized",
+        "forbidden",
+        "unknown_operation",
+        "invalid_input",
+        "not_found",
+        "unknown_kind",
+        "invalid_attributes",
+        "invalid_state",
+        "version_conflict",
+        "invalid_link",
+        "linked",
+        "internal"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "details": {}
+  },
+  "required": [
+    "code",
+    "message"
+  ],
+  "additionalProperties": false
+}

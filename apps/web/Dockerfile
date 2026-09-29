@@ -2,8 +2,11 @@ FROM node:24-alpine AS build
 WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/schema/package.json packages/schema/
+COPY packages/client/package.json packages/client/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --filter @ailab/web...
+COPY packages packages
 COPY apps/web apps/web
 RUN pnpm --filter @ailab/web build
 

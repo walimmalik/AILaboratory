@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from './api.ts';
 
 type ApiStatus = 'checking' | 'ok' | 'unreachable';
 
@@ -6,9 +7,7 @@ export function App() {
   const [status, setStatus] = useState<ApiStatus>('checking');
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((response) => setStatus(response.ok ? 'ok' : 'unreachable'))
-      .catch(() => setStatus('unreachable'));
+    api.health().then((ok) => setStatus(ok ? 'ok' : 'unreachable'));
   }, []);
 
   return (

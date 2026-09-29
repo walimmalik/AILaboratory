@@ -1,27 +1,13 @@
 import { convert } from '@ailab/domain';
-import { type Actor, defineKind, Quantity, recordIdOf } from '@ailab/schema';
+import type { Actor, Quantity } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { RecordError } from './errors.ts';
 import { KindRegistry } from './kinds.ts';
 import { type RecordContext, RecordService } from './service.ts';
-
-/** A test-only kind: a colored widget with a volume, optionally part of another widget. */
-const widget = defineKind({
-  kind: 'widget',
-  idPrefix: 'wdg',
-  namePrefix: 'WDG',
-  nameWidth: 4,
-  attributes: z.object({
-    color: z.string(),
-    volume: Quantity,
-    partOf: recordIdOf('wdg').optional(),
-  }),
-  links: (a) => (a.partOf ? [{ toId: a.partOf, relation: 'part_of' }] : []),
-});
+import { widget } from './test-kinds.ts';
 
 let db: Db;
 let close: () => Promise<void>;

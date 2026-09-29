@@ -1,4 +1,10 @@
-import type { Actor, RecordEnvelope, RecordOperation, RecordStatus } from '@ailab/schema';
+import type {
+  Actor,
+  OperationErrorBody,
+  RecordEnvelope,
+  RecordOperation,
+  RecordStatus,
+} from '@ailab/schema';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -130,4 +136,62 @@ export const nameCounters = pgTable(
     lastValue: integer('last_value').notNull(),
   },
   (t) => [primaryKey({ columns: [t.labId, t.prefix] })],
+);
+
+/** Changes an agent proposed, waiting for a person (plan 003). */
+export const proposals = pgTable(
+  'proposals',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    operationId: text('operation_id').notNull(),
+    input: jsonb('input').notNull(),
+    preview: jsonb('preview'),
+    status: text('status').$type<'pending' | 'approved' | 'rejected' | 'failed'>().notNull(),
+    proposedBy: jsonb('proposed_by').$type<Actor>().notNull(),
+    proposedAt: timestamp('proposed_at', { withTimezone: true }).notNull(),
+    reason: text('reason'),
+    decidedBy: jsonb('decided_by').$type<Actor>(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decisionReason: text('decision_reason'),
+    error: jsonb('error').$type<OperationErrorBody>(),
+  },
+  (t) => [
+    index('proposals_lab_status_idx').on(t.labId, t.status, t.proposedAt),
+    check(
+      'proposals_status_check',
+      sql`${t.status} in ('pending', 'approved', 'rejected', 'failed')`,
+    ),
+  ],
+);
+
+/** The lab's activity ledger: every change, proposal and decision (plan 003). Reads are not logged. */
+export const activity = pgTable(
+  'activity',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    actor: jsonb('actor').$type<Actor>().notNull(),
+    operationId: text('operation_id').notNull(),
+    outcome: text('outcome')
+      .$type<'succeeded' | 'failed' | 'proposed' | 'approved' | 'rejected'>()
+      .notNull(),
+    recordIds: jsonb('record_ids').$type<string[]>().notNull(),
+    proposalId: text('proposal_id'),
+    input: jsonb('input').notNull(),
+    error: jsonb('error').$type<OperationErrorBody>(),
+    durationMs: integer('duration_ms').notNull(),
+  },
+  (t) => [index('activity_lab_at_idx').on(t.labId, t.at)],
 );
