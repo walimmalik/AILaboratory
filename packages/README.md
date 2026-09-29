@@ -1,0 +1,11 @@
+# packages
+
+Shared libraries live here, one folder per package. None exist yet; plan 002 adds `schema` and `domain`.
+
+| Package | Plan | Purpose |
+| --- | --- | --- |
+| `schema` | 002 | Single source of truth for record, document and operation schemas |
+| `domain` | 002 | Pure domain logic (units, volume math, plate geometry), no I/O |
+| `client` | 003 | Generated typed API client |
+| `twin` | 015 | Instrument digital twins, ported from echo650-twin |
+| `scheduler` | 019 | Scheduling and simulation, ported from echo650-twin |

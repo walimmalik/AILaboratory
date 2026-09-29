@@ -1,0 +1,52 @@
+# Full stack: docker compose up --build
+# Database only (for pnpm dev): docker compose up db
+name: ailab
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ailab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ailab-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-ailab}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      API_PORT: 3001
+      DATABASE_URL: postgres://${POSTGRES_USER:-ailab}:${POSTGRES_PASSWORD:-ailab-dev-only}@db:5432/${POSTGRES_DB:-ailab}
+      SCIENCE_URL: http://science:8001
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  science:
+    build:
+      context: apps/science
+    ports:
+      - "8001:8001"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  db-data:
