@@ -22,7 +22,7 @@ The scientific frame (013), the designers that fill it (014, 016, 017) and the w
 
 ## The designers
 
-Locked 2026-09-29, all four rounds as recommended. The plan files come into `docs/plans` in their own docs PR.
+Locked 2026-09-29, all four rounds as recommended: [014](../plans/014-plate-map-designer.md), [016](../plans/016-transfer-designer.md), [017](../plans/017-experiment-designer.md).
 
 ### How they fit together (round 1)
 
@@ -46,8 +46,9 @@ Locked 2026-09-29, all four rounds as recommended. The plan files come into `doc
 ### Transfers (plan 016)
 
 - Code in `packages/domain/transfers` solves targets and sources into exact transfers; the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates) and explains it.
-- **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations.
-- **Worklists from real examples.** Before 016a starts, one real file per instrument comes from Wali's laptop (Echo pick list and its reports, an Opentrons protocol, the Hamilton STAR and Vantage import CSV, Mantis, PreciseDrop), each a golden-file test. Echo and Opentrons writers are code; Hamilton, Mantis and PreciseDrop CSVs are **worklist format** records an agent drafts from an example and a person confirms, so a new lab method is data, not code. Never Venus methods.
+- **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations. They are lab calculators (ADR 0024).
+- **Dilution optimizer.** `transfers.optimize_dilution` decides per compound and point whether the source plate works or an intermediate dilution is needed, and packs every compound into the fewest intermediate plates and wells within the DMSO limit and the plate's dead and maximum volume, optimizing accuracy first, then plates, then wells. Its result is drafted as intermediate plate maps and transfer plans, which become workflow steps on their own (018).
+- **Worklists from examples.** Each writer is tested against one example file per instrument (Echo pick lists and their transfer and survey reports, an Opentrons Flex protocol, the Hamilton STAR and Vantage import CSVs, Mantis, PreciseDrop) as a golden file. Mocks live in `seed/worklists/` until real exports come from Wali's laptop. Echo and Opentrons writers are code; Hamilton, Mantis and PreciseDrop CSVs are **worklist format** records an agent drafts from an example and a person confirms, so a new lab method is data, not code. Never Venus methods.
 - Echo transfer reports are imported and matched to the plan; failed wells are flagged and the ledger records what really happened.
 - **Tips belong to the protocol.** Each instrument method declares how it handles tips; the plan counts tips and cost from that and warns on clashes. Default tip rules apply only where we write the protocol (Opentrons).
 - Deck layouts are drafted per instrument step and checked against the configuration; a missing module becomes a proposed configuration change with its time cost.

@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 013 record their decisions in the plan files; their ADRs are written when each plan is built.
+Plans 006 to 018 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -32,6 +32,7 @@ Plans 006 to 013 record their decisions in the plan files; their ADRs are writte
 | [0020](../decisions/0020-own-agent-loop.md) | The in-app assistant runs our own tool loop with adapters for Anthropic, OpenRouter and OpenAI-compatible models |
 | [0021](../decisions/0021-draft-and-confirm.md) | Draft and confirm: per-field evidence, section confirmations, derived confirmation, readiness checks |
 | [0022](../decisions/0022-one-place-to-review.md) | One Review page, one verb ("Confirm"), and the last section's confirm activates the draft |
+| [0023](../decisions/0023-labware-types.md) | Labware types are a record kind with sections and checks; drafting, editing and confirming go through `records.*`, with labware operations only for Opentrons import and export and the well list |
 | [0024](../decisions/0024-lab-calculators.md) | Lab calculators: deterministic read operations every agent calls for volumes, dilutions, feasibility and totals, indexed by one skill |
 
 ## 000 Foundation (D1 to D7, all as recommended)
@@ -143,7 +144,7 @@ E1 campaign, experiment, run. E2 an experiment is the design; a run is one execu
 
 ## Designers: 014 plate maps, 016 transfers, 017 experiment designer (all as recommended)
 
-Locked 2026-09-29. The plan files move from the project folder into `docs/plans` in their own docs PR.
+Locked 2026-09-29. Plans: [014](../plans/014-plate-map-designer.md), [016](../plans/016-transfer-designer.md), [017](../plans/017-experiment-designer.md).
 
 - **Round 1 (P1 to P6, shared):** three linked documents (experiment, plate maps, transfer plans), each confirmed on its own; a plate map states intended contents only; layout templates plus plate maps; maps store the rules and the wells with overrides; the transfer plan picks containers and holds reservations; upstream changes mark confirmed documents "out of date" and redraft drafts.
 - **Round 2, 014 (M1 to M6):** every placement strategy (in order, randomized, balanced across plates, edge handling) with stored seeds, and lab-made layout templates; a dilution series is one object; one plate map spans many plates; a layout is for one plate format; small edits by hand, bigger ones through the agent; wells carry analysis groups.

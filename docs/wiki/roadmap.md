@@ -23,8 +23,8 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 | Plan | Delivers | Status | Split |
 | --- | --- | --- | --- |
-| [007 Labware](../plans/007-labware-library.md) | Labware types, geometry, volumes, dead volumes, Opentrons import and export | 007a built; 007b in progress (library pages, editing in place) | 007a model and import, 007b screens |
-| [008 Instruments](../plans/008-instrument-library.md) | Instrument and equipment kinds, registered instruments, configurations, capabilities, workcells | Locked; after 007a | 008a to 008d (008d workcells gets a short question round first) |
+| [007 Labware](../plans/007-labware-library.md) | Labware types, geometry, volumes, dead volumes, Opentrons import and export | 007a built (PR #13, ADR 0023); 007b in progress: Library pages, editing in place and to-scale drawings merged (PRs #16, #19) | 007a model and import, 007b screens |
+| [008 Instruments](../plans/008-instrument-library.md) | Instrument and equipment kinds, registered instruments, configurations, capabilities, workcells | Locked; next to build | 008a to 008d (008d workcells gets a short question round first) |
 | [009 Reagents and liquids](../plans/009-reagents-and-liquids.md) | Products, kits, recipes, lots, handling rules, liquid types and classes | Locked; after 008a | 009a to 009c |
 | [010 Inventory](../plans/010-inventory.md) | Entities, samples, containers, locations, barcodes, volume ledger, inherited handling rules | Locked; after 009a | 010a to 010e |
 
@@ -35,10 +35,10 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [011 SOP and literature library](../plans/011-sop-library.md) | File store, documents, parsing, hybrid search, mining mentions | Locked; after 009a | 011a to 011d |
 | [012 Digital SOPs](../plans/012-digital-sops.md) | Structured SOPs with typed steps and variables, the digitizer, AI review loop, benchmark | Locked; after 011 | 012a to 012d |
 | [013 Campaigns and experiments](../plans/013-campaigns-and-experiments.md) | Campaigns, experiments, runs, sets, protocol binding, run recording | Locked; after 012 (013a can start after 010a) | 013a to 013d |
-| 014 Plate map designer | Layout templates, plate maps, the plate editor | Locked | 014a, 014b |
+| [014 Plate map designer](../plans/014-plate-map-designer.md) | Layout templates, plate maps, the plate editor | Locked; after 013a and 010c | 014a, 014b |
 | 015 Twin port | echo650-twin twins into `packages/twin`, bound to the instrument registry | Not started | |
-| 016 Transfer designer | Transfer plans, deterministic option tools, deck layouts, worklists, run logs | Locked; needs real worklist examples from Wali's laptop first | |
-| 017 Experiment designer | Assay templates, custom builder, the designer, factorial designs | Locked | |
+| [016 Transfer designer](../plans/016-transfer-designer.md) | Transfer plans, the dilution optimizer and other calculators, deck layouts, worklists, run logs | Locked; after 014a and 009b. Worklist examples are mocked in `seed/worklists/` until real exports exist | |
+| [017 Experiment designer](../plans/017-experiment-designer.md) | Assay templates, custom builder, the designer, factorial designs | Locked; after 013d, 014 and 016a | |
 | [018 Workflow creator](../plans/018-workflow-creator.md) | Workflows as one-work-unit graphs chaining SOPs and transfer plans, labware paths, timing windows and handling rules with sources, the schedule request for 019 | Locked; after 012, 014a and 016a | 018a to 018c |
 
 ## Later
@@ -52,4 +52,4 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 ## Build order
 
-007a, then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
+007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017 and 018 follow in the order their rows say. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.

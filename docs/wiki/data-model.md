@@ -53,18 +53,18 @@ Every attribute's value has a source ([ADR 0021](../decisions/0021-draft-and-con
 | `datasheet` | From a vendor datasheet |
 | `imported` | From an import (Opentrons library, echo650-twin catalog, Venus export) |
 | `measured` | Measured in the lab |
-| `calculated` | Computed from other values |
+| `calculated` | Computed from other values, usually by a calculator operation (ADR 0024), which is named with its inputs |
 
 Seed data uses its own marking per value: verified, estimated or unknown. Loaders map these onto evidence.
 
 ## IDs and readable names
 
-Built kinds: only the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
+Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
 
 | Kind | ID prefix | Readable name | Plan |
 | --- | --- | --- | --- |
-| Vendor or manufacturer | `vnd_` | `VND-0001` | 007 |
-| Labware type | `lwt_` | `LWT-0001` | 007 |
+| Vendor or manufacturer | `vnd_` | `VND-0001` | 007, built |
+| Labware type | `lwt_` | `LWT-0001` | 007, built |
 | Instrument kind | `ink_` | `INK-0001` | 008 |
 | Equipment kind | `eqk_` | `EQK-0001` | 008 |
 | Instrument | `ins_` | `INS-0001` (plus a short name like `FLX-01`) | 008 |
@@ -94,7 +94,7 @@ The seed's placeholder `DL` + 6 digit barcodes are replaced by container names (
 
 A `Quantity` is `{ "value": "12.5", "unit": "uL" }`: an exact decimal string and an ASCII unit code with a display symbol (µL). Conversion only happens within a family; mass to molar needs a molar mass from the record; temperatures convert but don't add.
 
-Families today: volume, mass, amount, molar concentration, mass concentration (including ng/µL), molar mass, time, temperature, cells and cell density, optical density per wavelength (OD600), %v/v, %w/v, %w/w, enzyme activity (U, U/mL), CFU and CFU density. Plan 007 adds length (mm), wavelength (nm), speed (rpm) and centrifugal force (x g).
+Families today: volume, mass, amount, molar concentration, mass concentration (including ng/µL), molar mass, time, temperature, cells and cell density, optical density per wavelength (OD600), %v/v, %w/v, %w/w, enzyme activity (U, U/mL), CFU and CFU density, length (m to nm, for geometry and wavelengths), rotational speed (rpm) and relative centrifugal force (× g).
 
 ## Actors
 

@@ -29,6 +29,10 @@ A **proposal** stores the input and a preview (the operation run and rolled back
 
 **Earned autonomy (010-V7).** Wali wants agents to earn autonomy. The ledger will keep, per scenario ("move requested in the same conversation", "consume recorded by a run log"), how often proposals were confirmed unchanged, edited or rejected. When the record is good enough, a person can switch that scenario to auto-confirm; the switch is itself a recorded, reversible setting. Nothing auto-confirms at launch.
 
+## Calculators: agents compute, they don't guess
+
+Numbers agents rely on come from **calculators** ([ADR 0024](../decisions/0024-lab-calculators.md)): read operations marked `calculator: true`, backed by pure functions in `packages/domain`, indexed by one skill (`skills/calculators/`) that every agent loads, the in-app assistant included. A calculator returns the result, the inputs it used with their sources, ranked options with the numbers behind the ranking, and a plain explanation; it never writes. When an agent puts a calculator's result into a draft, the value's evidence is `calculated` by that operation, not `assumed`. People reach the same calculators from the UI. Planned so far: unit and mass-to-molar conversion, mixing and C1V1, plate-to-plate mappings, recipe scaling, liquid-class resolution, dead-volume lookup, SOP expressions, series expansion and placement, `transfers.options`, `transfers.dilution_options`, `transfers.optimize_dilution`, `transfers.source_volumes`, `transfers.check`, design totals and factor expansion.
+
 ## Preview and all-or-nothing
 
 Every write runs in one transaction. `?preview=true` (REST) or `preview: true` (MCP) runs the real code and rolls back, returning exactly what would have happened; nothing is saved or logged. Batches are all-or-nothing.
@@ -46,11 +50,12 @@ A draft is a record in `draft` status. Kinds that people review declare **sectio
 - **Readiness checks** live on the kind in code: a plain label, blocker or warning, the source of the rule, the section, a suggested fix, and a test. `records.readiness` returns sections, per-field state, check results and what is missing in plain words.
 - **The last section activates.** Confirming the last section of a draft, with no blocker failing, activates it in the same version; the button says "Confirm … and activate".
 - **Approval confirms.** Confirming an agent's proposed change confirms the sections it touched, since the person reviewed exactly that change.
+- **Editing in place.** From the review, Edit opens a section as a form drawn from the kind's schema; the person says where the values came from (entered, measured, a datasheet with a link, calculated, with a note), and Save runs `records.update`, the same operation an agent uses. Each failing check has a "Fix in …" link to its section; passing checks fold away.
 - **People creating records.** A person may create a record active directly, which confirms every section as written; an agent may not.
 
 ## One place to review
 
-The **Review** page lists everything waiting for a person: drafts (with the sections left, what is missing and how many values are assumed) and proposed changes to active records (before and after, Confirm change or Reject). The nav shows one count. After an assistant turn that left something waiting, the panel adds a "Waiting for you" line computed by the app, not written by the model. One verb throughout: "Confirm". Record status reads "draft · needs your review", "active", or "active · change waiting".
+The **Review** page lists everything waiting for a person, grouped by kind: drafts (with the sections left, what is missing and how many values are assumed) and proposed changes to active records (before and after, Confirm change or Reject). The nav shows one count. After an assistant turn that left something waiting, the panel adds a "Waiting for you" line computed by the app, not written by the model. One verb throughout: "Confirm". Record status reads "draft · needs your review", "active", or "active · change waiting".
 
 ## Assumptions, questions and review loops
 

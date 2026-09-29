@@ -17,7 +17,7 @@ A modular monolith: one TypeScript API with clear module boundaries, a Python se
 | Package | Holds |
 | --- | --- |
 | `packages/schema` | The single source: record envelope, quantities, actors, kinds, operation contracts, all in Zod 4; JSON Schema generated into `generated/` |
-| `packages/domain` | Pure logic with unit tests and no I/O: units and exact decimal math, IDs and names, readiness; later labware geometry, liquid-class resolution, mixing math, plate-map placement, transfer solving, the SOP expression language |
+| `packages/domain` | Pure logic with unit tests and no I/O: units and exact decimal math, IDs and names, readiness, labware geometry (well names, computed wells, SBS rules, liquid height for flat wells), Opentrons import and export; later liquid-class resolution, mixing math, plate-map placement, transfer solving, the SOP expression language |
 | `packages/client` | The typed API client used by the web app and tests |
 | `packages/twin`, `packages/scheduler` | Ported from echo650-twin in plans 015 and 019 |
 
@@ -32,7 +32,19 @@ An operation's public half is a contract in `packages/schema/src/operations` (ID
 | Live streams | `GET /v1/activity/stream` (ledger), `GET /v1/assistant/conversations/{id}/stream` |
 | Web app | `@ailab/client` with the session cookie |
 
-Adding a capability: a contract, an implementation registered in `createRegistry`, tests for valid input, invalid input and permission, and a line in the module's skill.
+Adding a capability: a contract, an implementation registered in `createRegistry`, tests for valid input, invalid input and permission, and a line in the module's skill. A new registry is first a record kind with sections and checks (ADR 0023); a calculation is a calculator operation with a line in the calculators skill (ADR 0024).
+
+## Modules built so far
+
+| Module | Doc |
+| --- | --- |
+| Core records, draft and confirm | [core-records.md](../architecture/core-records.md) |
+| Operations, REST, MCP, proposals, ledger | [operations.md](../architecture/operations.md) |
+| Web app | [web-app.md](../architecture/web-app.md) |
+| In-app assistant | [assistant.md](../architecture/assistant.md) |
+| Labware types and vendors, Opentrons import and export, seed loader | [labware.md](../architecture/labware.md) |
+
+`pnpm --filter @ailab/api seed` loads the seed lab through the operations as the agent "Seed loader", as drafts to review (labware so far). Verified values carry datasheet evidence with the source URL, estimated values are assumed, and unknown values are left out so readiness lists them. It is safe to run again.
 
 ## The in-app assistant
 
