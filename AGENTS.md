@@ -26,6 +26,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 ## Engineering rules
 
 - Schemas change first (in `packages/schema`); JSON Schema and migrations are generated from them with `pnpm generate`, and CI fails on stale generated files.
+- Capabilities are operations (`packages/schema/src/operations` plus `apps/api/src/operations`); see `docs/architecture/operations.md`. The web app calls the API only through `@ailab/client`.
 - Records go through the record service (`apps/api/src/records`), never raw inserts: it enforces versions, history, links and names. See `docs/architecture/core-records.md`.
 - Tests use PGlite (in-memory Postgres), so `pnpm test` needs no Docker.
 - Pure domain logic (units, volume math, plate geometry, variable evaluation) lives in `packages/domain` with unit tests, no I/O.
@@ -43,6 +44,7 @@ apps/web       React + Vite UI
 apps/science   Python service (FastAPI): statistics, curve fits, chemistry, sequences
 packages/      shared TypeScript packages (see packages/README.md)
 docs/          architecture, decisions (ADRs), plans
+skills/        one skill per module, explaining its operations to agents
 compose.yaml   local stack: Postgres (pgvector), api, science, web
 ```
 
@@ -56,6 +58,7 @@ Run from the repo root unless noted.
 | Database only | `docker compose up db` |
 | Apply migrations | `pnpm --filter @ailab/api db:migrate` (needs `DATABASE_URL`; the API also migrates on start) |
 | First-run setup (org, lab, user, token) | `pnpm --filter @ailab/api bootstrap` |
+| Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
 | Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |
 | Science service (:8001) | `cd apps/science && uv run uvicorn science.main:app --reload --port 8001` |

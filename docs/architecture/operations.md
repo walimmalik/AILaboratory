@@ -1,0 +1,72 @@
+# Operations: registry, REST, MCP, proposals and the activity ledger
+
+Every capability is an **operation**. People (through the web app) and agents (through MCP or REST) call the same operations through the same code path, so the UI can do nothing an agent can't. Decisions: ADRs 0015 to 0018.
+
+## Pieces
+
+| Piece | Where |
+| --- | --- |
+| Contracts: ID, summary, effect (`read` or `write`), Zod input and output | `packages/schema/src/operations/` |
+| Result, error, proposal and activity shapes | `packages/schema/src/operation.ts` |
+| Registry and `execute` | `apps/api/src/operations/registry.ts` |
+| Implementations | `apps/api/src/operations/*-operations.ts` |
+| REST, OpenAPI and the live stream | `apps/api/src/app.ts`, `operations/describe.ts` |
+| MCP server | `apps/api/src/operations/mcp.ts` |
+| Typed client | `packages/client` |
+| Skills for agents | `skills/` |
+
+## What `execute` does
+
+1. Looks up the operation and validates input against its contract (`invalid_input` with a readable list of problems).
+2. Refuses agents on people-only operations (`forbidden`), such as approving proposals.
+3. Reads run and return `{status: "done", output}`. They are not logged.
+4. Writes:
+   - **Preview** (`?preview=true`): runs in a transaction and rolls back. Returns `{status: "preview", output}`; nothing is saved or logged, not even a readable-name counter.
+   - **Agent with a `propose` policy**: previews, stores a proposal with that preview, logs `proposed`, and returns `{status: "proposed", proposal}`.
+   - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
+5. Output is checked against the contract before it leaves the server.
+
+## Agent policies
+
+A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per call. People always run directly. Current record policies:
+
+| Operation | Agents |
+| --- | --- |
+| `records.create` | direct for drafts, proposed when `status: "active"` |
+| `records.update`, `records.restore` | direct on drafts, proposed on active records |
+| `records.activate`, `records.archive`, `records.unarchive` | proposed |
+| `records.delete_draft` | direct |
+
+Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.
+
+## Doors
+
+| Door | How |
+| --- | --- |
+| REST | `GET /v1/operations` (contracts with JSON Schemas), `POST /v1/ops/{id}` with a JSON body and optional `?preview=true`, `GET /v1/openapi.json` |
+| Errors | HTTP 400/401/403/404/409/500 with `{code, message, details?}` |
+| Live ledger | `GET /v1/activity/stream`: server-sent events `ready`, `activity` (one ledger entry) and `ping` every 25 s, for the caller's lab |
+| MCP | `POST /mcp` (Streamable HTTP, stateless, JSON responses). Two tools: `describe_operations` (optionally by namespace or IDs) and `run_operation` (`operation`, `input`, `preview`). Refusals come back as tool errors with `{code, message}`. |
+| Web app | `@ailab/client`: `call(contract, input, {preview})` returns the typed result; `run` returns the output or throws. `apps/web/src` may not use `fetch` (lint rule). |
+
+All doors need `Authorization: Bearer <token>`. Agent tokens act on behalf of a person: `pnpm --filter @ailab/api token --agent "Claude Code"`.
+
+## Connecting an agent
+
+Any MCP client works, including bring-your-own-key models. For Claude Code on your machine:
+
+```bash
+claude mcp add --transport http ailab http://localhost:3001/mcp --header "Authorization: Bearer <agent token>"
+```
+
+## Adding an operation
+
+1. Add the contract to `packages/schema/src/operations/<module>.ts` and export it.
+2. Implement it with `implement(contract, {run, agentPolicy})` in `apps/api/src/operations/` and register it in `createRegistry`.
+3. Test valid input, invalid input and permission (agent policy or people-only), per AGENTS.md.
+4. Explain it in the module's skill in `skills/`.
+
+## Limits for now
+
+- The live stream uses an in-process bus. Several API replicas will need Postgres `LISTEN/NOTIFY`.
+- No roles yet: any person in the lab may approve.

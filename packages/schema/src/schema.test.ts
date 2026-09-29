@@ -56,7 +56,10 @@ describe('json schema', () => {
   it('exports every published schema', () => {
     const schemas = toJsonSchemas();
     expect(Object.keys(schemas).sort()).toEqual([
+      'ActivityEntry',
       'Actor',
+      'OperationErrorBody',
+      'Proposal',
       'Quantity',
       'RecordEnvelope',
       'RecordLink',
