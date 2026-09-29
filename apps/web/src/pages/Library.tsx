@@ -1,15 +1,16 @@
 import type { LabwareFamily, LabwareTypeAttributes, RecordEnvelope } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { formatValue } from '../lib/format.ts';
 import type { KindPage } from '../lib/kinds.ts';
 import { libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
+import { ImportOpentrons } from './ImportOpentrons.tsx';
 import { RecordList } from './Records.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 
-function Head({ page, lede }: { page: KindPage; lede: string }) {
+function Head({ page, lede, actions }: { page: KindPage; lede: string; actions?: ReactNode }) {
   return (
     <div className="page-head">
       <div>
@@ -19,6 +20,7 @@ function Head({ page, lede }: { page: KindPage; lede: string }) {
         <h1>{page.title}</h1>
         <p className="lede">{lede}</p>
       </div>
+      {actions}
     </div>
   );
 }
@@ -67,6 +69,7 @@ export function LabwarePage() {
       <Head
         page={page('labware_type')}
         lede="The kinds of plates, reservoirs, tubes, racks and tip racks the lab uses, with their geometry and volumes. Physical plates and what is in them come with inventory."
+        actions={<ImportOpentrons />}
       />
       <RecordList
         title="Labware types"

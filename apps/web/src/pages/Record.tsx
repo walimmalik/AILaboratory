@@ -15,6 +15,7 @@ import {
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
+import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { StatusChip } from './StatusChip.tsx';
@@ -92,7 +93,12 @@ export function RecordPage() {
           readiness={readiness}
           renderValue={renderValue}
           aside={
-            r.kind === 'labware_type' ? <LabwareDrawing attributes={r.attributes} /> : undefined
+            r.kind === 'labware_type' ? (
+              <>
+                <LabwareDrawing attributes={r.attributes} />
+                <OpentronsBlock record={r} />
+              </>
+            ) : undefined
           }
         />
       ) : (
