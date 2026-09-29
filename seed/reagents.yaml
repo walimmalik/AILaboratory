@@ -1,0 +1,869 @@
+# Reagent products and kits (real catalog items, plan 009), then the demo lab's lots.
+# Researched 2026-09-29 from vendor product pages, datasheets and technical manuals (WebFetch).
+#
+# Conventions
+#   quantity: {value: "<string>", unit: <one of: L mL uL nL g mg ug ng M mM uM nM mg/mL ug/mL ng/mL pg/mL
+#              g/mol s min h d degC %v/v %w/v cells/mL U/mL>}
+#   Counts (reactions, preps, plates, vials, assays) are not units in the app's list, so they are given as
+#   plain `count:` strings with a `count_of:` noun.
+#   Ratios (reagent:medium, dilution factors) are given as strings like "1:1", "1:100".
+#   status.<field>: verified   = read on a primary source (vendor page, datasheet, manual) listed in source_urls
+#                   estimated  = general lab knowledge / convention, NOT read on a primary source this session
+#                   unknown    = not found; do not invent
+#   handling_rules[].source: vendor | lab_convention
+#   liquid_behaviour hints are estimated unless a source is cited.
+
+products:
+
+  # ---------------------------------------------------------------- ELISA (IL-6 sandwich, 96-well)
+  - key: rnd-dy206
+    vendor: R&D Systems (Bio-Techne)
+    catalog_number: DY206
+    catalog_variants:
+      - {catalog_number: DY206, plates: "15"}
+      - {catalog_number: DY206-05, plates: "5"}
+    name: Human IL-6 DuoSet ELISA
+    category: elisa_development_kit
+    pack_size: {count: "15", count_of: 96-well plates}
+    assay_range: {low: {value: "9.38", unit: pg/mL}, high: {value: "600", unit: pg/mL}}
+    standard_curve:
+      top_concentration: {value: "600", unit: pg/mL}
+      points: "7"
+      dilution: "2-fold serial in Reagent Diluent"
+    sample_types: [cell culture supernates, serum, plasma]
+    components:
+      - name: Capture Antibody (mouse anti-human IL-6)
+        part_number: "840113"
+        amount: lot-specific
+        reconstitute_with: {volume: {value: "0.5", unit: mL}, diluent: PBS}
+        stock_concentration: per Certificate of Analysis (lot-specific)
+        working_concentration: per Certificate of Analysis (lot-specific)
+        coating_diluent: PBS
+      - name: Detection Antibody (biotinylated anti-human IL-6)
+        part_number: "840114"
+        amount: lot-specific
+        reconstitute_with: {volume: {value: "1.0", unit: mL}, diluent: Reagent Diluent}
+        stock_concentration: per Certificate of Analysis (lot-specific)
+        working_concentration: per Certificate of Analysis (lot-specific)
+      - name: Recombinant Human IL-6 Standard
+        part_number: "840115"
+        amount: lot-specific
+        reconstitute_with: {volume: {value: "0.5", unit: mL}, diluent: deionized water}
+        stock_concentration: per Certificate of Analysis (lot-specific)
+      - name: Streptavidin-HRP B
+        part_number: "893975"
+        volume: {value: "2.0", unit: mL}
+        working_dilution: per vial label (lot-specific)
+        diluent: Reagent Diluent
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    handling_rules:
+      - {rule: reconstitution_rest, text: "Let all components sit >= 15 min with gentle agitation after initial reconstitution", duration: {value: "15", unit: min}, source: vendor}
+      - {rule: detection_antibody_rest, text: "Store reconstituted Detection Antibody at least overnight at 2-8 degC before use the next day", source: vendor}
+      - {rule: light, text: "Streptavidin-HRP and substrate steps: avoid direct light", source: vendor}
+      - {rule: time_to_read, text: "Read immediately after Stop Solution at 450 nm; correction 540 or 570 nm", source: vendor}
+      - {rule: expiry, text: "Do not use past expiration date", source: vendor}
+    protocol_timings:
+      coating: "overnight, room temperature"
+      blocking: {value: "1", unit: h, qualifier: minimum, temperature: room temperature}
+      samples_standards: {value: "2", unit: h}
+      detection_antibody: {value: "2", unit: h}
+      streptavidin_hrp: {value: "20", unit: min, light: avoid direct light}
+      substrate: {value: "20", unit: min, light: avoid direct light}
+      read: {wavelength_nm: "450", correction_nm: "540 or 570", timing: immediately after stop}
+    ancillary_named_in_datasheet:
+      plate: DY990
+      wash_buffer: "WA126 (0.05% Tween 20 in PBS, pH 7.2-7.4)"
+      reagent_diluent: "DY995 (1% BSA in PBS, pH 7.2-7.4, 0.2 um filtered)"
+      substrate: DY999B
+      stop_solution: "DY994B (methanesulfonic acid)"
+    hazards: unknown
+    source_urls:
+      - https://www.rndsystems.com/products/human-il-6-duoset-elisa_dy206
+      - https://resources.rndsystems.com/pdfs/datasheets/dy206.pdf
+    status:
+      catalog_number: verified
+      pack_size: verified
+      components: verified
+      component_concentrations: unknown
+      standard_top_concentration: verified
+      assay_range: verified
+      storage_temperature: verified
+      protocol_timings: verified
+      hazards: unknown
+    notes: >
+      Current datasheet gives capture/detection/standard amounts and working concentrations only "per Certificate
+      of Analysis" (lot-specific), so no numbers are recorded here; they belong on the Lot record. Top standard
+      600 pg/mL is inferred from the stated assay range 9.38-600 pg/mL with a 7-point 2-fold series
+      (600/2^6 = 9.375), consistent with the range. Datasheet now names DY994B methanesulfonic acid stop solution,
+      not 2N H2SO4. Reconstituted-component shelf life after reconstitution not stated on the pages read.
+
+  - key: rnd-dy008b
+    vendor: R&D Systems (Bio-Techne)
+    catalog_number: DY008B
+    replaces: DY008 (discontinued; DY008B listed as replacement on the DY008 page)
+    name: DuoSet Ancillary Reagent Kit 2
+    category: elisa_ancillary_kit
+    pack_size: {count: "5", count_of: 96-well plate assays}
+    components:
+      - {name: Clear Polystyrene Microplates, count: "5", note: "12x8-well strip microplates, or five 384-well microplates"}
+      - {name: ELISA Plate Sealers, count: "24"}
+      - {name: TMB ELISA Substrate (1X), count: "5", volume_each: {value: "12.5", unit: mL}}
+      - {name: Stop Solution (1X), count: "3", volume_each: {value: "11", unit: mL}, identity: unknown}
+      - {name: ELISA Plate-coating Buffer (1X), count: "1", volume_each: {value: "60", unit: mL}}
+      - name: Reagent Diluent Concentrate 2 (10X)
+        count: "2"
+        volume_each: {value: "21", unit: mL}
+        composition_1x: "1% BSA in PBS, pH 7.2-7.4, 0.2 micron filtered"
+        working_dilution: "1:10"
+      - {name: Wash Buffer (25X), count: "6", volume_each: {value: "21", unit: mL}, working_dilution: "1:25"}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    handling_rules:
+      - {rule: storage, text: "Store unopened product at 2-8 degC; do not use past expiration date", source: vendor}
+    hazards: unknown
+    source_urls:
+      - https://www.rndsystems.com/products/duoset-ancillary-reagent-kit-2_dy008b
+      - https://www.rndsystems.com/products/duoset-ancillary-reagent-kit-2_dy008
+    status:
+      catalog_number: verified
+      components: verified
+      storage_temperature: estimated
+      stop_solution_identity: unknown
+    notes: >
+      The older DY008 contained Color Reagent A and B (3 x 12.5 mL each) instead of the one-part TMB. DY008B
+      storage temperature was read on the DY008 page; assumed identical. DY008B page does not say whether the
+      Stop Solution is sulfuric or methanesulfonic acid.
+
+  - key: rnd-dy999b
+    vendor: R&D Systems (Bio-Techne)
+    catalog_number: DY999B
+    name: TMB ELISA Substrate
+    category: elisa_substrate
+    pack_size: {count: "16", count_of: vials}
+    volume_per_vial: unknown
+    components:
+      - {name: TMB ELISA Substrate (1X, one-part), volume: unknown}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    handling_rules:
+      - {rule: light, text: "Protect from sunlight and other UV sources; incubate in the dark", light_sensitive: true, source: vendor}
+      - {rule: equilibrate, text: "Warm to room temperature before use", source: vendor}
+      - {rule: stability_after_opening, text: "Stable to label expiry for opened and unopened bottles when handled properly", source: vendor}
+      - {rule: no_backflow, text: "Do not pipette directly from bottle; pour only what is needed; do not return unused material", source: vendor}
+      - {rule: use, text: "100 uL/well, 20 min at room temperature, protected from light", volume_per_well: {value: "100", unit: uL}, incubation: {value: "20", unit: min}, source: vendor}
+    hazards: unknown
+    liquid_behaviour: {class: aqueous, status: estimated}
+    alternative:
+      vendor: R&D Systems
+      catalog_number: DY999
+      name: Substrate Reagent Pack (two-part)
+      components:
+        - {name: Color Reagent A (stabilized hydrogen peroxide), part_number: "895000", count: "8", volume_each: {value: "12", unit: mL}}
+        - {name: Color Reagent B (stabilized tetramethylbenzidine), part_number: "895001", count: "8", volume_each: {value: "12", unit: mL}}
+      handling_rules:
+        - {rule: mix_window, text: "Mix A and B in equal volumes within 15 min of use", duration: {value: "15", unit: min}, source: vendor}
+        - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 degC", source: vendor}
+        - {rule: light, light_sensitive: true, source: vendor}
+        - {rule: equilibrate, text: "Warm to room temperature before use", source: vendor}
+    source_urls:
+      - https://www.rndsystems.com/products/tmb-elisa-substrate_dy999b
+      - https://www.rndsystems.com/products/substrate-reagent-pack_dy999
+    status:
+      catalog_number: verified
+      pack_size: verified
+      volume_per_vial: unknown
+      storage_temperature: verified
+      handling_rules: verified
+      hazards: unknown
+    notes: Thermo 34028 (1-Step Ultra TMB) was not researched; DY999B matches the DY206 datasheet.
+
+  - key: rnd-dy994
+    vendor: R&D Systems (Bio-Techne)
+    catalog_number: DY994
+    part_number: "895032"
+    name: Stop Solution (2N Sulfuric Acid)
+    category: elisa_stop_solution
+    pack_size: {count: "15", count_of: vials, volume_each: {value: "6", unit: mL}}
+    components:
+      - {name: sulfuric acid, concentration: {value: "1", unit: M}, note: "2N H2SO4 = 1 M"}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    handling_rules:
+      - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 degC", source: vendor}
+      - {rule: use, text: "Add 50-100 uL/well", volume_per_well_range: [{value: "50", unit: uL}, {value: "100", unit: uL}], source: vendor}
+      - {rule: time_to_read, text: "Read immediately after stopping (DY206 datasheet)", source: vendor}
+    hazards:
+      summary: "Corrosive acid; vendor: wear protective gloves, clothing, eye and face protection"
+      ghs: "H290, H314 (typical for ~1 M H2SO4)"
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.rndsystems.com/products/stop-solution_dy994
+    status:
+      catalog_number: verified
+      pack_size: verified
+      storage_temperature: verified
+      hazards.summary: verified
+      hazards.ghs: estimated
+    notes: >
+      Current DuoSet datasheets name DY994B instead (methanesulfonic acid, 16 x 12 mL, store 2-25 degC, stable to
+      expiry opened or unopened, 100 uL/well; https://www.rndsystems.com/products/stop-solution_dy994b).
+      Seed either; DY994B is the one the current DY206 datasheet names.
+
+  - key: sigma-a7906
+    vendor: Sigma-Aldrich (Merck)
+    catalog_number: A7906
+    name: Bovine Serum Albumin, heat shock fraction, pH 7, >=98%
+    category: protein_blocking_agent
+    pack_size_options: [{value: "10", unit: g}, {value: "50", unit: g}, {value: "100", unit: g}]
+    pack_size: {value: "100", unit: g}
+    cas: 9048-46-8
+    form: lyophilized powder
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    handling_rules:
+      - {rule: use, text: "Reagent Diluent = 1% BSA in PBS, 0.2 um filtered (DuoSet)", concentration: {value: "1", unit: "%w/v"}, source: vendor}
+    hazards: {summary: "not classified hazardous (typical)", status: estimated}
+    liquid_behaviour: {text: "BSA solutions foam when vortexed or pipetted vigorously; mix by inversion", status: estimated}
+    source_urls:
+      - https://www.sigmaaldrich.com/US/en/product/sigma/a7906
+      - https://www.capitolscientific.com/Sigma-Aldrich-A7906-10G-Bovine-Serum-Albumin-Heat-Shock-Fraction-pH-7-98-10g-Bottle
+    status:
+      catalog_number: verified
+      pack_size: verified
+      storage_temperature: estimated
+      hazards: estimated
+    notes: Storage 2-8 degC is from memory of the Sigma listing; could not load the Sigma product page to confirm.
+
+  - key: gibco-10010023
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: "10010023"
+    name: PBS, pH 7.4 (no calcium, no magnesium, no phenol red)
+    category: buffer
+    pack_size: {value: "500", unit: mL}
+    formulation: {pH: "7.4", calcium: false, magnesium: false, phenol_red: false, sterile: "0.1 um sterile-filtered"}
+    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "30", unit: degC}}
+    shelf_life: "24 months from date of manufacture"
+    handling_rules: []
+    hazards: {summary: not hazardous, status: estimated}
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/10010023
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, shelf_life: verified, hazards: estimated}
+
+  - key: sigma-p1379
+    vendor: Sigma-Aldrich (Merck)
+    catalog_number: P1379
+    name: TWEEN 20 (polysorbate 20), viscous liquid
+    category: detergent
+    pack_size_options: [{value: "25", unit: mL}, {value: "100", unit: mL}, {value: "500", unit: mL}, {value: "1", unit: L}]
+    pack_size: {value: "500", unit: mL}
+    cas: 9005-64-5
+    specific_gravity: "1.1"
+    viscosity: "370-430 cps at 25 degC, neat (Brookfield)"
+    storage_temperature: {text: room temperature}
+    handling_rules:
+      - {rule: light, text: "Aqueous polysorbate solutions autoxidize; light, heat and copper catalyse it", light_sensitive: true, source: vendor}
+      - {rule: use, text: "Wash buffer: 0.05% Tween 20 in PBS (DuoSet)", concentration: {value: "0.05", unit: "%v/v"}, source: vendor}
+    hazards: {summary: not classified hazardous (typical), status: estimated}
+    liquid_behaviour:
+      text: "Very viscous neat (~400 cP): use reverse pipetting or positive displacement, slow aspirate/dispense; prefer weighing (1.1 g/mL) or a 10% stock. Dilute solutions foam."
+      viscosity_status: verified
+      technique_status: estimated
+    source_urls:
+      - https://www.sigmaaldrich.com/deepweb/assets/sigmaaldrich/product/documents/128/958/p9416pis.pdf
+      - https://www.capitolscientific.com/Sigma-Aldrich-P1379-500ML-TWEEN-20-Viscous-liquid-500mL-Bottle
+    status:
+      catalog_number: verified
+      pack_size: verified
+      properties: verified
+      storage_temperature: verified
+      hazards: estimated
+    notes: >
+      Pack sizes from reseller listings (Sigma page returned 404 to the fetcher). Properties and "Store at Room
+      Temperature" from Sigma's P9416 product information sheet, which names P1379 as the general-use grade.
+
+  # ---------------------------------------------------------------- Cell viability (384-well, CellTiter-Glo)
+  - key: promega-g9242
+    vendor: Promega
+    catalog_number: G9242
+    catalog_variants:
+      - {catalog_number: G9241, volume: {value: "10", unit: mL}, assays_96: "100", assays_384: "400"}
+      - {catalog_number: G9242, volume: {value: "100", unit: mL}, assays_96: "1000", assays_384: "4000"}
+      - {catalog_number: G9243, volume: {value: "500", unit: mL}, assays_96: "5000", assays_384: "20000"}
+    name: CellTiter-Glo 2.0 Assay
+    category: cell_viability_assay
+    pack_size: {value: "100", unit: mL}
+    components:
+      - {name: CellTiter-Glo 2.0 Reagent (single ready-to-use reagent), volume: {value: "100", unit: mL}}
+    storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}}
+    storage_long_term_preferred: {max: {value: "-65", unit: degC}, text: "for maximum light signal"}
+    handling_rules:
+      - {rule: light, text: "Light-sensitive; store in an opaque container", light_sensitive: true, source: vendor}
+      - {rule: stability_at_4C, text: ">85% light output after 2 months at 4 degC", duration: {value: "60", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
+      - {rule: stability_at_room_temperature, text: ">85% light output after 7 days at room temperature", duration: {value: "7", unit: d}, source: vendor}
+      - {rule: freeze_thaw, text: "Withstands 4 additional freeze-thaw cycles after the first thaw with no loss; do not refreeze after extended storage above recommended temperature", max_additional_cycles: "4", source: vendor}
+      - {rule: thaw, text: "Thaw overnight at 4 degC or in a 22 degC water bath; do not exceed 25 degC", max_temperature: {value: "25", unit: degC}, source: vendor}
+      - {rule: equilibrate_reagent, text: "~30 min for 100 mL, ~100 min for 500 mL to reach room temperature", duration: {value: "30", unit: min}, source: vendor}
+      - {rule: equilibrate_plate, text: "Equilibrate plate and contents to room temperature ~30 min before adding reagent", duration: {value: "30", unit: min}, source: vendor}
+      - {rule: dispense_ratio, text: "Add volume equal to medium: 100 uL (96-well) or 25 uL (384-well)", ratio: "1:1", volume_384: {value: "25", unit: uL}, volume_96: {value: "100", unit: uL}, source: vendor}
+      - {rule: mix, text: "Orbital shaker 2 min to induce lysis", duration: {value: "2", unit: min}, source: vendor}
+      - {rule: incubate_before_read, text: "10 min at room temperature to stabilise signal", duration: {value: "10", unit: min}, source: vendor}
+      - {rule: signal_half_life, text: "Half-life of luminescent signal > 3 h", duration: {value: "3", unit: h, qualifier: greater_than}, source: vendor}
+    hazards: unknown
+    liquid_behaviour: {text: "Detergent-containing lysis reagent; may foam if mixed vigorously", status: estimated}
+    source_urls:
+      - https://www.promega.com/-/media/files/resources/protocols/technical-manuals/101/celltiterglo-2-0-assay-protocol.pdf?la=en
+      - https://www.promega.com/products/cell-health-assays/cell-viability-and-cytotoxicity-assays/celltiter_glo-2_0-assay/
+    status:
+      catalog_number: verified
+      pack_size: verified
+      storage_temperature: verified
+      handling_rules: verified
+      hazards: unknown
+    notes: Manual TM403 (revised 1/23). Promega points to lot-specific SDS for hazards.
+
+  - key: gibco-11965092
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: "11965092"
+    name: DMEM, high glucose (with L-glutamine, phenol red; no sodium pyruvate, no HEPES)
+    category: cell_culture_medium
+    pack_size: {value: "500", unit: mL}
+    formulation: {glucose: {value: "4.5", unit: mg/mL, note: "4,500 mg/L D-glucose"}, l_glutamine: true, phenol_red: true, sodium_pyruvate: false, hepes: false}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
+    shelf_life: "12 months from date of manufacture"
+    handling_rules:
+      - {rule: light, text: "Protect from light", light_sensitive: true, source: vendor}
+      - {rule: environment, text: "Requires 5-10% CO2 to maintain physiological pH; typically supplemented with 10% FBS", source: vendor}
+      - {rule: warm_before_use, text: "Warm to 37 degC (or room temperature) before adding to cells", source: lab_convention, status: estimated}
+      - {rule: stability_after_supplement, text: "Complete medium used within ~2-4 weeks at 4 degC (glutamine degrades)", source: lab_convention, status: estimated}
+    hazards: {summary: not hazardous, status: estimated}
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/11965092
+    status: {catalog_number: verified, pack_size: verified, formulation: verified, storage_temperature: verified, shelf_life: verified}
+
+  - key: gibco-a5256701
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: A5256701
+    name: Fetal Bovine Serum, Value (not heat-inactivated)
+    category: serum
+    pack_size: {value: "500", unit: mL}
+    origin: per Certificate of Analysis
+    storage_temperature: {max: {value: "-10", unit: degC}, text: "store below -10 degC"}
+    shelf_life: "5 years"
+    handling_rules:
+      - {rule: thaw, text: "Thaw overnight at 4 degC or in a 37 degC water bath; remove as soon as thawed", source: vendor}
+      - {rule: freeze_thaw, text: "Aliquot; each aliquot ideally thawed only one additional time", max_additional_cycles: "1", source: vendor}
+      - {rule: use, text: "10% v/v in complete growth medium", concentration: {value: "10", unit: "%v/v"}, source: vendor}
+    hazards: {summary: animal-derived, not hazardous, status: estimated}
+    liquid_behaviour: {text: "Protein-rich; foams on vigorous pipetting or vortexing; slightly more viscous than water", status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/A5256701
+    status: {catalog_number: verified, name: verified, pack_size: verified, storage_temperature: verified, handling_rules: verified}
+    notes: 10270106 (Gibco FBS, South America origin) was not researched.
+
+  - key: gibco-15140122
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: "15140122"
+    name: Penicillin-Streptomycin (10,000 U/mL)
+    category: antibiotic
+    pack_size: {value: "100", unit: mL}
+    components:
+      - {name: penicillin, concentration: {value: "10000", unit: U/mL}}
+      - {name: streptomycin, concentration: {value: "10000", unit: ug/mL}}
+    storage_temperature: {min: {value: "-20", unit: degC}, max: {value: "-5", unit: degC}}
+    shelf_life: "12 months from date of manufacture"
+    handling_rules:
+      - {rule: working_dilution, text: "1:100 (100 U/mL penicillin, 100 ug/mL streptomycin)", ratio: "1:100", source: lab_convention, status: estimated}
+      - {rule: freeze_thaw, text: "Aliquot to limit freeze-thaw", source: lab_convention, status: estimated}
+    hazards: {summary: "may cause allergic skin/respiratory sensitisation (penicillin)", status: estimated}
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/15140122
+    status: {catalog_number: verified, pack_size: verified, concentration: verified, storage_temperature: verified, working_dilution: estimated, hazards: estimated}
+
+  - key: gibco-12604013
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: "12604013"
+    name: TrypLE Express Enzyme (1X), no phenol red
+    category: dissociation_reagent
+    pack_size: {value: "100", unit: mL}
+    formulation: {concentration: 1X, contains: EDTA, phenol_red: false}
+    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "30", unit: degC}, alternates: "2-8 degC or -5 to -20 degC"}
+    shelf_life: "24 months from date of manufacture"
+    handling_rules:
+      - {rule: light, text: "Protect from light", light_sensitive: true, source: vendor}
+      - {rule: room_temperature_stable, text: "Room-temperature stable for full shelf life; use directly", source: vendor}
+    hazards: {summary: not hazardous, status: estimated}
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/12604013
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, shelf_life: verified}
+
+  - key: gibco-14190144
+    vendor: Gibco (Thermo Fisher Scientific)
+    catalog_number: "14190144"
+    name: DPBS, no calcium, no magnesium
+    category: buffer
+    pack_size: {value: "500", unit: mL}
+    formulation: {calcium: false, magnesium: false, phenol_red: false, pH: "7.0-7.3", osmolality: "270-300 mOsm/kg"}
+    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "30", unit: degC}}
+    shelf_life: "36 months from date of manufacture"
+    handling_rules: []
+    hazards: {summary: not hazardous, status: estimated}
+    liquid_behaviour: {class: aqueous, status: estimated}
+    source_urls:
+      - https://www.thermofisher.com/order/catalog/product/14190144
+    status: {catalog_number: verified, pack_size: verified, formulation: verified, storage_temperature: verified, shelf_life: verified}
+
+  # ---------------------------------------------------------------- Compounds
+  - key: cayman-81590
+    vendor: Cayman Chemical
+    catalog_number: "81590"
+    name: Staurosporine
+    category: small_molecule
+    role: positive control (cytotoxic, pan-kinase inhibitor)
+    pack_size_options: [{value: "500", unit: ug}, {value: "1", unit: mg}, {value: "5", unit: mg}, {value: "10", unit: mg}]
+    pack_size: {value: "1", unit: mg}
+    cas: 62996-74-1
+    formula: C28H26N4O3
+    molecular_weight: {value: "466.5", unit: g/mol}
+    purity: ">=98%"
+    form: solid
+    solubility:
+      - {solvent: DMSO, value: "0.5", unit: mg/mL, note: "vendor states 500 ug/mL (~1.07 mM)"}
+      - {solvent: methanol, value: "2", unit: mg/mL}
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: stock, text: "Stocks in DMSO stored at -20 degC, aliquoted, protected from light", source: lab_convention, status: estimated}
+      - {rule: light, light_sensitive: unknown, source: vendor}
+    hazards: {summary: "Potent kinase inhibitor, toxic; vendor: not for human or veterinary use", status: estimated}
+    source_urls:
+      - https://www.caymanchem.com/product/81590/staurosporine
+    status: {catalog_number: verified, pack_size: verified, molecular_weight: verified, solubility: verified, storage_temperature: verified, light: unknown, hazards: estimated}
+    notes: >
+      The 0.5 mg/mL DMSO solubility is what the fetcher returned from the Cayman page; it limits a stock to ~1 mM.
+      Re-check before seeding a 10 mM stock. Sigma S4400 was not researched.
+
+  - key: sigma-d2650
+    vendor: Sigma-Aldrich (Merck)
+    catalog_number: D2650
+    name: Dimethyl sulfoxide, Hybri-Max, sterile-filtered
+    category: solvent
+    pack_size: {value: "100", unit: mL, note: "amber bottle; 5 x 5 mL and 5 x 10 mL also listed by resellers"}
+    cas: 67-68-5
+    density: {value: "1100", unit: mg/mL, note: "1.10 g/mL"}
+    melting_point: {value: "18.45", unit: degC, note: "product page: 16-19 degC"}
+    boiling_point: {value: "189", unit: degC}
+    storage_temperature: {text: room temperature (product information sheet)}
+    handling_rules:
+      - {rule: hygroscopic, text: "Very hygroscopic; protect from moisture; keep tightly closed", source: vendor}
+      - {rule: solidifies, text: "May arrive or become solid below ~18 degC; reliquefy by warming to room temperature without detriment", source: vendor}
+      - {rule: echo_source_plates, text: "Water uptake changes acoustic dispensing calibration and compound solubility; keep source plates sealed and minimise time open", source: lab_convention, status: estimated}
+    hazards: {summary: "Combustible liquid (flash point 87 degC closed cup); penetrates skin and carries dissolved substances", status: estimated}
+    liquid_behaviour:
+      text: "Hygroscopic, low volatility, slightly viscous (~2 cP), density 1.1 g/mL, wets plastics; freezes near 18 degC so cold rooms are a problem"
+      density_status: verified
+      viscosity_status: estimated
+    source_urls:
+      - https://www.sigmaaldrich.com/US/en/product/sigma/d2650
+      - https://www.sigmaaldrich.com/deepweb/assets/sigmaaldrich/product/documents/944/265/d2650pis.pdf
+    status: {catalog_number: verified, pack_size: verified, properties: verified, storage_temperature: verified, hazards: verified}
+    notes: >
+      Conflict: product information sheet says "Store at Room Temperature"; the product page summary returned
+      "cool storage area, such as 4 degC" (probably from SDS text). Seed room temperature and flag it.
+      "Skin penetration" is general knowledge (estimated); flash point is from the product page.
+
+  - key: selleck-l1300
+    vendor: Selleck Chemicals
+    catalog_number: L1300
+    name: FDA-approved Drug Library
+    category: compound_library
+    compound_count: "3199"
+    formats:
+      - {count: "2825", concentration: {value: "10", unit: mM}, solvent: DMSO}
+      - {count: "272", concentration: {value: "10", unit: mM}, solvent: water}
+      - {count: "81", concentration: {value: "2", unit: mM}, solvent: DMSO}
+      - {count: "19", concentration: {value: "2", unit: mM}, solvent: water}
+      - {count: "2", concentration: {value: "2", unit: mg/mL}, solvent: DMSO}
+    container: 96 deep-well plates sealed with aluminium foil (384-well format available on request)
+    storage_temperature: {value: "-20", unit: degC, alternate: "-80 degC"}
+    handling_rules:
+      - {rule: stability, text: "12 months at -20 degC in DMSO; 24 months at -80 degC in DMSO", source: vendor}
+      - {rule: freeze_thaw, text: "Limit freeze-thaw of master plates; make daughter/Echo source plates", source: lab_convention, status: estimated}
+    source_urls:
+      - https://www.selleckchem.com/screening/fda-approved-drug-library.html
+    status: {catalog_number: verified, compound_count: verified, formats: verified, storage: verified}
+    notes: >
+      The brief suggested L1700; the Selleck FDA-approved library page gives L1300. L1700 was not checked
+      and is not used here. Compound count changes between library versions; record it on the Lot.
+
+  # ---------------------------------------------------------------- Luminescent reporter assays
+  - key: promega-n3040
+    vendor: Promega
+    catalog_number: N3040
+    catalog_variants:
+      - catalog_number: N3030
+        volume: {value: "10", unit: mL}
+        components:
+          - {name: Nano-Glo HiBiT Lytic Buffer, volume: {value: "10", unit: mL}}
+          - {name: Nano-Glo HiBiT Lytic Substrate, volume: {value: "0.2", unit: mL}}
+          - {name: LgBiT Protein, volume: {value: "0.1", unit: mL}}
+      - catalog_number: N3040
+        volume: {value: "100", unit: mL}
+      - catalog_number: N3050
+        volume: {value: "1000", unit: mL, note: "10 x 100 mL buffer, 5 x 4 mL substrate, 10 x 1 mL LgBiT"}
+    name: Nano-Glo HiBiT Lytic Detection System
+    category: luminescent_reporter_assay
+    pack_size: {value: "100", unit: mL}
+    components:
+      - {name: Nano-Glo HiBiT Lytic Buffer, volume: {value: "100", unit: mL}}
+      - {name: Nano-Glo HiBiT Lytic Substrate, count: "2", volume_each: {value: "1", unit: mL}, working_dilution: "1:50"}
+      - {name: LgBiT Protein, volume: {value: "1", unit: mL}, working_dilution: "1:100"}
+    reagent_preparation: "Dilute LgBiT 1:100 and substrate 1:50 into room-temperature buffer; prepare fresh for each use"
+    storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}}
+    handling_rules:
+      - {rule: thaw, text: "Do not thaw above 25 degC", max_temperature: {value: "25", unit: degC}, source: vendor}
+      - {rule: buffer_after_opening, text: "Buffer: 2-8 degC for 1 year or room temperature for 3 months; >= 10 freeze-thaw cycles OK", source: vendor}
+      - {rule: working_reagent_stability, text: "~10% activity loss over 8 h and ~30% over 24 h at room temperature; <10% over 24 h at 4 degC; can store at -80, -20 or 4 degC with some loss", duration: {value: "8", unit: h}, source: vendor}
+      - {rule: dispense_ratio, text: "Volume equal to culture medium", ratio: "1:1", source: vendor}
+      - {rule: mix, text: "Orbital shaker 300-600 rpm for 3-10 min (minimum 15-30 s)", duration: {value: "3", unit: min}, source: vendor}
+      - {rule: incubate_before_read, text: "Wait >= 10 min for LgBiT/HiBiT equilibration", duration: {value: "10", unit: min}, source: vendor}
+      - {rule: signal_half_life, text: "Usually > 3 h", duration: {value: "3", unit: h, qualifier: greater_than}, source: vendor}
+      - {rule: temperature_constant, text: "Keep samples and reagents at constant temperature (luciferase is temperature dependent)", source: vendor}
+    hazards: unknown
+    source_urls:
+      - https://www.promega.com/-/media/files/resources/protocols/technical-manuals/500/nano-glo-hibit-lytic-detection-system-technical-manual.pdf
+    status: {catalog_number: verified, components: verified, storage_temperature: verified, handling_rules: verified, hazards: unknown}
+    notes: Manual TM516 (revised 6/23). LgBiT is supplied in the kit; no separate LgBiT catalog number recorded.
+
+  - key: promega-e2920
+    vendor: Promega
+    catalog_number: E2920
+    catalog_variants:
+      - {catalog_number: E2920, volume: {value: "10", unit: mL}}
+      - {catalog_number: E2940, volume: {value: "100", unit: mL}}
+      - {catalog_number: E2980, volume: {value: "1000", unit: mL, note: "10 x 100 mL"}}
+    name: Dual-Glo Luciferase Assay System
+    category: luminescent_reporter_assay
+    pack_size: {value: "10", unit: mL}
+    components:
+      - {name: Dual-Glo Luciferase Buffer, volume: {value: "10", unit: mL}, storage: "below 25 degC"}
+      - {name: Dual-Glo Luciferase Substrate (lyophilized), count: "1", storage: "-30 to -10 degC"}
+      - {name: Dual-Glo Stop & Glo Buffer, volume: {value: "10", unit: mL}, storage: "below 25 degC"}
+      - {name: Dual-Glo Stop & Glo Substrate, volume: {value: "100", unit: uL}, working_dilution: "1:100", storage: "-30 to -10 degC"}
+    components_E2940: "100 mL Luciferase Buffer, 1 vial substrate, 100 mL Stop & Glo Buffer, 1,000 uL Stop & Glo Substrate"
+    storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}, note: "substrates; buffers below 25 degC"}
+    handling_rules:
+      - {rule: substrate_at_4C, text: "Substrates may be stored at 4 degC up to 2 weeks", duration: {value: "14", unit: d}, source: vendor}
+      - {rule: working_reagent_stability, text: "Reconstituted Luciferase Reagent: ~10% loss after 8 h RT, 48 h 4 degC, 1 week -20 degC, 6 months -70 degC; do not keep at -20 degC > 1 week", duration: {value: "8", unit: h}, source: vendor}
+      - {rule: freeze_thaw, text: "Luciferase Reagent: 5 freeze-thaw cycles with ~15% loss", max_cycles: "5", source: vendor}
+      - {rule: stop_glo_prepare_fresh, text: "Stop & Glo Reagent prepared on day of use, immediately before use (8.1% loss after 8 h RT)", source: vendor}
+      - {rule: equilibrate, text: "Reagents at room temperature before measuring; can store buffers at room temperature to avoid equilibration", source: vendor}
+      - {rule: dispense_ratio, text: "Luciferase Reagent volume equal to medium (75 uL in 96-well, 20 uL in 384-well); Stop & Glo volume equal to original medium volume", ratio: "1:1", volume_384: {value: "20", unit: uL}, source: vendor}
+      - {rule: incubate_before_read, text: ">= 10 min after each reagent; read firefly within 2 h", duration: {value: "10", unit: min}, source: vendor}
+      - {rule: max_gap_between_reagents, text: "Add Stop & Glo within 4 h of Luciferase Reagent", duration: {value: "4", unit: h}, source: vendor}
+      - {rule: time_to_read_after_stop, text: "Read Renilla within 2 h of Stop & Glo", duration: {value: "2", unit: h}, source: vendor}
+      - {rule: signal_half_life, duration: {value: "2", unit: h, qualifier: approximately}, source: vendor}
+      - {rule: medium, text: "Minimise phenol red in medium (reduces sensitivity)", source: vendor}
+    hazards: {summary: "Lyophilized luciferase substrate contains DTT (hazardous); reconstituted reagent <1% DTT", status: verified}
+    liquid_behaviour: {text: "Stop & Glo Substrate is in a highly volatile solvent: pipette carefully, cap tightly (vendor)", status: verified}
+    source_urls:
+      - https://www.promega.com/-/media/files/resources/protocols/technical-manuals/0/dual-glo-luciferase-assay-system-protocol.pdf
+    status: {catalog_number: verified, components: verified, storage_temperature: verified, handling_rules: verified, hazards: verified}
+    notes: Manual TM058 (revised 1/23).
+
+  # ---------------------------------------------------------------- Enzyme kinetics (absorbance)
+  - key: thermo-37620
+    vendor: Thermo Scientific (Pierce)
+    catalog_number: "37620"
+    name: PNPP Substrate Kit (p-nitrophenyl phosphate tablets + diethanolamine buffer)
+    category: enzyme_substrate
+    readout: {mode: absorbance, wavelength_nm: "405", kinetic_or_endpoint: "either; endpoint stop with NaOH"}
+    target_enzyme: alkaline phosphatase
+    components:
+      - {name: PNPP Tablets, count: "105", mass_each: {value: "5", unit: mg}, storage: "-20 degC"}
+      - {name: Diethanolamine Substrate Buffer (5X), volume: {value: "225", unit: mL}, composition_note: "diethanolamine, pH 9.8; molarity unknown (see notes)", working_dilution: "1:5", storage: "4 degC"}
+    working_solution: "2 tablets (10 mg) in 10 mL 1X buffer = 1 mg/mL pNPP"
+    working_concentration: {value: "1", unit: mg/mL}
+    storage_temperature: {text: "tablets -20 degC; buffer 4 degC"}
+    handling_rules:
+      - {rule: equilibrate, text: "Equilibrate PNPP to room temperature before opening", source: vendor}
+      - {rule: use, text: "100 uL/well; incubate 30 min or until colour develops", volume_per_well: {value: "100", unit: uL}, incubation: {value: "30", unit: min}, source: vendor}
+      - {rule: stop, text: "50 uL 2 N NaOH per well, then read 405 nm", volume_per_well: {value: "50", unit: uL}, source: vendor}
+      - {rule: light, text: "Prepare working solution fresh and protect from light", light_sensitive: true, source: lab_convention, status: estimated}
+    hazards: {summary: "Avoid PNPP contact with eyes, skin, clothing; diethanolamine is harmful/irritant", status: estimated}
+    related:
+      - {catalog_number: "37621", name: 1-Step PNPP Substrate Solution, volume: {value: "100", unit: mL}, storage: "4 degC", stability: "12 months at 2-8 degC", readout_nm: "405"}
+      - {catalog_number: "34045", name: PNPP powder, mass: {value: "25", unit: g}}
+      - {catalog_number: "34047", name: PNPP tablets, count: "105"}
+      - {catalog_number: "34064", name: Diethanolamine Substrate Buffer 5X, volume: {value: "225", unit: mL}}
+    source_urls:
+      - https://assets.fishersci.com/TFS-Assets/LSG/manuals/MAN0011219_PNPP_Phosphatase_Subs_UG.pdf
+      - https://www.thermofisher.com/order/catalog/product/37621
+    status: {catalog_number: verified, components: verified, working_solution: verified, storage_temperature: verified, stop: verified, buffer_molarity: unknown, light: estimated}
+    notes: >
+      The fetcher summary gave the buffer as "5.1 M diethanolamine, pH 9.8"; that is implausible as quoted for
+      either 1X or 5X (neat DEA is ~10.4 M) so buffer molarity is marked unknown. For a kinetic (not stopped)
+      read, read A405 every 30-60 s without NaOH; a p-nitrophenol extinction coefficient (~18,000 M-1 cm-1 at
+      405 nm in alkali) would be needed and was not sourced here. No enzyme product was researched; pair with a
+      calf intestinal alkaline phosphatase of the lab's choice.
+
+  # ---------------------------------------------------------------- Molecular biology
+  - key: neb-m0492
+    vendor: New England Biolabs
+    catalog_number: M0492S
+    catalog_variants:
+      - {catalog_number: M0492S, volume: {value: "2.5", unit: mL, note: "2 x 1.25 mL"}, reactions_50uL: "100"}
+      - {catalog_number: M0492L, volume: {value: "12.5", unit: mL, note: "10 x 1.25 mL"}, reactions_50uL: "500"}
+    name: Q5 High-Fidelity 2X Master Mix
+    category: pcr_master_mix
+    pack_size: {value: "2.5", unit: mL}
+    components:
+      - {name: Q5 High-Fidelity 2X Master Mix (polymerase, dNTPs, Mg2+ in buffer), concentration: 2X, mg_at_1x: {value: "2", unit: mM}}
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: freeze_thaw, text: "Up to 15 freeze-thaw cycles tested with no effect", max_cycles: "15", source: vendor}
+      - {rule: precipitate, text: "Precipitate after first 1-2 freeze-thaws is normal; resuspend before use", source: vendor}
+      - {rule: keep_on_ice, text: "Keep on ice during setup", source: lab_convention, status: estimated}
+    hazards: unknown
+    liquid_behaviour: {text: "Glycerol-containing enzyme mix; mildly viscous, pipette slowly", status: estimated}
+    source_urls:
+      - https://www.neb.com/en-us/products/m0492-q5-high-fidelity-2x-master-mix
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, handling_rules: verified, hazards: unknown}
+
+  - key: thermo-q32851
+    vendor: Invitrogen (Thermo Fisher Scientific)
+    catalog_number: Q32851
+    name: Qubit dsDNA HS Assay Kit (100 assays)
+    category: nucleic_acid_quantitation
+    pack_size: {count: "100", count_of: assays}
+    assay_range: {low: {value: "0.1", unit: ng}, high: {value: "120", unit: ng}, note: "ng in assay tube"}
+    components:
+      - {name: Qubit dsDNA HS Reagent (A), volume: {value: "250", unit: uL}, concentration: "200X in DMSO", storage: "2-8 degC, desiccate, protect from light"}
+      - {name: Qubit dsDNA HS Buffer (B), volume: {value: "50", unit: mL}, storage: "<= 30 degC"}
+      - {name: "Qubit dsDNA HS Standard #1 (C)", volume: {value: "1", unit: mL}, concentration: {value: "0", unit: ng/mL}, storage: "2-8 degC"}
+      - {name: "Qubit dsDNA HS Standard #2 (D)", volume: {value: "1", unit: mL}, concentration: {value: "10000", unit: ng/mL, note: "10 ng/uL in TE"}, storage: "2-8 degC"}
+    working_solution: "Reagent 1:200 in Buffer; 200 uL final per tube; 10 uL standard; 1-20 uL sample"
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}, note: "reagent and standards; buffer <= 30 degC"}
+    handling_rules:
+      - {rule: light, text: "Protect reagent stock, standards and assay tubes from light", light_sensitive: true, source: vendor}
+      - {rule: incubate_before_read, duration: {value: "2", unit: min}, source: vendor}
+      - {rule: time_to_read_window, text: "Fluorescence stable 3 h at room temperature if protected from light", duration: {value: "3", unit: h}, source: vendor}
+      - {rule: equilibrate, text: "Use at room temperature (product page: store buffer and reagent at room temperature, not refrigerator)", source: vendor}
+    hazards: {summary: "Reagent contains DMSO; follow SDS", status: verified}
+    source_urls:
+      - https://documents.thermofisher.com/TFS-Assets/LSG/manuals/Qubit_dsDNA_HS_Assay_UG.pdf
+      - https://www.thermofisher.com/order/catalog/product/Q32851
+    status: {catalog_number: verified, components: verified, storage_temperature: verified, handling_rules: verified}
+    notes: >
+      Conflict: user guide lists the reagent at 2-8 degC; the current product page says buffer and reagent should
+      be stored at room temperature. Kit revisions differ; take the value from the lot's insert.
+
+  - key: biorad-1725271
+    vendor: Bio-Rad
+    catalog_number: "1725271"
+    name: SsoAdvanced Universal SYBR Green Supermix
+    category: qpcr_master_mix
+    pack_size: {value: "5", unit: mL, note: "5 x 1 mL, 500 x 20 uL reactions"}
+    components:
+      - {name: SsoAdvanced Universal SYBR Green Supermix (2X; dNTPs, Sso7d-fusion polymerase, MgCl2, SYBR Green I, ROX), volume: {value: "5", unit: mL}}
+    reaction_volume: {value: "20", unit: uL}
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: stability_after_thaw, text: "Up to 3 months at 4 degC after thawing", duration: {value: "90", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
+      - {rule: light, text: "Contains SYBR Green I; protect from light", light_sensitive: true, source: lab_convention, status: estimated}
+    shelf_life: "12 months at -20 degC"
+    hazards: unknown
+    liquid_behaviour: {text: "Mildly viscous master mix; may foam; spin down", status: estimated}
+    source_urls:
+      - https://www.bio-rad.com/en-us/sku/1725271-ssoadvanced-universal-sybr-green-supermix-500-x-20-ul-rxns-5-ml-5-x-1-ml?ID=1725271
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, stability_after_thaw: verified, light: estimated, freeze_thaw: unknown}
+
+  # ---------------------------------------------------------------- Cloning
+  - key: neb-e2621
+    vendor: New England Biolabs
+    catalog_number: E2621L
+    catalog_variants:
+      - {catalog_number: E2621S, volume: {value: "0.1", unit: mL}, reactions: "10"}
+      - {catalog_number: E2621L, volume: {value: "0.5", unit: mL}, reactions: "50"}
+      - {catalog_number: E2621X, volume: {value: "2.5", unit: mL, note: "5 x 0.5 mL"}, reactions: "250"}
+    name: NEBuilder HiFi DNA Assembly Master Mix
+    category: dna_assembly
+    pack_size: {value: "0.5", unit: mL}
+    components:
+      - {name: NEBuilder HiFi DNA Assembly Master Mix, concentration: 2X}
+    reaction: "10 uL 2X master mix + DNA in 20 uL; 2-3 fragments 0.03-0.2 pmol, 50 degC 15 min; 4-6 fragments 0.2-0.5 pmol, 50 degC 60 min"
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: thaw_mix, text: "Thaw and vortex thoroughly; keep on ice", source: vendor}
+      - {rule: product_storage, text: "Assembled product on ice or -20 degC; transform 2 uL of chilled product", source: vendor}
+    hazards: unknown
+    liquid_behaviour: {text: "Glycerol-containing; mildly viscous", status: estimated}
+    source_urls:
+      - https://www.neb.com/en-us/products/e2621-nebuilder-hifi-dna-assembly-master-mix
+      - https://www.neb.com/en/-/media/nebus/files/manuals/manuale2621_e5520.pdf
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, reaction: verified, hazards: unknown}
+    notes: NEB Gibson Assembly Master Mix (E2611) was not researched; HiFi is the current NEB recommendation.
+
+  - key: neb-e1601
+    vendor: New England Biolabs
+    catalog_number: E1601S
+    catalog_variants:
+      - {catalog_number: E1601S, reactions: "20"}
+      - {catalog_number: E1601L, reactions: "100"}
+    name: NEBridge Golden Gate Assembly Kit (BsaI-HFv2)
+    category: dna_assembly
+    pack_size: {count: "20", count_of: reactions}
+    components:
+      - {name: NEBridge Golden Gate Enzyme Mix (BsaI-HFv2 + T4 DNA Ligase), volume: unknown, use_per_rxn: "1 uL (<=10 inserts) or 2 uL (>10 inserts)"}
+      - {name: T4 DNA Ligase Reaction Buffer (10X), volume: unknown, use_per_rxn: {value: "2", unit: uL}}
+      - {name: pGGAselect Destination Plasmid (2,220 bp), volume: unknown, use_per_rxn: "0.05 pmol (75 ng)"}
+    reaction: "20 uL; 1 insert: 37 degC 5 min -> 60 degC 5 min; 2-10 inserts: (37 degC 1 min, 16 degC 1 min) x30 -> 60 degC 5 min; 11-20+: (37 degC 5 min, 16 degC 5 min) x30 -> 60 degC 5 min"
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: ligase_buffer_freeze_thaw, text: "T4 ligase buffer contains ATP; aliquot to limit freeze-thaw", source: lab_convention, status: estimated}
+    hazards: unknown
+    source_urls:
+      - https://www.neb.com/en-us/products/e1601-nebridge-golden-gate-assembly-mix-basai-hf-v2
+      - https://www.neb.com/-/media/nebus/files/manuals/manuale1601.pdf
+    status: {catalog_number: verified, pack_size: verified, component_volumes: unknown, reaction: verified, storage_temperature: verified}
+    notes: Product now branded "NEBridge"; the brief's name "NEB Golden Gate Assembly Kit" is the older name.
+
+  - key: neb-r3733
+    vendor: New England Biolabs
+    catalog_number: R3733S
+    catalog_variants:
+      - {catalog_number: R3733S, units: "1000"}
+      - {catalog_number: R3733L, units: "5000"}
+    name: BsaI-HFv2
+    category: restriction_enzyme
+    pack_size: {value: "50", unit: uL, note: "1,000 units at 20,000 U/mL (computed)"}
+    concentration: {value: "20000", unit: U/mL}
+    recognition_site: "5'-GGTCTC(N1)/(N5)-3'"
+    reaction_buffer: "rCutSmart Buffer (1X: 50 mM KOAc, 20 mM Tris-acetate, 10 mM Mg(OAc)2, 100 ug/mL recombinant albumin, pH 7.9)"
+    incubation_temperature: {value: "37", unit: degC}
+    heat_inactivation: {temperature: {value: "80", unit: degC}, duration: {value: "20", unit: min}}
+    storage_buffer: "20 mM Tris-HCl, 300 mM NaCl, 0.1 mM TCEP, 200 ug/mL recombinant albumin, 50% glycerol, pH 9"
+    storage_temperature: {value: "-20", unit: degC}
+    handling_rules:
+      - {rule: keep_cold, text: "Keep on ice or in a -20 degC benchtop cooler; add enzyme last", source: lab_convention, status: estimated}
+    hazards: unknown
+    liquid_behaviour: {text: "50% glycerol: viscous; pipette slowly, wipe tip, use <=10% v/v in reaction", status: estimated, basis: "50% glycerol storage buffer is verified"}
+    source_urls:
+      - https://www.neb.com/en/products/r3733-bsai-hf-v2
+    status: {catalog_number: verified, units: verified, concentration: verified, storage_temperature: verified, pack_volume: estimated}
+
+  - key: neb-c2987
+    vendor: New England Biolabs
+    catalog_number: C2987H
+    catalog_variants:
+      - {catalog_number: C2987H, format: "20 x 0.05 mL single-use tubes"}
+      - {catalog_number: C2987I, format: "6 x 0.2 mL"}
+      - {catalog_number: C2987P, format: "96-well plate, 20 uL/well"}
+      - {catalog_number: C2987R, format: "384-well plate, 10 uL/well; 1-5 x 10^8 cfu/ug"}
+      - {catalog_number: C2987U, format: "96 x 0.05 mL (12 x 8-strip)"}
+    name: NEB 5-alpha Competent E. coli (High Efficiency)
+    category: competent_cells
+    pack_size: {count: "20", count_of: tubes, volume_each: {value: "50", unit: uL}}
+    transformation_efficiency: "1-3 x 10^9 cfu/ug pUC19"
+    genotype: "fhuA2::IS2 D(mmuP-mhpD)169 DphoA8 glnX44 phi80d[DlacZ58(M15)] rfbD1 gyrA96 luxS11 recA1 endA1 rphWT thiE1 hsdR17"
+    components:
+      - {name: NEB 5-alpha Competent E. coli, count: "20", volume_each: {value: "50", unit: uL}}
+      - {name: pUC19 control DNA, volume: unknown}
+      - {name: SOC Outgrowth Medium, volume: unknown}
+    storage_temperature: {value: "-80", unit: degC}
+    handling_rules:
+      - {rule: thaw, text: "Thaw on ice 10 min (C2987H)", duration: {value: "10", unit: min}, source: vendor}
+      - {rule: no_refreeze, text: "Thaw only once; cells lose efficiency whenever warmed above -80 degC", max_cycles: "1", source: vendor}
+      - {rule: protocol, text: "1-5 uL (1 pg-100 ng) DNA; ice 30 min; heat shock exactly 42 degC 30 s; 950 uL RT SOC; 37 degC 60 min at 250 rpm", source: vendor}
+    biosafety_level: {value: "BSL-1", status: estimated}
+    hazards: {summary: "Contains DMSO (vendor)", status: verified}
+    source_urls:
+      - https://www.neb.com/en/products/c2987-neb-5-alpha-competent-e-coli-high-efficiency
+      - https://www.neb.com/en-us/protocols/high-efficiency-transformation-protocol-c2987?pdf=true
+      - https://www.neb.com/en/-/media/nebus/files/manuals/manuale2621_e5520.pdf
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, handling_rules: verified, biosafety_level: estimated}
+
+  - key: qiagen-27104
+    vendor: QIAGEN
+    catalog_number: "27104"
+    name: QIAprep Spin Miniprep Kit (50)
+    category: plasmid_purification_kit
+    pack_size: {count: "50", count_of: preps}
+    components:
+      - {name: QIAprep 2.0 Spin Columns, count: "50"}
+      - {name: Buffer P1, volume: {value: "20", unit: mL}}
+      - {name: Buffer P2, volume: {value: "20", unit: mL}}
+      - {name: Buffer N3, volume: {value: "30", unit: mL}}
+      - {name: Buffer PB, volume: {value: "30", unit: mL}}
+      - {name: Buffer PE (concentrate), count: "2", volume_each: {value: "6", unit: mL}, note: "add 96-100% ethanol per bottle label before use; ethanol volume unknown"}
+      - {name: Buffer EB, volume: {value: "15", unit: mL}}
+      - {name: RNase A, mass: {value: "2", unit: mg}}
+      - {name: LyseBlue, volume: {value: "20", unit: uL}}
+      - {name: Loading dye, volume: {value: "110", unit: uL}}
+      - {name: Collection Tubes (2 mL), count: "50"}
+    yield: "up to 20 ug per prep (1.5 mL overnight culture: 5-15 ug)"
+    elution_volume: {value: "50", unit: uL}
+    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "25", unit: degC}}
+    handling_rules:
+      - {rule: p1_after_rnase, text: "Buffer P1 with RNase A: 2-8 degC, stable 6 months", duration: {value: "180", unit: d, note: "vendor says 6 months"}, source: vendor}
+      - {rule: lysis_time_limit, text: "Do not let lysis proceed > 5 min", duration: {value: "5", unit: min}, source: vendor}
+      - {rule: p2_precipitate, text: "Check P2 for precipitate; redissolve at 37 degC", source: vendor}
+      - {rule: kit_shelf_life, text: "12 months dry at room temperature", source: vendor}
+    hazards: {summary: "Buffers N3 and PB contain guanidine hydrochloride: never mix with bleach", status: verified}
+    source_urls:
+      - https://www.qiagen.com/us/products/discovery-and-translational-research/dna-rna-purification/dna-purification/plasmid-dna/qiaprep-spin-miniprep-kit
+      - https://bpb-us-e1.wpmucdn.com/sites.gatech.edu/dist/1/1814/files/2018/06/Manual-QIAprep-Spin-Miniprep-Kit-Handbook.pdf
+    status: {catalog_number: verified, components: verified, storage_temperature: verified, handling_rules: verified, hazards: verified}
+    notes: >
+      Component volumes are from the June 2015 handbook (4th ed.), hosted by a university; current kit (GelPilot
+      loading dye per QIAGEN page) may differ. P1-with-RNase stability converted from 6 months to 180 d.
+
+  - key: thermo-s33102
+    vendor: Invitrogen (Thermo Fisher Scientific)
+    catalog_number: S33102
+    name: SYBR Safe DNA Gel Stain, 10,000X concentrate in DMSO
+    category: nucleic_acid_gel_stain
+    pack_size: {value: "400", unit: uL}
+    components:
+      - {name: SYBR Safe DNA Gel Stain (10,000X in DMSO), volume: {value: "400", unit: uL}}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "25", unit: degC}}
+    handling_rules:
+      - {rule: light, text: "Protect from light", light_sensitive: true, source: vendor}
+      - {rule: stability, text: "~6 months when stored as directed", source: vendor}
+      - {rule: use, text: "1:10,000 in gel buffer (3 uL per 30 mL 1X TBE); no post-stain needed", ratio: "1:10000", source: vendor}
+    optics: {excitation_nm: "280, 502", emission_nm: "530"}
+    hazards: {summary: "No or very low mutagenic activity; not US federal hazardous waste; solvent is DMSO", status: verified}
+    liquid_behaviour: {text: "DMSO stock; freezes below ~18 degC if refrigerated, warm and mix before use", status: estimated}
+    source_urls:
+      - https://documents.thermofisher.com/TFS-Assets/LSG/manuals/sybr_safe_dna_gel_stain_man.pdf
+      - https://www.thermofisher.com/order/catalog/product/S33102
+    status: {catalog_number: verified, pack_size: verified, storage_temperature: verified, handling_rules: verified}
+    notes: No agarose product was researched.
+
+# ------------------------------------------------------------------------------------------------
+# GAPS AND CAVEATS
+# - DY206: capture/detection antibody amounts, stock and working concentrations, standard stock concentration
+#   and Streptavidin-HRP dilution are lot-specific ("per C of A"). None recorded; put them on the Lot record.
+#   Shelf life of reconstituted components not read (older datasheets gave ~1 month at 2-8 degC, unverified).
+# - DY206 datasheet now names DY994B (methanesulfonic acid stop) and DY999B (one-part TMB); DY994 (2N H2SO4)
+#   and DY999 (two-part) are included as the requested / alternative items.
+# - DY008 is discontinued; DY008B is recorded. DY008B stop-solution identity and DY999B vial volume are unknown.
+# - Sigma product pages (A7906, P1379) returned 404 to the fetcher. A7906 storage (2-8 degC) is estimated;
+#   Tween 20 data comes from Sigma's P9416 information sheet, which names P1379 as the general-use grade.
+# - DMSO D2650 storage conflict: information sheet says room temperature, product page summary said ~4 degC.
+# - Qubit HS storage conflict: user guide says reagent at 2-8 degC, current product page says room temperature.
+# - Staurosporine DMSO solubility read as 0.5 mg/mL (~1 mM) from Cayman; re-check before seeding 10 mM stocks.
+#   Light sensitivity unknown. Sigma S4400 not researched.
+# - Selleck library: page gives L1300 (FDA-approved Drug Library, 3,199 compounds); L1700 not checked.
+# - Hazards/GHS: few items have primary-source GHS codes; most hazards are marked estimated or unknown.
+#   Promega points to lot-specific SDS.
+# - PNPP buffer molarity unclear from the fetched manual summary (marked unknown); p-nitrophenol extinction
+#   coefficient and an alkaline phosphatase enzyme product not sourced.
+# - Not researched: Thermo 34028 TMB, Gibco FBS 10270106, NEB Gibson E2611, agarose, a separate LgBiT catalog
+#   number (LgBiT is in the N3030/N3040 kit).
+# - Golden Gate kit component volumes, NEB 5-alpha SOC/pUC19 volumes, QIAprep PE ethanol volume: unknown.
+# - Liquid-behaviour hints are estimated except: Tween 20 viscosity 370-430 cP (Sigma sheet), DMSO density
+#   1.10 g/mL and hygroscopicity (Sigma), Stop & Glo substrate volatile solvent (Promega), BsaI 50% glycerol (NEB).
+# - "months" and "years" are not app units, so shelf lives are free-text strings; 2-3 month stability windows
+#   were converted to d (2 months = 60 d, 3 months = 90 d, 6 months = 180 d), approximately.
+# - Time out of incubator (30 min) is a lab convention, not a vendor spec, on every cell line.
+# - Direct PDF download via curl was blocked by the proxy (403); datasheet contents come from WebFetch
+#   summaries, so spot-check numeric values against the PDF before release.

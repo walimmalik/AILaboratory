@@ -1,0 +1,1355 @@
+# Labware types (real catalog items, plan 007). Fields not in `status` are verified.
+# Researched 2026-09-29 from manufacturer product pages, datasheets and the Opentrons
+# shared-data labware definitions (github.com/Opentrons/opentrons, branch edge,
+# shared-data/labware/definitions/2/<loadName>/<version>.json).
+#
+# Conventions
+#   - Every quantity is {value: "<string>", unit: "<unit>"}.
+#   - status per field: verified  = read on a manufacturer page/datasheet (or the Opentrons
+#                                    definition when it lists this exact catalog number),
+#                       estimated = derived from a sibling product, a secondary source or reasoning,
+#                       unknown   = not found; value left null.
+#   - "opentrons_def" dimensions are Opentrons' measured definition values. Opentrons publishes
+#     them for the catalog numbers listed in the definition's brandId, so they count as verified
+#     only for those numbers.
+#   - Instruments in the owner's lab: Hamilton STAR + VANTAGE, Opentrons Flex, Echo 650,
+#     Formulatrix Mantis, Analytik Jena CyBio FeliX, Tecan Spark Cyto, BlueCatBio BlueWasher,
+#     Analytik Jena qTOWER3, Bio-Rad thermocyclers. (No OT-2: OT-2 tips dropped.)
+
+# ---------------------------------------------------------------- PLATES: ELISA
+kinds:
+- key: corning-3590
+  manufacturer: Corning
+  catalog_number: "3590"
+  name: Corning 96-well EIA/RIA Clear Flat Bottom Polystyrene High Bind Microplate, individually wrapped, without lid, nonsterile
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.8", unit: mm}
+    width: {value: "85.5", unit: mm}
+    height: {value: "14.2", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: flat
+    depth: {value: "10.67", unit: mm}
+    top_diameter: {value: "6.86", unit: mm}
+    bottom_diameter: {value: "6.35", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "360", unit: uL}
+  working_volume: {min: {value: "75", unit: uL}, max: {value: "200", unit: uL}}
+  dead_volume: {value: "10", unit: uL}
+  material: polystyrene
+  color: clear
+  surface_treatment: High Bind (approx. 500 ng mouse IgG/cm2)
+  sterile: false
+  lid: none (sold separately)
+  pack: 1 per package, 100 per case
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE, Opentrons Flex, BlueCatBio BlueWasher, Tecan Spark Cyto]
+  opentrons_load_name: corning_96_wellplate_360ul_flat
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Microplates/Assay-Microplates/96-Well-Microplates/Corning%C2%AE-96-well-Clear-Polystyrene-Microplates/p/3590
+    - https://www.corning.com/catalog/cls/documents/drawings/MicroplateDimensions96-384-1536.pdf
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/corning_96_wellplate_360ul_flat/4.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    Dimensions from Corning's 96/384/1536 dimension sheet, which lists 3590 in the 360 uL flat-bottom
+    group; Opentrons definition brandId also lists 3590. Dead volume is an estimate: plate is a
+    destination/assay plate, ~10 uL is what a liquid handler typically cannot aspirate from a flat
+    6.35 mm well bottom. Hamilton VENUS file name not confirmed from a primary source.
+
+- key: thermo-442404
+  manufacturer: Thermo Fisher Scientific (Nunc)
+  catalog_number: "442404"
+  name: Nunc MaxiSorp Clear Flat-Bottom Immuno Nonsterile 96-Well Plate (F96), without lid
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: round
+    bottom_shape: flat
+    depth: null
+    top_diameter: null
+    bottom_diameter: null
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "400", unit: uL}
+  working_volume: {min: null, max: {value: "350", unit: uL}}
+  dead_volume: {value: "10", unit: uL}
+  material: polystyrene
+  color: clear
+  surface_treatment: MaxiSorp (hydrophilic, high binding; approx. 600-650 ng IgG/cm2)
+  sterile: false
+  lid: none
+  pack: 5 per pack, 60 per case
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE, Opentrons Flex, BlueCatBio BlueWasher, Tecan Spark Cyto]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.thermofisher.com/order/catalog/product/442404
+    - https://assets.fishersci.com/TFS-Assets/LSG/manuals/44-2404.pdf
+  status: {catalog_number: verified, name: verified, footprint: unknown, well_geometry: unknown, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Thermo lists 8x12 array, 400 uL well, 350 uL working. Plate and well dimensions were not on the
+    product page or the 44-2404 sheet (a customer drawing exists but was not found). SBS footprint and
+    9 mm pitch are the norm for this plate but not read from a Thermo drawing. No official Opentrons
+    definition; a custom one is needed. Dead volume estimated as for Corning 3590.
+
+# ---------------------------------------------------------------- PLATES: cell assay (384)
+- key: corning-3570
+  manufacturer: Corning
+  catalog_number: "3570"
+  name: Corning 384-well Low Flange White Flat Bottom Polystyrene TC-treated Microplates, 10 per bag, with lid, sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: {value: "127.8", unit: mm}
+    width: {value: "85.5", unit: mm}
+    height: {value: "14.2", unit: mm}
+  well_geometry:
+    shape: square
+    bottom_shape: flat
+    depth: {value: "11.43", unit: mm}
+    top_side: {value: "3.63", unit: mm}
+    bottom_side: {value: "2.67", unit: mm}
+    pitch: {value: "4.5", unit: mm}
+  max_volume: {value: "112", unit: uL}
+  working_volume: {min: {value: "20", unit: uL}, max: {value: "80", unit: uL}}
+  recommended_medium_volume: {min: {value: "25", unit: uL}, max: {value: "50", unit: uL}}
+  dead_volume: null
+  material: polystyrene
+  color: white (solid)
+  surface_treatment: TC-treated; growth area 0.06 cm2
+  sterile: true
+  lid: included
+  pack: 10 per bag, 50 per case
+  typical_instruments: [Echo 650 (destination), Hamilton STAR, Hamilton VANTAGE, CyBio FeliX, Formulatrix Mantis, Tecan Spark Cyto (luminescence)]
+  opentrons_load_name: corning_384_wellplate_112ul_flat
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Microplates/Assay-Microplates/384-Well-Microplates/Corning%C2%AE-384-well-Solid-Black-and-White-Polystyrene-Microplates/p/3570
+    - https://www.corning.com/catalog/cls/documents/drawings/MicroplateDimensions96-384-1536.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: estimated, max_volume: verified, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: estimated, hamilton_labware_file: unknown}
+  notes: >-
+    Confirmed: 3570 is a STANDARD-volume (112 uL) 384-well white solid TC-treated sterile plate, NOT
+    low-volume. Well/plate dimensions are Corning's standard 384 flat-bottom values (sheet lists
+    3640/3680/3700-series etc.; 3570 is not in that list), so marked estimated. The Opentrons
+    corning_384_wellplate_112ul_flat brandId does not include 3570; closest definition. Good
+    CellTiter-Glo cell plate (white walls). Dead volume not applicable in normal use (destination).
+
+- key: corning-3765
+  manufacturer: Corning
+  catalog_number: "3765"
+  name: Corning 384-well Flat Clear Bottom White Polystyrene TC-treated Microplates, 20 per bag, with lid, sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: {value: "127.8", unit: mm}
+    width: {value: "85.5", unit: mm}
+    height: {value: "14.2", unit: mm}
+  well_geometry:
+    shape: square
+    bottom_shape: flat
+    depth: {value: "11.43", unit: mm}
+    top_side: {value: "3.63", unit: mm}
+    bottom_side: {value: "2.67", unit: mm}
+    pitch: {value: "4.5", unit: mm}
+  max_volume: {value: "112", unit: uL}
+  working_volume: {min: {value: "20", unit: uL}, max: {value: "80", unit: uL}}
+  dead_volume: null
+  material: polystyrene
+  color: white walls, clear bottom
+  surface_treatment: TC-treated
+  sterile: true
+  lid: included
+  pack: 20 per bag, 100 per case
+  typical_instruments: [Echo 650 (destination), Hamilton STAR, CyBio FeliX, Formulatrix Mantis, Tecan Spark Cyto (luminescence + brightfield confluence imaging)]
+  opentrons_load_name: corning_384_wellplate_112ul_flat
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Microplates/Assay-Microplates/384-Well-Microplates/Corning%C2%AE-384-well-Black-Clear-and-White-Clear-Bottom-Polystyrene-Microplates/p/3765
+    - https://www.corning.com/catalog/cls/documents/drawings/MicroplateDimensions96-384-1536.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: estimated, max_volume: verified, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: estimated, hamilton_labware_file: unknown}
+  notes: >-
+    Corning page says 3765 is the suggested replacement for 3707. Page lists "low flange" in the
+    spec table though the product name omits it. Geometry from Corning's standard 384 sheet (3765
+    not listed there) so estimated. Clear bottom lets the Spark Cyto image cells in the same plate
+    used for CellTiter-Glo.
+
+- key: corning-3764
+  manufacturer: Corning
+  catalog_number: "3764"
+  name: Corning 384-well Flat Clear Bottom Black Polystyrene TC-treated Microplates, Low Flange, 20 per bag, with lid, sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: {value: "127.8", unit: mm}
+    width: {value: "85.5", unit: mm}
+    height: {value: "14.2", unit: mm}
+  well_geometry:
+    shape: square
+    bottom_shape: flat
+    depth: {value: "11.43", unit: mm}
+    top_side: {value: "3.63", unit: mm}
+    bottom_side: {value: "2.67", unit: mm}
+    pitch: {value: "4.5", unit: mm}
+  max_volume: {value: "112", unit: uL}
+  working_volume: {min: {value: "20", unit: uL}, max: {value: "80", unit: uL}}
+  dead_volume: null
+  material: polystyrene
+  color: black walls, clear bottom
+  surface_treatment: TC-treated; gamma sterilized, nonpyrogenic
+  sterile: true
+  lid: included
+  pack: 20 per bag, 100 per case
+  typical_instruments: [Echo 650 (destination), Hamilton STAR, CyBio FeliX, Tecan Spark Cyto (fluorescence imaging)]
+  opentrons_load_name: corning_384_wellplate_112ul_flat
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Microplates/Assay-Microplates/384-Well-Microplates/Corning%C2%AE-384-well-Black-Clear-and-White-Clear-Bottom-Polystyrene-Microplates/p/3764
+    - https://www.corning.com/catalog/cls/documents/drawings/MicroplateDimensions96-384-1536.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: estimated, max_volume: verified, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: estimated, hamilton_labware_file: unknown}
+  notes: >-
+    Black/clear imaging and fluorescence plate. Geometry assumed equal to Corning standard 384
+    flat-bottom (not listed by number on the dimension sheet). Bottom thickness not published on page.
+
+- key: greiner-781080
+  manufacturer: Greiner Bio-One
+  catalog_number: "781080"
+  name: CELLSTAR Cell Culture Microplate, 384 well, PS, F-bottom, white, lid, TC, sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "14.4", unit: mm}
+  well_geometry:
+    shape: rounded square
+    bottom_shape: flat
+    depth: {value: "11.5", unit: mm}
+    top_side: {value: "3.7", unit: mm}
+    bottom_side: {value: "3.3", unit: mm}
+    pitch: {value: "4.5", unit: mm}
+    a1_row_offset: {value: "8.99", unit: mm}
+    a1_column_offset: {value: "12.13", unit: mm}
+  max_volume: {value: "138", unit: uL}
+  working_volume: {min: {value: "15", unit: uL}, max: {value: "110", unit: uL}}
+  dead_volume: null
+  material: polystyrene
+  color: white (solid)
+  surface_treatment: TC (physical surface treatment); growth area 10 mm2 per well
+  sterile: true
+  lid: included
+  pack: 8 per bag, 32 per case
+  typical_instruments: [Echo 650 (destination), Hamilton STAR, CyBio FeliX, Formulatrix Mantis, Tecan Spark Cyto (luminescence)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/usa/products/bioscience/cell-culture-products/cellstar-cell-culture-microplates/384-well-cell-culture-microplates-clear-black-white/781080.html
+    - https://www.gbo.com/fileadmin/media/GBO-International/01_Downloads_BioScience/SALES_Brochures/F073027_Microplate_Dimensions_Guide.pdf
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Dimensions from Greiner's Microplate Dimensions Guide (standard 384 PS F-bottom group, which names
+    781080/781098/781101). max_volume is Greiner's "mathematical" well volume (138 uL); product page
+    working volume 15-110 uL (the guide says 10-130 uL for the group; product page used). "Diameter"
+    top/bottom in the guide is the rounded-square well side. No official Opentrons definition.
+
+- key: greiner-781098
+  manufacturer: Greiner Bio-One
+  catalog_number: "781098"
+  name: CELLSTAR Cell Culture Microplate, 384 well, PS, F-bottom, uClear, white, lid, TC, sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "14.4", unit: mm}
+  well_geometry:
+    shape: rounded square
+    bottom_shape: flat
+    depth: {value: "11.5", unit: mm}
+    top_side: {value: "3.7", unit: mm}
+    bottom_side: {value: "3.3", unit: mm}
+    pitch: {value: "4.5", unit: mm}
+    a1_row_offset: {value: "8.99", unit: mm}
+    a1_column_offset: {value: "12.13", unit: mm}
+  max_volume: {value: "138", unit: uL}
+  working_volume: {min: {value: "15", unit: uL}, max: {value: "110", unit: uL}}
+  dead_volume: null
+  material: polystyrene (uClear film bottom)
+  color: white walls, clear (uClear) bottom
+  surface_treatment: TC (physical surface treatment); growth area 10 mm2 per well
+  sterile: true
+  lid: included
+  pack: 8 per bag, 32 per case
+  typical_instruments: [Echo 650 (destination), Hamilton STAR, CyBio FeliX, Tecan Spark Cyto (luminescence + imaging)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/usa/products/bioscience/cell-culture-products/cellstar-cell-culture-microplates/384-well-cell-culture-microplates-clear-black-white/781098.html
+    - https://www.gbo.com/fileadmin/media/GBO-International/01_Downloads_BioScience/SALES_Brochures/F073027_Microplate_Dimensions_Guide.pdf
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: estimated, max_volume: estimated, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    781098 is the uClear (clear film bottom) version of 781080, not a solid white plate. The dimension
+    guide groups it with 781080, but uClear plates usually have a slightly different bottom elevation,
+    so well geometry and volume are marked estimated.
+
+- key: greiner-782075
+  manufacturer: Greiner Bio-One
+  catalog_number: "782075"
+  name: Microplate, 1536 well, PS, F-bottom, HiBase, white, LUMITRAC, medium binding
+  format: plate
+  well_count: 1536
+  rows: 32
+  columns: 48
+  well_addressing: A1..AF48
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "10.4", unit: mm}
+  well_geometry:
+    shape: rounded square
+    bottom_shape: flat
+    depth: {value: "5.0", unit: mm}
+    top_side: {value: "1.7", unit: mm}
+    bottom_side: {value: "1.53", unit: mm}
+    pitch: {value: "2.25", unit: mm}
+    a1_row_offset: {value: "7.87", unit: mm}
+    a1_column_offset: {value: "11.01", unit: mm}
+  max_volume: {value: "12.6", unit: uL}
+  working_volume: {min: {value: "3", unit: uL}, max: {value: "10", unit: uL}}
+  dead_volume: null
+  material: polystyrene
+  color: white
+  surface_treatment: LUMITRAC 200, medium binding (NOT TC-treated)
+  sterile: false
+  lid: none listed
+  pack: see vendor
+  typical_instruments: [Echo 650 (destination), Formulatrix Mantis, CyBio FeliX (384/1536 head), Tecan Spark Cyto (luminescence)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/row/products/bioscience/microplates/1536-well-microplates/1536-well-hibase-microplates/782075.html
+    - https://www.gbo.com/fileadmin/media/GBO-International/01_Downloads_BioScience/SALES_Brochures/F073027_Microplate_Dimensions_Guide.pdf
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Non-sterile, non-TC 1536 plate: suited to biochemical luminescence, NOT to growing cells. Rows
+    beyond Z continue AA..AF (32 rows). Dimension values are from the guide's "1536 standard PS"
+    group (782075/782080); the HiBase variant may have a different bottom elevation. Optional item.
+
+# ---------------------------------------------------------------- PLATES: 96 general / imaging
+- key: greiner-655101
+  manufacturer: Greiner Bio-One
+  catalog_number: "655101"
+  name: Microplate, 96 well, PS, F-bottom, clear, non-sterile
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "14.6", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: flat
+    depth: {value: "10.9", unit: mm}
+    top_diameter: {value: "6.96", unit: mm}
+    bottom_diameter: {value: "6.39", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+    a1_row_offset: {value: "11.24", unit: mm}
+    a1_column_offset: {value: "14.38", unit: mm}
+  max_volume: {value: "382", unit: uL}
+  working_volume: {min: {value: "25", unit: uL}, max: {value: "340", unit: uL}}
+  dead_volume: {value: "10", unit: uL}
+  material: polystyrene
+  color: clear
+  surface_treatment: none (medium binding standard PS)
+  sterile: false
+  lid: none
+  pack: 10 per bag, 100 per case
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE, Opentrons Flex, Tecan Spark Cyto (absorbance)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/usa/products/bioscience/microplates/96-well-microplates/96-well-microplates-clear/655101.html
+    - https://hamptonresearch.com/uploads/support_materials/HR3-139_Greiner_655101_product_datasheet.pdf
+    - https://www.gbo.com/fileadmin/media/GBO-International/01_Downloads_BioScience/SALES_Brochures/F073027_Microplate_Dimensions_Guide.pdf
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: estimated, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Greiner PDS 6551xx gives total volume 382 uL for 655101/-161 (the dimension guide rounds the group
+    to 392 uL, which is the chimney-well TC variants). Surface "medium binding" is Greiner's usual
+    description for untreated PS but was not stated on the 655101 page. Dead volume estimated.
+
+- key: greiner-655090
+  manufacturer: Greiner Bio-One
+  catalog_number: "655090"
+  name: CELLSTAR Cell Culture Microplate, 96 well, PS, F-bottom (chimney well), uClear, black, TC, sterile, lid with condensation rings
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: null
+  well_geometry:
+    shape: round
+    bottom_shape: flat
+    depth: null
+    top_diameter: null
+    bottom_diameter: null
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "392", unit: uL}
+  working_volume: {min: {value: "25", unit: uL}, max: {value: "340", unit: uL}}
+  dead_volume: null
+  material: polystyrene (uClear film bottom)
+  color: black walls, clear bottom
+  surface_treatment: TC (physical surface treatment); growth area 34 mm2 per well
+  sterile: true
+  lid: included, with condensation rings
+  pack: 8 per bag, 32 per case
+  typical_instruments: [Hamilton STAR, Opentrons Flex, Tecan Spark Cyto (fluorescence imaging)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/usa/products/bioscience/cell-culture-products/cellstar-cell-culture-microplates/96-well-cell-culture-microplates-clear/655090.html
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: estimated, working_volume: verified, dead_volume: unknown, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    96-well uClear plates have a thin film bottom so plate height and well depth differ from 655101; the
+    dimension guide row for these was not extracted. max_volume 392 uL taken from Greiner's PDS value
+    for chimney-well TC 96 plates (estimated for 655090).
+
+# ---------------------------------------------------------------- PLATES: deep-well / storage
+- key: thermo-260252
+  manufacturer: Thermo Fisher Scientific (Nunc)
+  catalog_number: "260252"
+  name: Nunc 96-Well Polypropylene DeepWell Storage Plate, 1.3 mL, non-sterile
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.47", unit: mm}
+    height: {value: "31.6", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: round (U)
+    depth: {value: "29.1", unit: mm}
+    top_diameter: {value: "8.4", unit: mm}
+    bottom_diameter: {value: "7.2", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "1300", unit: uL}
+  working_volume: {min: null, max: {value: "1000", unit: uL}}
+  dead_volume: {value: "20", unit: uL}
+  material: polypropylene (virgin medical grade)
+  color: natural
+  surface_treatment: none
+  sterile: false
+  lid: none
+  pack: 50 per case
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE, Opentrons Flex, CyBio FeliX]
+  opentrons_load_name: thermoscientificnunc_96_wellplate_1300ul
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.thermofisher.com/order/catalog/product/260252
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/thermoscientificnunc_96_wellplate_1300ul/3.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    Dimensions from the Opentrons definition, whose brandId lists 260251 (sterile) and 260252. The
+    bottom is a 3.6 mm radius hemisphere under a slightly tapered cylinder. Dead volume estimated from
+    the hemispherical bottom (~20 uL below a safe tip height).
+
+- key: greiner-780270
+  manufacturer: Greiner Bio-One
+  catalog_number: "780270"
+  name: MASTERBLOCK 96 well, 2 mL, PP, V-bottom, natural, non-sterile
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "44.0", unit: mm}
+  well_geometry:
+    shape: square
+    bottom_shape: V (pyramidal)
+    depth: null
+    top_side: null
+    bottom_diameter: null
+    pitch: {value: "9.0", unit: mm}
+    a1_row_offset: {value: "11.24", unit: mm}
+    a1_column_offset: {value: "14.38", unit: mm}
+  max_volume: {value: "2.42", unit: mL}
+  working_volume: {min: {value: "0.1", unit: mL}, max: {value: "2.1", unit: mL}}
+  dead_volume: {value: "10", unit: uL}
+  material: polypropylene
+  color: natural
+  surface_treatment: none; temperature range -196 to +121 degC
+  sterile: false
+  lid: none (CapMats 381080/381081 compatible)
+  pack: see vendor
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE, Opentrons Flex, CyBio FeliX]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://shop.gbo.com/en/usa/products/bioscience/microplates/polypropylene-storage-plates/96-well-masterblock-2ml/780270.html
+    - https://www.gbo.com/fileadmin/media/GBO-International/01_Downloads_BioScience/SALES_Brochures/F073027_Microplate_Dimensions_Guide.pdf
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: estimated, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Square wells are typical of MASTERBLOCK but not stated in the extracted text; well depth and
+    well size not extracted. Working volume 0.1-2.1 mL at RT (0.1-2.0 mL at -20 degC). Dead volume is
+    an estimate for a pyramidal V bottom. Opentrons has no definition for this part (nest_96_wellplate_2ml_deep
+    is a different product).
+
+# ---------------------------------------------------------------- PLATES: PCR / qPCR
+- key: biorad-hsp9601
+  manufacturer: Bio-Rad
+  catalog_number: HSP9601
+  name: Hard-Shell 96-Well PCR Plates, low profile, thin wall, skirted, white/clear
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "16.06", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: V (conical with rounded tip)
+    depth: {value: "14.57", unit: mm}
+    top_diameter: {value: "5.44", unit: mm}
+    bottom_diameter: {value: "2.81", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "200", unit: uL}
+  working_volume: null
+  dead_volume: {value: "5", unit: uL}
+  material: polypropylene wells, polycarbonate-type rigid shell (two-component)
+  color: white shell, clear wells
+  surface_treatment: none; certified DNase/RNase/human gDNA free
+  sterile: false
+  lid: none (seal with film)
+  pack: see vendor
+  typical_instruments: [Bio-Rad thermocyclers (CFX96, C1000), Hamilton STAR, Opentrons Flex (thermocycler module)]
+  opentrons_load_name: biorad_96_wellplate_200ul_pcr
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.bio-rad.com/en-us/sku/hsp9601-hard-shell-96-well-pcr-plates-low-profile-thin-wall-skirted-white-clear?ID=hsp9601
+    - https://www.bio-rad.com/webroot/web/pdf/lsr/literature/10012853.pdf
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/biorad_96_wellplate_200ul_pcr/4.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: estimated, color: verified, surface_treatment: verified, sterile: estimated, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    Height 16.06 mm from Bio-Rad; well geometry from the Opentrons definition (brandId hsp9601).
+    Bio-Rad says "virgin polypropylene" wells in a "two-component design"; shell material not
+    named in what was read. Application temperature -80 to 121 degC. Sterility not stated.
+
+- key: biorad-hsp9655
+  manufacturer: Bio-Rad
+  catalog_number: HSP9655
+  name: Hard-Shell 96-Well PCR Plates, low profile, thin wall, skirted, white/white
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "16.06", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: V (conical with rounded tip)
+    depth: {value: "14.57", unit: mm}
+    top_diameter: {value: "5.44", unit: mm}
+    bottom_diameter: {value: "2.81", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "200", unit: uL}
+  working_volume: null
+  dead_volume: {value: "5", unit: uL}
+  material: polypropylene wells (two-component hard shell)
+  color: white shell, white wells
+  surface_treatment: none
+  sterile: false
+  lid: none (seal with optical film)
+  pack: see vendor
+  typical_instruments: [Bio-Rad CFX96 / C1000, Analytik Jena qTOWER3 (unconfirmed), Hamilton STAR, Opentrons Flex]
+  opentrons_load_name: biorad_96_wellplate_200ul_pcr
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.bio-rad.com/en-us/sku/HSP9655-hard-shell-96-well-pcr-plates-low-profile-thin-wall-skirted-white-white?ID=HSP9655
+    - https://www.bio-rad.com/webroot/web/pdf/lsr/literature/10012853.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: estimated, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: verified, color: verified, surface_treatment: estimated, sterile: estimated, opentrons_load_name: estimated, hamilton_labware_file: unknown}
+  notes: >-
+    White wells for qPCR. Height 16.06 mm verified on Bio-Rad page; well geometry assumed identical to
+    HSP9601 (same mold family, only colour differs). qTOWER3 compatibility is NOT stated by Bio-Rad or
+    Analytik Jena in what was read; for qTOWER3 the vendor-native plate is 844-70292-0 below.
+
+- key: aj-844-70292-0
+  manufacturer: Analytik Jena
+  catalog_number: 844-70292-0
+  name: PCR plate 96 well, 0.1 mL, low profile, full-skirted, white
+  format: plate
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: round
+    bottom_shape: V (conical)
+    depth: null
+    top_diameter: null
+    bottom_diameter: null
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "100", unit: uL}
+  working_volume: null
+  dead_volume: null
+  material: polypropylene
+  color: white
+  surface_treatment: none
+  sterile: false
+  lid: none
+  pack: 50 plates
+  typical_instruments: [Analytik Jena qTOWER3]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.analytik-jena.us/products/life-science/pcr-qpcr-thermal-cycler/qpcr-and-pcr-plates/
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: verified, working_volume: unknown, dead_volume: unknown, material: estimated, color: verified, surface_treatment: estimated, sterile: estimated, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Listed by Analytik Jena as its 96-well PCR/qPCR plate; the page does not name qTOWER3 explicitly,
+    but it is Analytik Jena's own consumable for its cyclers. No dimensions published on the page.
+
+# ---------------------------------------------------------------- ECHO SOURCE PLATES
+- key: beckman-001-14555
+  manufacturer: Beckman Coulter (Labcyte)
+  catalog_number: 001-14555
+  name: Echo Qualified 384-Well Polypropylene Microplate (384PP), clear, non-sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: square
+    bottom_shape: flat
+    depth: null
+    top_side: null
+    bottom_side: null
+    pitch: {value: "4.5", unit: mm}
+  max_volume: {value: "65", unit: uL}
+  working_volume: {min: {value: "20", unit: uL}, max: {value: "65", unit: uL}}
+  dead_volume: {value: "20", unit: uL}
+  echo_calibrations:
+    - {name: 384PP_DMSO2, fluid: "70-100% DMSO", range: {min: {value: "15", unit: uL}, max: {value: "65", unit: uL}}}
+    - {name: 384PP_AQ_SP2, fluid: "buffers with surfactant/protein (PCR mix, lysis buffer, serum)", range: {min: {value: "15", unit: uL}, max: {value: "65", unit: uL}}}
+    - {name: 384PP_AQ_GP3, fluid: "buffer/protein without surfactant, cell culture medium", range: {min: {value: "15", unit: uL}, max: {value: "65", unit: uL}}}
+    - {name: 384PP_AQ_CP, fluid: "crystallography reagents", range: {min: {value: "20", unit: uL}, max: {value: "50", unit: uL}}}
+  droplet_volume: {value: "2.5", unit: nL}
+  material: polypropylene
+  color: clear (natural)
+  surface_treatment: none; solvent (DMSO) resistant; heat-seal and MicroClime lid compatible
+  sterile: false
+  related_catalog_numbers: {sterile: 001-14615, barcoded: 001-14618, amine_coated: 001-14622, legacy_labcyte: PP-0200}
+  typical_instruments: [Echo 650 (source), Echo 525, Echo 655, Hamilton STAR (filling)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://media.beckman.com/-/media/pdf-assets/brochures/echo-acoustic-liquid-handler-consumables-brochure.pdf?rev=121d941cb16b47829be390bd8641fe59
+    - https://store.beckman.com/es/p/echo-qualified-microplates/001-14555
+    - https://cpos.hku.hk/wp-content/uploads/2026/01/SOP_Beckman_Echo650_20260129.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: verified, working_volume: verified, dead_volume: estimated, echo_calibrations: estimated, droplet_volume: estimated, material: verified, sterile: verified, related_catalog_numbers: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Beckman brochure: working volume 20-65 uL, Echo 525/650/655. Dead volume = the minimum working
+    volume (Echo cannot eject below it); brochure says 20 uL, an Echo 650 facility SOP (HKU, secondary)
+    lists 15-65 uL per calibration, so treat 15-20 uL as the dead volume depending on calibration and
+    software version; confirm against the lab's Echo plate definitions. 001-14615 confirmed as the
+    sterile version (user's guess was right). 2.5 nL droplet is the standard Echo 650 droplet
+    (not read on a Beckman page here). Legacy Labcyte number PP-0200 from the HKU SOP (secondary).
+    Plate dimensions not published on the pages read; Echo software holds the plate definition.
+
+- key: beckman-001-12782
+  manufacturer: Beckman Coulter (Labcyte)
+  catalog_number: 001-12782
+  name: Echo Qualified 384-well Cyclic Olefin Copolymer (COC) Source Microplate, Low Dead Volume (384LDV), clear, non-sterile
+  format: plate
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: unknown
+    bottom_shape: flat
+    depth: null
+    top_side: null
+    bottom_side: null
+    pitch: {value: "4.5", unit: mm}
+  max_volume: {value: "14", unit: uL}
+  working_volume:
+    dmso: {min: {value: "3", unit: uL}, max: {value: "12", unit: uL}}
+    buffer: {min: {value: "2.5", unit: uL}, max: {value: "12", unit: uL}}
+    buffer_protein: {min: {value: "6", unit: uL}, max: {value: "14", unit: uL}}
+  dead_volume: {value: "3", unit: uL}
+  echo_calibrations:
+    - {name: 384LDV_DMSO, fluid: "70-100% DMSO", range: {min: {value: "2.5", unit: uL}, max: {value: "12", unit: uL}}}
+    - {name: 384LDV_AQ_B2, fluid: "buffer without surfactant (oligos, DNA, RNA)", range: {min: {value: "3", unit: uL}, max: {value: "12", unit: uL}}}
+    - {name: 384LDV_AQ_P2, fluid: "protein in buffer (enzymes, antibodies)", range: {min: {value: "6", unit: uL}, max: {value: "16", unit: uL}}}
+  droplet_volume: {value: "2.5", unit: nL}
+  material: cyclic olefin copolymer (COC)
+  color: clear
+  surface_treatment: none; heat-seal compatible
+  sterile: false
+  related_catalog_numbers: {sterile: 001-16128, barcoded: 001-6025, carboxyl_coated: 001-13070, legacy_labcyte: LP-0200}
+  typical_instruments: [Echo 650 (source), Echo 525, Echo 655]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://media.beckman.com/-/media/pdf-assets/brochures/echo-acoustic-liquid-handler-consumables-brochure.pdf?rev=121d941cb16b47829be390bd8641fe59
+    - https://store.beckman.com/p/echo-qualified-microplates-650-series/001-12782
+    - https://cpos.hku.hk/wp-content/uploads/2026/01/SOP_Beckman_Echo650_20260129.pdf
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: estimated, working_volume: verified, dead_volume: estimated, echo_calibrations: estimated, droplet_volume: estimated, material: verified, sterile: verified, related_catalog_numbers: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    LP-0200 is the legacy Labcyte number; Beckman now sells it as 001-12782 (legacy mapping from the
+    HKU SOP, secondary). Brochure working volumes: DMSO 3-12, buffer 2.5-12, buffer/protein 6-14 uL.
+    The SOP's calibration table differs slightly (DMSO 2.5-12, AQ_P2 6-16), hence calibrations are
+    estimated. Dead volume = minimum working volume for the compound (DMSO) use case. Max 14 uL is the
+    highest brochure working volume, not a published well capacity. For the dose-response screen this
+    is the compound source plate.
+
+- key: beckman-001-11101
+  manufacturer: Beckman Coulter (Labcyte)
+  catalog_number: 001-11101
+  name: Echo Qualified Reservoir, 2x3 Well, Polypropylene Microplate, Surface Treated with Amine Coating (6RES)
+  format: reservoir
+  well_count: 6
+  rows: 2
+  columns: 3
+  well_addressing: A1..B3
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: rectangular
+    bottom_shape: flat
+    depth: null
+  max_volume: {value: "2.8", unit: mL}
+  working_volume: {min: {value: "250", unit: uL}, max: {value: "2.8", unit: mL}}
+  dead_volume: {value: "250", unit: uL}
+  material: polypropylene, amine-coated
+  color: clear (natural)
+  surface_treatment: amine coating
+  sterile: false
+  typical_instruments: [Echo 525]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://media.beckman.com/-/media/pdf-assets/brochures/echo-acoustic-liquid-handler-consumables-brochure.pdf?rev=121d941cb16b47829be390bd8641fe59
+    - https://www.beckman.com/supplies/echo-qualified-supplies/reservoirs/001-11101
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: verified, working_volume: verified, dead_volume: verified, material: verified, sterile: estimated, typical_instruments: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    IMPORTANT: Beckman lists this reservoir as compatible with the Echo 525 only (aqueous), not the
+    Echo 650 series, and "not compatible with centrifugation or heat sealing". Brochure: 250 uL -
+    2.8 mL working, dead volume "maximum 250 uL per well"; product page: "less than 10% of the
+    maximum working volume". Keep in the catalog only if the lab confirms a 6RES definition exists on
+    its Echo 650; otherwise use 384PP for bulk aqueous transfers.
+
+# ---------------------------------------------------------------- RESERVOIRS
+- key: axygen-res-sw96-hp
+  manufacturer: Corning (Axygen)
+  catalog_number: RES-SW96-HP
+  name: Axygen Single Well Reagent Reservoir with 96-Bottom Troughs, High Profile, Nonsterile
+  format: reservoir
+  well_count: 1
+  rows: 1
+  columns: 1
+  well_addressing: A1
+  footprint:
+    sbs: true
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: rectangular
+    bottom_shape: 96 pyramidal collection pools (V) under 96-tip positions
+    depth: null
+  max_volume: {value: "240", unit: mL}
+  working_volume: null
+  dead_volume: null
+  material: polypropylene (virgin)
+  color: natural
+  surface_treatment: none
+  sterile: false
+  related_catalog_numbers: {sterile: RES-SW96-HP-SI, sterile_replacement: RES-SW96-HP-SI-M, low_profile_flat_1_well: RES-SW1-LP}
+  typical_instruments: [Hamilton STAR (CO-RE 96 head), Hamilton VANTAGE, CyBio FeliX, Opentrons Flex (96-channel)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Genomics-&-Molecular-Biology/Automation-Consumables/Automation-Reservoirs/Axygen%C2%AE-Reagent-Reservoirs-(ANSI-SLAS-Footprint)/p/RES-SW96-HP-SI
+    - https://www.fishersci.com/shop/products/single-well-high-profile-reagent-reservoirs/14222424
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: unknown, material: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Corning's -SI (sterile) page gives 240 mL, ANSI/SLAS footprint, 96 collection pools "to minimize
+    dead volume" but no number. Nonsterile RES-SW96-HP name confirmed via Corning search listing and
+    Fisher (240 mL, nonsterile, 96). Corning notes the -SI version is being discontinued with -SI-M as
+    replacement; check -M availability for the nonsterile version. Dead volume must be measured
+    (typically a few mL for high-profile single-well troughs) - leave unknown.
+
+- key: nest-360102
+  manufacturer: NEST
+  catalog_number: "360102"
+  name: NEST 12-channel reagent reservoir, 15 mL per channel
+  format: reservoir
+  well_count: 12
+  rows: 1
+  columns: 12
+  well_addressing: A1..A12
+  footprint:
+    sbs: true
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "31.4", unit: mm}
+  well_geometry:
+    shape: rectangular trough
+    bottom_shape: V
+    depth: {value: "26.85", unit: mm}
+    top_length_x: {value: "8.35", unit: mm}
+    top_length_y: {value: "71.25", unit: mm}
+    pitch: {value: "9.0", unit: mm}
+  max_volume: {value: "15", unit: mL}
+  working_volume: null
+  dead_volume: {value: "300", unit: uL}
+  material: polypropylene
+  color: natural
+  surface_treatment: none; DMSO compatible; storable at -80 degC
+  sterile: false
+  pack: 5 per pack, 50 per case
+  typical_instruments: [Opentrons Flex (8-channel), Hamilton STAR]
+  opentrons_load_name: nest_12_reservoir_15ml
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.nest-biotech.com/reagent-reserviors/59178414.html
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/nest_12_reservoir_15ml/3.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: verified, sterile: estimated, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    NEST page: 15 mL, 12 channels, PP, ANSI/SBS. Geometry from the Opentrons definition (brandId
+    360102), including the 2.05 mm V-shaped bottom section. Dead volume estimated: volume of a
+    trough ~8 x 70 mm below ~0.5 mm usable height plus the V groove, roughly 0.2-0.4 mL for an
+    8-channel pipette. Sterility not stated (assume non-sterile).
+
+- key: hamilton-56694-01
+  manufacturer: Hamilton
+  catalog_number: 56694-01
+  name: 60 mL Reagent Reservoir, self-standing, natural, with lid
+  format: reservoir
+  well_count: 1
+  rows: 1
+  columns: 1
+  well_addressing: A1
+  footprint:
+    sbs: false
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: rectangular trough
+    bottom_shape: shaped bottom to minimize dead volume
+    depth: null
+  max_volume: {value: "60", unit: mL}
+  working_volume: null
+  dead_volume: null
+  material: polypropylene
+  color: natural
+  surface_treatment: none; free of DNase, RNase, pyrogens, human DNA, ATP, PCR inhibitors
+  sterile: false
+  carrier: 60 mL Reagent Reservoir Carrier, five positions (53646-01)
+  pack: 28 per case (individually wrapped)
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.hamiltoncompany.com/automated-liquid-handling/other-robotics/56694-01
+    - https://www.thermofisher.com/order/catalog/product/56694-01
+    - https://www.testmart.com/estore/unit.cfm/PIPPET/HAMROB/56694-01/automated_pippetting_devices_and_systems/8.html
+  status: {catalog_number: verified, name: estimated, footprint: verified, well_geometry: unknown, max_volume: verified, working_volume: unknown, dead_volume: unknown, material: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    The user-supplied 56695-01 is NOT the 60 mL trough: Hamilton lists 56695-01 as the 200 mL
+    reservoir (entry below). 56694-01 is the 60 mL part. Hamilton's page covers natural/black and
+    with/without-lid variants under one page; "natural, with lid" comes from a reseller listing
+    (TestMart), so the name is estimated. Sits on a Hamilton carrier, not an SBS footprint.
+
+- key: hamilton-56695-01
+  manufacturer: Hamilton
+  catalog_number: 56695-01
+  name: 200 mL Reagent Reservoir, natural, with lid
+  format: reservoir
+  well_count: 1
+  rows: 1
+  columns: 1
+  well_addressing: A1
+  footprint:
+    sbs: false
+    length: null
+    width: null
+    height: null
+  well_geometry:
+    shape: rectangular trough
+    bottom_shape: unknown
+    depth: null
+  max_volume: {value: "200", unit: mL}
+  working_volume: null
+  dead_volume: null
+  material: polypropylene
+  color: natural
+  surface_treatment: none; free of DNase, RNase, pyrogens, human DNA, ATP, PCR inhibitors
+  sterile: false
+  carrier: 200 mL Reagent Reservoir Carrier, four positions (53645-01)
+  pack: 10 per case, individually wrapped
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.hamiltoncompany.com/automated-liquid-handling/other-robotics/56695-01
+    - https://www.thermofisher.com/order/catalog/product/56695-01
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: unknown, max_volume: verified, working_volume: unknown, dead_volume: unknown, material: verified, sterile: estimated, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  notes: >-
+    Hamilton states "not ANSI/SLAS compliant". Bulk buffer trough for ELISA wash/diluent on STAR.
+
+# ---------------------------------------------------------------- TUBES
+- key: eppendorf-0030120086
+  manufacturer: Eppendorf
+  catalog_number: "0030120086"
+  name: Eppendorf Safe-Lock Tubes, 1.5 mL, Eppendorf Quality, colorless
+  format: tube
+  well_count: 1
+  rows: null
+  columns: null
+  well_addressing: null
+  footprint:
+    sbs: false
+    outer_diameter: {value: "10.8", unit: mm}
+    length: {value: "38.9", unit: mm}
+    length_lid_open: {value: "59", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: conical
+    inner_diameter: {value: "8.7", unit: mm}
+    depth: {value: "37.8", unit: mm}
+  max_volume: {value: "1.5", unit: mL}
+  working_volume: null
+  dead_volume: {value: "10", unit: uL}
+  material: polypropylene (no slip agents, plasticizers or biocides)
+  color: colorless
+  surface_treatment: none
+  sterile: false
+  temperature_range: {min: {value: "-86", unit: degC}, max: {value: "100", unit: degC}}
+  pack: 1000 per pack
+  typical_instruments: [Opentrons Flex (tube rack), Hamilton STAR (sample carrier), benchtop centrifuge]
+  opentrons_load_name: opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.eppendorf.com/product-media/doc/en/140027_Technical-Data/Eppendorf_Consumables_Technical-data_Safe-Lock-Tube-15-mL_Safe-Lock-15-mL-technical-drawing.pdf
+    - https://www.analytics-shop.com/us/ep0030120086
+    - https://www.scientificlabs.co.uk/product/micro-centrifuge-tubes/E0030120086
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap/3.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: verified, sterile: verified, temperature_range: estimated, opentrons_load_name: estimated, hamilton_labware_file: unknown}
+  notes: >-
+    Dimensions from Eppendorf's technical drawing (1.5 mL Safe-Lock). Temperature range from a
+    reseller (SLS), not Eppendorf. The Opentrons rack definition lists Eppendorf 0223632xx numbers
+    (older/other-grade Safe-Lock 1.5 mL), not 0030120086; same tube body, so estimated.
+    Dead volume estimated for a conical tip-accessible bottom.
+
+- key: falcon-352096
+  manufacturer: Corning (Falcon)
+  catalog_number: "352096"
+  name: Falcon 15 mL High Clarity PP Centrifuge Tube, conical bottom, dome seal screw cap, sterile
+  format: tube
+  well_count: 1
+  rows: null
+  columns: null
+  well_addressing: null
+  footprint:
+    sbs: false
+    outer_diameter: {value: "17", unit: mm}
+    length: {value: "120", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: conical
+    inner_diameter: {value: "14.7", unit: mm}
+    depth: {value: "117.5", unit: mm}
+  max_volume: {value: "15", unit: mL}
+  working_volume: null
+  dead_volume: {value: "100", unit: uL}
+  material: polypropylene (cap polyethylene)
+  color: clear
+  surface_treatment: none
+  sterile: true
+  max_rcf: 12000 x g
+  pack: 50 per bag, 500 per case
+  typical_instruments: [Opentrons Flex (15-tube rack), Hamilton STAR (tube carrier)]
+  opentrons_load_name: opentrons_15_tuberack_falcon_15ml_conical
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Liquid-Handling/Tubes,-Liquid-Handling/Centrifuge-Tubes/Falcon%C2%AE-Conical-Centrifuge-Tubes/p/352096
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_15_tuberack_falcon_15ml_conical/3.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: verified, sterile: verified, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    OD x length from Corning; inner diameter and depth from the Opentrons rack definition (brandId
+    lists 352096). Dead volume estimated from the conical tip (~100 uL unreachable by a 1 mL tip).
+
+- key: falcon-352070
+  manufacturer: Corning (Falcon)
+  catalog_number: "352070"
+  name: Falcon 50 mL High Clarity PP Centrifuge Tube, conical bottom, sterile
+  format: tube
+  well_count: 1
+  rows: null
+  columns: null
+  well_addressing: null
+  footprint:
+    sbs: false
+    outer_diameter: {value: "30", unit: mm}
+    length: {value: "115", unit: mm}
+  well_geometry:
+    shape: round
+    bottom_shape: conical
+    inner_diameter: {value: "27.81", unit: mm}
+    depth: {value: "113", unit: mm}
+  max_volume: {value: "50", unit: mL}
+  working_volume: null
+  dead_volume: {value: "500", unit: uL}
+  material: polypropylene (cap polyethylene, blue flat-top)
+  color: clear
+  surface_treatment: none
+  sterile: true
+  max_rcf: 16000 x g
+  pack: 25 per bag, 500 per case
+  typical_instruments: [Opentrons Flex (6-tube rack), Hamilton STAR (tube carrier)]
+  opentrons_load_name: opentrons_6_tuberack_falcon_50ml_conical
+  hamilton_labware_file: null
+  source_urls:
+    - https://ecatalog.corning.com/life-sciences/b2c/US/en/Liquid-Handling/Tubes,-Liquid-Handling/Centrifuge-Tubes/Falcon%C2%AE-Conical-Centrifuge-Tubes/p/352070
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_6_tuberack_falcon_50ml_conical/2.json
+  status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: verified, max_volume: verified, working_volume: unknown, dead_volume: estimated, material: verified, sterile: verified, opentrons_load_name: verified, hamilton_labware_file: unknown}
+  notes: >-
+    Inner geometry from the Opentrons 6-tube rack definition (brandId 352070, 352098). Dead volume
+    estimated from the 14.3 mm-tall cone.
+
+# ---------------------------------------------------------------- TIPS: Hamilton (STAR / VANTAGE)
+- key: hamilton-235948
+  manufacturer: Hamilton
+  catalog_number: "235948"
+  name: 50 uL CO-RE II Conductive Filter Tips, non-sterile
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint: {sbs: false}
+  tip_length: {value: "50.4", unit: mm}
+  max_volume: {value: "50", unit: uL}
+  filter: true
+  conductive: true
+  material: black conductive polypropylene
+  sterile: false
+  pack: 96 tips per rack, 60 racks per case (5760 tips)
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE (1000 uL channels, CO-RE 96 head)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.hamiltoncompany.com/consumables/50-%CE%BCl-co-re-ii-conductive-tips
+  status: {catalog_number: verified, name: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: verified, hamilton_labware_file: unknown}
+  notes: >-
+    Frame-racked Hamilton tips for capacitive LLD and TADM. VENUS rack file name not confirmed
+    (community names like "TIP_50ulF_L" or PyLabRobot resource names exist but were not read).
+
+- key: hamilton-235903
+  manufacturer: Hamilton
+  catalog_number: "235903"
+  name: 300 uL CO-RE II Conductive Filter Tips, non-sterile
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint: {sbs: false}
+  tip_length: {value: "59.9", unit: mm}
+  max_volume: {value: "300", unit: uL}
+  filter: true
+  conductive: true
+  material: black conductive polypropylene
+  sterile: false
+  pack: 96 tips per rack, 60 racks per case (5760 tips)
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE]
+  opentrons_load_name: null
+  hamilton_labware_file: STF_L
+  source_urls:
+    - https://www.hamiltoncompany.com/consumables/300-%CE%BCl-co-re-ii-conductive-tips?part-number=235903
+  status: {catalog_number: verified, name: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: verified, hamilton_labware_file: estimated}
+  notes: >-
+    STF_L ("standard tip, filter, landscape") is the commonly used VENUS rack name for 300 uL filter
+    tips; not confirmed from a Hamilton primary source. Non-filter equivalent is 235902.
+
+- key: hamilton-235905
+  manufacturer: Hamilton
+  catalog_number: "235905"
+  name: 1000 uL CO-RE II Conductive Filter Tips, non-sterile
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint: {sbs: false}
+  tip_length: {value: "95.1", unit: mm}
+  max_volume: {value: "1000", unit: uL}
+  filter: true
+  conductive: true
+  material: black conductive polypropylene
+  sterile: false
+  pack: 3840 tips per case (40 racks of 96)
+  typical_instruments: [Hamilton STAR, Hamilton VANTAGE]
+  opentrons_load_name: null
+  hamilton_labware_file: HTF_L
+  source_urls:
+    - https://www.hamiltoncompany.com/consumables/300-%CE%BCl-co-re-ii-conductive-tips?part-number=235903
+    - https://www.fishersci.co.uk/shop/products/pipettor-tip-1000-l-high-volume-co-re-filter-non-sterile-black-microlab-star-automated-pipetting-system/13477697
+    - https://www.hamiltoncompany.com/automated-liquid-handling/disposable-tips/1000-%CE%BCl-conductive-sterile-filter-tips
+  status: {catalog_number: verified, name: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: estimated, hamilton_labware_file: estimated}
+  notes: >-
+    The user's guess 235940 could not be confirmed; Hamilton's own site links 235905 as the 1000 uL
+    CO-RE II tip, and Fisher lists 235905 as 1000 uL conductive non-sterile filter tips (3840/case).
+    Tip length 95.1 mm is Hamilton's value for the 1000 uL non-filter tip (235904) and matches Fisher's
+    235905 listing. HTF_L is the common VENUS rack name, not confirmed from Hamilton.
+
+# ---------------------------------------------------------------- TIPS: Opentrons Flex
+- key: opentrons-991-00104
+  manufacturer: Opentrons
+  catalog_number: 991-00104
+  name: Opentrons Flex Tips, 50 uL, filtered, racks (20 racks)
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.75", unit: mm}
+    width: {value: "85.75", unit: mm}
+    height: {value: "99", unit: mm}
+  tip_length: {value: "57.9", unit: mm}
+  max_volume: {value: "50", unit: uL}
+  filter: true
+  conductive: false
+  material: clear non-conducting polypropylene
+  sterile: true
+  pack: 20 racks, 1920 tips (refill SKU 991-00110)
+  typical_instruments: [Opentrons Flex]
+  opentrons_load_name: opentrons_flex_96_filtertiprack_50ul
+  hamilton_labware_file: null
+  source_urls:
+    - https://opentrons.com/products/opentrons-flex-filter-tips-50-l
+    - https://insights.opentrons.com/hubfs/Products/Flex/Opentrons%20Flex%20Tips%20Brochure.pdf
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_flex_96_filtertiprack_50ul/1.json
+  status: {catalog_number: verified, name: verified, footprint: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: verified, opentrons_load_name: verified}
+  notes: E-beam sterilized. Tip length is the Opentrons definition's tipLength.
+
+- key: opentrons-991-00105
+  manufacturer: Opentrons
+  catalog_number: 991-00105
+  name: Opentrons Flex Tips, 200 uL, filtered, racks (20 racks)
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.75", unit: mm}
+    width: {value: "85.75", unit: mm}
+    height: {value: "99", unit: mm}
+  tip_length: {value: "58.35", unit: mm}
+  max_volume: {value: "200", unit: uL}
+  filter: true
+  conductive: false
+  material: clear non-conducting polypropylene
+  sterile: true
+  pack: 20 racks, 1920 tips (refill SKU 991-00111)
+  typical_instruments: [Opentrons Flex]
+  opentrons_load_name: opentrons_flex_96_filtertiprack_200ul
+  hamilton_labware_file: null
+  source_urls:
+    - https://opentrons.com/products/opentrons-flex-filter-tips-200-l
+    - https://insights.opentrons.com/hubfs/Products/Flex/Opentrons%20Flex%20Tips%20Brochure.pdf
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_flex_96_filtertiprack_200ul/1.json
+  status: {catalog_number: verified, name: verified, footprint: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: verified, opentrons_load_name: verified}
+  notes: null
+
+- key: opentrons-991-00106
+  manufacturer: Opentrons
+  catalog_number: 991-00106
+  name: Opentrons Flex Tips, 1000 uL, filtered, racks (20 racks)
+  format: tip_rack
+  well_count: 96
+  rows: 8
+  columns: 12
+  well_addressing: A1..H12
+  footprint:
+    sbs: true
+    length: {value: "127.75", unit: mm}
+    width: {value: "85.75", unit: mm}
+    height: {value: "99", unit: mm}
+  tip_length: {value: "95.6", unit: mm}
+  max_volume: {value: "1000", unit: uL}
+  filter: true
+  conductive: false
+  material: clear non-conducting polypropylene
+  sterile: true
+  pack: 20 racks, 1920 tips (refill SKU 991-00112)
+  typical_instruments: [Opentrons Flex]
+  opentrons_load_name: opentrons_flex_96_filtertiprack_1000ul
+  hamilton_labware_file: null
+  source_urls:
+    - https://opentrons.com/products/opentrons-flex-filter-tips-1000-l
+    - https://insights.opentrons.com/hubfs/Products/Flex/Opentrons%20Flex%20Tips%20Brochure.pdf
+    - https://raw.githubusercontent.com/Opentrons/opentrons/edge/shared-data/labware/definitions/2/opentrons_flex_96_filtertiprack_1000ul/1.json
+  status: {catalog_number: verified, name: verified, footprint: verified, tip_length: verified, max_volume: verified, filter: verified, sterile: verified, pack: verified, opentrons_load_name: verified}
+  notes: null
+
+# ---------------------------------------------------------------- TIPS: CyBio FeliX
+- key: aj-ol3810-25-244
+  manufacturer: Analytik Jena
+  catalog_number: OL3810-25-244
+  name: CyBio RoboTipTray 384/60 uL, PCR-certified, pre-sterilized (no filter)
+  format: tip_rack
+  well_count: 384
+  rows: 16
+  columns: 24
+  well_addressing: A1..P24
+  footprint: {sbs: true}
+  tip_length: null
+  max_volume: {value: "60", unit: uL}
+  filter: false
+  conductive: false
+  material: polypropylene
+  sterile: true
+  pack: 384 tips per tray, 12 trays per pack
+  typical_instruments: [CyBio FeliX (Head R 384/60 uL)]
+  opentrons_load_name: null
+  hamilton_labware_file: null
+  source_urls:
+    - https://www.analytik-jena.us/products/liquid-handling-automation/laboratory-equipment/pipetting-tips-for-automated-liquid-handling-systems/disposable-tips-for-cybio-felix/
+  status: {catalog_number: verified, name: verified, footprint: estimated, tip_length: unknown, max_volume: verified, filter: verified, sterile: verified, pack: verified, material: estimated}
+  notes: >-
+    Chosen as the single FeliX tip item: 384-format sterile tips for plating cells / adding
+    CellTiter-Glo into 384-well plates. Alternatives from the same page: OL3810-25-241 (standard,
+    non-sterile), OL3810-25-246 (filter, 45 uL), and for a 96/250 uL head OL3810-25-664 (sterile)
+    / OL3810-25-669 (filter). The owner should confirm which FeliX head is installed.
+
+# ---------------------------------------------------------------- CONSUMABLE (not labware): Mantis chip
+- key: formulatrix-233580
+  manufacturer: Formulatrix
+  catalog_number: "233580"
+  name: MANTIS Chip, Silicone, HV (1 uL & 5 uL nozzles), RFID, pack of 6
+  format: dispense_chip (consumable, not labware)
+  well_count: null
+  max_volume: null
+  min_dispense_volume: {value: "1", unit: uL}
+  dead_volume: {value: "15", unit: uL}
+  fluid_channel_min_diameter: {value: "0.38", unit: mm}
+  material: silicone diaphragm
+  sterile: false
+  related:
+    lv_chip: "MANTIS Chip - Silicone, LV (0.1 uL & 0.5 uL), RFID: min dispense 0.1 uL, dead volume 6 uL, channel 0.25 mm; SKU not found"
+    pfe_variants: "LVP / HVP (perfluoroelastomer) chips for harsh reagents; SKUs not found"
+    continuous_flow: "CF chip, min ~5 uL, dead volume ~150 uL; SKU not found"
+  typical_instruments: [Formulatrix Mantis]
+  source_urls:
+    - https://wcm.formulatrix.com/product/mantis-chip-silicone-hv-1ul-5ul-rfid-pi-pack-of-6/
+    - https://help.formulatrix.com/mantis/4.5/Content/Chip_Specifications_Reference.htm
+  status: {catalog_number: verified, name: verified, min_dispense_volume: verified, dead_volume: verified, related.lv_chip: estimated}
+  notes: >-
+    Mantis chips are reusable dispense consumables mounted on the instrument, not labware that holds
+    samples; model them as instrument consumables. Only the HV silicone SKU (233580) was confirmed on
+    the Formulatrix eStore; LV SKU not shown. Chip specs from the Mantis 4.5 help "Chip Specifications
+    Reference".
+
+# =============================================================================
+# GAPS AND CAVEATS
+# - Echo 384PP / 384LDV / 6RES: Beckman pages publish no plate or well dimensions; well geometry
+#   is unknown. Echo dead volume taken as the minimum working volume; brochure and an Echo 650 SOP
+#   disagree by 5 uL for 384PP (20 vs 15 uL). Confirm against the lab's Echo plate-type table.
+# - Echo 6RES (001-11101) is listed for Echo 525 only; likely not usable on the lab's Echo 650.
+# - Hamilton 56695-01 is the 200 mL reservoir; the 60 mL is 56694-01. Hamilton 235940 not
+#   confirmed; 235905 is the 1000 uL filter tip. No Hamilton VENUS labware file names were
+#   confirmed from a Hamilton source (STF_L / HTF_L are community-standard names, estimated).
+# - Thermo 442404 MaxiSorp: no plate/well dimensions found (customer drawing not located).
+# - Greiner 655090, 780270, Analytik Jena 844-70292-0, Axygen RES-SW96-HP: partial or no
+#   dimensional data; dead volumes for reservoirs are not published and are unknown/estimated.
+# - Corning 3570/3764/3765 geometry assumed equal to Corning's standard 384 flat-bottom drawing
+#   (these numbers are not listed on the drawing). No official Opentrons definition names them.
+# - HSP9655 on qTOWER3: compatibility not confirmed by either vendor.
+# - Mantis LV chip SKU and CyBio tip lengths not found.
+# - Not researched: plate lids (e.g. Corning 3099), sealing films, Matrix 2D-barcoded tube racks,
+#   Opentrons OT-2 tips (dropped: owner has no OT-2), Agilent 201252-100 290 mL reservoir
+#   (Opentrons definition exists: agilent_1_reservoir_290ml).
+# =============================================================================

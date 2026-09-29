@@ -1,0 +1,955 @@
+# Instrument kinds (real models, plan 008) and the demo lab's registered instruments.
+# Kinds: researched 2026-09-29 from manufacturer pages and datasheets. "verified" = read on a
+# manufacturer page or PDF; "estimated" = secondary source (reseller, core facility, PyLabRobot)
+# or a conversion; "unknown" = not found and left blank on purpose. Fields not in `status` are verified.
+# Units beyond the current registry (added by plans 007/008): mm, nm, rpm, xg, kg, degC/s.
+# PyLabRobot support levels come from PyLabRobot docs/_static/devices.json (main, 2026-09-29):
+#   wip < basic < mostly < full.
+# Cellario: HighRes publishes no per-model driver list, so Cellario support is only marked
+#   verified for HighRes' own devices.
+
+kinds:
+
+# ---------------------------------------------------------------------------------------------
+- key: hamilton-star
+  manufacturer: Hamilton
+  model: Microlab STAR
+  variants: [Microlab STARlet, Microlab STAR, Microlab STARplus]
+  category: liquid_handler
+  capabilities: [transfer, dispense, grip_move]
+  specs:
+    deck_tracks:
+      STARlet: 30
+      STAR: 54
+    track_pitch: {value: "22.5", unit: "mm"}
+    ansi_slas_positions:
+      STARlet: 25
+      STAR: 55
+    channels_1000uL_max: 16
+    channels_5mL_max: 8
+    volume_range_1000uL_channel: {min: {value: "0.5", unit: "uL"}, max: {value: "1", unit: "mL"}}
+    volume_range_5mL_channel: {min: {value: "50", unit: "uL"}, max: {value: "5", unit: "mL"}}
+    volume_range_core96_head: {min: {value: "1", unit: "uL"}, max: {value: "1000", unit: "uL"}}
+    volume_range_core384_head: {min: {value: "0.1", unit: "uL"}, max: {value: "50", unit: "uL"}}
+    footprint:
+      STARlet: {width: {value: "1124", unit: "mm"}, height: {value: "903", unit: "mm"}, depth: {value: "781", unit: "mm"}}
+      STAR: {width: {value: "1664", unit: "mm"}, height: {value: "903", unit: "mm"}, depth: {value: "781", unit: "mm"}}
+    weight:
+      STARlet: {value: "135", unit: "kg"}
+      STAR: {value: "145", unit: "kg"}
+  configurability:
+    type: modular
+    slots:
+      - name: pipetting_arm_channels
+        options: ["2-16 independent 1000 uL channels", "up to 8 independent 5 mL channels"]
+        changeable: factory_or_service   # installed configuration of the instance
+      - name: multi_probe_head
+        options: [none, CO-RE 96 Probe Head, CO-RE 384 Probe Head]   # STAR: "96 and/or 384"; STARlet: "96 or 384"
+        changeable: factory_or_service
+      - name: iswap
+        options: [none, iSWAP]   # articulating plate-gripper arm, reaches both sides of the deck
+        changeable: factory_or_service
+      - name: core_gripper
+        options: [none, CO-RE Gripper]   # tool picked up by two pipetting channels during a run
+        changeable: runtime_tool
+      - name: autoload
+        options: [none, "Autoload with 1D barcode", "Autoload with 1D+2D barcode"]
+        changeable: factory_or_service
+      - name: deck_carriers
+        description: >-
+          Deck is 54 tracks (STAR) at 22.5 mm pitch; carriers slide onto tracks and are changed
+          by the user between runs. Typical: PLT_CAR_L5AC (5 plate positions, 135 mm = 6 tracks
+          wide), TIP_CAR_480 (5 tip-rack positions, 6 tracks), RGT_CAR (reagent trough carriers).
+        changeable: user_between_runs
+  control_interfaces:
+    - VENUS (Hamilton method software)
+    - PyLabRobot STARBackend (firmware-level; support "full" for STAR and STARlet)
+    - Cellario: unknown (no public per-model list)
+  source_urls:
+    - https://www.hamiltoncompany.com/microlab-star
+    - https://www.analitykgenetyka.pl/sites/default/files/2_microlab_star_brochure_0.pdf
+    - https://www.epfl.ch/research/facilities/gene-expression-core-facility/wp-content/uploads/2018/08/Microlab-STAR-Brochure.pdf
+    - https://www.bostonind.com/hamilton-microlab-star-line-configuration-guide-starlet-star-starplus
+    - https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/resources/hamilton/hamilton_decks.py
+    - https://github.com/PyLabRobot/pylabrobot/blob/main/pylabrobot/resources/hamilton/plate_carriers.py
+  status:
+    deck_tracks: verified            # Hamilton brochure (hosted by distributor) 30/54; PyLabRobot constants agree
+    track_pitch: estimated           # PyLabRobot _TRACK_WIDTH = 22.5 mm, not read in a Hamilton doc
+    ansi_slas_positions: verified
+    channels: verified
+    volume_ranges: verified          # Hamilton brochure PDF (distributor-hosted)
+    footprint: verified              # width from hamiltoncompany.com; H x D from brochure (35.5 x 31.2 in) converted
+    weight: verified                 # "8 ch." configuration
+    configurability: verified
+    deck_carriers: estimated         # carrier names/widths from PyLabRobot resource library
+    pylabrobot: verified
+  notes:
+    - "hamiltoncompany.com spec table says 'Up to 66 tracks' for both STARlet and STAR, which conflicts with the brochure (30/54/STARplus 82) and PyLabRobot (30/54/76). Use 54 for STAR; flag the STARplus count as unconfirmed."
+    - "Hamilton's site gives depth as '78.1-1.01 m' (range depends on options). Brochure: 31.2 in = ~792 mm; 781 mm used as the base depth from the Hamilton page."
+    - "Hamilton's site gives one overall pipetting range '1 uL - 5000 uL'; the per-channel ranges above come from the Hamilton brochure."
+    - "iSWAP is not listed on the current hamiltoncompany.com spec table but is described in both brochures."
+    - "PyLabRobot uses 'track' (deck) vs 'rail' (carrier); its old STAR_NUM_RAILS constant was 56 (tracks + 2)."
+
+# ---------------------------------------------------------------------------------------------
+- key: hamilton-vantage
+  manufacturer: Hamilton
+  model: Microlab VANTAGE
+  variants: [VANTAGE 1.3 m, VANTAGE 2.0 m]
+  category: liquid_handler
+  capabilities: [transfer, dispense, grip_move]
+  specs:
+    deck_tracks:
+      "1.3": 54
+      "2.0": 80
+    ansi_slas_positions:
+      "1.3": 35
+      "2.0": 60   # page says "60+"
+    channels_1000uL_max: 16
+    channels_5mL_max: 8
+    channels_fluid_motion_x1_max: 16
+    channels_magpip_max: 8
+    pipetting_range_overall: {min: {value: "0.35", unit: "uL"}, max: {value: "5000", unit: "uL"}}
+    footprint:
+      "1.3": {width: {value: "1330", unit: "mm"}, depth: {value: "980", unit: "mm"}, height: {value: "1820", unit: "mm"}}
+      "2.0": {width: {value: "2010", unit: "mm"}, depth: {value: "980", unit: "mm"}, height: {value: "1820", unit: "mm"}}
+    weight:
+      "1.3": {value: "273", unit: "kg"}
+      "2.0": {value: "451", unit: "kg"}
+  configurability:
+    type: modular
+    slots:
+      - {name: pipetting_arm_channels, options: ["1 mL channels (up to 16)", "5 mL channels (up to 8)", "Fluid Motion X1 channels (up to 16)", "MagPip channels (up to 8)"], changeable: factory_or_service}
+      - {name: multi_probe_head, options: [none, "96 head", "384 head"], changeable: factory_or_service}
+      - {name: internal_plate_gripper_ipg, options: [none, IPG], changeable: factory_or_service}
+      - {name: core_gripper, options: [none, CO-RE Gripper], changeable: runtime_tool}
+      - {name: track_gripper, options: [none, Track Gripper], changeable: factory_or_service}
+      - {name: device_integration, description: "360 degrees (left, right, rear, below)", changeable: site_install}
+  control_interfaces:
+    - VENUS
+    - PyLabRobot Vantage backend (support "mostly")
+    - Cellario: unknown
+  source_urls:
+    - https://www.hamiltoncompany.com/microlab-vantage
+    - https://github.com/PyLabRobot/pylabrobot/blob/main/docs/_static/devices.json
+  status:
+    deck_tracks: verified
+    ansi_slas_positions: verified
+    channels: verified
+    pipetting_range_overall: verified
+    per_channel_volume_ranges: unknown
+    footprint: verified
+    weight: verified
+    configurability: verified
+    pylabrobot: verified
+  notes:
+    - "Per-channel/per-head volume ranges are not on the Hamilton page; only the overall 0.35 uL - 5000 uL."
+    - "The page lists IPG, CO-RE gripper and Track Gripper; iSWAP is not listed for VANTAGE."
+
+# ---------------------------------------------------------------------------------------------
+- key: opentrons-flex
+  manufacturer: Opentrons
+  model: Opentrons Flex
+  category: liquid_handler
+  capabilities: [transfer, dispense, grip_move]   # heat/cool/shake/thermocycle/read_absorbance come from modules
+  specs:
+    deck_slots_working: 12      # A1-D3, pipettes + gripper
+    deck_slots_staging: 4       # A4-D4, gripper only
+    footprint: {width: {value: "870", unit: "mm"}, depth: {value: "690", unit: "mm"}, height: {value: "840", unit: "mm"}}
+    weight: {value: "88.5", unit: "kg"}
+  pipettes:   # mount options; each is a kind the instance installs
+    - {name: "Flex 1-Channel 50 uL", channels: 1, min: {value: "1", unit: "uL"}, max: {value: "50", unit: "uL"}}
+    - {name: "Flex 1-Channel 1000 uL", channels: 1, min: {value: "5", unit: "uL"}, max: {value: "1000", unit: "uL"}}
+    - {name: "Flex 8-Channel 50 uL", channels: 8, min: {value: "1", unit: "uL"}, max: {value: "50", unit: "uL"}}
+    - {name: "Flex 8-Channel 1000 uL", channels: 8, min: {value: "5", unit: "uL"}, max: {value: "1000", unit: "uL"}}
+    - {name: "Flex 96-Channel 200 uL", channels: 96, min: {value: "1", unit: "uL"}, max: {value: "200", unit: "uL"}}
+    - {name: "Flex 96-Channel 1000 uL", channels: 96, min: {value: "5", unit: "uL"}, max: {value: "1000", unit: "uL"}}
+  modules:
+    - name: Heater-Shaker Module GEN1
+      capabilities: [heat, shake]
+      temp_range: {min: "ambient + 1.5 degC", max: {value: "95", unit: "degC"}}
+      temp_step: {value: "1", unit: "degC"}
+      temp_accuracy: {value: "0.5", unit: "degC", note: "+/- at 55 degC"}
+      shake_speed: {min: {value: "200", unit: "rpm"}, max: {value: "3000", unit: "rpm"}}
+      orbit_diameter: {value: "2", unit: "mm"}
+      dimensions: {length: {value: "152", unit: "mm"}, width: {value: "90", unit: "mm"}, height: {value: "82", unit: "mm"}}
+      robots: [Flex (with Flex Heater-Shaker Caddy), OT-2]
+    - name: Temperature Module GEN2
+      capabilities: [heat, cool]
+      temp_range: {min: {value: "4", unit: "degC"}, max: {value: "95", unit: "degC"}}
+      robots: [Flex (with Flex Temperature Caddy), OT-2]
+    - name: Thermocycler Module GEN2
+      capabilities: [thermocycle, heat, cool]
+      block_temp_range: {min: {value: "4", unit: "degC"}, max: {value: "99", unit: "degC"}}
+      lid_temp_range: {min: {value: "37", unit: "degC"}, max: {value: "110", unit: "degC"}}
+      max_heating_rate: {value: "4.25", unit: "degC/s", note: "ambient to 95 degC"}
+      max_cooling_rate: {value: "2.0", unit: "degC/s", note: "95 degC to ambient"}
+      plate_format: "96-well"
+    - name: Magnetic Block GEN1
+      capabilities: [hold]   # unpowered magnet for bead separation; no plain-verb match in the list
+      powered: false
+    - name: Absorbance Plate Reader Module GEN1
+      capabilities: [read_absorbance]
+      wavelengths_nm: ["450", "562", "600", "650"]
+      od_range: {min: "0.0", max: "4.0", resolution: "0.001"}   # OD is unitless
+      plate_format: "96-well flat bottom"
+      robots: [Flex]
+  configurability:
+    type: modular
+    slots:
+      - {name: left_mount, options: [1- or 8-channel pipettes above], changeable: user}
+      - {name: right_mount, options: [1- or 8-channel pipettes above], changeable: user}
+      - {name: both_mounts, options: ["96-channel pipette occupies both mounts"], changeable: user}
+      - {name: gripper, options: [none, Flex Gripper GEN1], changeable: user}
+      - {name: deck_slots, options: "A1-D3 labware, modules, trash bin (A1-D1, A3-D3), waste chute (D3 only)", changeable: user_between_runs}
+      - {name: staging_area_slots, options: "A4-D4 via Staging Area Slot fixtures; incompatible with a powered module in column 3 of the same row", changeable: user_between_runs}
+  control_interfaces:
+    - Opentrons Python Protocol API v2 (protocols must load trash bin fixtures from API 2.16)
+    - Opentrons App / Protocol Designer
+    - PyLabRobot opentrons.Flex (support "basic"; 1-channel and 96-channel heads unverified per PLR notes)
+    - Cellario: unknown
+  source_urls:
+    - https://opentrons.com/products/flex
+    - https://docs.opentrons.com/python-api/deck-slots/
+    - https://opentrons.com/products/heater-shaker-module
+    - https://opentrons.com/products/temperature-module-gen2
+    - https://docs.opentrons.com/flex/modules/thermocycler/
+    - https://opentrons.com/products/opentrons-flex-absorbance-plate-reader-module
+    - https://opentrons.com/products/opentrons-flex-gripper-gen1
+    - https://docs.opentrons.com/v2/new_modules.html
+  status:
+    deck_slots: verified
+    footprint: verified
+    weight: verified
+    pipettes: verified
+    heater_shaker: verified
+    temperature_module: verified
+    thermocycler_gen2: verified
+    thermocycler_sample_volume: unknown
+    thermocycler_deck_slots_occupied: unknown
+    magnetic_block: verified        # "unpowered module" per Opentrons API docs; no numeric specs taken
+    absorbance_reader: verified
+    gripper_specs: unknown          # product page gives supported labware only, no force/payload
+    pylabrobot: verified
+  notes:
+    - "Flex product page lists the 96-channel low-volume pipette as '1-200 uL'."
+    - "Absorbance Plate Reader is not sold in European Patent Convention states (per Opentrons page)."
+    - "Heater-Shaker minimum is relative to room temperature (ambient + 1.5 degC); store it as a relative constraint, not a fixed number."
+    - "Gripper-optimized labware (Opentrons page): NEST 2 mL 96 deep well V-bottom, Opentrons Tough 0.2 mL 96 PCR full skirt, NEST 96 flat, all Flex tip racks."
+    - "Thermocycler occupies several slots on Flex (commonly A1+B1); not confirmed from a fetched page."
+
+# ---------------------------------------------------------------------------------------------
+- key: echo-650
+  manufacturer: Beckman Coulter Life Sciences (formerly Labcyte)
+  model: Echo 650 (current sales name "Echo 650 Plus Series")
+  variants: [Echo 650 Plus, Echo 655 Plus, Echo 650T Plus, Echo 655T Plus]
+  category: acoustic_liquid_handler
+  capabilities: [transfer]
+  specs:
+    droplet_volume: {value: "2.5", unit: "nL"}
+    max_drop_rate: "up to 700 drops/s"   # Beckman 650 Plus page
+    transfer_volume_range: {min: {value: "2.5", unit: "nL"}, max: null}
+    footprint: {width: {value: "538", unit: "mm"}, depth: {value: "746", unit: "mm"}, height: {value: "915", unit: "mm"}}
+    weight: {value: "117", unit: "kg"}
+  source_labware:
+    - 384LDV (Echo Qualified 384-well Low Dead Volume)
+    - 384PP (Echo Qualified 384-well Polypropylene)
+    - 1536LDV (Echo Qualified 1536-well Low Dead Volume)
+    - Echo-qualified acoustic reservoirs
+    - Acoustic Sample Tubes (650T Plus / 655T Plus only)
+  destination_labware: "Most ANSI/SLAS microplates in 96-, 384- and 1536-well format, 8-16 mm tall"
+  fluid_types:
+    - "70-100% DMSO"
+    - "Aqueous: simple buffers (e.g. PBS), cell culture media, DNA/protein/RNA solutions, serum, plasma"
+    - "up to 50% glycerol"
+    - "crystallography reagents"
+  fluid_classes_named_in_software: unknown   # e.g. DMSO, AQ_BP, CP, SP, GP calibrations - not confirmed
+  configurability:
+    type: fixed
+    slots:
+      - {name: source_plate_nest, options: "one Echo-qualified source plate (or tubes on T models)", changeable: per_transfer}
+      - {name: destination_plate_nest, options: "one destination plate", changeable: per_transfer}
+      - {name: plate_isolation_zone, description: "supports humidity/temperature control with enclosed automation", changeable: false}
+  control_interfaces:
+    - Echo Client Utility (included)
+    - "Optional apps: Echo Plate Reformat, Echo Cherry Pick, Echo Dose-Response, Echo Combination Screen, Echo Plate Audit, Echo Array Maker"
+    - "Host PC: Windows 10 or 11 64-bit"
+    - PyLabRobot: not listed in devices.json
+    - Cellario: unknown
+  model_differences:
+    Echo 525: "25 nL droplets, aqueous only (no DMSO), no 1536-well, no plate isolation zone, no tubes"
+    Echo 555: "not listed on the current Beckman Echo overview page; specs not confirmed"
+  source_urls:
+    - https://www.beckman.com/liquid-handlers/echo-acoustic/echo-650-plus-series
+    - https://www.beckman.com/liquid-handlers/echo-acoustic
+    - https://store.beckman.com/en/p/echo-650-series-acoustic-liquid-handlers/001-16079
+    - https://www.emeraldcloudlab.com/helpfiles/experimentacousticliquidhandling
+  status:
+    droplet_volume: verified
+    max_drop_rate: verified
+    transfer_volume_max: unknown
+    footprint: verified
+    weight: verified
+    source_labware: verified
+    destination_labware: verified
+    fluid_types: verified
+    fluid_classes_named_in_software: unknown
+    echo_525_differences: verified
+    echo_555_differences: unknown
+  notes:
+    - "Weight conflict: Beckman store page for Echo 650 (001-16079) says 130 kg; the 650 Plus series page says 117 kg (258 lb). 117 kg used for 650 Plus."
+    - "Emerald Cloud Lab (secondary) describes 200-500 drops/s giving 500 nL/s to 1.25 uL/s, and calibration groups DMSO / Glycerol / AqueousWithSurfactant / AqueousWithoutSurfactant; these are ECL's labels, not Beckman fluid-class codes."
+    - "Echo transfers are integer multiples of 2.5 nL; no maximum per transfer is stated on the fetched pages."
+
+# ---------------------------------------------------------------------------------------------
+- key: formulatrix-mantis
+  manufacturer: Formulatrix
+  model: MANTIS Liquid Dispenser
+  variants: [Mantis (current V4), Mantis V3]
+  category: bulk_dispenser
+  capabilities: [dispense]
+  specs:
+    min_dispense_volume: {value: "0.1", unit: "uL"}
+    max_dispense_volume: "unlimited (continuous dispense)"
+    cv_at_min: "<2% at 0.1 uL"
+    plate_formats: "SBS 6- to 1536-well"
+    footprint: {width: {value: "350", unit: "mm"}, depth: {value: "232", unit: "mm"}, height: {value: "212", unit: "mm"}}
+  chips:   # user-swappable micro-diaphragm pump chips; each is a kind
+    - {name: Low Volume (LV) Silicone, min_volume: {value: "0.1", unit: "uL"}, dead_volume: {value: "6", unit: "uL"}}
+    - {name: High Volume (HV) Silicone, min_volume: {value: "1", unit: "uL"}, dead_volume: {value: "15", unit: "uL"}}
+    - {name: Low Volume PFE (LVP), min_volume: {value: "0.1", unit: "uL"}}
+    - {name: High Volume PFE (HVP), min_volume: {value: "1", unit: "uL"}}
+    - {name: LV Hi-Fi Silicone, min_volume: {value: "0.1", unit: "uL"}}
+    - {name: HV Hi-Fi Silicone, min_volume: {value: "1", unit: "uL"}}
+    - {name: Continuous Flow (CF) Silicone, min_volume: {value: "5", unit: "uL", note: "as low as ~5 uL"}, dead_volume: {value: "150", unit: "uL", note: "~"}}
+    - {name: Continuous Flow (CF) PFE, min_volume: {value: "5", unit: "uL", note: "~"}, dead_volume: {value: "150", unit: "uL", note: "~"}}
+    - {name: High Viscosity CF Silicone, min_volume: {value: "10", unit: "uL", note: "~"}, dead_volume: {value: "150", unit: "uL", note: "~"}}
+  chip_cv_marketing:
+    LV: "1.4% at 0.1 uL to 0.4% at 1 uL"
+    HV: "0.8% at 1 uL to 0.4% at 25 uL"
+    CF: "0.3% at 25 uL to 0.2% at 200 uL"
+  configurability:
+    type: modular
+    slots:
+      - {name: chip_positions, options: "one chip per reagent line; chips swapped by user", changeable: user}
+      - {name: lc3_chip_changer, options: [none, "Large Capacity Chip Changer (24 or 48 chips)"], changeable: factory_or_service}
+  control_interfaces:
+    - Mantis control software (CSV plate-map import, labware teaching, optional 21 CFR Part 11)
+    - PyLabRobot Mantis (support "wip")
+    - Cellario: unknown
+  source_urls:
+    - https://formulatrix.com/liquid-handling-systems/mantis-liquid-dispenser/
+    - https://help.formulatrix.com/mantis/5.1/Content/Chip_Specifications_Reference.htm
+  status:
+    min_dispense_volume: verified
+    chips: verified
+    dead_volumes: verified      # the help table gives 6 or 15 uL for standard chips; mapping LV=6, HV=15 is estimated
+    plate_formats: verified
+    footprint: estimated
+    cv: verified
+    pylabrobot: verified
+  notes:
+    - "Footprint 350 x 232 x 212 mm was read from the Formulatrix page by a summarizer and seems small for the instrument; re-check the datasheet before relying on it."
+    - "Standard chip dead volume: help page gives '6 uL' or '15 uL'; which chip has which is my inference (LV=6, HV=15)."
+    - "LV chip comes with 100 nL + 500 nL diaphragms, or 1 uL + 5 uL for HV (per product page)."
+
+# ---------------------------------------------------------------------------------------------
+- key: precisedrop-ii
+  manufacturer: "HighRes Biosolutions (current seller/brand); originally Let's Go Robotics"
+  model: PreciseDrop II (also written "Precise Drop II")
+  category: bulk_dispenser
+  capabilities: [dispense]
+  specs:
+    technology: "independently controlled microvalve per channel, pressure-driven, per-channel calibration (non-contact)"
+    channels: {min: "1", max: "8", standard: "4"}
+    volume_range: {min: {value: "80", unit: "nL"}, max: {value: "2000", unit: "uL"}}
+    min_volume_highres_claim: {value: "50", unit: "nL"}
+    precision: "better than 5% CV"
+    plate_formats: "96, 384, 1536-well plates or any substrate"
+    features: ["dispense on the fly", "dose-response gradient dispensing", "CSV plate-map import", "API for workcell integration"]
+  configurability:
+    type: modular
+    slots:
+      - {name: valve_channels, options: "1-8 channels", changeable: factory_or_service}
+  control_interfaces:
+    - PreciseDrop software (plate maps, CSV import)
+    - "Vendor API for scheduler integration (HighRes: 'any robotic workcell run by any scheduling software')"
+    - Cellario: likely (HighRes product) but not confirmed
+    - PyLabRobot: not listed
+  source_urls:
+    - https://www.highres.com/automated-liquid-handling/precisedrop-ii
+    - https://www.prnewswire.com/news-releases/lets-go-robotics-and-axivend-announce-exclusive-us-distribution-agreement-for-precise-drop-ii-and-upgraded-bioraptr-2-0--301322297.html
+    - https://axivend.com/products/dispensers
+  status:
+    identity: verified
+    technology: verified      # 2021 press release
+    channels: verified        # 2021 press release
+    volume_range: verified    # 2021 press release: 80 nL-2000 uL
+    min_volume_highres_claim: verified
+    precision: verified
+    footprint: unknown
+    cellario: estimated
+  notes:
+    - "Identity: HighRes now sells it as 'PreciseDrop II' (low-volume, non-contact dispenser, 'from 50 nL'). A 2021 press release names Let's Go Robotics as maker, with axiVEND as exclusive US distributor at that time; HighRes later took over distribution (blog title 'HighRes & Matrix Fluidix Expand Precise Drop II Distribution', page 404). Exact current manufacturer relationship not confirmed."
+    - "Min volume conflict: 80 nL (2021 press release) vs 50 nL (current HighRes page)."
+
+# ---------------------------------------------------------------------------------------------
+- key: tecan-spark-cyto
+  manufacturer: Tecan
+  model: Spark Cyto   # owner wrote "CytoSpark"; Tecan's name is "Spark Cyto"
+  category: plate_reader_imager
+  capabilities: [read_absorbance, read_fluorescence, read_luminescence, image, incubate]
+  specs:
+    absorbance_range: {min: {value: "200", unit: "nm"}, max: {value: "1000", unit: "nm"}}
+    fluorescence_range: {min: {value: "230", unit: "nm"}, max: {value: "900", unit: "nm"}}
+    luminescence_modes: [glow, flash, multicolor, scan]
+    other_modes: [fluorescence top/bottom, TRF, FRET, TR-FRET, fluorescence polarization]
+    imaging_channels:
+      blue: {min: {value: "381", unit: "nm"}, max: {value: "450", unit: "nm"}}
+      green: {min: {value: "461", unit: "nm"}, max: {value: "530", unit: "nm"}}
+      red: {min: {value: "543", unit: "nm"}, max: {value: "611", unit: "nm"}}
+      far_red: {min: {value: "626", unit: "nm"}, max: {value: "800", unit: "nm"}}
+    imaging: "brightfield, digital phase contrast, 5 LED excitation channels, 12-bit CMOS, LED autofocus"
+    objectives: ["2x NA 0.08", "4x NA 0.13", "10x NA 0.30"]
+    temperature_max: {value: "42", unit: "degC"}    # "up to 42 degC"; min is ambient-relative
+    gas_control: [CO2, O2]
+    humidity: "Lid Lifter + Humidity Cassette"
+    plate_formats: "6- to 1536-well (whole-well imaging in 96/384; composite imaging 6-48)"
+  configurability:
+    type: modular
+    slots:
+      - {name: detection_modules, options: "Tecan offers 'five specialized configurations'", changeable: factory_or_service}
+      - {name: gas_control_module, options: [none, CO2/O2], changeable: factory_or_service}
+      - {name: objective_changer, options: "2x/4x/10x", changeable: factory_or_service}
+  control_interfaces:
+    - SparkControl (with Image Analyzer)
+    - "PyLabRobot: only 'Spark 20M' listed (support 'mostly'); Spark Cyto not listed"
+    - Cellario: unknown
+  source_urls:
+    - https://lifesciences.tecan.com/plate-reader-live-cell-imaging-cytometry
+    - https://htslab.org/platform/instruments/tecan-spark-cyto
+  status:
+    imaging_specs: verified
+    temperature_max: verified
+    gas_control: verified
+    absorbance_range: estimated     # core facility page; matches general Spark platform
+    fluorescence_range: estimated
+    plate_formats: verified
+    shaking: unknown
+    footprint: unknown
+    variant_names: unknown
+  notes:
+    - "Model name confirmed as 'Spark Cyto' (Tecan). Configuration names (e.g. 400/600) not confirmed."
+
+# ---------------------------------------------------------------------------------------------
+- key: bluecatbio-bluewasher
+  manufacturer: BlueCatBio
+  model: BlueWasher
+  variants: [BlueWasher, BlueWasher XL]
+  category: plate_washer
+  capabilities: [wash, dispense, centrifuge]
+  specs:
+    principle: "contactless centrifugal emptying (plate spun upside down) with near-zero residual volume"
+    speed_range: {min: {value: "3", unit: "rpm"}, max: {value: "3500", unit: "rpm"}}
+    max_rcf: {value: "630", unit: "xg"}
+    residual_volume_per_well: {min: {value: "0.01", unit: "uL"}, max: {value: "5", unit: "uL"}}
+    liquid_inputs: 7
+    dispense_pins_384: 16
+    dispense_precision: "<3% CV at 100 uL (384-well); >1 uL dispense"
+    plate_formats: "any SBS plate up to 17.4 mm height, strips or slides; dispensing into 384-well"
+    footprint: {width: {value: "205", unit: "mm"}, depth: {value: "365", unit: "mm"}, height: {value: "690", unit: "mm"}}
+    weight: {value: "27", unit: "kg"}
+  configurability:
+    type: fixed
+    slots:
+      - {name: liquid_inputs, options: "7 shared Luer-lock inputs", changeable: user}
+  control_interfaces:
+    - BlueFlow software
+    - PyLabRobot: not listed
+    - Cellario: unknown
+  source_urls:
+    - https://www.bostonind.com/bluecatbio-hti-automation-bluewasher-centrifugal-microplate-washer
+    - https://www.bluecatbio.com/products/bluewasher/
+  status:
+    all_specs: estimated    # reseller (Boston Industries) page; bluecatbio.com and its PDF flyer could not be fetched
+  notes:
+    - "BlueCatBio's own site timed out; every number here is from a reseller listing. Re-check against the BlueWasher flyer (bluecatbio.com/wp-content/uploads/2025/03/221006_BlueCatBio_Flyer_BlueWasher_v03_single-pages.pdf)."
+    - "Dimension order on the reseller page is '20.5 x 36.5 x 69 cm'; mapping to W x D x H is assumed."
+
+# ---------------------------------------------------------------------------------------------
+- key: cybio-felix
+  manufacturer: Analytik Jena
+  model: CyBio FeliX
+  category: liquid_handler
+  capabilities: [transfer, dispense, grip_move]
+  specs:
+    deck_positions: {count: 12, note: "on two levels"}
+    volume_range_overall: {min: {value: "1", unit: "uL"}, max: {value: "1000", unit: "uL"}}
+    labware: "ANSI/SLAS microplates and deep-well plates"
+    footprint_with_enclosure: {width: {value: "650", unit: "mm"}, depth: {value: "450", unit: "mm"}, height: {value: "698", unit: "mm"}}
+  heads:   # interchangeable pipetting heads; each is a kind
+    - {name: "Head R 96/60 uL", channels: 96, max: {value: "60", unit: "uL"}, part: OL3316-14-750}
+    - {name: "Head R 96/250 uL", channels: 96, max: {value: "250", unit: "uL"}, part: OL3316-14-850}
+    - {name: "Head R 96/1000 uL", channels: 96, max: {value: "1000", unit: "uL"}, part: OL3316-14-950}
+    - {name: "Head R 384/60 uL", channels: 384, max: {value: "60", unit: "uL"}, part: OL3316-14-550}
+    - {name: "CHOICE Head", channels: "1, 8, 12, 16 or 24 via adapters", range: "1-1000 uL"}
+    - {name: "SELECT Head 8/50 uL", channels: 8, min: {value: "1", unit: "uL"}, max: {value: "50", unit: "uL"}, part: OL3318-26-410}
+    - {name: "SELECT Head 8/250 uL", channels: 8, max: {value: "250", unit: "uL"}, part: OL3318-26-420}
+    - {name: "SELECT Head 8/1000 uL", channels: 8, max: {value: "1000", unit: "uL"}, part: OL3318-26-430}
+  configurability:
+    type: modular
+    slots:
+      - {name: pipetting_head, options: heads above, changeable: user}
+      - {name: gripper, options: [none, "Gripper OL3317-14-800"], changeable: user}
+      - {name: deck_positions, options: "12 positions; accessories (shakers, temp blocks) not researched", changeable: user_between_runs}
+  control_interfaces:
+    - CyBio Composer (scripting)
+    - CyBio Scheduler
+    - PyLabRobot: not listed
+    - Cellario: unknown
+  source_urls:
+    - https://www.analytik-jena.com/products/liquid-handling-automation/laboratory-equipment/automated-liquid-handlers-alh/cybio-felix-series/
+    - https://www.analytik-jena.com/products/liquid-handling-automation/laboratory-equipment/pipetting-heads/cybio-felix-select-head-series/
+  status:
+    deck_positions: verified
+    heads: verified
+    head_min_volumes: unknown   # only SELECT 8/50 min (1 uL) confirmed
+    footprint: verified
+    weight: unknown
+  notes:
+    - "Other enclosure variants: Clean Bench 699 x 450 x 637 mm; Clean Bench with light curtain 876 x 503 x 668 mm."
+
+# ---------------------------------------------------------------------------------------------
+- key: qtower3
+  manufacturer: Analytik Jena
+  model: qTOWER3
+  variants: [qTOWER3, qTOWER3 G (gradient), qTOWER3 84, qTOWER3 84 G, qTOWER3 auto, qTOWER3 84 auto]
+  category: qpcr
+  capabilities: [thermocycle, read_fluorescence]
+  specs:
+    block_temp_range_auto: {min: {value: "4", unit: "degC"}, max: {value: "99", unit: "degC"}}
+    temp_accuracy: {value: "0.1", unit: "degC", note: "+/-"}
+    per_variant:
+      "qTOWER3 / qTOWER3 G / qTOWER3 auto (96-well)":
+        format: "96 x 0.2 mL"
+        sample_volume: {min: {value: "5", unit: "uL"}, max: {value: "100", unit: "uL"}}
+        max_heating_rate: {value: "8", unit: "degC/s"}
+        max_cooling_rate_auto: {value: "5.5", unit: "degC/s"}
+      "qTOWER3 84 / 84 G / 84 auto (384-well)":
+        format: "384-well"
+        sample_volume: {min: {value: "2", unit: "uL"}, max: {value: "30", unit: "uL"}}
+        max_heating_rate: {value: "4", unit: "degC/s"}
+        max_cooling_rate: {value: "2", unit: "degC/s"}
+    color_modules_max: 6   # standard qTOWER3
+    footprint_auto: {width: {value: "310", unit: "mm"}, depth: {value: "365", unit: "mm"}, height: {value: "479", unit: "mm"}, note: "plus separate power module 290 x 186 x 335 mm"}
+    footprint_standard: {value: "275 x 585 x 275 mm", note: "reseller"}
+    weight_standard: {value: "30", unit: "kg"}
+  configurability:
+    type: modular
+    slots:
+      - {name: filter_color_modules, options: "up to 6 dye/FRET modules", changeable: factory_or_service}
+      - {name: block, options: ["96 (qTOWER3)", "96 gradient (G)", "384 (84)", "384 gradient (84 G)"], changeable: false}
+      - {name: motorized_drawer, options: "auto variants only: motorized drawer + plate lifter for robot loading", changeable: false}
+  control_interfaces:
+    - qPCRsoft (optional 21 CFR Part 11 module)
+    - PyLabRobot: not listed
+    - Cellario: unknown
+  source_urls:
+    - https://www.analytik-jena.com/products/life-science/pcr-qpcr-thermal-cycler/real-time-thermal-cycler-qpcr/qtower3-auto-series/
+    - https://remma.fr/en/model/qtower3-pcr-thermocycler
+  status:
+    auto_series_specs: verified
+    standard_qtower3_specs: estimated    # reseller page (heating 8 degC/s, cooling 6 degC/s, 30 kg, 275x585x275 mm)
+    gradient_range_G: unknown
+    optics_ex_em_range: unknown
+    variant_list: verified               # names from Analytik Jena pages/manual titles ("qTOWER3 84 / qTOWER3 84 G")
+  notes:
+    - "Standard (non-auto) qTOWER3 cooling rate per reseller is 6 degC/s vs 5.5 degC/s for auto; keep per variant."
+    - "Which variant the lab owns is an instance fact; the owner's list names 'G, 84, auto'."
+
+# ---------------------------------------------------------------------------------------------
+- key: biorad-c1000-touch
+  manufacturer: Bio-Rad
+  model: C1000 Touch Thermal Cycler
+  model_choice: assumed    # owner said "Bio-Rad thermocyclers"; C1000 Touch chosen as likely model
+  category: thermocycler
+  capabilities: [thermocycle, heat, cool]
+  specs:
+    block_temp_range: {min: {value: "0", unit: "degC"}, max: {value: "100", unit: "degC"}}
+    temp_accuracy: "+/-0.2 degC of target at 90 degC"
+    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}}
+    gradient_span: {min: {value: "1", unit: "degC"}, max: {value: "24", unit: "degC"}}
+    lid_default: "105 degC (96 / dual 48), 95 degC (384)"
+    footprint: {width: {value: "330", unit: "mm"}, depth: {value: "460", unit: "mm"}, height: {value: "200", unit: "mm"}}
+    weight: {value: "10", unit: "kg"}
+  reaction_modules:   # tool-free swappable; each is a kind
+    - {name: 96-Well Fast, capacity: "96 x 0.2 mL tubes or 1 x 96-well plate", volume: {min: {value: "10", unit: "uL"}, max: {value: "50", unit: "uL"}}, max_ramp: {value: "5", unit: "degC/s"}}
+    - {name: 96-Deep Well, capacity: "96 x 0.2 mL, 48 x 0.5 mL tubes or 1 x 96-well plate", volume: {min: {value: "10", unit: "uL"}, max: {value: "125", unit: "uL"}}, max_ramp: {value: "2.5", unit: "degC/s"}}
+    - {name: Dual 48/48 Fast, capacity: "2 x 48 x 0.2 mL tubes or 2 x 48-well plates", volume: {min: {value: "10", unit: "uL"}, max: {value: "50", unit: "uL"}}}
+    - {name: 384-Well, capacity: "1 x 384-well plate", volume: {min: {value: "3", unit: "uL"}, max: {value: "30", unit: "uL"}}, max_ramp: {value: "2.5", unit: "degC/s"}}
+    - {name: "CFX96 / CFX384 optical modules", note: "turn the base into a CFX qPCR; not researched"}
+  configurability:
+    type: modular
+    slots:
+      - {name: reaction_module, options: reaction modules above, changeable: user}
+  control_interfaces:
+    - Onboard touchscreen (stand-alone)
+    - "CFX Manager 2.1+ (software-controlled mode) via USB-B; Ethernet port"
+    - "Can control up to three S1000 cyclers over USB"
+    - PyLabRobot: not listed
+    - Cellario: unknown
+  source_urls:
+    - https://www.bio-rad.com/sites/default/files/2021-08/Bulletin_6095.pdf
+    - https://www.bio-rad.com/sites/default/files/webroot/web/pdf/lsr/literature/10021377.pdf
+  status:
+    model_choice: estimated
+    specs: verified
+    dual48_ramp: unknown
+    lid_temp_range: unknown   # only defaults published
+    automation_api: unknown
+
+# ---------------------------------------------------------------------------------------------
+- key: biorad-t100
+  manufacturer: Bio-Rad
+  model: T100 Thermal Cycler
+  model_choice: assumed
+  category: thermocycler
+  capabilities: [thermocycle, heat, cool]
+  specs:
+    capacity: "96 x 0.2 mL tubes, 0.2 mL strips, or 1 x 96-well plate"
+    block_temp_range: {min: {value: "4", unit: "degC"}, max: {value: "100", unit: "degC"}}
+    max_ramp: {value: "4", unit: "degC/s"}
+    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}}
+    footprint: {width: {value: "260", unit: "mm"}, depth: {value: "470", unit: "mm"}, height: {value: "230", unit: "mm"}}
+    weight: {value: "9", unit: "kg"}
+  configurability: {type: fixed, slots: []}
+  control_interfaces:
+    - Onboard touchscreen
+    - PyLabRobot: not listed
+    - Cellario: unknown
+  source_urls:
+    - https://www.bio-rad.com/webroot/web/pdf/lsr/literature/Bulletin_6060.pdf
+  status:
+    model_choice: estimated
+    specs: verified
+    reaction_volume: unknown
+    lid_temp: unknown
+  notes:
+    - "Not designed for robotic loading (no motorized lid); treat as manual-only in the scheduler."
+
+# ---------------------------------------------------------------------------------------------
+- key: highres-flexpod
+  manufacturer: HighRes Biosolutions
+  model: Nucleus FlexPod
+  category: automation_cart
+  capabilities: [grip_move]
+  specs:
+    description: "compact, configurable, manually moved automation pod with a robot arm bolted to the centre of the base"
+    arm_repeatability: {value: "0.2", unit: "mm", note: "+/-"}
+    device_capacity: "3-5+ devices depending on type and size"
+    included_devices: [PlateOrient, barcode scanner, "two labware stackers"]
+    footprint: {width: {value: "737", unit: "mm"}, depth: {value: "508", unit: "mm"}, height: {value: "660", unit: "mm"}, height_with_robot: {value: "1778", unit: "mm"}}
+    weight: {value: "100", unit: "kg"}
+    power: "120/240 VAC 15/10 A"
+  configurability:
+    type: modular
+    slots:
+      - {name: device_positions, options: "3-5+ devices", changeable: site_install}
+  control_interfaces:
+    - Cellario Scheduler (verified, HighRes)
+    - PyLabRobot: not listed
+  source_urls:
+    - https://www.highres.com/lab-automation/flexpod
+  status:
+    specs: verified
+    robot_arm_model: unknown
+    docking: unknown
+  notes:
+    - "Launched SLAS2024 as 'Nucleus FlexPod'. A 'FlexPod with Perception' blog post exists; perception features not researched."
+    - "Footprint dimension order assumed W x D x H."
+
+# ---------------------------------------------------------------------------------------------
+- key: highres-microspin
+  manufacturer: HighRes Biosolutions
+  model: MicroSpin
+  category: centrifuge
+  capabilities: [centrifuge]
+  specs:
+    max_rcf: {value: "3000", unit: "xg"}
+    max_speed: {value: "4729", unit: "rpm"}
+    capacity: "2 microplates or ANSI/SLAS labware"
+    max_labware_height: {value: "65", unit: "mm"}
+    footprint: {width: {value: "381", unit: "mm"}, depth: {value: "406", unit: "mm"}, height: {value: "406", unit: "mm"}}
+    weight: {value: "43", unit: "kg"}
+    comms: Ethernet
+  configurability:
+    type: fixed
+    slots:
+      - {name: rotor, options: "fixed, permanently attached", changeable: false}
+  control_interfaces:
+    - Cellario (verified)
+    - PyLabRobot MicroSpin (support "mostly")
+  source_urls:
+    - https://www.highres.com/lab-instruments/microspin-centrifuge
+    - https://43688375.fs1.hubspotusercontent-na1.net/hubfs/43688375/PDF%20Content/HRB044%20Lab%20Essentials%20Brochure%20NOV24_SINGLE.pdf
+  status:
+    specs: verified
+    temperature_control: unknown   # none stated
+    auto_balancing: unknown
+
+# ---------------------------------------------------------------------------------------------
+- key: highres-lidvalet
+  manufacturer: HighRes Biosolutions
+  model: LidValet
+  category: delidder
+  capabilities: [delid, relid]
+  specs:
+    description: "removes and replaces plate lids during automated runs, storing lids until needed"
+    positions: "2-position variant exists (LidValet 2-Position 2.0, per resale listing)"
+  configurability: {type: fixed}
+  control_interfaces:
+    - Cellario (verified)
+    - PyLabRobot HighResLidValet (support "mostly")
+  source_urls:
+    - https://www.highres.com/lab-instruments/lid-management
+  status:
+    description: verified
+    positions: estimated
+    footprint: unknown
+    cycle_time: unknown
+  notes:
+    - "No numeric specs published on HighRes pages or the Lab Essentials brochure."
+
+# ---------------------------------------------------------------------------------------------
+- key: highres-plateorient
+  manufacturer: HighRes Biosolutions
+  model: PlateOrient (current generation sold as PlateOrient 2.0)
+  category: plate_rotator
+  capabilities: [rotate]
+  specs:
+    description: "automatically aligns plates to the correct orientation before downstream processing"
+  configurability: {type: fixed}
+  control_interfaces:
+    - Cellario (verified)
+    - PyLabRobot: not listed
+  source_urls:
+    - https://www.highres.com/lab-instruments/plateorient
+  status:
+    description: verified
+    rotation_angles: unknown
+    footprint: unknown
+    cycle_time: unknown
+
+# ---------------------------------------------------------------------------------------------
+- key: thermo-cytomat-10
+  manufacturer: Thermo Scientific
+  model: Cytomat 10 C Series Automated Incubator   # owner wrote "Cytomat C10"
+  variants: ["Cytomat 10 C", "Cytomat 10 C450"]
+  category: automated_incubator
+  capabilities: [incubate, store]
+  specs:
+    plate_capacity:
+      "1536-well": 280
+      "96/384-well": 210
+      "transwell/insert": 150
+      "deep-well": 100
+    temp_range: {min: "ambient + 10 degC", max: {value: "50", unit: "degC"}}
+    co2_range: {min: {value: "0", unit: "%v/v"}, max: {value: "20", unit: "%v/v"}}
+    humidity: "<98% RH at 37 degC"
+    access_time: {value: "10", unit: "s", note: "below"}
+    footprint: {width: {value: "800", unit: "mm"}, depth: {value: "822", unit: "mm"}, height: {value: "915", unit: "mm"}}
+  configurability:
+    type: modular
+    slots:
+      - {name: stacker_cassettes, options: "capacity depends on stacker pitch/plate type", changeable: user}
+  control_interfaces:
+    - "5-inch touchscreen"
+    - "PyLabRobot Cytomat driver: models listed are Cytomat 2 C425/C450 SHAKE/C_50, 5C, 6000, 6002; Cytomat 10 not listed"
+    - Cellario: unknown
+  source_urls:
+    - https://www.thermofisher.com/order/catalog/product/51025982
+  status:
+    model_name: verified
+    plate_capacity: verified
+    temp_range: verified
+    co2_range: verified
+    footprint: verified
+    weight: unknown
+    o2_option: unknown
+  notes:
+    - "Thermo's brochure PDF (tools.thermofisher.com BR-LA-CYT10) returned 403; capacity per stacker configuration not broken down."
+    - "Temperature lower bound is relative to room temperature; the 'C450' sub-model's range may differ and was not checked."
+
+# =============================================================================================
+# GAPS (not confirmed from a primary source)
+# - Hamilton: official STAR track count conflicts on hamiltoncompany.com ("up to 66"); STARplus
+#   tracks disagree across sources (71 / 76 / 82). Carrier details come from PyLabRobot, not Hamilton.
+# - Hamilton VANTAGE: per-channel/per-head volume ranges; whether iSWAP is offered.
+# - Opentrons Flex: thermocycler sample volume and slots occupied; gripper payload/force;
+#   Magnetic Block numeric specs.
+# - Echo 650: max volume per transfer; named fluid-class codes (DMSO, AQ_BP, CP, SP, GP...);
+#   Echo 555 specs. Weight conflict 117 vs 130 kg.
+# - Mantis: footprint looks wrong (350 x 232 x 212 mm); chip-to-dead-volume mapping inferred.
+# - PreciseDrop II: current manufacturer relationship (Let's Go Robotics vs HighRes); footprint;
+#   min volume 50 vs 80 nL.
+# - Tecan Spark Cyto: absorbance/fluorescence ranges from a core-facility page; shaking; footprint;
+#   configuration names.
+# - BlueWasher: all numbers from a reseller; manufacturer site unreachable.
+# - CyBio FeliX: head minimum volumes (except SELECT 8/50); weight.
+# - qTOWER3: gradient range for G variants; optics wavelengths; standard-model specs from reseller.
+# - Bio-Rad: model choice (C1000 Touch, T100) is assumed; lid temperature ranges; T100 volume range.
+# - HighRes LidValet / PlateOrient: no numeric specs published. FlexPod robot arm model unknown.
+# - Cytomat 10: weight; per-cassette capacity breakdown; O2 option.
+# - Cellario: no public per-model driver list; only HighRes' own devices are marked supported.
+# - degC/s (ramp rates) is used but is not in the unit registry yet.
+# =============================================================================================
+
+# =============================================================================================
+# The demo lab's registered instruments (fictional serials; configurations are a plausible
+# academic setup, marked assumed until someone in a real lab confirms them).
+# =============================================================================================
+instances:
+  - key: star-01
+    kind: hamilton-star
+    name: STAR 1
+    serial: DEMO-STAR-0001
+    room: rm-automation
+    assumed: true
+    configuration:
+      pipetting_arm_channels: "8 x 1000 uL channels"
+      multi_probe_head: CO-RE 96 Probe Head
+      iswap: iSWAP
+      core_gripper: CO-RE Gripper
+      autoload: Autoload with 1D+2D barcode
+      deck_carriers:
+        - { carrier: TIP_CAR_480, tracks: "1-6" }
+        - { carrier: PLT_CAR_L5AC, tracks: "7-12" }
+        - { carrier: PLT_CAR_L5AC, tracks: "13-18" }
+        - { carrier: RGT_CAR, tracks: "19-24" }
+  - key: vantage-01
+    kind: hamilton-vantage
+    name: VANTAGE 1
+    serial: DEMO-VAN-0001
+    room: rm-automation
+    assumed: true
+    configuration:
+      variant: VANTAGE 1.3 m
+      pipetting_arm_channels: "8 x 1000 uL channels"
+      multi_probe_head: "96 head"
+      internal_plate_gripper_ipg: IPG
+      core_gripper: CO-RE Gripper
+  - key: flex-01
+    kind: opentrons-flex
+    name: Flex 1
+    serial: DEMO-FLX-0001
+    room: rm-molbio
+    assumed: true
+    configuration:
+      left_mount: Flex 8-Channel 1000 uL
+      right_mount: Flex 1-Channel 50 uL
+      gripper: Flex Gripper GEN1
+      deck:
+        A1: trash bin
+        B1: Thermocycler Module GEN2
+        C1: Temperature Module GEN2
+        D1: Heater-Shaker Module GEN1
+        C2: Magnetic Block GEN1
+        D3: waste chute
+  - key: echo-01
+    kind: echo-650
+    name: Echo 1
+    serial: DEMO-ECH-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: mantis-01
+    kind: formulatrix-mantis
+    name: Mantis 1
+    serial: DEMO-MAN-0001
+    room: rm-tissue-culture
+    assumed: true
+    configuration:
+      chips: [LV, HV]
+  - key: precisedrop-01
+    kind: precisedrop-ii
+    name: PreciseDrop 1
+    serial: DEMO-PDR-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: spark-01
+    kind: tecan-spark-cyto
+    name: Spark Cyto 1
+    serial: DEMO-SPK-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: bluewasher-01
+    kind: bluecatbio-bluewasher
+    name: BlueWasher 1
+    serial: DEMO-BLW-0001
+    room: rm-automation
+  - key: felix-01
+    kind: cybio-felix
+    name: FeliX 1
+    serial: DEMO-FLX-0002
+    room: rm-automation
+    assumed: true
+    configuration:
+      head: "96-channel head (model to confirm)"
+  - key: qtower-01
+    kind: qtower3
+    name: qTOWER 1
+    serial: DEMO-QTW-0001
+    room: rm-molbio
+    assumed: true
+    configuration:
+      variant: "qTOWER3 G (to confirm)"
+  - key: c1000-01
+    kind: biorad-c1000-touch
+    name: C1000 Touch 1
+    serial: DEMO-C1K-0001
+    room: rm-molbio
+    assumed: true
+  - key: c1000-02
+    kind: biorad-c1000-touch
+    name: C1000 Touch 2
+    serial: DEMO-C1K-0002
+    room: rm-molbio
+    assumed: true
+  - key: t100-01
+    kind: biorad-t100
+    name: T100 1
+    serial: DEMO-T10-0001
+    room: rm-molbio
+    assumed: true
+  - key: flexpod-01
+    kind: highres-flexpod
+    name: FlexPod work cell 1
+    serial: DEMO-FPD-0001
+    room: rm-automation
+    assumed: true
+    notes: A work cell holding the Echo, PreciseDrop, Spark Cyto, Cytomat, MicroSpin, LidValet and PlateOrient, scheduled by Cellario.
+  - key: microspin-01
+    kind: highres-microspin
+    name: MicroSpin 1
+    serial: DEMO-MSP-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: lidvalet-01
+    kind: highres-lidvalet
+    name: LidValet 1
+    serial: DEMO-LDV-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: plateorient-01
+    kind: highres-plateorient
+    name: PlateOrient 1
+    serial: DEMO-POR-0001
+    room: rm-automation
+    workcell: flexpod-01
+  - key: cytomat-01
+    kind: thermo-cytomat-10
+    name: Cytomat 1
+    serial: DEMO-CYT-0001
+    room: rm-automation
+    workcell: flexpod-01
+    setpoints:
+      temperature: { value: "37", unit: degC }
+      co2: { value: "5", unit: "%v/v" }
