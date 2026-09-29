@@ -91,5 +91,9 @@ console.log(
   `Instrument and equipment kinds: ${instruments.created.length} drafted, ${instruments.existing.length} already there.`,
 );
 for (const line of instruments.created) console.log(`  + ${line}`);
+console.log(
+  `Instruments: ${instruments.registered.length} registered, ${instruments.registeredBefore.length} already there.`,
+);
+for (const line of instruments.registered) console.log(`  + ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

@@ -1,6 +1,8 @@
 import {
   EquipmentKindAttributes,
+  EquipmentNode,
   type EvidenceInput,
+  InstrumentAttributes,
   InstrumentKindAttributes,
   type RecordEnvelope,
 } from '@ailab/schema';
@@ -26,10 +28,29 @@ const Entry = <A extends z.ZodType>(attributes: A) =>
     attributes: attributes,
   });
 
+const Instance = z.strictObject({
+  key: z.string().min(1),
+  research: z.string().min(1),
+  /** Keys of kinds in this file, for the instrument and each node. */
+  kind: z.string().min(1),
+  label: z.string().min(1),
+  ...InstrumentAttributes.pick({
+    shortName: true,
+    serial: true,
+    room: true,
+    variant: true,
+    notes: true,
+  }).shape,
+  configuration: z.array(EquipmentNode.extend({ kind: z.string().min(1) })).optional(),
+});
+
 const Library = z.strictObject({
   instrument_kinds: z.array(Entry(InstrumentKindAttributes.omit({ manufacturer: true }))),
   equipment_kinds: z.array(Entry(EquipmentKindAttributes.omit({ manufacturer: true }))),
+  instruments: z.array(Instance),
 });
+
+export type SeedInstrument = z.infer<typeof Instance>;
 
 const Research = z.looseObject({
   kinds: z.array(z.looseObject({ key: z.string(), source_urls: z.array(z.string()).optional() })),
@@ -44,8 +65,13 @@ export interface SeedKind {
   evidence: Record<string, EvidenceInput>;
 }
 
+export interface SeedLibrary {
+  kinds: SeedKind[];
+  instruments: SeedInstrument[];
+}
+
 /** Reads the library file, citing the research file's sources. Refuses a file that doesn't parse. */
-export function readSeedInstruments(libraryYaml: string, researchYaml: string): SeedKind[] {
+export function readSeedInstruments(libraryYaml: string, researchYaml: string): SeedLibrary {
   const library = Library.parse(parse(libraryYaml));
   const sources = new Map(
     Research.parse(parse(researchYaml)).kinds.map((k) => [k.key, k.source_urls?.[0]]),
@@ -77,15 +103,25 @@ export function readSeedInstruments(libraryYaml: string, researchYaml: string): 
       evidence,
     };
   };
-  return [
+  const kinds = [
     ...library.instrument_kinds.map((e) => convert('instrument_kind', e)),
     ...library.equipment_kinds.map((e) => convert('equipment_kind', e)),
   ];
+  const keys = new Set(kinds.map((k) => k.key));
+  for (const instrument of library.instruments) {
+    for (const key of [instrument.kind, ...(instrument.configuration ?? []).map((n) => n.kind)]) {
+      if (!keys.has(key)) throw new Error(`${instrument.key}: no kind "${key}" in the library`);
+    }
+  }
+  return { kinds, instruments: library.instruments };
 }
 
 export interface InstrumentSeedReport {
   created: string[];
   existing: string[];
+  /** Instruments registered, and those already there (matched by label). */
+  registered: string[];
+  registeredBefore: string[];
 }
 
 /**
@@ -95,7 +131,7 @@ export interface InstrumentSeedReport {
 export async function loadSeedInstruments(
   registry: OperationRegistry,
   ctx: RecordContext,
-  kinds: SeedKind[],
+  { kinds, instruments }: SeedLibrary,
 ): Promise<InstrumentSeedReport> {
   const run = async <T>(operation: string, input: unknown): Promise<T> => {
     const result = await registry.execute(ctx, operation, input);
@@ -104,16 +140,25 @@ export async function loadSeedInstruments(
   };
   const list = (kind: string) =>
     run<{ records: RecordEnvelope[] }>('records.list', { kind, limit: 200 }).then((r) => r.records);
-  const existing = new Set(
-    [...(await list('instrument_kind')), ...(await list('equipment_kind'))].map(
-      (r) => `${r.kind}/${r.label}`,
-    ),
+  const known = new Map(
+    [...(await list('instrument_kind')), ...(await list('equipment_kind'))].map((r) => [
+      `${r.kind}/${r.label}`,
+      r.id,
+    ]),
   );
+  const idOf = new Map<string, string>(); // seed key -> record ID
   const vendors = new Map((await list('vendor')).map((v) => [v.label.toLowerCase(), v.id]));
   const reason = 'Seed lab (plan 006), loaded by plan 008';
-  const report: InstrumentSeedReport = { created: [], existing: [] };
+  const report: InstrumentSeedReport = {
+    created: [],
+    existing: [],
+    registered: [],
+    registeredBefore: [],
+  };
   for (const seed of kinds) {
-    if (existing.has(`${seed.kind}/${seed.label}`)) {
+    const earlier = known.get(`${seed.kind}/${seed.label}`);
+    if (earlier) {
+      idOf.set(seed.key, earlier);
       report.existing.push(seed.key);
       continue;
     }
@@ -141,7 +186,27 @@ export async function loadSeedInstruments(
       evidence,
       reason,
     });
+    idOf.set(seed.key, record.id);
     report.created.push(`${record.name} ${seed.key}`);
+  }
+
+  // The demo lab's instruments, registered with their configurations (checked as they go in).
+  const registered = new Set((await list('instrument')).map((r) => r.label));
+  for (const seed of instruments) {
+    if (registered.has(seed.label)) {
+      report.registeredBefore.push(seed.key);
+      continue;
+    }
+    const { key: _key, research, kind, configuration, ...rest } = seed;
+    const record = await run<RecordEnvelope>('instruments.register', {
+      ...rest,
+      kind: idOf.get(kind),
+      configuration: {
+        equipment: (configuration ?? []).map((node) => ({ ...node, kind: idOf.get(node.kind) })),
+      },
+      reason: `Seed lab (plan 006), instance ${research} in seed/instruments.yaml, loaded by plan 008`,
+    });
+    report.registered.push(`${record.name} ${seed.key}`);
   }
   return report;
 }

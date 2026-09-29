@@ -736,3 +736,51 @@ equipment_kinds:
     serialized: true
     capabilities:
       - {capability: move_labware}
+
+# The demo lab's registered instruments (plan 008b), from the `instances` in instruments.yaml
+# (`research` names the instance). `kind` and each node's `kind` are keys above. Rooms use the room
+# names in lab.yaml. Configurations are a plausible academic setup and load as assumed.
+instruments:
+- {key: star-01, research: star-01, kind: hamilton-star, label: STAR 1, shortName: STAR-01, serial: DEMO-STAR-0001, room: Automation room (B2.14), variant: Microlab STAR,
+   configuration: [
+     {id: channels, kind: star-1000ul-channels, mount: channels, placement: {on: fixed}},
+     {id: head, kind: star-core96-head, mount: head, placement: {on: fixed}},
+     {id: gripper, kind: star-core-gripper, mount: gripper, placement: {on: fixed}},
+     {id: tips, kind: hamilton-tip-car-480, mount: tracks, placement: {on: rail, track: 1}},
+     {id: plates-1, kind: hamilton-plt-car-l5ac, mount: tracks, placement: {on: rail, track: 7}},
+     {id: plates-2, kind: hamilton-plt-car-l5ac, mount: tracks, placement: {on: rail, track: 13}}]}
+- {key: vantage-01, research: vantage-01, kind: hamilton-vantage, label: VANTAGE 1, shortName: VAN-01, serial: DEMO-VAN-0001, room: Automation room (B2.14), variant: VANTAGE 1.3 m,
+   configuration: [
+     {id: channels, kind: vantage-1ml-channels, mount: channels, placement: {on: fixed}},
+     {id: head, kind: vantage-96-head, mount: head, placement: {on: fixed}},
+     {id: gripper, kind: vantage-qcg, mount: gripper, placement: {on: fixed}},
+     {id: track-gripper, kind: vantage-track-gripper, mount: track_gripper, placement: {on: fixed}}]}
+- {key: flex-01, research: flex-01, kind: opentrons-flex, label: Flex 1, shortName: FLX-01, serial: DEMO-FLX-0001, room: Molecular biology bench (B2.12),
+   notes: "The seed instance put the trash bin in A1, but the thermocycler in B1 also takes A1, so the bin is in A3 here.",
+   configuration: [
+     {id: left, kind: flex-8ch-1000, mount: pipettes, placement: {on: slot, slot: left}},
+     {id: right, kind: flex-1ch-50, mount: pipettes, placement: {on: slot, slot: right}},
+     {id: gripper, kind: flex-gripper, mount: gripper, placement: {on: fixed}},
+     {id: thermocycler, kind: flex-thermocycler, mount: deck, placement: {on: slot, slot: B1}},
+     {id: temperature, kind: flex-temperature-module, mount: deck, placement: {on: slot, slot: C1}},
+     {id: heater-shaker, kind: flex-heater-shaker, mount: deck, placement: {on: slot, slot: D1}},
+     {id: magnet, kind: flex-magnetic-block, mount: deck, placement: {on: slot, slot: C2}},
+     {id: trash, kind: flex-trash-bin, mount: deck, placement: {on: slot, slot: A3}},
+     {id: chute, kind: flex-waste-chute, mount: deck, placement: {on: slot, slot: D3}}]}
+- {key: echo-01, research: echo-01, kind: echo-650, label: Echo 1, shortName: ECH-01, serial: DEMO-ECH-0001, room: Automation room (B2.14)}
+- {key: mantis-01, research: mantis-01, kind: formulatrix-mantis, label: Mantis 1, shortName: MAN-01, serial: DEMO-MAN-0001, room: Tissue culture room (B2.16)}
+- {key: precisedrop-01, research: precisedrop-01, kind: precisedrop-ii, label: PreciseDrop 1, shortName: PDR-01, serial: DEMO-PDR-0001, room: Automation room (B2.14)}
+- {key: spark-01, research: spark-01, kind: tecan-spark-cyto, label: Spark Cyto 1, shortName: SPK-01, serial: DEMO-SPK-0001, room: Automation room (B2.14)}
+- {key: bluewasher-01, research: bluewasher-01, kind: bluecatbio-bluewasher, label: BlueWasher 1, shortName: BLW-01, serial: DEMO-BLW-0001, room: Automation room (B2.14)}
+- {key: felix-01, research: felix-01, kind: cybio-felix, label: FeliX 1, shortName: FEL-01, serial: DEMO-FLX-0002, room: Automation room (B2.14),
+   notes: "The Head R 96/1000 uL is also in the lab and can be mounted instead.",
+   configuration: [{id: head, kind: felix-head-r-96-250, mount: head, placement: {on: fixed}}]}
+- {key: qtower-01, research: qtower-01, kind: qtower3, label: qTOWER 1, shortName: QTW-01, serial: DEMO-QTW-0001, room: Molecular biology bench (B2.12), variant: qTOWER3 auto}
+- {key: ptc-tempo-96-01, research: ptc-tempo-96-01, kind: biorad-ptc-tempo, label: PTC Tempo 96 1, shortName: PTC-01, serial: DEMO-PTC-0001, room: Molecular biology bench (B2.12), variant: PTC Tempo 96}
+- {key: ptc-tempo-96-02, research: ptc-tempo-96-02, kind: biorad-ptc-tempo, label: PTC Tempo 96 2, shortName: PTC-02, serial: DEMO-PTC-0002, room: Molecular biology bench (B2.12), variant: PTC Tempo 96}
+- {key: ptc-tempo-384-01, research: ptc-tempo-384-01, kind: biorad-ptc-tempo, label: PTC Tempo 384 1, shortName: PTC-03, serial: DEMO-PTC-0003, room: Molecular biology bench (B2.12), variant: PTC Tempo 384}
+- {key: flexpod-01, research: flexpod-01, kind: highres-flexpod, label: FlexPod 1, shortName: FPD-01, serial: DEMO-FPD-0001, room: Automation room (B2.14)}
+- {key: microspin-01, research: microspin-01, kind: highres-microspin, label: MicroSpin 1, shortName: MSP-01, serial: DEMO-MSP-0001, room: Automation room (B2.14)}
+- {key: lidvalet-01, research: lidvalet-01, kind: highres-lidvalet, label: LidValet 1, shortName: LDV-01, serial: DEMO-LDV-0001, room: Automation room (B2.14)}
+- {key: plateorient-01, research: plateorient-01, kind: highres-plateorient, label: PlateOrient 1, shortName: POR-01, serial: DEMO-POR-0001, room: Automation room (B2.14)}
+- {key: cytomat-01, research: cytomat-01, kind: thermo-cytomat-10, label: Cytomat 1, shortName: CYT-01, serial: DEMO-CYT-0001, room: Automation room (B2.14)}

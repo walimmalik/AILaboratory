@@ -250,8 +250,8 @@ describe('seed instrument library', () => {
   const seedFile = (name: string) =>
     readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
 
-  it('drafts every kind once, with sources, and they resolve', async () => {
-    const kinds = readSeedInstruments(
+  it('drafts every kind and instrument once, with sources, and they resolve', async () => {
+    const library = readSeedInstruments(
       await seedFile('instrument-library.yaml'),
       await seedFile('instruments.yaml'),
     );
@@ -263,11 +263,25 @@ describe('seed instrument library', () => {
         onBehalfOf: (person.actor as { userId: string }).userId,
       },
     };
-    const report = await loadSeedInstruments(registry, seeder, kinds);
-    expect(report.created).toHaveLength(kinds.length);
-    expect((await loadSeedInstruments(registry, seeder, kinds)).existing).toHaveLength(
-      kinds.length,
-    );
+    const report = await loadSeedInstruments(registry, seeder, library);
+    expect(report.created).toHaveLength(library.kinds.length);
+    expect(report.registered).toHaveLength(library.instruments.length);
+    const again = await loadSeedInstruments(registry, seeder, library);
+    expect(again.existing).toHaveLength(library.kinds.length);
+    expect(again.registeredBefore).toHaveLength(library.instruments.length);
+
+    // The demo Flex resolves with every module it has installed.
+    const flex1 = (
+      await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+        kind: 'instrument',
+        search: 'Flex 1',
+      })
+    ).records[0] as RecordEnvelope;
+    const demo = await run<ResolvedConfiguration>(agent, 'instruments.resolve', {
+      instrument: flex1.id,
+    });
+    expect(demo.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(demo.capabilities.map((c) => c.capability)).toContain('thermocycle');
 
     const all = [
       ...(
