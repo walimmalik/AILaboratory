@@ -76,6 +76,11 @@ export interface KindCheck<A = Record<string, unknown>> {
   section?: string;
   /** What to do when it fails. */
   fix?: string;
+  /**
+   * An operation that fixes the failure in one step, when it can for these values. It takes
+   * `{id, expectedVersion}` of the record, like `labware.use_standard_positions`.
+   */
+  quickFix?: { operation: string; label: string; applies?: (attributes: A) => boolean };
   /** Whether the check means anything for these values, e.g. well positions for a single tube. Default yes. */
   applies?: (attributes: A) => boolean;
   test: (attributes: A) => true | string;
@@ -115,6 +120,8 @@ export const CheckResult = z.object({
   passed: z.boolean(),
   message: z.string().optional(),
   fix: z.string().optional(),
+  /** Offered only while the check fails: an operation taking `{id, expectedVersion}` that fixes it. */
+  quickFix: z.object({ operation: z.string(), label: z.string() }).optional(),
 });
 export type CheckResult = z.infer<typeof CheckResult>;
 

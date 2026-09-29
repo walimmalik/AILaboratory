@@ -148,6 +148,24 @@ export function sbsPitch(rows: number, columns: number): number | undefined {
   return undefined;
 }
 
+/**
+ * Where A1 sits on a standard SBS grid (ANSI/SLAS 4-2004), in mm from the left and back edges, with
+ * the well spacing; undefined for grids the standard doesn't place. Single-row reservoirs with 12 or
+ * 24 troughs take the plate's column positions and sit centred front to back.
+ */
+export function sbsPositions(
+  rows: number,
+  columns: number,
+): { pitch: number; a1: { x: number; y: number } } | undefined {
+  if (rows === 8 && columns === 12) return { pitch: 9, a1: { x: 14.38, y: 11.24 } };
+  if (rows === 16 && columns === 24) return { pitch: 4.5, a1: { x: 12.13, y: 8.99 } };
+  if (rows === 32 && columns === 48) return { pitch: 2.25, a1: { x: 11.005, y: 7.865 } };
+  const centre = SBS_FOOTPRINT.width / 2;
+  if (rows === 1 && columns === 12) return { pitch: 9, a1: { x: 14.38, y: centre } };
+  if (rows === 1 && columns === 24) return { pitch: 4.5, a1: { x: 12.13, y: centre } };
+  return undefined;
+}
+
 /** Why a grid's wells don't fit inside the footprint, or undefined when they do (or it can't tell). */
 export function gridFitProblem(layout: WellLayout, footprint: Footprint): string | undefined {
   if (!footprint.length || !footprint.width) return undefined;

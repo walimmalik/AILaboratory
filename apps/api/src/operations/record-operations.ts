@@ -23,7 +23,11 @@ import { type AgentPolicy, implement, type OperationDeps } from './registry.ts';
 const service = (deps: OperationDeps) => new RecordService(deps.db, deps.kinds);
 
 /** Agents edit drafts freely; changes to active records wait for a person. */
-const proposeIfActive: AgentPolicy<{ id: string }> = async (ctx: RecordContext, input, deps) => {
+export const proposeIfActive: AgentPolicy<{ id: string }> = async (
+  ctx: RecordContext,
+  input,
+  deps,
+) => {
   const record = await service(deps).get(ctx, input.id);
   return record.status === 'active' ? 'propose' : 'direct';
 };

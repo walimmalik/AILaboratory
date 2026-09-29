@@ -4,6 +4,7 @@ import {
   LabwareError,
   sbsFootprintProblem,
   sbsPitch,
+  sbsPositions,
   wellCapacity,
 } from '@ailab/domain';
 import {
@@ -128,6 +129,20 @@ const checks: KindCheck<Attributes>[] = [
       if (w?.layout !== 'grid') return true;
       const single = w.rows === 1 && w.columns === 1;
       return w.a1 && (w.pitch || single) ? true : 'Pitch or A1 offset is missing';
+    },
+    quickFix: {
+      operation: 'labware.use_standard_positions',
+      label: 'Use the standard SBS positions',
+      // Offered when the standard places this grid and any pitch already given agrees with it.
+      applies: (a) => {
+        const w = a.wells;
+        const standard = w?.layout === 'grid' && sbsPositions(w.rows, w.columns);
+        return (
+          a.footprint?.sbs === true &&
+          !!standard &&
+          (!w.pitch || Number(w.pitch.value) === standard.pitch)
+        );
+      },
     },
   },
   {

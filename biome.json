@@ -14,7 +14,8 @@
       "!packages/schema/generated",
       "!apps/api/drizzle",
       "!docs/sop-library/sops",
-      "!docs/sop-library/literature"
+      "!docs/sop-library/literature",
+      "!seed/opentrons"
     ]
   },
   "formatter": {

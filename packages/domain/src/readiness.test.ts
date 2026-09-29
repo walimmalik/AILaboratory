@@ -153,4 +153,25 @@ describe('readiness', () => {
     expect(result.checks.map((c) => c.id)).toEqual(['volume_positive']);
     expect(result.notApplicable).toEqual(['volume.unit']);
   });
+
+  it('offers a quick fix only while the check fails and the fix fits the values', () => {
+    const withFix = [
+      {
+        ...checks[0],
+        quickFix: {
+          operation: 'widgets.fill_volume',
+          label: 'Use the standard volume',
+          applies: (a: { color: string }) => a.color === 'blue',
+        },
+      },
+    ] as unknown as KindCheck<never>[];
+    const empty = widget({ attributes: { color: 'blue', volume: { value: '0', unit: 'mL' } } });
+    expect(readiness(empty, { sections, checks: withFix }).checks[0]?.quickFix).toEqual({
+      operation: 'widgets.fill_volume',
+      label: 'Use the standard volume',
+    });
+    empty.attributes = { color: 'red', volume: { value: '0', unit: 'mL' } };
+    expect(readiness(empty, { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
+    expect(readiness(widget(), { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
+  });
 });

@@ -1,13 +1,21 @@
-import { computeWells, fromOpentrons, LabwareError, toOpentrons } from '@ailab/domain';
+import {
+  computeWells,
+  fromOpentrons,
+  LabwareError,
+  sbsPositions,
+  toOpentrons,
+} from '@ailab/domain';
 import {
   type EvidenceInput,
   LabwareTypeAttributes,
   labwareExportOpentrons,
   labwareImportOpentrons,
+  labwareUseStandardPositions,
   labwareWells,
   type RecordEnvelope,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
+import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
@@ -44,6 +52,11 @@ function refusal(error: unknown): never {
   }
   throw error;
 }
+
+/** Where the standard positions come from, shown as the evidence reference. */
+export const SBS_POSITIONS_REFERENCE = 'ANSI/SLAS 4-2004 (R2012) Microplates: Well Positions';
+
+const mmOf = (value: number) => ({ value: String(value), unit: 'mm' as const });
 
 export const labwareOperations = [
   implement(labwareWells, {
@@ -95,6 +108,59 @@ export const labwareOperations = [
       } catch (error) {
         refusal(error);
       }
+    },
+  }),
+  implement(labwareUseStandardPositions, {
+    agentPolicy: proposeIfActive,
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const { record, attributes } = await labwareTypeOf(service, ctx, input.id);
+      const wells = attributes.wells;
+      if (wells?.layout !== 'grid') {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} has no grid of wells; add the rows and columns first`,
+        );
+      }
+      if (attributes.footprint?.sbs !== true) {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} is not marked as SBS format; the standard positions only hold for SBS labware`,
+        );
+      }
+      const standard = sbsPositions(wells.rows, wells.columns);
+      if (!standard) {
+        throw new OperationError(
+          'invalid_input',
+          `The standard places 96, 384 and 1536 wells and 12- or 24-trough reservoirs, not ${wells.rows} × ${wells.columns}; measure the pitch and A1 offset from the datasheet drawing`,
+        );
+      }
+      if (wells.pitch && Number(wells.pitch.value) !== standard.pitch) {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} has a ${wells.pitch.value} mm pitch, not the standard ${standard.pitch} mm; measure the A1 offset from the datasheet drawing`,
+        );
+      }
+      const shape = `${wells.rows} × ${wells.columns}`;
+      return service.update(ctx, record.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: {
+          ...record.attributes,
+          wells: {
+            ...wells,
+            pitch: mmOf(standard.pitch),
+            a1: { x: mmOf(standard.a1.x), y: mmOf(standard.a1.y) },
+          },
+        },
+        evidence: {
+          wells: {
+            source: 'calculated',
+            reference: SBS_POSITIONS_REFERENCE,
+            note: `Pitch and A1 offset are the standard for an SBS ${shape} grid; the rest of the wells is as it was. Check them against the datasheet drawing.`,
+          },
+        },
+        reason: input.reason ?? `Standard SBS well positions for a ${shape} grid`,
+      });
     },
   }),
 ];

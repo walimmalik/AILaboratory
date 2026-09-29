@@ -19,7 +19,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { labwareKinds } from './kinds.ts';
-import { loadSeedLabware, readSeedLabware } from './seed.ts';
+import { loadSeedLabware, readDefinitions, readSeedLabware } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -197,6 +197,74 @@ describe('labware.wells and labware.export_opentrons', () => {
   });
 });
 
+describe('labware.use_standard_positions', () => {
+  const sbsPlate = (wells: Record<string, unknown>) =>
+    run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'Tip rack',
+      attributes: {
+        family: 'tip_rack',
+        footprint: { sbs: true },
+        wells: { layout: 'grid', ...wells },
+      },
+    });
+
+  it('offers the fix on the failing check and fills the standard pitch and A1 offset', async () => {
+    const record = await sbsPlate({ rows: 8, columns: 12 });
+    const before = await run<Readiness>(person, 'records.readiness', { id: record.id });
+    expect(before.checks.find((c) => c.id === 'wells_placed')?.quickFix).toEqual({
+      operation: 'labware.use_standard_positions',
+      label: 'Use the standard SBS positions',
+    });
+
+    const updated = await run<RecordEnvelope>(agent, 'labware.use_standard_positions', {
+      id: record.id,
+      expectedVersion: record.version,
+    });
+    expect(updated.attributes.wells).toEqual({
+      layout: 'grid',
+      rows: 8,
+      columns: 12,
+      pitch: { value: '9', unit: 'mm' },
+      a1: { x: { value: '14.38', unit: 'mm' }, y: { value: '11.24', unit: 'mm' } },
+    });
+    expect(updated.evidence.wells).toMatchObject({
+      source: 'calculated',
+      reference: expect.stringContaining('ANSI/SLAS 4-2004'),
+    });
+    const after = await run<Readiness>(person, 'records.readiness', { id: updated.id });
+    expect(after.checks.find((c) => c.id === 'wells_placed')).toMatchObject({ passed: true });
+    expect(after.checks.find((c) => c.id === 'wells_placed')?.quickFix).toBeUndefined();
+  });
+
+  it('refuses grids the standard does not place, and a pitch that disagrees', async () => {
+    const six = await sbsPlate({ rows: 2, columns: 3 });
+    const odd = await refused(
+      run(person, 'labware.use_standard_positions', { id: six.id, expectedVersion: 1 }),
+    );
+    expect(odd).toMatchObject({ code: 'invalid_input' });
+    expect(odd.message).toContain('not 2 × 3');
+    const state = await run<Readiness>(person, 'records.readiness', { id: six.id });
+    expect(state.checks.find((c) => c.id === 'wells_placed')?.quickFix).toBeUndefined();
+
+    const wide = await sbsPlate({ rows: 8, columns: 12, pitch: { value: '9.5', unit: 'mm' } });
+    const pitch = await refused(
+      run(person, 'labware.use_standard_positions', { id: wide.id, expectedVersion: 1 }),
+    );
+    expect(pitch.message).toContain('9.5 mm pitch');
+  });
+
+  it('keeps other labs out', async () => {
+    const record = await sbsPlate({ rows: 16, columns: 24 });
+    const hidden = await refused(
+      run(otherLab, 'labware.use_standard_positions', { id: record.id, expectedVersion: 1 }),
+    );
+    expect(hidden).toMatchObject({ code: 'not_found' });
+    const mine = await run<RecordEnvelope>(person, 'records.get', { id: record.id });
+    expect(mine.attributes.wells).not.toHaveProperty('a1');
+  });
+});
+
 describe('labware type checks', () => {
   it('blocks a draft whose SBS plate has the wrong well spacing', async () => {
     const record = await run<RecordEnvelope>(person, 'records.create', {
@@ -259,6 +327,8 @@ describe('labware type checks', () => {
 describe('seed labware', () => {
   const seedFile = () =>
     readFile(new URL('../../../../seed/labware.yaml', import.meta.url), 'utf8');
+  const seedDefinitions = () =>
+    readDefinitions(new URL('../../../../seed/opentrons/', import.meta.url));
 
   it('reads every labware entry in the seed file and says why it skips the rest', async () => {
     const { types, skipped } = readSeedLabware(await seedFile());
@@ -277,6 +347,30 @@ describe('seed labware', () => {
     });
   });
 
+  it('places wells from the Opentrons definition the seed names', async () => {
+    const { types } = readSeedLabware(await seedFile(), await seedDefinitions());
+    const tips = types.find((t) => t.key === 'opentrons-991-00104');
+    expect(tips?.attributes.wells).toMatchObject({
+      layout: 'grid',
+      rows: 8,
+      columns: 12,
+      pitch: { value: '9', unit: 'mm' },
+      a1: { x: { value: '14.38', unit: 'mm' }, y: { value: '11.37', unit: 'mm' } },
+      well: { top: { shape: 'circular', diameter: { value: '5.58', unit: 'mm' } } },
+    });
+    expect(tips?.evidence.wells).toMatchObject({
+      source: 'datasheet',
+      reference: expect.stringContaining('opentrons_flex_96_filtertiprack_50ul/1.json'),
+    });
+    // The Corning plate keeps its datasheet well size and gains the definition's positions.
+    const plate = types.find((t) => t.key === 'corning-3590');
+    expect(plate?.attributes.wells).toMatchObject({ a1: { x: { value: '14.38', unit: 'mm' } } });
+    expect(plate?.evidence.wells?.note).toContain('well size from the seed source');
+    // A load name the seed only estimated is not trusted for positions.
+    const pcr = types.find((t) => t.key === 'biorad-hsp9655');
+    expect(pcr?.attributes.wells).not.toHaveProperty('a1');
+  });
+
   it('loads drafts once, through the operations, as the seed loader', async () => {
     const loader: RecordContext = {
       ...person,
@@ -289,11 +383,14 @@ describe('seed labware', () => {
     const text = await seedFile();
     const first = await loadSeedLabware(registry, loader, text);
     expect(first.created).toHaveLength(32);
-    const again = await loadSeedLabware(registry, loader, text);
-    expect(again).toMatchObject({
-      created: [],
-      existing: expect.arrayContaining(['corning-3590']),
-    });
+    const again = await loadSeedLabware(registry, loader, text, await seedDefinitions());
+    expect(again.created).toEqual([]);
+    expect(again.updated).toEqual(
+      expect.arrayContaining([expect.stringContaining('opentrons-991-00104')]),
+    );
+    expect(again.existing).toContain('falcon-352096');
+    const once = await loadSeedLabware(registry, loader, text, await seedDefinitions());
+    expect(once.updated).toEqual([]);
 
     const { records } = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
       kind: 'vendor',

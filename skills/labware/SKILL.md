@@ -23,6 +23,11 @@ A labware type is a record of kind `labware_type` (readable names like `LWT-0001
 - `labware.import_opentrons` takes an Opentrons labware definition (schema version 2, the JSON in Opentrons shared-data) and drafts a type with every value marked imported. It finds or creates the vendor. Trash, adapters and lids are refused.
 - `labware.export_opentrons` returns a definition in the `custom_beta` namespace, for Opentrons' simulator or as custom labware. If the type is incomplete it refuses with `not_ready` and names what is missing.
 
+## Standard well positions
+
+- `labware.use_standard_positions` with `{id, expectedVersion}` sets the pitch and A1 offset of an SBS plate or reservoir to ANSI/SLAS 4-2004 (96, 384 or 1536 wells; 12- or 24-trough reservoirs). Use it when the datasheet gives no drawing and the type is marked SBS; it refuses other grids, non-SBS labware and a pitch that disagrees with the standard. The values are marked calculated from the standard, so a person still checks them against the datasheet.
+- A failing check that can be fixed this way carries `quickFix` in `records.readiness`, naming the operation.
+
 ## Wells
 
 `labware.wells` returns every well with its name and, when known, its centre (mm from the left and back edges). `order: "column"` (default) runs A1, B1, C1…; `"row"` runs A1, A2, A3….

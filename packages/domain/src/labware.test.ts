@@ -7,6 +7,7 @@ import {
   parseWellName,
   sbsFootprintProblem,
   sbsPitch,
+  sbsPositions,
   volumeAtHeight,
   wellCapacity,
   wellName,
@@ -86,6 +87,18 @@ describe('SBS rules', () => {
     expect(sbsPitch(16, 24)).toBe(4.5);
     expect(sbsPitch(32, 48)).toBe(2.25);
     expect(sbsPitch(2, 3)).toBeUndefined();
+  });
+
+  it('places A1 on standard SBS grids and leaves other grids alone', () => {
+    expect(sbsPositions(8, 12)).toEqual({ pitch: 9, a1: { x: 14.38, y: 11.24 } });
+    expect(sbsPositions(16, 24)).toEqual({ pitch: 4.5, a1: { x: 12.13, y: 8.99 } });
+    expect(sbsPositions(32, 48)).toEqual({ pitch: 2.25, a1: { x: 11.005, y: 7.865 } });
+    expect(sbsPositions(1, 12)).toEqual({ pitch: 9, a1: { x: 14.38, y: 42.74 } });
+    expect(sbsPositions(4, 6)).toBeUndefined();
+    // The last well of a 96-well plate sits as far from the right and front edges as A1 from the left and back.
+    const { pitch, a1 } = sbsPositions(8, 12) as NonNullable<ReturnType<typeof sbsPositions>>;
+    expect(127.76 - (a1.x + 11 * pitch)).toBeCloseTo(a1.x, 1);
+    expect(85.48 - (a1.y + 7 * pitch)).toBeCloseTo(a1.y, 1);
   });
 
   it('finds wells that fall off the footprint', () => {

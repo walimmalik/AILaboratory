@@ -273,6 +273,15 @@ test('a failing check links to its section, where a person fills in the value an
 
   await expect(geometry.getByText(/measured · calipers/).first()).toBeVisible();
   await expect(readiness.getByText('Length, width or height is missing')).toHaveCount(0);
+
+  // Positions the standard gives are one click away, cited to the standard.
+  await expect(readiness.getByText('Pitch or A1 offset is missing')).toBeVisible();
+  await readiness.getByRole('button', { name: 'Use the standard SBS positions' }).click();
+  await expect(readiness.getByText('Pitch or A1 offset is missing')).toHaveCount(0);
+  await expect(
+    geometry.getByText(/calculated · Pitch and A1 offset.*ANSI\/SLAS 4-2004/).first(),
+  ).toBeVisible();
+  await expect(drawing.getByText(/Wells drawn 4.5 mm apart/)).toHaveCount(0);
 });
 
 test('the wiki is readable in the app, with links between its pages', async ({ page }) => {
