@@ -1,6 +1,6 @@
 # 018: Workflow creator
 
-- Status: in planning. Round 1 (W1 to W6) accepted by Wali 2026-09-29, all A, with notes. Round 2 (W7 to W12) asked 2026-09-29. Don't build from this yet.
+- Status: accepted. Round 1 (W1 to W6) and round 2 (W7 to W12) accepted by Wali 2026-09-29, all A, with the notes under each round's answers. Ready to build after 012, 014a and 016a; the schedule request contract (018a) is what 019 plans against.
 - Depends on: 008 (capabilities, instruments, manual stations, workcells, `instruments.find_capable`), 009 (handling rules on products), 010 (effective handling rules from well contents, storage locations), 012 (digital SOPs: typed steps, per-step inputs and outputs, timing windows), 013 (experiments, runs, sets), 014 (plate maps: plate count and planned contents), 016 (transfer plans: instrument steps, deck layouts, time estimates), 017 (the designer drafts the whole design)
 - Feeds: 019 (the scheduler schedules a confirmed workflow), 013 (a run follows a workflow), 015 (twins simulate workflow steps), 021 (notebook timeline), 022 (the gateway and Cellario hand-off run the same steps)
 
@@ -60,6 +60,14 @@ Pure logic in `packages/domain/workflows`: graph checks (acyclic, every input co
 | `workflow_templates.draft`, `workflow_templates.save_from`, `workflow_templates.confirm` | direct on drafts, confirm people or proposed |
 | `workflows.get`, `workflows.search`, `workflows.where_used` | read |
 
+## Defaults I'm assuming (say if any is wrong)
+
+- A confirmed workflow version is frozen; changing it makes a new version, and upstream changes (a new SOP version, a plate map with more plates) mark it out of date with a one-click redraft (P6).
+- The number of units is read from the plate maps and can be overridden per run in the schedule request; the workflow itself never changes when the count does (W1).
+- Transport is not drawn; the schedule request says where each plate starts and ends, and 019 with the twins adds the moves, including a person carrying a plate between a workcell and a standalone instrument (W3, W5).
+- Workflow templates are converted from `seed/assays.yaml` (plasmid assembly first, since 017 waits on it) and confirmed by a person before use.
+- Hand-off to Cellario or another external scheduler takes the same schedule request and waits for the device gateway (022).
+
 ## Screens
 
 - **Workflow page:** the graph, grouped by SOP, with labware paths as coloured threads you can follow; one inspector for the selected step; the readiness panel; the agent beside it.
@@ -92,6 +100,12 @@ Recommended option starred. Asked 2026-09-29.
 | W5 | How are steps tied to instruments? | A) A step names its capability (from the SOP) and code lists the candidate instruments for it, given the labware and the active workcell (`instruments.find_capable`). A step is pinned to one instrument only when something fixes it: a transfer plan's worklist (the Echo), the SOP, or a person. The scheduler picks among the candidates · B) Every step is bound to one instrument in the workflow · C) No instruments in the workflow; the scheduler works it all out | ★ **A.** Keeping candidates lets the scheduler use the second reader when the first is busy, while steps with a worklist stay on the instrument the worklist was written for. B fixes choices too early; C hides from you which instruments a workflow can use until it is scheduled. |
 | W6 | What is the interface to the scheduler (019)? | A) A schedule request, defined here and checked by code: the confirmed workflow version plus run settings (units, which plates are shared, earliest start, deadline, units at once). It lists steps with duration estimates and their source, what each needs (capability, candidates, a person for manual steps), wait-fors, timing windows (hard or soft, with source), each plate's handling rules from its planned contents, and the end states. 019 returns a schedule that refers to workflow steps per unit. 018 also shows an unlimited-resource timeline labelled "not a schedule" · B) The scheduler reads SOPs, plate maps and experiments itself; no contract · C) 018 also schedules simply, on one instrument at a time | ★ **A.** A typed contract lets 019 be built and tested on its own, and lets Cellario or another scheduler take the same request later (022). The resource-free timeline catches impossible windows before the scheduler exists. C duplicates 019. |
 
+## Round 2 answers
+
+Wali chose A for W7 to W12 on 2026-09-29, with this note:
+
+- **W8, agents research constraints.** When handling rules or timing matter to a scheduling decision and the records don't settle it (a cell line with no stated time-out limit, a reagent whose stability after thaw is unknown, a hold that could be longer), the agent can research: the SOP and literature library (011), vendor documents, lab memory and past runs. This is part of the workflow skill (and 019's). What it finds comes back as a proposal with its citations: a new or tightened handling rule on the entity kind or product (so every later workflow gets it), or a lab memory, confirmed by a person like any other. Until confirmed, the value shows as assumed with its source, and the scheduler treats an unconfirmed rule as advice, not a hard limit.
+
 ## Round 2 questions (as asked): time, science rules, holds, routines, runs
 
 Recommended option starred. Asked 2026-09-29.
@@ -109,4 +123,4 @@ Recommended option starred. Asked 2026-09-29.
 
 - **018a:** schemas, `packages/domain/workflows` (checks, unit expansion, timing arithmetic), operations, schedule request contract.
 - **018b:** drafting from a confirmed design (SOP steps, plate maps, transfer plans), agent joins, candidates, constraints with sources.
-- **018c:** workflow page (graph, labware paths, timeline, end states), templates, skill.
+- **018c:** workflow page (graph with SOPs as nodes you open, labware paths, timeline, end states), templates, run checklist from workflow steps (with 013c), skill including the research steps from W8.

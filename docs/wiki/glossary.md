@@ -48,6 +48,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Role** (in an SOP) | A named material or instrument with requirements and a default, bound when an experiment is planned |
 | **Run** | One execution of an experiment's design on a day |
 | **Sample** | A prep the lab made of an entity (a miniprep, a cell bank), with its QC |
+| **Schedule request** | A confirmed workflow plus run settings (units, start, deadline): what the scheduler plans (plans 018, 019) |
 | **Section** | A group of fields on a draft that a person confirms together |
 | **Set** | A named list of entities or samples one experiment hands to the next |
 | **Site** | A place on an instrument where labware can sit |
@@ -55,5 +56,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Stated** | A value the person told the agent; confirmed with its section like any other |
 | **Transfer plan** | How liquid gets from sources to targets: transfers, instruments, liquid classes, decks, worklists (plan 016) |
 | **Twin** | A digital simulation of an instrument, sharing capability contracts with the real hardware |
+| **Work unit** | What one workflow graph describes: one assay plate (or tube) and everything that happens to it; a run repeats it (plan 018) |
 | **Workcell** | An arrangement of instruments and pods served by a transport robot (plan 008d) |
+| **Workflow** | The steps of one or more SOPs and transfer plans in order, with labware paths, waits and timing windows (plan 018) |
 | **Worklist** | A file an instrument's own software runs (Echo CSV, Opentrons protocol) |

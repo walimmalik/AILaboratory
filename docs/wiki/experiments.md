@@ -1,6 +1,6 @@
 # Experiments and designers
 
-The scientific frame (013) and the designers that fill it (014, 016, 017). All four are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
+The scientific frame (013), the designers that fill it (014, 016, 017) and the workflows that put a design in order for the scheduler (018). All five are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
 
 ## Campaigns, experiments and runs (plan 013)
 
@@ -65,3 +65,17 @@ Locked 2026-09-29, all four rounds as recommended. The plan files come into `doc
 ## The lab's assays
 
 These drive the templates and the first end-to-end target (one ELISA): sandwich ELISA (IL-6 DuoSet); single-point compound screen with dose-response follow-up (CellTiter-Glo or HiBiT); enzyme kinetic screen (absorbance or fluorescence, pNPP); Promega Dual-Glo reporter; plasmid assembly (Gibson, Golden Gate) with transformation and miniprep. All six are written in words in `seed/assays.yaml`.
+
+## Workflows (plan 018)
+
+[Plan 018](../plans/018-workflow-creator.md). Locked 2026-09-29; builds after 012, 014a and 016a.
+
+- A **workflow** (`WF-0001`) is how the day or the week goes for one experiment (or a routine like passaging): the steps of its SOPs and transfer plans in order, acting on named plates, tubes and reservoirs, with waits and timing windows between them.
+- It describes **one work unit** (one assay plate and everything that happens to it). Shared plates, such as a compound source, are marked shared. How many units, and how many at once, are run settings, so 2 plates or 20 is the same design.
+- **Code drafts it** from confirmed documents: SOP steps become steps, plate maps give labware and plate count, transfer plans become instrument sessions, and intermediate dilution plates appear on their own. The agent chooses how SOPs join (from ranked options) and where plates wait between them.
+- On the page each **SOP is a node** you open to see its steps; labware paths run through them; every path ends somewhere explicit (stored, discarded, handed on).
+- Steps list **candidate instruments**, in the workcell or standalone; a step is pinned only when a worklist, the SOP or a person fixes it.
+- **Timing and science:** durations, timing windows and handling rules (from what the plate map puts in each plate) all show their source. Agents can research a missing rule and propose it with citations.
+- The **schedule request** (a confirmed workflow plus run settings) is what the scheduler (019) plans; the workflow page shows only a timeline that assumes every instrument is free, labelled "not a schedule".
+- When an experiment has a workflow, the **run checklist** follows its steps, plate by plate.
+
