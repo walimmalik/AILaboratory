@@ -388,3 +388,168 @@ describe('seed instrument library', () => {
     expect(starResult.sites).toHaveLength(15);
   });
 });
+
+describe('registered instruments', () => {
+  async function setup() {
+    const kind = await create(person, 'instrument_kind', 'Opentrons Flex', flex);
+    const eight = await create(person, 'equipment_kind', 'Flex 8-Channel 1000 uL', pipette);
+    return { kind, eight };
+  }
+  const left = (kindId: string, extra: Record<string, unknown> = {}) => ({
+    id: 'left',
+    kind: kindId,
+    mount: 'pipettes',
+    placement: { on: 'slot', slot: 'left' },
+    ...extra,
+  });
+
+  it('registers an instrument as a draft with a checked configuration', async () => {
+    const { kind, eight } = await setup();
+    const flex1 = await run<RecordEnvelope>(agent, 'instruments.register', {
+      label: 'Flex 1',
+      kind: kind.id,
+      shortName: 'FLX-01',
+      serial: 'DEMO-FLX-0001',
+      configuration: { equipment: [left(eight.id)] },
+    });
+    expect(flex1).toMatchObject({ name: 'INS-0001', status: 'draft' });
+    expect(flex1.attributes).toMatchObject({ status: 'ready', shortName: 'FLX-01' });
+    const resolved = await run<ResolvedConfiguration>(agent, 'instruments.resolve', {
+      instrument: flex1.id,
+    });
+    expect(resolved.capabilities.map((c) => c.capability)).toEqual(['transfer']);
+  });
+
+  it('refuses a configuration that does not resolve, and a kind that is not an instrument kind', async () => {
+    const { kind, eight } = await setup();
+    const bad = await refused(
+      run(agent, 'instruments.register', {
+        label: 'Flex 1',
+        kind: kind.id,
+        configuration: {
+          equipment: [left(eight.id, { placement: { on: 'slot', slot: 'middle' } })],
+        },
+      }),
+    );
+    expect(bad).toMatchObject({ code: 'invalid_input' });
+    expect(bad.message).toContain('has no slot middle');
+    const wrong = await refused(
+      run(agent, 'instruments.register', {
+        label: 'Pipette',
+        kind: eight.id.replace('eqk_', 'ink_'),
+      }),
+    );
+    expect(wrong).toMatchObject({ code: 'not_found' });
+  });
+
+  it('changes the configuration as a whole, with items tracked by serial', async () => {
+    const { kind, eight } = await setup();
+    const item = await create(person, 'equipment_item', 'Flex 8-Channel 1000 uL SN 123', {
+      kind: eight.id,
+      serial: 'P1KM123',
+    });
+    const flex1 = await run<RecordEnvelope>(person, 'instruments.register', {
+      label: 'Flex 1',
+      kind: kind.id,
+    });
+    const changed = await run<RecordEnvelope>(agent, 'instruments.change_configuration', {
+      id: flex1.id,
+      expectedVersion: 1,
+      changes: [
+        { change: 'place', equipment: left(eight.id) },
+        { change: 'move', id: 'left', mount: 'pipettes', placement: { on: 'slot', slot: 'right' } },
+        { change: 'set_item', id: 'left', item: item.id },
+      ],
+    });
+    expect((changed.attributes as { configuration: unknown }).configuration).toEqual({
+      equipment: [{ ...left(eight.id), placement: { on: 'slot', slot: 'right' }, item: item.id }],
+    });
+
+    // The same item can't be installed on a second instrument.
+    const flex2 = await run<RecordEnvelope>(person, 'instruments.register', {
+      label: 'Flex 2',
+      kind: kind.id,
+    });
+    const twice = await refused(
+      run(agent, 'instruments.change_configuration', {
+        id: flex2.id,
+        expectedVersion: 1,
+        changes: [{ change: 'place', equipment: left(eight.id, { item: item.id }) }],
+      }),
+    );
+    expect(twice.message).toContain('is installed in Flex 1 (INS-0001)');
+
+    const removed = await run<RecordEnvelope>(agent, 'instruments.change_configuration', {
+      id: flex1.id,
+      expectedVersion: 2,
+      changes: [{ change: 'remove', id: 'left' }],
+    });
+    expect((removed.attributes as { configuration: unknown }).configuration).toEqual({
+      equipment: [],
+    });
+    const missing = await refused(
+      run(agent, 'instruments.change_configuration', {
+        id: flex1.id,
+        expectedVersion: 3,
+        changes: [{ change: 'remove', id: 'left' }],
+      }),
+    );
+    expect(missing.message).toBe('Nothing called "left" is installed');
+  });
+
+  it('proposes an agent change to a confirmed instrument, and status and service always', async () => {
+    const { kind, eight } = await setup();
+    const flex1 = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'instrument',
+      label: 'Flex 1',
+      status: 'active',
+      attributes: { kind: kind.id, configuration: { equipment: [] }, status: 'ready' },
+    });
+    const change = await registry.execute(agent, 'instruments.change_configuration', {
+      id: flex1.id,
+      expectedVersion: 1,
+      changes: [{ change: 'place', equipment: left(eight.id) }],
+    });
+    expect(change.status).toBe('proposed');
+    const status = await registry.execute(agent, 'instruments.set_status', {
+      id: flex1.id,
+      expectedVersion: 1,
+      status: 'maintenance',
+    });
+    expect(status.status).toBe('proposed');
+
+    const set = await run<RecordEnvelope>(person, 'instruments.set_status', {
+      id: flex1.id,
+      expectedVersion: 1,
+      status: 'maintenance',
+    });
+    const serviced = await run<RecordEnvelope>(person, 'instruments.log_service', {
+      id: flex1.id,
+      expectedVersion: set.version,
+      date: '2026-09-29',
+      note: 'Annual PM',
+      calibrationDue: '2027-09-29',
+    });
+    expect(serviced.attributes).toMatchObject({
+      status: 'maintenance',
+      lastService: { date: '2026-09-29', note: 'Annual PM' },
+      calibrationDue: '2027-09-29',
+    });
+  });
+
+  it('keeps other labs out', async () => {
+    const { kind } = await setup();
+    const flex1 = await run<RecordEnvelope>(person, 'instruments.register', {
+      label: 'Flex 1',
+      kind: kind.id,
+    });
+    const hidden = await refused(
+      run(otherLab, 'instruments.set_status', {
+        id: flex1.id,
+        expectedVersion: 1,
+        status: 'in_use',
+      }),
+    );
+    expect(hidden).toMatchObject({ code: 'not_found' });
+  });
+});

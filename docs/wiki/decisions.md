@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 for 008a so far). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -35,6 +35,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0023](../decisions/0023-labware-types.md) | Labware types are a record kind with sections and checks; drafting, editing and confirming go through `records.*`, with labware operations only for Opentrons import and export and the well list |
 | [0024](../decisions/0024-lab-calculators.md) | Lab calculators: deterministic read operations every agent calls for volumes, dilutions, feasibility and totals, indexed by one skill |
 | [0025](../decisions/0025-instrument-kinds-and-configurations.md) | Instrument and equipment kinds as records; capability catalog in code; mounts, sites, fit tags and claims; one resolver for every configuration |
+| [0026](../decisions/0026-registered-instruments.md) | Registered instruments and equipment items; typed configuration changes checked as a whole; status and service as attributes with history as the log |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

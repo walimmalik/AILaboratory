@@ -39,6 +39,9 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `records.delete_draft` | direct |
 | `labware.import_opentrons` | direct (creates a draft) |
 | `labware.use_standard_positions` | direct on drafts, proposed on active records |
+| `instruments.register` | direct (creates a draft) |
+| `instruments.change_configuration` | direct on drafts, proposed on active records |
+| `instruments.set_status`, `instruments.log_service` | proposed |
 | `records.confirm_section` | people only |
 | `assistant.ask` | people only |
 

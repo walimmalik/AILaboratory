@@ -1,14 +1,14 @@
 # Instruments
 
-Instrument kinds, equipment kinds, the capability catalog and resolving a configuration (plan 008, ADR 0025). Registered instruments and their stored configurations arrive in 008b, screens in 008c and workcells in 008d.
+Instrument kinds, equipment kinds, the capability catalog and resolving a configuration (plan 008, ADR 0025); registered instruments, equipment items and configuration changes (008b, ADR 0026). Screens arrive in 008c and workcells in 008d.
 
 ## Pieces
 
 | Piece | Where |
 | --- | --- |
 | Attribute schemas (kinds, mounts, sites, capability providers and limits), capability catalog, configuration and resolved configuration | `packages/schema/src/instruments.ts` |
-| Operations: `instruments.capabilities`, `instruments.resolve` | `packages/schema/src/operations/instruments.ts`, `apps/api/src/instruments/operations.ts` |
-| Kinds `instrument_kind` and `equipment_kind`, with sections and readiness checks | `apps/api/src/instruments/kinds.ts` |
+| Operations: `instruments.capabilities`, `instruments.resolve`, `instruments.register`, `instruments.change_configuration`, `instruments.set_status`, `instruments.log_service` | `packages/schema/src/operations/instruments.ts`, `apps/api/src/instruments/operations.ts` |
+| Kinds `instrument_kind`, `equipment_kind`, `instrument` and `equipment_item`, with sections and readiness checks | `apps/api/src/instruments/kinds.ts` |
 | Resolver | `packages/domain/src/instruments.ts` |
 | Seed loader for `seed/instrument-library.yaml` (sources from `seed/instruments.yaml`) | `apps/api/src/instruments/seed.ts`, `apps/api/src/seed.ts` |
 | Skill | `skills/instruments/SKILL.md` |
@@ -29,9 +29,20 @@ Instrument kinds, equipment kinds, the capability catalog and resolving a config
 - A **capability provider** names a catalog capability, its limits and optionally its sites.
 - An equipment kind's `placement` says which slots it may use, what else it takes (`alsoClaims`, e.g. `{"B1": ["A1"]}`) and how many tracks it takes on a rail.
 
+| Instrument (`INS-0001`) | Identity | `kind`, `variant`, `shortName`, `serial`, `room`, `notes` |
+| | Installed equipment | `configuration` |
+| | Status and service | `status`, `lastService`, `calibrationDue` |
+| Equipment item (`EQP-0001`) | Identity | `kind`, `serial`, `calibrationDue`, `notes` |
+
+## Registered instruments
+
+- `instruments.register` checks the starting configuration and creates a draft (status `ready`).
+- `instruments.change_configuration` applies `place`, `move`, `remove` and `set_item` changes together and refuses the result if it doesn't resolve. Configuration nodes may name the `equipment_item` they are; an item can be installed on one instrument at a time, found from the configurations that name it.
+- `instruments.set_status` and `instruments.log_service` change status and the last service; history is the log.
+
 ## Resolving
 
-`instruments.resolve` takes an instrument kind and a configuration (`{equipment: [{id, kind, parent?, mount, placement}]}`) and returns:
+`instruments.resolve` takes an instrument kind and a configuration (`{equipment: [{id, kind, parent?, mount, placement, item?}]}`), or a registered `instrument`, and returns:
 
 - `claims`: the slots or tracks each piece takes;
 - `sites`: every place labware can sit, with covered deck slots left out;

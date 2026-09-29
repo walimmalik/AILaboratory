@@ -28,6 +28,18 @@ export interface ResolveInput {
   /** The equipment kinds the configuration names, by record ID. */
   equipment: ReadonlyMap<string, KindInfo<EquipmentKindAttributes>>;
   configuration: ConfigurationInput;
+  /**
+   * The equipment items the configuration names, by record ID: their kind, and the instrument they
+   * are installed in when that is another one. Items not given are unknown.
+   */
+  items?: ReadonlyMap<string, ItemInfo>;
+}
+
+export interface ItemInfo {
+  label: string;
+  kind: string;
+  /** The other instrument it is installed in, in words, e.g. "Flex 2 (INS-0002)". */
+  installedIn?: string;
 }
 
 type Resolved = ResolvedConfiguration;
@@ -49,6 +61,7 @@ export function resolveConfiguration({
   instrument,
   equipment,
   configuration,
+  items,
 }: ResolveInput): Resolved {
   const issues: ConfigurationIssue[] = [];
   const error = (rule: ConfigurationIssue['rule'], node: string | undefined, message: string) =>
@@ -84,6 +97,7 @@ export function resolveConfiguration({
   ]);
   const labelOf = (node: EquipmentNode) => node.label ?? equipment.get(node.kind)?.label ?? node.id;
   const warned = new Set<string>();
+  const itemUsed = new Map<string, string>(); // item ID -> node ID
   for (const node of nodes.values()) {
     const kind = equipment.get(node.kind);
     if (!kind) {
@@ -102,6 +116,23 @@ export function resolveConfiguration({
         node: node.id,
         message: `${kind.label} is a draft nobody has confirmed yet`,
       });
+    }
+    if (node.item) {
+      const item = items?.get(node.item);
+      const problem = !item
+        ? `${node.item} is not an equipment item in this lab`
+        : item.kind !== node.kind
+          ? `${item.label} is not a ${kind.label}`
+          : itemUsed.has(node.item)
+            ? `${item.label} is also "${itemUsed.get(node.item)}" in this configuration`
+            : item.installedIn
+              ? `${item.label} is installed in ${item.installedIn}`
+              : undefined;
+      if (problem) {
+        error('wrong_item', node.id, problem);
+        continue;
+      }
+      itemUsed.set(node.item, node.id);
     }
     holders.set(node.id, {
       label: labelOf(node),
