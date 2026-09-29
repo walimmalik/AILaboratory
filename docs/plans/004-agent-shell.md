@@ -1,6 +1,6 @@
 # 004: Agent shell and UI foundation
 
-- Status: accepted (round 5 answered by Wali 2026-09-29, all as recommended); building 004a. Direction and design system accepted by Wali on 2026-09-29 (mockup v3: console layer, single outlines, no side stripes, no nested containers)
+- Status: accepted (round 5 answered by Wali 2026-09-29, all as recommended); 004a merged, building 004b. Direction and design system accepted by Wali on 2026-09-29 (mockup v3: console layer, single outlines, no side stripes, no nested containers)
 - Depends on: 003 (operation registry)
 - Mockup: https://claude.ai/artifact/4ECfKnRveEYembEY1ToNJs
 
@@ -44,7 +44,7 @@ The in-app agent uses a provider interface: Claude by default, plus any OpenAI-c
 
 ## Scope (to finalize before building)
 
-App shell and routing, theme tokens, the ask bar, the agent panel on the Claude Agent SDK over our MCP server, the draft document framework (sections, per-section confirm, final confirm, version on confirm), the readiness panel (checks with a source and a fix action), change highlighting and a changes list, and "assumed" markers wired to the schema's assumed-value flag.
+App shell and routing, theme tokens, the ask bar, the agent panel (on our own tool loop, round 5 question 1, ADR 0020), the draft document framework (sections, per-section confirm, final confirm, version on confirm), the readiness panel (checks with a source and a fix action), change highlighting and a changes list, and "assumed" markers wired to the schema's assumed-value flag.
 
 ## Round 5: scope decisions
 
@@ -60,3 +60,17 @@ Wali chose the recommended option (bold) for all six on 2026-09-29. Keys: `OPENR
 | 6 | How to split the work | A) Three PRs: 004a shell, sign-in, ledger, proposals and records · 004b agent panel and model adapters · 004c draft-and-confirm framework · B) One PR | **A.** Small PRs, each usable on its own. |
 
 Routine choices (not asking): TanStack Router and TanStack Query, Radix primitives styled with our own CSS tokens (no Tailwind, to keep the console look), Playwright for end-to-end tests.
+
+## 004b: defaults chosen while building (routine; say if any should change)
+
+| Choice | Default | Why |
+| --- | --- | --- |
+| Tools the assistant sees | One tool per operation an agent may call (`records_create`…), not MCP's describe-then-run pair | Cheaper models call named tools with schemas far more reliably. Revisit when there are more than a few dozen operations. |
+| Who the assistant is in the ledger | An agent on behalf of the signed-in person, named after the model (`deepseek-chat`, `Claude`), with the conversation as its session | You can tell which model did what, and every ledger line opens its conversation. Same proposals as outside agents. |
+| Asking | `assistant.ask` is an operation (people only), so each ask is a ledger line; the answer runs in the background and streams to the panel | Human = agent, and a long model run should not hold a request or a transaction open. |
+| Ask bar vs panel | The ask bar always starts a new conversation; the panel's box continues the shown one; `/` focuses the ask bar | Matches round 3 ("both"); routing to design pages comes with 004c. |
+| Conversations | Private to the person who started them; agents acting for that person can read them | Personal by default; sharing can come with lab memory (005). |
+| Streaming | Step by step (each reply and each operation as it is saved), not word by word | Much simpler across providers; token streaming can come later. |
+| Limits | 16 model turns per message, 180 s per model call | Bounds cost and stuck runs until there is a stop button. |
+| Models | `openrouter` (default `deepseek/deepseek-chat`), `anthropic` (default `claude-opus-5-5`), `openai-compatible` (e.g. Ollama) | Your key first; local models for free testing. |
+| New read operation | `records.kinds` lists kinds with their attribute schemas | The assistant (and any agent) needs it before creating records. |

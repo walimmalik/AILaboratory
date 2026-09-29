@@ -18,6 +18,8 @@ pnpm dev
 
 The API reads `.env` from the repo root. `bootstrap` creates your org, lab and user, and prints your web sign-in (email and a generated password, unless you set `BOOTSTRAP_PASSWORD`) and an API token once; keep them private. If you bootstrapped before web sign-in existed, or forgot the password, run `pnpm --filter @ailab/api password --email you@example.org`.
 
+For the assistant panel, pick a model in `.env` (`AGENT_PROVIDER`, its key and `AGENT_MODEL`; OpenRouter, Anthropic or any OpenAI-compatible server) and restart. See [docs/architecture/assistant.md](docs/architecture/assistant.md).
+
 The web app is at http://localhost:5173 and the API at http://localhost:3001. To run everything in containers instead: `docker compose up --build` (web on http://localhost:8080).
 
 Contributor and agent rules: [AGENTS.md](AGENTS.md).

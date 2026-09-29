@@ -1,5 +1,6 @@
 import type {
   Actor,
+  AssistantMessage,
   OperationErrorBody,
   RecordEnvelope,
   RecordOperation,
@@ -207,4 +208,58 @@ export const activity = pgTable(
     durationMs: integer('duration_ms').notNull(),
   },
   (t) => [index('activity_lab_at_idx').on(t.labId, t.at)],
+);
+
+/** Conversations with the in-app assistant (plan 004b). Each belongs to the person who started it. */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    title: text('title').notNull(),
+    status: text('status').$type<'idle' | 'running' | 'failed'>().notNull(),
+    agentName: text('agent_name').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('conversations_user_updated_idx').on(t.userId, t.updatedAt),
+    check('conversations_status_check', sql`${t.status} in ('idle', 'running', 'failed')`),
+  ],
+);
+
+/**
+ * Messages in a conversation, in order. `body` is the provider-neutral message the API returns;
+ * `providerRaw` keeps the model's own reply (e.g. Claude's thinking blocks) so it can be sent back unchanged.
+ */
+export const conversationMessages = pgTable(
+  'conversation_messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    role: text('role').$type<'user' | 'assistant' | 'tool'>().notNull(),
+    body: jsonb('body').$type<AssistantMessage>().notNull(),
+    provider: text('provider'),
+    model: text('model'),
+    providerRaw: jsonb('provider_raw'),
+  },
+  (t) => [
+    unique('conversation_messages_seq_unique').on(t.conversationId, t.seq),
+    check('conversation_messages_role_check', sql`${t.role} in ('user', 'assistant', 'tool')`),
+  ],
 );

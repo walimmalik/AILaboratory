@@ -1,6 +1,6 @@
 # 0005: In-app agent on the Claude Agent SDK over our MCP server
 
-- Status: accepted
+- Status: amended by [0020](0020-own-agent-loop.md): the in-app assistant runs our own tool loop with model adapters; the MCP server stays the contract for outside agents
 - Date: 2026-09-29
 - Plan: 000 (decision D5)
 
