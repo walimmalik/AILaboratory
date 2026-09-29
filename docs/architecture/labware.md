@@ -42,6 +42,8 @@ Everything is optional except `family`, so an agent can draft what it knows; the
 
 Library › Labware lists the types with a family filter (plates, tip racks, reservoirs, tubes…) and their format, manufacturer, catalog number and maximum volume. Vendors have their own page.
 
+The Labware page imports an Opentrons definition file (Import Opentrons JSON). A labware type's page offers its Opentrons definition as a file to download, or says what is missing to write it; the assistant's export shows as the same file.
+
 A labware type's page draws it to scale: from above, with its wells named, and one well cut through its centre, filled to the maximum volume when the bottom is flat. What the record doesn't give is drawn dashed and listed under the drawing (the SBS size, the standard spacing, a well size), so a draft still has a picture without the picture claiming values nobody entered.
 
 ## Seed

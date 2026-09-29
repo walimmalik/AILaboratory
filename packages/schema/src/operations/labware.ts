@@ -36,10 +36,15 @@ export const labwareImportOpentrons = defineContract({
 export const labwareExportOpentrons = defineContract({
   id: 'labware.export_opentrons',
   summary:
-    'Write a labware type as an Opentrons labware definition (schema version 2), for simulation or loading as custom labware',
+    "Write a labware type as an Opentrons labware definition (schema version 2), for simulation or loading as custom labware. The app offers the definition to the person as a file to download; don't copy it into your reply",
   effect: 'read',
   input: z.strictObject({ id: LabwareTypeId }),
   output: z.object({ definition: OpentronsDefinition }),
+  file: ({ definition }) => ({
+    name: `${definition.parameters.loadName}.json`,
+    mediaType: 'application/json',
+    text: `${JSON.stringify(definition, null, 2)}\n`,
+  }),
 });
 
 export const labwareUseStandardPositions = defineContract({

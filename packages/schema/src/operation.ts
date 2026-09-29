@@ -21,6 +21,18 @@ export interface OperationContract<
   effect: OperationEffect;
   input: I;
   output: O;
+  /**
+   * When the output is a file a person saves (a definition, a worklist): its name and text. Clients
+   * offer it as a download instead of showing it, and agents don't repeat it in their replies.
+   */
+  file?: (output: z.output<O>) => OutputFile;
+}
+
+export interface OutputFile {
+  name: string;
+  /** e.g. application/json, text/csv. */
+  mediaType: string;
+  text: string;
 }
 
 export function defineContract<I extends z.ZodType, O extends z.ZodType>(

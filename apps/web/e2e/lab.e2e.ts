@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 
 const api = 'http://localhost:3001';
@@ -294,4 +295,31 @@ test('the wiki is readable in the app, with links between its pages', async ({ p
   await page.getByRole('article').getByRole('link', { name: 'Roadmap and status' }).click();
   await expect(page).toHaveURL(/\/wiki\/roadmap$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Roadmap/);
+});
+
+test('an Opentrons definition imports from a file and exports as one, on the page and in the assistant', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto('/labware');
+  const definition = fileURLToPath(
+    new URL('../../../seed/opentrons/nest_12_reservoir_15ml.json', import.meta.url),
+  );
+  await page.getByLabel('Import Opentrons JSON').setInputFiles(definition);
+  await expect(page).toHaveURL(/\/records\/lwt_/);
+  const id = page.url().split('/').at(-1) ?? '';
+
+  const block = page.getByRole('region', { name: 'Opentrons' });
+  await expect(block.getByText('nest_12_reservoir_15ml.json')).toBeVisible();
+  const saving = page.waitForEvent('download');
+  await block.getByRole('button', { name: 'Download' }).click();
+  expect((await saving).suggestedFilename()).toBe('nest_12_reservoir_15ml.json');
+
+  // The assistant's export shows as the same file, not as text in its reply.
+  const ask = page.getByLabel('Ask the assistant');
+  await ask.fill(`/op labware.export_opentrons ${JSON.stringify({ id })}`);
+  await ask.press('Enter');
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await expect(panel.getByText('nest_12_reservoir_15ml.json')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Download' })).toBeVisible();
 });

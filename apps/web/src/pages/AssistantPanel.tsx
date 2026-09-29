@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
+import { fileOf } from '../lib/files.ts';
 import { describeToolStep, formatWhen, type ToolLine, waitingForYou } from '../lib/format.ts';
 import { RichText } from '../lib/RichText.tsx';
 import {
@@ -11,6 +12,7 @@ import {
   conversationsQuery,
   reviewQuery,
 } from '../queries.ts';
+import { FileCard } from './FileCard.tsx';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
 export function AssistantPanel() {
@@ -229,6 +231,11 @@ function Step({
   const line: ToolLine = result
     ? describeToolStep(result)
     : { text: `${call.operationId}…`, tone: 'muted' };
+  // A done step's result is the operation's {status, output}.
+  const file =
+    result?.outcome === 'done'
+      ? fileOf(call.operationId, (result.result as { output?: unknown } | undefined)?.output)
+      : undefined;
   return (
     <li className={`step ${line.tone}`}>
       <span aria-hidden="true">{result ? '›' : '·'}</span> <span>{line.text}</span>
@@ -246,6 +253,7 @@ function Step({
           <Link to="/review">review</Link>
         </>
       )}
+      {file && <FileCard file={file} />}
       <details className="tech">
         <summary>technical details</summary>
         <pre className="json">

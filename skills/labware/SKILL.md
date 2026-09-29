@@ -21,7 +21,7 @@ A labware type is a record of kind `labware_type` (readable names like `LWT-0001
 ## Opentrons
 
 - `labware.import_opentrons` takes an Opentrons labware definition (schema version 2, the JSON in Opentrons shared-data) and drafts a type with every value marked imported. It finds or creates the vendor. Trash, adapters and lids are refused.
-- `labware.export_opentrons` returns a definition in the `custom_beta` namespace, for Opentrons' simulator or as custom labware. If the type is incomplete it refuses with `not_ready` and names what is missing.
+- `labware.export_opentrons` returns a definition in the `custom_beta` namespace, for Opentrons' simulator or as custom labware. If the type is incomplete it refuses with `not_ready` and names what is missing. In the app the person gets the definition as a file to download, so don't paste it into your reply. People can also import a definition file from the Labware page.
 
 ## Standard well positions
 
