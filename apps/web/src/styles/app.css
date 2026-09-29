@@ -325,6 +325,10 @@ a {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.quick-fix {
+  margin-top: 6px;
+}
+
 .field {
   border: 1px solid var(--rule);
   background: var(--field);

@@ -41,3 +41,20 @@ export const labwareExportOpentrons = defineContract({
   input: z.strictObject({ id: LabwareTypeId }),
   output: z.object({ definition: OpentronsDefinition }),
 });
+
+export const labwareUseStandardPositions = defineContract({
+  id: 'labware.use_standard_positions',
+  summary:
+    "Set a labware type's well spacing and A1 offset to the ANSI/SLAS 4-2004 standard for its grid (96, 384 or 1536 wells, or a 12- or 24-trough reservoir); refused for other grids, labware that isn't SBS, or a pitch that differs from the standard",
+  effect: 'write',
+  input: z.strictObject({
+    id: LabwareTypeId,
+    expectedVersion: z
+      .number()
+      .int()
+      .positive()
+      .describe('The version you last read; the change is refused if the record has moved on'),
+    reason: z.string().min(1).optional().describe('Why the change was made; kept in history'),
+  }),
+  output: RecordEnvelope,
+});

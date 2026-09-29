@@ -4,14 +4,15 @@ import { contextFor } from './auth.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { labwareKinds } from './labware/kinds.ts';
-import { loadSeedLabware } from './labware/seed.ts';
+import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { KindRegistry } from './records/kinds.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review. Runs as
  * the agent "Seed loader" on behalf of a user, so every value shows where it came from. Safe to run
- * again: types the lab already has are left alone.
+ * again: types the lab already has are left alone, except that drafts it made get well positions the
+ * seed has gained since, while nobody else has changed their wells.
  *
  *   pnpm --filter @ailab/api seed
  */
@@ -62,11 +63,13 @@ for (const kind of labwareKinds) kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus());
 
 const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');
-const report = await loadSeedLabware(registry, ctx, yaml);
+const definitions = await readDefinitions(new URL('../../../seed/opentrons/', import.meta.url));
+const report = await loadSeedLabware(registry, ctx, yaml, definitions);
 console.log(
-  `Labware types: ${report.created.length} drafted, ${report.existing.length} already there.`,
+  `Labware types: ${report.created.length} drafted, ${report.updated.length} updated, ${report.existing.length} already there.`,
 );
 for (const line of report.created) console.log(`  + ${line}`);
+for (const line of report.updated) console.log(`  ~ ${line} (well positions)`);
 for (const skip of report.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

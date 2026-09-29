@@ -16,6 +16,7 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | `inventory.yaml` | Lots, and containers with what is in them and where they are | 009 / 010 |
 | `sops/own/` | Short SOPs written for this lab, with their variables in front matter | 011 |
 | `assays.yaml` | Assay templates that tie SOPs, labware, reagents and instruments together | 012 onward |
+| `opentrons/` | Opentrons labware definitions the labware entries name, so well positions load offline | 007 |
 | `worklists/` | Mock worklist and instrument report examples, one per instrument, until real exports exist | 016 (golden-file tests) |
 
 Public SOPs, papers and vendor protocol PDFs for the SOP library are gathered separately (the SOP and literature test set) and kept in the project files, not here.

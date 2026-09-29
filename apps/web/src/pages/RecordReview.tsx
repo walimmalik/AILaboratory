@@ -2,6 +2,7 @@ import {
   type Actor,
   type CheckResult,
   type FieldEvidence,
+  labwareUseStandardPositions,
   type Me,
   type Readiness,
   type ReadinessSection,
@@ -138,7 +139,12 @@ function ReadinessBlock({
           </p>
         )}
         {readiness.checks.length > 0 && (
-          <Checks checks={readiness.checks} titles={titles} onFix={onFix} />
+          <Checks
+            checks={readiness.checks}
+            titles={titles}
+            onFix={onFix}
+            target={{ id: record.id, version: readiness.version }}
+          />
         )}
         {draft &&
           (sectioned && !readiness.ready ? (
@@ -181,10 +187,12 @@ function Checks({
   checks,
   titles,
   onFix,
+  target,
 }: {
   checks: CheckResult[];
   titles: Record<string, string>;
   onFix: (section: string) => void;
+  target: Target;
 }) {
   const failing = [...checks].filter((c) => !c.passed).sort((a, b) => rank(a) - rank(b));
   const passing = checks.filter((c) => c.passed);
@@ -193,7 +201,7 @@ function Checks({
       <table className="checks">
         <tbody>
           {rows.map((check) => (
-            <CheckRow key={check.id} check={check} titles={titles} onFix={onFix} />
+            <CheckRow key={check.id} check={check} titles={titles} onFix={onFix} target={target} />
           ))}
         </tbody>
       </table>
@@ -214,14 +222,25 @@ function Checks({
   );
 }
 
+/** The record a quick fix changes, at the version the checks were worked out for. */
+interface Target {
+  id: string;
+  version: number;
+}
+
+/** Operations a check may offer as a one-step fix; each takes the record and its version. */
+const quickFixes = { 'labware.use_standard_positions': labwareUseStandardPositions } as const;
+
 function CheckRow({
   check,
   titles,
   onFix,
+  target,
 }: {
   check: CheckResult;
   titles: Record<string, string>;
   onFix: (section: string) => void;
+  target: Target;
 }) {
   const mark = check.passed ? '✓' : check.severity === 'blocker' ? '✗' : '!';
   const tone = check.passed ? 'ok-ink' : check.severity === 'blocker' ? 'crit-ink' : 'warn-ink';
@@ -248,9 +267,34 @@ function CheckRow({
             )}
           </div>
         )}
+        {!check.passed && check.quickFix && <QuickFix fix={check.quickFix} target={target} />}
       </td>
       <td className="muted source">{check.source}</td>
     </tr>
+  );
+}
+
+/** A one-step fix the check offers, run as its operation; the record then reloads. */
+function QuickFix({ fix, target }: { fix: NonNullable<CheckResult['quickFix']>; target: Target }) {
+  const queryClient = useQueryClient();
+  const contract = quickFixes[fix.operation as keyof typeof quickFixes];
+  const run = useMutation({
+    mutationFn: () => api.run(contract, { id: target.id, expectedVersion: target.version }),
+    onSuccess: () =>
+      Promise.all(
+        [['record', target.id], ['review'], ['records']].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
+  });
+  if (!contract) return null;
+  return (
+    <div className="quick-fix">
+      <button type="button" className="btn" disabled={run.isPending} onClick={() => run.mutate()}>
+        {fix.label}
+      </button>
+      {run.error && <span className="error-text"> {run.error.message}</span>}
+    </div>
   );
 }
 

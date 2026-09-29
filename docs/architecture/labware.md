@@ -7,11 +7,11 @@ Labware types: the kind of every plate, reservoir, tube, rack, tip rack and lid 
 | Piece | Where |
 | --- | --- |
 | Attribute schema (families, footprint, well layout, volumes, instrument names), Opentrons definition schema | `packages/schema/src/labware.ts` |
-| Operations: `labware.wells`, `labware.import_opentrons`, `labware.export_opentrons` | `packages/schema/src/operations/labware.ts`, `apps/api/src/labware/operations.ts` |
+| Operations: `labware.wells`, `labware.import_opentrons`, `labware.export_opentrons`, `labware.use_standard_positions` | `packages/schema/src/operations/labware.ts`, `apps/api/src/labware/operations.ts` |
 | Kinds `labware_type` and `vendor`, with sections and readiness checks | `apps/api/src/labware/kinds.ts` |
 | Well names, computed wells, SBS rules, liquid height | `packages/domain/src/labware.ts` |
 | Opentrons import and export | `packages/domain/src/opentrons.ts` |
-| Seed loader for `seed/labware.yaml` | `apps/api/src/labware/seed.ts`, `apps/api/src/seed.ts` |
+| Seed loader for `seed/labware.yaml` and the Opentrons definitions in `seed/opentrons/` | `apps/api/src/labware/seed.ts`, `apps/api/src/seed.ts` |
 | Skill | `skills/labware/SKILL.md` |
 
 ## Model
@@ -47,3 +47,9 @@ A labware type's page draws it to scale: from above, with its wells named, and o
 ## Seed
 
 `pnpm --filter @ailab/api seed` loads the seed lab's labware as drafts, running as the agent "Seed loader" for the only user (or `--user`). It is safe to run again: types whose label already exists are left alone. Entries that aren't labware (the Mantis chip) are skipped with the reason.
+
+The seed rarely says where wells sit. When an entry's Opentrons load name is verified and `seed/opentrons/` holds that definition (Apache-2.0, copied from Opentrons shared-data), the loader takes the pitch and A1 offset from it, and the well size too unless the seed's own is verified; the wells cite the definition's URL as datasheet evidence. A rerun gives drafts it made earlier the newer wells, as long as the draft's wells still cite the seed (nobody has changed them).
+
+## Standard positions
+
+`labware.use_standard_positions` sets the pitch and A1 offset of an SBS labware type to ANSI/SLAS 4-2004: 96 wells 9 mm apart with A1 at 14.38 mm from the left and 11.24 mm from the back, 384 wells 4.5 mm with A1 at 12.13 and 8.99 mm, 1536 wells 2.25 mm with A1 at 11.005 and 7.865 mm, and 12- or 24-trough reservoirs on the plate's columns, centred front to back (`sbsPositions` in `@ailab/domain`). The wells get `calculated` evidence citing the standard, so the note says to check them against the datasheet drawing. It refuses grids the standard doesn't place, labware not marked SBS, and a pitch that differs from the standard. The "Well positions are known" check offers it as a quick fix while it fails and the fix fits, and the review page shows it as a button.

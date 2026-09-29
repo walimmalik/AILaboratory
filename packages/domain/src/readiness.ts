@@ -42,10 +42,15 @@ export function runChecks(
 ): CheckResult[] {
   return checks.flatMap((check) => {
     let outcome: true | string;
+    let quickFix: CheckResult['quickFix'];
     try {
       const applies = (check as unknown as KindCheck).applies;
       if (applies && !applies(attributes)) return [];
       outcome = (check as unknown as KindCheck).test(attributes);
+      const offered = (check as unknown as KindCheck).quickFix;
+      if (outcome !== true && offered && (!offered.applies || offered.applies(attributes))) {
+        quickFix = { operation: offered.operation, label: offered.label };
+      }
     } catch (error) {
       outcome = error instanceof Error ? error.message : String(error);
     }
@@ -59,6 +64,7 @@ export function runChecks(
         passed: outcome === true,
         ...(outcome === true ? {} : { message: outcome }),
         ...(check.fix ? { fix: check.fix } : {}),
+        ...(quickFix ? { quickFix } : {}),
       },
     ];
   });

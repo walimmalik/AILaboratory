@@ -1,8 +1,12 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { fromOpentrons, sameValue } from '@ailab/domain';
 import {
   type EvidenceInput,
   LabwareFamily,
   LabwareTypeAttributes,
+  OpentronsDefinition,
   type RecordEnvelope,
+  type WellLayout,
 } from '@ailab/schema';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -13,7 +17,61 @@ import type { RecordContext } from '../records/service.ts';
  * Turns the reviewed seed file `seed/labware.yaml` (plan 006) into labware type drafts (plan 007).
  * Values the seed marks verified carry their source URL as datasheet evidence; estimated values are
  * marked assumed; unknown values are left out, so readiness lists them as missing.
+ *
+ * The seed rarely gives where wells sit. When an entry names a verified Opentrons load name and
+ * `seed/opentrons/` holds that definition, the pitch and A1 offset (and the well size, when the seed
+ * has none) come from the definition, cited by its URL.
  */
+
+/** Opentrons definitions by load name. */
+export type Definitions = Record<string, OpentronsDefinition>;
+
+/** Reads every Opentrons definition in a folder (`seed/opentrons/`). */
+export async function readDefinitions(folder: URL): Promise<Definitions> {
+  const definitions: Definitions = {};
+  for (const file of (await readdir(folder)).filter((f) => f.endsWith('.json'))) {
+    const definition = OpentronsDefinition.parse(
+      JSON.parse(await readFile(new URL(file, folder), 'utf8')),
+    );
+    definitions[definition.parameters.loadName] = definition;
+  }
+  return definitions;
+}
+
+const definitionUrl = (d: OpentronsDefinition) =>
+  `https://github.com/Opentrons/opentrons/blob/edge/shared-data/labware/definitions/2/${d.parameters.loadName}/${d.version}.json`;
+
+/**
+ * The seed's grid with the pitch and A1 offset from an Opentrons definition of the same labware, or
+ * undefined when the definition doesn't describe the same grid. The well size stays the seed's when
+ * it is verified (`keepWell`), otherwise the definition's.
+ */
+function placedBy(
+  definition: OpentronsDefinition,
+  family: LabwareFamily,
+  grid: WellLayout,
+  keepWell: boolean,
+) {
+  if (grid.layout !== 'grid' || grid.a1) return undefined;
+  const imported = fromOpentrons(definition).attributes;
+  const from = imported.wells;
+  if (
+    imported.family !== family ||
+    from?.layout !== 'grid' ||
+    from.rows !== grid.rows ||
+    from.columns !== grid.columns ||
+    !from.a1
+  ) {
+    return undefined;
+  }
+  const well = keepWell && grid.well ? grid.well : from.well;
+  return {
+    ...grid,
+    ...(from.pitch ? { pitch: from.pitch } : {}),
+    a1: from.a1,
+    ...(well ? { well } : {}),
+  };
+}
 
 export interface SeedLabware {
   key: string;
@@ -119,7 +177,7 @@ function wellGeometry(g: NonNullable<Entry['well_geometry']>) {
   return present({ top: top || undefined, base, depth: g.depth, bottom });
 }
 
-function convert(entry: Entry): SeedLabware | SeedSkip {
+function convert(entry: Entry, definitions: Definitions): SeedLabware | SeedSkip {
   const family = LabwareFamily.safeParse(entry.format);
   if (!family.success) {
     return { key: entry.key, reason: `"${entry.format}" is not a labware family` };
@@ -200,10 +258,27 @@ function convert(entry: Entry): SeedLabware | SeedSkip {
   };
   const reference = entry.source_urls?.[0];
   const seedNote = `Seed data (seed/labware.yaml, ${entry.key})`;
+  const loadName = entry.opentrons_load_name;
+  const definition =
+    loadName && status('opentrons_load_name') === 'verified' ? definitions[loadName] : undefined;
+  const keepWell = !!geometryKnown && status('well_geometry') === 'verified';
+  const placed =
+    definition && parsed.data.wells
+      ? placedBy(definition, parsed.data.family, parsed.data.wells, keepWell)
+      : undefined;
+  if (placed) parsed.data.wells = placed;
   const evidence: Record<string, EvidenceInput> = {};
   for (const field of Object.keys(parsed.data)) {
     const backing = statusField[field];
-    if (field === 'family' || field === 'notes' || !backing) {
+    if (field === 'wells' && placed && definition) {
+      evidence[field] = {
+        source: 'datasheet',
+        reference: definitionUrl(definition),
+        note: `${seedNote}: pitch and A1 offset from the Opentrons labware definition; well size from ${
+          keepWell ? 'the seed source' : 'the definition'
+        }`,
+      };
+    } else if (field === 'family' || field === 'notes' || !backing) {
       evidence[field] = { source: 'imported', reference: 'seed/labware.yaml', note: seedNote };
     } else if (status(backing) === 'estimated') {
       evidence[field] = { source: 'assumed', note: `${seedNote}: estimated, see the notes` };
@@ -225,7 +300,10 @@ function convert(entry: Entry): SeedLabware | SeedSkip {
 }
 
 /** Reads the seed file: the types to create, and entries it can't use with the reason. */
-export function readSeedLabware(yamlText: string): { types: SeedLabware[]; skipped: SeedSkip[] } {
+export function readSeedLabware(
+  yamlText: string,
+  definitions: Definitions = {},
+): { types: SeedLabware[]; skipped: SeedSkip[] } {
   const file = File.parse(parse(yamlText));
   const types: SeedLabware[] = [];
   const skipped: SeedSkip[] = [];
@@ -236,7 +314,7 @@ export function readSeedLabware(yamlText: string): { types: SeedLabware[]; skipp
       skipped.push({ key: String(key ?? '?'), reason: z.prettifyError(entry.error) });
       continue;
     }
-    const converted = convert(entry.data);
+    const converted = convert(entry.data, definitions);
     if ('reason' in converted) skipped.push(converted);
     else types.push(converted);
   }
@@ -246,19 +324,24 @@ export function readSeedLabware(yamlText: string): { types: SeedLabware[]; skipp
 export interface SeedReport {
   created: string[];
   existing: string[];
+  /** Drafts the loader made earlier whose well positions it has filled in since. */
+  updated: string[];
   skipped: SeedSkip[];
 }
 
 /**
  * Creates a draft for every seed labware type the lab doesn't have yet (matched by label), through
- * the same operations people and agents use. Vendors are matched by name or created as drafts.
+ * the same operations people and agents use. Vendors are matched by name or created as drafts. A draft
+ * it made earlier gets newer seed wells only while nobody else has changed them (their evidence still
+ * cites the seed).
  */
 export async function loadSeedLabware(
   registry: OperationRegistry,
   ctx: RecordContext,
   yamlText: string,
+  definitions: Definitions = {},
 ): Promise<SeedReport> {
-  const { types, skipped } = readSeedLabware(yamlText);
+  const { types, skipped } = readSeedLabware(yamlText, definitions);
   const run = async <T>(operation: string, input: unknown): Promise<T> => {
     const result = await registry.execute(ctx, operation, input);
     if (result.status !== 'done') throw new Error(`${operation} was ${result.status}, not done`);
@@ -266,13 +349,32 @@ export async function loadSeedLabware(
   };
   const list = (kind: string) =>
     run<{ records: RecordEnvelope[] }>('records.list', { kind, limit: 200 }).then((r) => r.records);
-  const existingLabels = new Set((await list('labware_type')).map((r) => r.label));
+  const existing = new Map((await list('labware_type')).map((r) => [r.label, r]));
   const vendors = new Map((await list('vendor')).map((v) => [v.label.toLowerCase(), v.id]));
   const reason = 'Seed lab (plan 006), loaded by plan 007';
-  const report: SeedReport = { created: [], existing: [], skipped };
+  const report: SeedReport = { created: [], existing: [], updated: [], skipped };
   for (const type of types) {
-    if (existingLabels.has(type.label)) {
-      report.existing.push(type.key);
+    const earlier = existing.get(type.label);
+    if (earlier) {
+      const wells = type.attributes.wells;
+      const seedOwned = earlier.evidence.wells?.note?.startsWith('Seed data') ?? false;
+      if (
+        earlier.status === 'draft' &&
+        seedOwned &&
+        wells &&
+        !sameValue(earlier.attributes.wells, wells)
+      ) {
+        await run('records.update', {
+          id: earlier.id,
+          expectedVersion: earlier.version,
+          attributes: { ...earlier.attributes, wells },
+          evidence: { wells: type.evidence.wells },
+          reason: 'Well positions from the seed (Opentrons definition)',
+        });
+        report.updated.push(`${earlier.name} ${type.key}`);
+      } else {
+        report.existing.push(type.key);
+      }
       continue;
     }
     let vendorId = vendors.get(type.manufacturer.toLowerCase());
