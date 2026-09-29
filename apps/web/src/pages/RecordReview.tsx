@@ -68,6 +68,9 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
   });
   const draft = record.status === 'draft';
   const toReview = readiness.sections.filter((s) => s.state === 'needs_review').length;
+  // Kinds with sections activate with their last section's confirm (plan 004d); only kinds without
+  // sections, or a draft left ready, need the record-level Confirm.
+  const sectioned = readiness.sections.length > 0;
   const state = !draft
     ? readiness.ready
       ? { text: '✓ confirmed', tone: 'ok-ink' }
@@ -100,25 +103,30 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
           </p>
         )}
         {readiness.checks.length > 0 && <Checks checks={readiness.checks} />}
-        {draft && (
-          <div className="actions">
-            <button
-              type="button"
-              className="btn primary"
-              disabled={!readiness.ready || confirm.isPending}
-              onClick={() => confirm.mutate()}
-            >
-              Confirm {record.name}
-            </button>
-            <span className="muted">
-              {readiness.ready
-                ? 'Everything is confirmed. Confirm it to make it active for the lab.'
-                : toReview > 0
-                  ? `Confirm ${toReview === 1 ? 'the remaining section' : `the ${toReview} remaining sections`} first.`
+        {draft &&
+          (sectioned && !readiness.ready ? (
+            <p className="muted">
+              {toReview > 0
+                ? `Confirm ${toReview === 1 ? 'the last section' : `the ${toReview} sections`} below. Confirming the last one makes ${record.name} active.`
+                : 'Fix what blocks it first.'}
+            </p>
+          ) : (
+            <div className="actions">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!readiness.ready || confirm.isPending}
+                onClick={() => confirm.mutate()}
+              >
+                Confirm {record.name}
+              </button>
+              <span className="muted">
+                {readiness.ready
+                  ? 'Everything is confirmed. Confirm it to make it active for the lab.'
                   : 'Fix what blocks it first.'}
-            </span>
-          </div>
-        )}
+              </span>
+            </div>
+          ))}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
         <details className="tech">
           <summary>technical details</summary>

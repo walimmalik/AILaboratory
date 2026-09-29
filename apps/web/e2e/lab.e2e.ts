@@ -167,6 +167,8 @@ test('an agent drafts a record, a person reviews it section by section, and the 
     volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
   ).toBeVisible();
   await expect(readiness.getByText('Appearance is not confirmed')).toBeVisible();
+  // Kinds with sections have no separate final Confirm: the last section's confirm activates.
+  await expect(readiness.getByRole('button', { name: `Confirm ${record.name}` })).toHaveCount(0);
 
   await volume.getByRole('button', { name: 'Confirm volume' }).click();
   await expect(volume.getByText(/confirmed by you/)).toBeVisible();
