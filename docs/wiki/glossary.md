@@ -59,4 +59,5 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Work unit** | What one workflow graph describes: one assay plate (or tube) and everything that happens to it; a run repeats it (plan 018) |
 | **Workcell** | An arrangement of instruments and pods served by a transport robot (plan 008d) |
 | **Workflow** | The steps of one or more SOPs and transfer plans in order, with labware paths, waits and timing windows (plan 018) |
+| **Workflow template** | A reusable workflow for an assay or routine, written against roles and capabilities; applied to a new experiment's documents (plan 018) |
 | **Worklist** | A file an instrument's own software runs (Echo CSV, Opentrons protocol) |
