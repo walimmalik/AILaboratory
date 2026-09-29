@@ -1,0 +1,29 @@
+# SOPs and the library
+
+Two records, two plans: the **library document** is the source as published (011), and the **digital SOP** is the structured, computable procedure built from it (012). Both locked, not yet built.
+
+## SOP and literature library (plan 011)
+
+[Plan 011](../plans/011-sop-library.md). The lab's reading shelf, searchable by people and agents.
+
+- **Documents**: SOPs, vendor manuals, papers, robot protocol code and web pages, one record per source; a new revision is a new version. Each carries its license and a share policy. All Rights Reserved and non-commercial items are lab-private and never go into `seed/` or exports.
+- **File store**: content-addressed (bytes named by sha256) on a Docker volume, behind an interface that can move to S3-compatible storage on the cluster. SDS and CoA files use it too.
+- **Parsing**: Docling in the science service keeps headings, page numbers, reading order and tables, with OCR for scans. It runs locally, so private manuals never leave the machine.
+- **Search**: hybrid Postgres full text plus pgvector over passages; every hit points to its page and heading. Embeddings are local by default; an OpenAI-compatible provider is optional (and sends text off the machine). One model per lab; switching re-embeds.
+- **Mining**: an agent proposes what each passage mentions (products, labware, instruments, cell lines, assay type) and the parameters it states, linked to registry records. A person confirms in bulk. Record pages gain "Mentioned in".
+- **Test set**: `docs/sop-library` has 12 openly licensed SOPs, 7 papers and 4 code items, deliberately including messy SOPs (OpenWetWare), a 73-step ELISA, robot code, and the iGEM InterLab protocol in four forms as ground truth for 012. `seed/sops/own/` has 11 short lab SOPs with variables.
+
+## Digital SOPs (plan 012)
+
+[Plan 012](../plans/012-digital-sops.md). An SOP as a structured, versioned design document.
+
+- **Sections**: overview, materials, solutions, variables, procedure, layout requirements, analysis, timing rules. Our own schema; LabOP is an import path and a benchmark reference.
+- **Steps** are typed actions from a fixed vocabulary aligned with instrument capabilities (add, transfer, serial dilute, mix, wash, incubate, shake, spin, seal, peel, read, image, wait, make solution) plus "manual". Steps group and repeat, keep the source wording, and state inputs and outputs so workflows (018) can chain SOPs.
+- **Roles, not hard links**: "coating plate: 96-well high-binding, default Thermo 442404". Roles bind to a labware type, lot or instrument when an experiment is planned; until then the default shows as estimated.
+- **Variables**: inputs per run (samples, replicates), defaults, values read from records (a plate's dead volume on the pipetting instrument, a lot's CoA concentration) and computed values in a small expression language with units and exact decimals: `n_samples * replicates * well_volume + dead_volume`.
+- **Timing windows** are typed constraints ("read within 30 min of stop") with a source, and bind the scheduler.
+- **Variants**: scale and format are variables; a structural change is a derived SOP that shows its diff to the parent. No nesting; composition belongs to templates and workflows.
+- **Digitizer**: an agent turns a library document into a draft, citing the passage behind every step and value, and records open questions where the source is unclear. A reviewer model then checks it (two rounds by default), fixes only what the source settles as tracked changes, and asks where it is ambiguous. A person confirms section by section.
+- **Benchmark**: per-section scores on the test set, run with any model pair, before and after review, reported in PR descriptions.
+- A confirmed SOP version is immutable. Experiments pin the version they use; a new version flags experiments still designing.
+- Out: a printable and tablet view. Robot code is generated from transfer plans (016), not from SOPs.
