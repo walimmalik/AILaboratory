@@ -4,16 +4,18 @@ import { contextFor } from './auth.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
+import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { KindRegistry } from './records/kinds.ts';
 
 /**
- * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review. Runs as
- * the agent "Seed loader" on behalf of a user, so every value shows where it came from. Safe to run
- * again: types the lab already has are left alone, except that types it made get well positions the
- * seed has gained since, while nobody else has changed their wells (confirmed types as a proposal).
+ * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
+ * types, then instrument and equipment kinds. Runs as the agent "Seed loader" on behalf of a user,
+ * so every value shows where it came from. Safe to run again: records the lab already has are left
+ * alone, except that labware types it made get well positions the seed has gained since, while
+ * nobody else has changed their wells (confirmed types as a proposal).
  *
  *   pnpm --filter @ailab/api seed
  */
@@ -74,5 +76,20 @@ for (const line of report.updated) console.log(`  ~ ${line} (well positions)`);
 for (const line of report.proposed)
   console.log(`  ? ${line} (well positions, confirmed type: approve on Review)`);
 for (const skip of report.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
+
+const seedFile = (name: string) =>
+  readFile(new URL(`../../../seed/${name}`, import.meta.url), 'utf8');
+const instruments = await loadSeedInstruments(
+  registry,
+  ctx,
+  readSeedInstruments(
+    await seedFile('instrument-library.yaml'),
+    await seedFile('instruments.yaml'),
+  ),
+);
+console.log(
+  `Instrument and equipment kinds: ${instruments.created.length} drafted, ${instruments.existing.length} already there.`,
+);
+for (const line of instruments.created) console.log(`  + ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

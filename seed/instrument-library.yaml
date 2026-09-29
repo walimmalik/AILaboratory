@@ -1,0 +1,738 @@
+# Instrument and equipment kinds in the shape the instrument library stores them (plan 008a, ADR 0025).
+# The research behind every value, with sources and verified/estimated/unknown labels, is in
+# instruments.yaml; `research` names the entry there. The loader cites that entry's first source URL
+# as datasheet evidence for each attribute, except the attributes listed under `assumed`, which load
+# as assumed (an estimate, or a layout choice nobody has checked against the instrument yet).
+# Unknown values are left out, so readiness lists them.
+#
+# Fit tags pair equipment with mounts: equipment whose `fits` names a tag a mount `accepts` can go on it.
+
+instrument_kinds:
+
+- key: hamilton-star
+  research: hamilton-star
+  label: Hamilton Microlab STAR
+  manufacturer: Hamilton
+  assumed: [mounts]
+  attributes:
+    model: Microlab STAR
+    variants: [Microlab STARlet, Microlab STAR, Microlab STARplus]
+    category: liquid_handler
+    performedBy: machine
+    footprint: {width: {value: "1664", unit: mm}, depth: {value: "781", unit: mm}, height: {value: "903", unit: mm}}
+    weight: {value: "145", unit: kg}
+    mounts:
+      - {id: tracks, label: deck tracks, layout: {layout: rail, tracks: 54, pitch: {value: "22.5", unit: mm}}, accepts: [hamilton_track], changedBy: operator}
+      - {id: channels, label: pipetting arm, layout: {layout: fixed}, accepts: [star_channels], changedBy: factory}
+      - {id: head, label: multi-probe head mount, layout: {layout: fixed}, accepts: [star_head], changedBy: service}
+      - {id: gripper, label: gripper, layout: {layout: fixed}, accepts: [star_gripper], changedBy: service}
+      - {id: arm, label: plate handling arm, layout: {layout: fixed}, accepts: [star_iswap], changedBy: service}
+    controlInterfaces: [VENUS, PyLabRobot STARBackend]
+    notes: "Tracks and pitch are for the STAR (54 tracks); a STARlet has 30. Carriers take a run of tracks and carry the plate positions."
+
+- key: hamilton-vantage
+  research: hamilton-vantage
+  label: Hamilton Microlab VANTAGE
+  manufacturer: Hamilton
+  assumed: [mounts]
+  attributes:
+    model: Microlab VANTAGE
+    variants: [VANTAGE 1.3 m, VANTAGE 2.0 m]
+    category: liquid_handler
+    performedBy: machine
+    footprint: {width: {value: "1330", unit: mm}, depth: {value: "980", unit: mm}, height: {value: "1820", unit: mm}}
+    weight: {value: "273", unit: kg}
+    mounts:
+      - {id: tracks, label: deck tracks, layout: {layout: rail, tracks: 54}, accepts: [hamilton_track], changedBy: operator}
+      - {id: channels, label: pipetting arm, layout: {layout: fixed}, accepts: [vantage_channels], changedBy: factory}
+      - {id: head, label: multi-probe head mount, layout: {layout: fixed}, accepts: [vantage_head], changedBy: service}
+      - {id: gripper, label: channel gripper, layout: {layout: fixed}, accepts: [vantage_gripper], changedBy: service}
+      - {id: track_gripper, label: track gripper, layout: {layout: fixed}, accepts: [vantage_track_gripper], changedBy: service}
+    controlInterfaces: [VENUS, PyLabRobot Vantage backend]
+    notes: "Tracks are for the 1.3 m deck (54); the 2.0 m deck has 80. Whether STAR carriers fit unchanged is assumed."
+
+- key: opentrons-flex
+  research: opentrons-flex
+  label: Opentrons Flex
+  manufacturer: Opentrons
+  assumed: []
+  attributes:
+    model: Opentrons Flex
+    category: liquid_handler
+    performedBy: machine
+    footprint: {width: {value: "870", unit: mm}, depth: {value: "690", unit: mm}, height: {value: "840", unit: mm}}
+    weight: {value: "88.5", unit: kg}
+    mounts:
+      - {id: pipettes, label: pipette mounts, layout: {layout: slots, slots: [left, right]}, accepts: [flex_pipette], changedBy: operator}
+      - {id: gripper, label: gripper mount, layout: {layout: fixed}, accepts: [flex_gripper], changedBy: operator}
+      - {id: deck, label: deck, layout: {layout: slots, slots: [A1, A2, A3, B1, B2, B3, C1, C2, C3, D1, D2, D3]}, accepts: [flex_module, flex_fixture], changedBy: operator}
+    sites:
+      - {id: A1, mount: {mount: deck, slot: A1}, accepts: {sbs: true}}
+      - {id: A2, mount: {mount: deck, slot: A2}, accepts: {sbs: true}}
+      - {id: A3, mount: {mount: deck, slot: A3}, accepts: {sbs: true}}
+      - {id: B1, mount: {mount: deck, slot: B1}, accepts: {sbs: true}}
+      - {id: B2, mount: {mount: deck, slot: B2}, accepts: {sbs: true}}
+      - {id: B3, mount: {mount: deck, slot: B3}, accepts: {sbs: true}}
+      - {id: C1, mount: {mount: deck, slot: C1}, accepts: {sbs: true}}
+      - {id: C2, mount: {mount: deck, slot: C2}, accepts: {sbs: true}}
+      - {id: C3, mount: {mount: deck, slot: C3}, accepts: {sbs: true}}
+      - {id: D1, mount: {mount: deck, slot: D1}, accepts: {sbs: true}}
+      - {id: D2, mount: {mount: deck, slot: D2}, accepts: {sbs: true}}
+      - {id: D3, mount: {mount: deck, slot: D3}, accepts: {sbs: true}}
+    controlInterfaces: [Opentrons Python Protocol API v2, Opentrons App, PyLabRobot opentrons.Flex]
+    twin: echo650-twin Flex
+    notes: "Transfer comes from the pipettes and plate moves from the gripper. Staging area slots A4 to D4 are not modelled yet."
+
+- key: echo-650
+  research: echo-650
+  label: Echo 650
+  manufacturer: Beckman Coulter Life Sciences
+  assumed: []
+  attributes:
+    model: Echo 650 Plus
+    variants: [Echo 650 Plus, Echo 655 Plus, Echo 650T Plus, Echo 655T Plus]
+    category: acoustic_dispenser
+    performedBy: machine
+    footprint: {width: {value: "538", unit: mm}, depth: {value: "746", unit: mm}, height: {value: "915", unit: mm}}
+    weight: {value: "117", unit: kg}
+    sites:
+      - {id: source, label: source plate, accepts: {sbs: true}}
+      - {id: destination, label: destination plate, accepts: {sbs: true}}
+    capabilities:
+      - capability: transfer
+        sites: [source, destination]
+        limits:
+          volume: {min: {value: "2.5", unit: nL}}
+          volumeStep: {value: "2.5", unit: nL}
+          wellCounts: [384, 1536]
+          note: "Sources are Echo-qualified 384PP, 384LDV and 1536LDV plates; destinations most SBS 96-, 384- and 1536-well plates 8 to 16 mm tall. No maximum per transfer is published."
+    controlInterfaces: [Echo Client Utility]
+    twin: echo650-twin Echo 650
+
+- key: formulatrix-mantis
+  research: formulatrix-mantis
+  label: Formulatrix MANTIS
+  manufacturer: Formulatrix
+  assumed: [footprint]
+  attributes:
+    model: MANTIS Liquid Dispenser
+    variants: [Mantis V4, Mantis V3]
+    category: bulk_dispenser
+    performedBy: machine
+    footprint: {width: {value: "350", unit: mm}, depth: {value: "232", unit: mm}, height: {value: "212", unit: mm}}
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - capability: dispense
+        sites: [plate]
+        limits:
+          volume: {min: {value: "0.1", unit: uL}}
+          wellCounts: [6, 12, 24, 48, 96, 384, 1536]
+          note: "The smallest volume depends on the chip: 0.1 uL with low-volume chips, 1 uL with high-volume chips."
+    controlInterfaces: [Mantis control software]
+    notes: "Chips (LV, HV, continuous flow) are swapped by the user; they are not modelled as equipment yet."
+
+- key: precisedrop-ii
+  research: precisedrop-ii
+  label: PreciseDrop II
+  manufacturer: HighRes Biosolutions
+  assumed: []
+  attributes:
+    model: PreciseDrop II
+    category: bulk_dispenser
+    performedBy: machine
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - capability: dispense
+        sites: [plate]
+        limits:
+          volume: {min: {value: "80", unit: nL}, max: {value: "2000", unit: uL}}
+          wellCounts: [96, 384, 1536]
+          note: "1 to 8 valve channels (4 standard). HighRes now quotes 50 nL as the minimum."
+    controlInterfaces: [PreciseDrop software]
+
+- key: tecan-spark-cyto
+  research: tecan-spark-cyto
+  label: Tecan Spark Cyto
+  manufacturer: Tecan
+  assumed: []
+  attributes:
+    model: Spark Cyto
+    category: plate_reader
+    performedBy: machine
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - {capability: read_absorbance, limits: {wavelengths: {min: {value: "200", unit: nm}, max: {value: "1000", unit: nm}}, note: "Range from a core-facility page (estimated)."}}
+      - {capability: read_fluorescence, limits: {wavelengths: {min: {value: "230", unit: nm}, max: {value: "900", unit: nm}}, note: "Range from a core-facility page (estimated)."}}
+      - {capability: read_luminescence, limits: {note: "Glow, flash, multicolor and scan modes."}}
+      - {capability: image, limits: {wellCounts: [96, 384], note: "Brightfield, digital phase contrast and 4 fluorescence channels; whole-well imaging in 96 and 384 wells."}}
+      - {capability: incubate, limits: {temperature: {max: {value: "42", unit: degC}}, note: "CO2 and O2 control."}}
+    controlInterfaces: [SparkControl]
+
+- key: bluecatbio-bluewasher
+  research: bluecatbio-bluewasher
+  label: BlueCatBio BlueWasher
+  manufacturer: BlueCatBio
+  assumed: [footprint, weight, sites, capabilities]
+  attributes:
+    model: BlueWasher
+    variants: [BlueWasher, BlueWasher XL]
+    category: plate_washer
+    performedBy: machine
+    footprint: {width: {value: "205", unit: mm}, depth: {value: "365", unit: mm}, height: {value: "690", unit: mm}}
+    weight: {value: "27", unit: kg}
+    sites:
+      - {id: plate, accepts: {sbs: true, maxHeight: {value: "17.4", unit: mm}}}
+    capabilities:
+      - {capability: wash, sites: [plate], limits: {note: "Empties plates by spinning them upside down; residual volume 0.01 to 5 uL per well."}}
+      - {capability: dispense, sites: [plate], limits: {volume: {min: {value: "1", unit: uL}}, wellCounts: [384], note: "7 liquid inputs."}}
+      - {capability: centrifuge, sites: [plate], limits: {force: {max: {value: "630", unit: xg}}, note: "3 to 3500 rpm."}}
+    controlInterfaces: [BlueFlow software]
+    notes: "Every number is from a reseller listing; check against the BlueCatBio flyer."
+
+- key: cybio-felix
+  research: cybio-felix
+  label: Analytik Jena CyBio FeliX
+  manufacturer: Analytik Jena
+  assumed: [mounts]
+  attributes:
+    model: CyBio FeliX
+    category: liquid_handler
+    performedBy: machine
+    footprint: {width: {value: "650", unit: mm}, depth: {value: "450", unit: mm}, height: {value: "698", unit: mm}}
+    mounts:
+      - {id: head, label: pipetting head mount, layout: {layout: fixed}, accepts: [felix_head], changedBy: operator}
+      - {id: gripper, label: gripper mount, layout: {layout: fixed}, accepts: [felix_gripper], changedBy: operator}
+    sites:
+      - {id: "1", label: position 1, accepts: {sbs: true}}
+      - {id: "2", label: position 2, accepts: {sbs: true}}
+      - {id: "3", label: position 3, accepts: {sbs: true}}
+      - {id: "4", label: position 4, accepts: {sbs: true}}
+      - {id: "5", label: position 5, accepts: {sbs: true}}
+      - {id: "6", label: position 6, accepts: {sbs: true}}
+      - {id: "7", label: position 7, accepts: {sbs: true}}
+      - {id: "8", label: position 8, accepts: {sbs: true}}
+      - {id: "9", label: position 9, accepts: {sbs: true}}
+      - {id: "10", label: position 10, accepts: {sbs: true}}
+      - {id: "11", label: position 11, accepts: {sbs: true}}
+      - {id: "12", label: position 12, accepts: {sbs: true}}
+    controlInterfaces: [CyBio Composer, CyBio Scheduler]
+    notes: "12 deck positions on two levels. Footprint is with the enclosure."
+
+- key: qtower3
+  research: qtower3
+  label: Analytik Jena qTOWER3
+  manufacturer: Analytik Jena
+  assumed: []
+  attributes:
+    model: qTOWER3
+    variants: [qTOWER3, qTOWER3 G, qTOWER3 84, qTOWER3 84 G, qTOWER3 auto, qTOWER3 84 auto]
+    category: qpcr
+    performedBy: machine
+    footprint: {width: {value: "310", unit: mm}, depth: {value: "365", unit: mm}, height: {value: "479", unit: mm}}
+    sites:
+      - {id: block, accepts: {sbs: true}}
+    capabilities:
+      - capability: qpcr
+        sites: [block]
+        limits:
+          temperature: {min: {value: "4", unit: degC}, max: {value: "99", unit: degC}}
+          volume: {min: {value: "5", unit: uL}, max: {value: "100", unit: uL}}
+          wellCounts: [96]
+          note: "96-well auto variant. The 84 variants take 384-well plates with 2 to 30 uL. Up to 6 colour modules."
+    controlInterfaces: [qPCRsoft]
+    notes: "Footprint is the auto variant's, plus a separate power module."
+
+- key: biorad-ptc-tempo
+  research: biorad-ptc-tempo
+  label: Bio-Rad PTC Tempo
+  manufacturer: Bio-Rad
+  assumed: []
+  attributes:
+    model: PTC Tempo Thermal Cycler
+    variants: [PTC Tempo 96, PTC Tempo 384, PTC Tempo Deepwell]
+    category: thermocycler
+    performedBy: machine
+    footprint: {width: {value: "280", unit: mm}, depth: {value: "500", unit: mm}, height: {value: "260", unit: mm}}
+    weight: {value: "15", unit: kg}
+    sites:
+      - {id: block, accepts: {sbs: true}}
+    capabilities:
+      - capability: thermocycle
+        sites: [block]
+        limits:
+          temperature: {min: {value: "4", unit: degC}, max: {value: "100", unit: degC}}
+          volume: {min: {value: "1", unit: uL}, max: {value: "50", unit: uL}}
+          wellCounts: [96, 384]
+          note: "96 block: 1 to 50 uL, 5 degC/s. 384 block: 1 to 30 uL, 2.5 degC/s. Gradient 30 to 100 degC. Motorized lid for automation."
+    controlInterfaces: [Touch screen, BR.io]
+
+- key: highres-flexpod
+  research: highres-flexpod
+  label: HighRes Nucleus FlexPod
+  manufacturer: HighRes Biosolutions
+  assumed: []
+  attributes:
+    model: Nucleus FlexPod
+    category: transport
+    performedBy: machine
+    footprint: {width: {value: "737", unit: mm}, depth: {value: "508", unit: mm}, height: {value: "1778", unit: mm}}
+    weight: {value: "100", unit: kg}
+    capabilities:
+      - {capability: move_labware, limits: {note: "Robot arm on the pod base, repeatability 0.2 mm; 3 to 5 devices per pod."}}
+    controlInterfaces: [Cellario]
+    notes: "Height is with the robot arm. Docking and reach come with workcells (008d)."
+
+- key: highres-microspin
+  research: highres-microspin
+  label: HighRes MicroSpin
+  manufacturer: HighRes Biosolutions
+  assumed: []
+  attributes:
+    model: MicroSpin
+    category: centrifuge
+    performedBy: machine
+    footprint: {width: {value: "381", unit: mm}, depth: {value: "406", unit: mm}, height: {value: "406", unit: mm}}
+    weight: {value: "43", unit: kg}
+    sites:
+      - {id: rotor, accepts: {sbs: true, maxHeight: {value: "65", unit: mm}}, capacity: 2}
+    capabilities:
+      - {capability: centrifuge, sites: [rotor], limits: {force: {max: {value: "3000", unit: xg}}, speed: {max: {value: "4729", unit: rpm}}, capacity: 2}}
+    controlInterfaces: [Cellario, PyLabRobot MicroSpin]
+
+- key: highres-lidvalet
+  research: highres-lidvalet
+  label: HighRes LidValet
+  manufacturer: HighRes Biosolutions
+  assumed: []
+  attributes:
+    model: LidValet
+    category: lid_handler
+    performedBy: machine
+    capabilities:
+      - {capability: delid}
+      - {capability: relid}
+    controlInterfaces: [Cellario, PyLabRobot HighResLidValet]
+
+- key: highres-plateorient
+  research: highres-plateorient
+  label: HighRes PlateOrient
+  manufacturer: HighRes Biosolutions
+  assumed: []
+  attributes:
+    model: PlateOrient 2.0
+    category: plate_handler
+    performedBy: machine
+    capabilities:
+      - {capability: rotate}
+    controlInterfaces: [Cellario]
+
+- key: thermo-cytomat-10
+  research: thermo-cytomat-10
+  label: Thermo Cytomat 10 C
+  manufacturer: Thermo Scientific
+  assumed: []
+  attributes:
+    model: Cytomat 10 C Series Automated Incubator
+    variants: [Cytomat 10 C, Cytomat 10 C450]
+    category: incubator
+    performedBy: machine
+    footprint: {width: {value: "800", unit: mm}, depth: {value: "822", unit: mm}, height: {value: "915", unit: mm}}
+    capabilities:
+      - {capability: incubate, limits: {temperature: {minAboveAmbient: {value: "10", unit: degC}, max: {value: "50", unit: degC}}, note: "CO2 0 to 20 %; humidity below 98 % RH at 37 degC."}}
+      - {capability: store, limits: {capacity: 210, note: "210 96- or 384-well plates, 280 1536-well, 100 deep-well."}}
+
+# Manual stations (plan 008, I6): capabilities a person performs. Not from instruments.yaml, so every
+# value loads as assumed.
+- key: lab-bench
+  label: Lab bench (manual work)
+  assumed: [category, performedBy, capabilities]
+  attributes:
+    category: manual_station
+    performedBy: person
+    capabilities:
+      - {capability: transfer, limits: {note: "Hand pipettes, single and multichannel."}}
+      - {capability: dispense}
+      - {capability: move_labware}
+      - {capability: delid}
+      - {capability: relid}
+      - {capability: seal, limits: {note: "Adhesive seals by hand; no heat."}}
+      - {capability: peel}
+      - {capability: wash, limits: {note: "Manual plate washing, e.g. ELISA washes with a multichannel or wash bottle."}}
+
+- key: biosafety-cabinet
+  label: Biosafety cabinet (manual work)
+  assumed: [category, performedBy, capabilities]
+  attributes:
+    category: manual_station
+    performedBy: person
+    capabilities:
+      - {capability: transfer, limits: {note: "Sterile hand pipetting."}}
+      - {capability: dispense}
+      - {capability: move_labware}
+
+equipment_kinds:
+
+# Opentrons Flex ------------------------------------------------------------------------------
+- key: flex-1ch-50
+  research: opentrons-flex
+  label: Flex 1-Channel Pipette (50 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 1-Channel 50 uL
+    role: pipette
+    fits: [flex_pipette]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "1", unit: uL}, max: {value: "50", unit: uL}}, channels: [1]}}
+- key: flex-1ch-1000
+  research: opentrons-flex
+  label: Flex 1-Channel Pipette (1000 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 1-Channel 1000 uL
+    role: pipette
+    fits: [flex_pipette]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "5", unit: uL}, max: {value: "1000", unit: uL}}, channels: [1]}}
+- key: flex-8ch-50
+  research: opentrons-flex
+  label: Flex 8-Channel Pipette (50 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 8-Channel 50 uL
+    role: pipette
+    fits: [flex_pipette]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "1", unit: uL}, max: {value: "50", unit: uL}}, channels: [1, 8]}}
+- key: flex-8ch-1000
+  research: opentrons-flex
+  label: Flex 8-Channel Pipette (1000 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 8-Channel 1000 uL
+    role: pipette
+    fits: [flex_pipette]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "5", unit: uL}, max: {value: "1000", unit: uL}}, channels: [1, 8]}}
+- key: flex-96ch-200
+  research: opentrons-flex
+  label: Flex 96-Channel Pipette (200 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 96-Channel 200 uL
+    role: pipette
+    fits: [flex_pipette]
+    placement: {slots: [left], alsoClaims: {left: [right]}}
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "1", unit: uL}, max: {value: "200", unit: uL}}, channels: [96]}}
+- key: flex-96ch-1000
+  research: opentrons-flex
+  label: Flex 96-Channel Pipette (1000 uL)
+  manufacturer: Opentrons
+  attributes:
+    model: Flex 96-Channel 1000 uL
+    role: pipette
+    fits: [flex_pipette]
+    placement: {slots: [left], alsoClaims: {left: [right]}}
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "5", unit: uL}, max: {value: "1000", unit: uL}}, channels: [96]}}
+- key: flex-gripper
+  research: opentrons-flex
+  label: Flex Gripper GEN1
+  manufacturer: Opentrons
+  attributes:
+    model: Flex Gripper GEN1
+    role: gripper
+    fits: [flex_gripper]
+    serialized: true
+    capabilities:
+      - {capability: move_labware, limits: {note: "Works best with gripper-optimized labware (NEST 96 flat, Opentrons Tough PCR, Flex tip racks)."}}
+- key: flex-heater-shaker
+  research: opentrons-flex
+  label: Heater-Shaker Module GEN1
+  manufacturer: Opentrons
+  assumed: [placement]
+  attributes:
+    model: Heater-Shaker Module GEN1
+    role: module
+    fits: [flex_module]
+    placement: {slots: [A1, B1, C1, D1, A3, B3, C3, D3]}
+    serialized: true
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - {capability: heat, sites: [plate], limits: {temperature: {minAboveAmbient: {value: "1.5", unit: degC}, max: {value: "95", unit: degC}}}}
+      - {capability: shake, sites: [plate], limits: {speed: {min: {value: "200", unit: rpm}, max: {value: "3000", unit: rpm}}, note: "2 mm orbit."}}
+- key: flex-temperature-module
+  research: opentrons-flex
+  label: Temperature Module GEN2
+  manufacturer: Opentrons
+  assumed: [placement]
+  attributes:
+    model: Temperature Module GEN2
+    role: module
+    fits: [flex_module]
+    placement: {slots: [A1, B1, C1, D1, A3, B3, C3, D3]}
+    serialized: true
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - {capability: heat, sites: [plate], limits: {temperature: {min: {value: "4", unit: degC}, max: {value: "95", unit: degC}}}}
+      - {capability: cool, sites: [plate], limits: {temperature: {min: {value: "4", unit: degC}, max: {value: "95", unit: degC}}}}
+- key: flex-thermocycler
+  research: opentrons-flex
+  label: Thermocycler Module GEN2
+  manufacturer: Opentrons
+  assumed: [placement]
+  attributes:
+    model: Thermocycler Module GEN2
+    role: module
+    fits: [flex_module]
+    placement: {slots: [B1], alsoClaims: {B1: [A1]}}
+    serialized: true
+    sites:
+      - {id: block, accepts: {sbs: true}}
+    capabilities:
+      - capability: thermocycle
+        sites: [block]
+        limits:
+          temperature: {min: {value: "4", unit: degC}, max: {value: "99", unit: degC}}
+          wellCounts: [96]
+          note: "Lid 37 to 110 degC. Heats at up to 4.25 degC/s, cools at up to 2 degC/s."
+    notes: "Takes slots A1 and B1 (commonly stated; not read on an Opentrons page)."
+- key: flex-magnetic-block
+  research: opentrons-flex
+  label: Magnetic Block GEN1
+  manufacturer: Opentrons
+  attributes:
+    model: Magnetic Block GEN1
+    role: module
+    fits: [flex_module]
+    serialized: false
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - {capability: magnetic_separation, sites: [plate], limits: {note: "Unpowered magnet; the gripper moves plates on and off."}}
+- key: flex-absorbance-reader
+  research: opentrons-flex
+  label: Absorbance Plate Reader Module GEN1
+  manufacturer: Opentrons
+  assumed: [placement]
+  attributes:
+    model: Absorbance Plate Reader Module GEN1
+    role: module
+    fits: [flex_module]
+    placement: {slots: [A3, B3, C3, D3]}
+    serialized: true
+    sites:
+      - {id: plate, accepts: {sbs: true}}
+    capabilities:
+      - capability: read_absorbance
+        sites: [plate]
+        limits:
+          wavelengths: {fixed: [{value: "450", unit: nm}, {value: "562", unit: nm}, {value: "600", unit: nm}, {value: "650", unit: nm}]}
+          wellCounts: [96]
+          note: "OD 0 to 4. 96-well flat-bottom plates."
+- key: flex-trash-bin
+  research: opentrons-flex
+  label: Flex Trash Bin
+  manufacturer: Opentrons
+  attributes:
+    role: fixture
+    fits: [flex_fixture]
+    placement: {slots: [A1, B1, C1, D1, A3, B3, C3, D3]}
+    serialized: false
+    sites:
+      - {id: bin, label: bin}
+- key: flex-waste-chute
+  research: opentrons-flex
+  label: Flex Waste Chute
+  manufacturer: Opentrons
+  attributes:
+    role: fixture
+    fits: [flex_fixture]
+    placement: {slots: [D3]}
+    serialized: false
+    sites:
+      - {id: chute, label: chute}
+
+# Hamilton STAR and VANTAGE ---------------------------------------------------------------------
+- key: star-1000ul-channels
+  research: hamilton-star
+  label: STAR 1000 uL channels (8)
+  manufacturer: Hamilton
+  attributes:
+    model: 1000 uL independent channels
+    role: head
+    fits: [star_channels]
+    serialized: false
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "0.5", unit: uL}, max: {value: "1", unit: mL}}, channels: [1, 2, 3, 4, 5, 6, 7, 8]}}
+    notes: "The arm takes 2 to 16 channels; the demo STAR has 8."
+- key: star-core96-head
+  research: hamilton-star
+  label: CO-RE 96 Probe Head
+  manufacturer: Hamilton
+  attributes:
+    model: CO-RE 96 Probe Head
+    role: head
+    fits: [star_head]
+    serialized: false
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "1", unit: uL}, max: {value: "1000", unit: uL}}, channels: [96]}}
+- key: star-core384-head
+  research: hamilton-star
+  label: CO-RE 384 Probe Head
+  manufacturer: Hamilton
+  attributes:
+    model: CO-RE 384 Probe Head
+    role: head
+    fits: [star_head]
+    serialized: false
+    capabilities:
+      - {capability: transfer, limits: {volume: {min: {value: "0.1", unit: uL}, max: {value: "50", unit: uL}}, channels: [384]}}
+- key: star-core-gripper
+  research: hamilton-star
+  label: STAR CO-RE Gripper
+  manufacturer: Hamilton
+  attributes:
+    model: CO-RE Gripper
+    role: gripper
+    fits: [star_gripper]
+    serialized: false
+    capabilities:
+      - {capability: move_labware, limits: {note: "Paddles picked up by two channels during a run; moves plates on the deck."}}
+- key: star-iswap
+  research: hamilton-star
+  label: iSWAP
+  manufacturer: Hamilton
+  attributes:
+    model: iSWAP
+    role: gripper
+    fits: [star_iswap]
+    serialized: false
+    capabilities:
+      - {capability: move_labware, limits: {note: "Articulating arm that reaches both sides of the deck."}}
+- key: hamilton-plt-car-l5ac
+  research: hamilton-star
+  label: Plate carrier PLT_CAR_L5AC
+  manufacturer: Hamilton
+  assumed: [placement, sites]
+  attributes:
+    model: PLT_CAR_L5AC
+    role: carrier
+    fits: [hamilton_track]
+    placement: {tracks: 6}
+    serialized: false
+    sites:
+      - {id: "1", label: position 1, accepts: {sbs: true}}
+      - {id: "2", label: position 2, accepts: {sbs: true}}
+      - {id: "3", label: position 3, accepts: {sbs: true}}
+      - {id: "4", label: position 4, accepts: {sbs: true}}
+      - {id: "5", label: position 5, accepts: {sbs: true}}
+    notes: "Width and positions from the PyLabRobot resource library, not a Hamilton document."
+- key: hamilton-tip-car-480
+  research: hamilton-star
+  label: Tip carrier TIP_CAR_480
+  manufacturer: Hamilton
+  assumed: [placement, sites]
+  attributes:
+    model: TIP_CAR_480
+    role: carrier
+    fits: [hamilton_track]
+    placement: {tracks: 6}
+    serialized: false
+    sites:
+      - {id: "1", label: position 1, accepts: {families: [tip_rack]}}
+      - {id: "2", label: position 2, accepts: {families: [tip_rack]}}
+      - {id: "3", label: position 3, accepts: {families: [tip_rack]}}
+      - {id: "4", label: position 4, accepts: {families: [tip_rack]}}
+      - {id: "5", label: position 5, accepts: {families: [tip_rack]}}
+    notes: "Width and positions from the PyLabRobot resource library, not a Hamilton document."
+- key: vantage-1ml-channels
+  research: hamilton-vantage
+  label: VANTAGE 1 mL channels (8)
+  manufacturer: Hamilton
+  attributes:
+    model: 1 mL independent channels
+    role: head
+    fits: [vantage_channels]
+    serialized: false
+    capabilities:
+      - {capability: transfer, limits: {channels: [1, 2, 3, 4, 5, 6, 7, 8], note: "Per-channel volume range not published; the VANTAGE overall is 0.35 uL to 5 mL."}}
+- key: vantage-96-head
+  research: hamilton-vantage
+  label: VANTAGE 96 head
+  manufacturer: Hamilton
+  attributes:
+    model: 96 head
+    role: head
+    fits: [vantage_head]
+    serialized: false
+    capabilities:
+      - {capability: transfer, limits: {channels: [96], note: "Volume range not published."}}
+- key: vantage-qcg
+  research: hamilton-vantage
+  label: Quad CO-RE Gripper (QCG)
+  manufacturer: Hamilton
+  attributes:
+    model: Quad CO-RE Gripper
+    role: gripper
+    fits: [vantage_gripper]
+    serialized: false
+    capabilities:
+      - {capability: move_labware}
+- key: vantage-track-gripper
+  research: hamilton-vantage
+  label: VANTAGE Track Gripper
+  manufacturer: Hamilton
+  attributes:
+    model: Track Gripper
+    role: gripper
+    fits: [vantage_track_gripper]
+    serialized: false
+    capabilities:
+      - {capability: move_labware}
+
+# CyBio FeliX -----------------------------------------------------------------------------------
+- key: felix-head-r-96-250
+  research: cybio-felix
+  label: CyBio FeliX Head R 96/250 uL
+  manufacturer: Analytik Jena
+  attributes:
+    model: Head R 96/250 uL (OL3316-14-850)
+    role: head
+    fits: [felix_head]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {max: {value: "250", unit: uL}}, channels: [96]}}
+- key: felix-head-r-96-1000
+  research: cybio-felix
+  label: CyBio FeliX Head R 96/1000 uL
+  manufacturer: Analytik Jena
+  attributes:
+    model: Head R 96/1000 uL (OL3316-14-950)
+    role: head
+    fits: [felix_head]
+    serialized: true
+    capabilities:
+      - {capability: transfer, limits: {volume: {max: {value: "1000", unit: uL}}, channels: [96]}}
+- key: felix-gripper
+  research: cybio-felix
+  label: CyBio FeliX Gripper
+  manufacturer: Analytik Jena
+  attributes:
+    model: Gripper OL3317-14-800
+    role: gripper
+    fits: [felix_gripper]
+    serialized: true
+    capabilities:
+      - {capability: move_labware}
