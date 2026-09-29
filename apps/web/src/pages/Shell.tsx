@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
+import { libraryPages } from '../lib/kinds.ts';
 import { LiveProvider, useLive } from '../live.tsx';
 import { reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
@@ -29,7 +30,10 @@ function ShellLayout() {
   const me = useMe();
   const live = useLive();
   const [theme, setTheme] = useTheme();
-  const pending = useQuery(reviewQuery).data?.length ?? 0;
+  const waiting = useQuery(reviewQuery).data ?? [];
+  const pending = waiting.length;
+  const draftsOf = (kind: string) =>
+    waiting.filter((i) => i.type === 'draft' && i.record.kind === kind).length;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const assistant = useAssistant();
@@ -89,8 +93,32 @@ function ShellLayout() {
                 <span className={`count num ${pending ? 'pending' : ''}`}>{pending}</span>
               </Link>
             </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Library</h2>
+          <ul>
+            {libraryPages.map((p) => {
+              const drafts = draftsOf(p.kind);
+              return (
+                <li key={p.kind}>
+                  <Link to={p.path}>
+                    {p.title}
+                    {drafts > 0 && (
+                      <span className="count num pending" title={`${drafts} drafts to review`}>
+                        {drafts}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+        <section className="nav-foot">
+          <ul>
             <li>
-              <Link to="/records">Records</Link>
+              <Link to="/records">All records</Link>
             </li>
           </ul>
         </section>

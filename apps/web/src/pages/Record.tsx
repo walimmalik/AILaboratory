@@ -1,16 +1,21 @@
 import type { RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
+import { useState } from 'react';
 import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
+import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
+  kindsQuery,
   linksQuery,
   pendingProposalsQuery,
   readinessQuery,
   recordQuery,
 } from '../queries.ts';
 import { useMe } from '../session.ts';
+import type { JsonSchema } from './FieldEditor.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
+import { SectionEditor } from './SectionEditor.tsx';
 import { StatusChip } from './StatusChip.tsx';
 
 const operationWords: Record<string, string> = {
@@ -33,6 +38,8 @@ export function RecordPage() {
     (p) => (p.input as { id?: unknown } | undefined)?.id === id,
   );
   const me = useMe();
+  const kinds = useQuery(kindsQuery).data;
+  const [editing, setEditing] = useState(false);
 
   if (record.error) {
     return <p className="error-text">{record.error.message}</p>;
@@ -46,13 +53,21 @@ export function RecordPage() {
       <div className="page-head">
         <div>
           <div className="crumbs">
-            lab / <Link to="/records">records</Link> / <b>{r.name}</b>
+            lab /{' '}
+            {kindPage(r.kind) ? (
+              <Link to={kindPage(r.kind)?.path ?? '/records'}>
+                {kindPage(r.kind)?.title.toLowerCase()}
+              </Link>
+            ) : (
+              <Link to="/records">records</Link>
+            )}{' '}
+            / <b>{r.name}</b>
           </div>
           <h1>
             <span className="mono">{r.name}</span> {r.label}
           </h1>
           <p className="lede">
-            {r.kind} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
+            {kindNoun(r.kind)} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
             <span className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>
               {actorLabel(r.updatedBy, me)}
             </span>
@@ -78,7 +93,16 @@ export function RecordPage() {
             <h2>Fields</h2>
           </header>
           <div className="body">
-            {Object.keys(r.attributes).length === 0 ? (
+            {editing ? (
+              <SectionEditor
+                record={r}
+                fields={Object.keys(
+                  (kinds?.find((k) => k.kind === r.kind)?.attributes as JsonSchema | undefined)
+                    ?.properties ?? r.attributes,
+                )}
+                onDone={() => setEditing(false)}
+              />
+            ) : Object.keys(r.attributes).length === 0 ? (
               <p className="empty">No fields.</p>
             ) : (
               <dl className="kv">
@@ -86,6 +110,13 @@ export function RecordPage() {
                   <Field key={key} name={key} value={value} />
                 ))}
               </dl>
+            )}
+            {!editing && r.status !== 'archived' && (
+              <div className="actions">
+                <button type="button" className="btn" onClick={() => setEditing(true)}>
+                  Edit fields
+                </button>
+              </div>
             )}
             <details className="tech">
               <summary>technical details</summary>

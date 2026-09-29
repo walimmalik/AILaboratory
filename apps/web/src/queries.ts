@@ -7,6 +7,7 @@ import {
   proposalsList,
   recordsGet,
   recordsHistory,
+  recordsKinds,
   recordsLinks,
   recordsList,
   recordsReadiness,
@@ -41,6 +42,7 @@ export const decidedProposalsQuery = queryOptions({
 });
 
 export const recordsQuery = (filters: {
+  kind?: string;
   search?: string;
   status?: 'draft' | 'active' | 'archived';
 }) =>
@@ -49,6 +51,7 @@ export const recordsQuery = (filters: {
     queryFn: async () =>
       (
         await api.run(recordsList, {
+          ...(filters.kind ? { kind: filters.kind } : {}),
           ...(filters.search ? { search: filters.search } : {}),
           ...(filters.status ? { status: filters.status } : {}),
           limit: 200,
@@ -93,3 +96,10 @@ export const conversationQuery = (id: string) =>
     queryKey: ['assistant', 'conversation', id],
     queryFn: () => api.run(assistantGetConversation, { id }),
   });
+
+/** The kinds this lab holds, with the JSON Schema of their attributes (drives the edit forms). */
+export const kindsQuery = queryOptions({
+  queryKey: ['kinds'],
+  queryFn: async () => (await api.run(recordsKinds, {})).kinds,
+  staleTime: Number.POSITIVE_INFINITY,
+});

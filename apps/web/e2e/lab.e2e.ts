@@ -74,8 +74,8 @@ test('an agent proposes a change, a person confirms it on the Review page, and t
   await proposal.getByRole('button', { name: 'Confirm change' }).click();
   await expect(proposal).toHaveCount(0);
 
-  await page.getByRole('link', { name: 'Records' }).click();
-  await page.getByRole('searchbox', { name: 'Find records' }).fill(record.name);
+  await page.getByRole('link', { name: 'All records' }).click();
+  await page.getByRole('searchbox', { name: 'Find all records' }).fill(record.name);
   await page.getByRole('row', { name: new RegExp(record.name) }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${label} (ELISA)`);
   const history = page.getByRole('row', { name: /v2/ });
@@ -193,4 +193,80 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   await expect(page.getByRole('row', { name: /v5/ })).toContainText(
     'confirmed appearance and activated',
   );
+});
+
+test('labware has its own page in the library, and the Review page groups drafts by kind', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const label = `Deep well plate ${Date.now()}`;
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'labware_type',
+    label,
+    attributes: {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 8, columns: 12 },
+      maxVolume: { value: '2', unit: 'mL' },
+    },
+  });
+  const name = drafted.output.name;
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Labware/ })
+    .click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Labware');
+  await page.getByRole('button', { name: 'Tip racks' }).click();
+  await expect(page.getByRole('row', { name: new RegExp(name) })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Plates' }).click();
+  const row = page.getByRole('row', { name: new RegExp(name) });
+  await expect(row).toContainText('plate · 96 wells');
+  await expect(row).toContainText('2 mL');
+  await row.click();
+  await expect(page.locator('.crumbs')).toContainText(`lab / labware / ${name}`);
+
+  await page
+    .getByRole('link', { name: /^Review/ })
+    .first()
+    .click();
+  await page.getByRole('button', { name: /^Labware \d+/ }).click();
+  await expect(page.getByRole('article', { name: `Draft ${name}` })).toBeVisible();
+});
+
+test('a failing check links to its section, where a person fills in the value and says where it came from', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'labware_type',
+    label: `Tip tray ${Date.now()}`,
+    attributes: {
+      family: 'tip_rack',
+      footprint: {
+        sbs: true,
+        length: { value: '127.76', unit: 'mm' },
+        width: { value: '85.48', unit: 'mm' },
+      },
+      wells: { layout: 'grid', rows: 16, columns: 24 },
+      maxVolume: { value: '60', unit: 'uL' },
+    },
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  const geometry = page.getByRole('region', { name: 'Geometry' });
+
+  // Failing checks come first; passing ones are folded away.
+  await expect(readiness.getByText('Length, width or height is missing')).toBeVisible();
+  await expect(readiness.getByText(/checks pass/)).toBeVisible();
+
+  await readiness.getByRole('button', { name: 'Fix in geometry' }).first().click();
+  await geometry.getByRole('textbox', { name: 'height', exact: true }).first().fill('30.5');
+  await geometry.getByRole('button', { name: 'Measured' }).click();
+  await geometry.getByRole('textbox', { name: 'Note' }).fill('calipers');
+  await geometry.getByRole('button', { name: 'Save' }).click();
+
+  await expect(geometry.getByText(/measured · calipers/).first()).toBeVisible();
+  await expect(readiness.getByText('Length, width or height is missing')).toHaveCount(0);
 });

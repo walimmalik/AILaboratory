@@ -23,7 +23,7 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 | Plan | Delivers | Status | Split |
 | --- | --- | --- | --- |
-| [007 Labware](../plans/007-labware-library.md) | Labware types, geometry, volumes, dead volumes, Opentrons import and export | Locked; next to build | 007a model and import, 007b screens |
+| [007 Labware](../plans/007-labware-library.md) | Labware types, geometry, volumes, dead volumes, Opentrons import and export | 007a built; 007b in progress (library pages, editing in place) | 007a model and import, 007b screens |
 | [008 Instruments](../plans/008-instrument-library.md) | Instrument and equipment kinds, registered instruments, configurations, capabilities, workcells | Locked; after 007a | 008a to 008d (008d workcells gets a short question round first) |
 | [009 Reagents and liquids](../plans/009-reagents-and-liquids.md) | Products, kits, recipes, lots, handling rules, liquid types and classes | Locked; after 008a | 009a to 009c |
 | [010 Inventory](../plans/010-inventory.md) | Entities, samples, containers, locations, barcodes, volume ledger, inherited handling rules | Locked; after 009a | 010a to 010e |
