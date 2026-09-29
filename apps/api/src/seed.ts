@@ -70,7 +70,8 @@ console.log(
 );
 for (const line of report.created) console.log(`  + ${line}`);
 for (const line of report.updated) console.log(`  ~ ${line} (well positions)`);
-for (const line of report.proposed) console.log(`  ? ${line} (well positions, confirmed type: approve on Review)`);
+for (const line of report.proposed)
+  console.log(`  ? ${line} (well positions, confirmed type: approve on Review)`);
 for (const skip of report.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

@@ -12,8 +12,8 @@ import {
 import { parse } from 'yaml';
 import { z } from 'zod';
 import type { OperationRegistry } from '../operations/registry.ts';
-import { SBS_POSITIONS_REFERENCE } from './operations.ts';
 import type { RecordContext } from '../records/service.ts';
+import { SBS_POSITIONS_REFERENCE } from './operations.ts';
 
 /**
  * Turns the reviewed seed file `seed/labware.yaml` (plan 006) into labware type drafts (plan 007).
@@ -359,9 +359,7 @@ export async function loadSeedLabware(
   const report: SeedReport = { created: [], existing: [], updated: [], proposed: [], skipped };
   // Records that already wait on a person for a seed change, so a rerun doesn't ask twice.
   const pending = new Set(
-    (
-      await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' })
-    ).proposals
+    (await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' })).proposals
       .filter((p) => p.operationId === 'records.update')
       .map((p) => (p.input as { id?: string }).id),
   );
