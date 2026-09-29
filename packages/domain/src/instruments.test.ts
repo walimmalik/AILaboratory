@@ -338,3 +338,43 @@ describe('resolveConfiguration: STAR', () => {
     ]);
   });
 });
+
+describe('resolveConfiguration: equipment items', () => {
+  const item = (n: number) => `eqp_01J9Z3K8Q4ABCDEFGHJKMNPQR${n}`;
+  const items = new Map([
+    [item(1), { label: 'EQP-0001', kind: K.eight }],
+    [item(2), { label: 'EQP-0002', kind: K.gripper }],
+    [item(3), { label: 'EQP-0003', kind: K.eight, installedIn: 'Flex 2 (INS-0002)' }],
+  ]);
+  const withItems = (nodes: EquipmentNode[]) =>
+    resolveConfiguration({
+      instrument: { label: 'Flex 1', attributes: flex, confirmed: true },
+      equipment,
+      configuration: { equipment: nodes },
+      items,
+    });
+  const pipetteIn = (nodeId: string, side: string, itemId: string): EquipmentNode => ({
+    ...node(nodeId, K.eight, 'pipettes', slot(side)),
+    item: itemId,
+  });
+
+  it('accepts the item of the right kind', () => {
+    expect(withItems([pipetteIn('left', 'left', item(1))]).valid).toBe(true);
+  });
+
+  it('refuses an unknown item, one of another kind, one used twice or installed elsewhere', () => {
+    const result = withItems([
+      pipetteIn('a', 'left', item(9)),
+      pipetteIn('b', 'left', item(2)),
+      pipetteIn('c', 'left', item(1)),
+      pipetteIn('d', 'right', item(1)),
+      pipetteIn('e', 'right', item(3)),
+    ]);
+    expect(result.issues.map((i) => [i.node, i.message])).toEqual([
+      ['a', `${item(9)} is not an equipment item in this lab`],
+      ['b', 'EQP-0002 is not a Flex 8-Channel 1000 uL'],
+      ['d', 'EQP-0001 is also "c" in this configuration'],
+      ['e', 'EQP-0003 is installed in Flex 2 (INS-0002)'],
+    ]);
+  });
+});

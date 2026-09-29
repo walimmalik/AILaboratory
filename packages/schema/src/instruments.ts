@@ -381,6 +381,9 @@ export const EquipmentNode = z.strictObject({
   parent: LocalId.optional().describe(`The node it attaches to; the instrument when absent`),
   mount: LocalId,
   placement: Placement,
+  item: recordIdOf('eqp')
+    .optional()
+    .describe('The equipment item (its own record, with a serial) when the kind is serialized'),
 });
 export type EquipmentNode = z.infer<typeof EquipmentNode>;
 
@@ -388,6 +391,47 @@ export const Configuration = z.strictObject({
   equipment: z.array(EquipmentNode),
 });
 export type Configuration = z.infer<typeof Configuration>;
+
+// Registered instruments (008b): the real machine, what is installed on it now, and its state.
+
+export const InstrumentStatus = z
+  .enum(['ready', 'in_use', 'maintenance', 'out_of_service'])
+  .describe('ready, in_use, maintenance or out_of_service');
+export type InstrumentStatus = z.infer<typeof InstrumentStatus>;
+
+export const CalendarDate = z.iso.date().describe('A date like 2026-09-29');
+
+export const InstrumentAttributes = z.strictObject({
+  kind: recordIdOf('ink').describe('The instrument kind: the model'),
+  variant: z.string().min(1).optional().describe("One of the kind's variants, e.g. STARlet"),
+  shortName: z
+    .string()
+    .regex(/^[A-Z0-9][A-Z0-9-]{0,15}$/, 'must be a short name like FLX-01')
+    .optional()
+    .describe('What people call it at the bench, e.g. FLX-01'),
+  serial: z.string().min(1).optional(),
+  room: z.string().min(1).optional().describe('Where it stands'),
+  configuration: Configuration.describe(
+    'What is installed on it now; change it with instruments.change_configuration',
+  ),
+  status: InstrumentStatus,
+  lastService: z
+    .strictObject({ date: CalendarDate, note: z.string().min(1) })
+    .optional()
+    .describe('The latest service, calibration or repair; earlier ones are in history'),
+  calibrationDue: CalendarDate.optional(),
+  notes: z.string().min(1).optional(),
+});
+export type InstrumentAttributes = z.infer<typeof InstrumentAttributes>;
+
+/** A serial-bearing part that moves between instruments (I4): a Flex pipette, a module. */
+export const EquipmentItemAttributes = z.strictObject({
+  kind: recordIdOf('eqk'),
+  serial: z.string().min(1).optional(),
+  calibrationDue: CalendarDate.optional(),
+  notes: z.string().min(1).optional(),
+});
+export type EquipmentItemAttributes = z.infer<typeof EquipmentItemAttributes>;
 
 // What a resolved configuration gives: derived, never edited.
 
@@ -429,6 +473,7 @@ export const ConfigurationIssue = z.object({
     'off_rail',
     'conflict',
     'kind_not_confirmed',
+    'wrong_item',
   ]),
   severity: z.enum(['error', 'warning']),
   node: LocalId.optional(),

@@ -2,7 +2,9 @@ import {
   type CapabilityProvider,
   capabilityCatalog,
   defineKind,
+  EquipmentItemAttributes,
   EquipmentKindAttributes,
+  InstrumentAttributes,
   InstrumentKindAttributes,
   type KindCheck,
   type MountDefinition,
@@ -229,4 +231,71 @@ export const equipmentKind = defineKind({
   checks: equipmentChecks,
 });
 
-export const instrumentKinds = [instrumentKind, equipmentKind];
+const instrumentChecksOnInstance: KindCheck<InstrumentAttributes>[] = [
+  {
+    id: 'identified',
+    label: 'Serial number is known',
+    severity: 'warning',
+    source: `${LIBRARY}: service, calibration and support go by serial`,
+    section: 'identity',
+    fix: 'Add the serial from the label on the instrument',
+    test: (a) => a.serial !== undefined || 'Not given',
+  },
+  {
+    id: 'calibration_due_known',
+    label: 'Next calibration date is known',
+    severity: 'warning',
+    source: `${LIBRARY}: the scheduler avoids instruments that are due`,
+    section: 'service',
+    fix: 'Log the last service with the date calibration is next due',
+    test: (a) => a.calibrationDue !== undefined || 'Not given',
+  },
+];
+
+/**
+ * A registered instrument (008b): the real machine, with what is installed on it now. Its
+ * configuration changes through instruments.change_configuration, which checks it against the kinds.
+ */
+export const instrument = defineKind({
+  kind: 'instrument',
+  idPrefix: 'ins',
+  namePrefix: 'INS',
+  nameWidth: 4,
+  attributes: InstrumentAttributes,
+  links: (a) => [
+    { toId: a.kind, relation: 'is_a' },
+    ...a.configuration.equipment.flatMap((n) => [
+      { toId: n.kind, relation: 'has_equipment' },
+      ...(n.item ? [{ toId: n.item, relation: 'has_item' }] : []),
+    ]),
+  ],
+  sections: [
+    {
+      id: 'identity',
+      title: 'Identity',
+      fields: ['kind', 'variant', 'shortName', 'serial', 'room', 'notes'],
+    },
+    { id: 'configuration', title: 'Installed equipment', fields: ['configuration'] },
+    {
+      id: 'service',
+      title: 'Status and service',
+      fields: ['status', 'lastService', 'calibrationDue'],
+    },
+  ],
+  checks: instrumentChecksOnInstance,
+});
+
+/** A serial-bearing part that moves between instruments (I4): a Flex pipette, gripper or module. */
+export const equipmentItem = defineKind({
+  kind: 'equipment_item',
+  idPrefix: 'eqp',
+  namePrefix: 'EQP',
+  nameWidth: 4,
+  attributes: EquipmentItemAttributes,
+  links: (a) => [{ toId: a.kind, relation: 'is_a' }],
+  sections: [
+    { id: 'identity', title: 'Identity', fields: ['kind', 'serial', 'calibrationDue', 'notes'] },
+  ],
+});
+
+export const instrumentKinds = [instrumentKind, equipmentKind, instrument, equipmentItem];

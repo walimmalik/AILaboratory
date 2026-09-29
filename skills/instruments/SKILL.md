@@ -31,3 +31,11 @@ Manual stations use `category: "manual_station"` and `performedBy: "person"`; ev
 ## Evidence and review
 
 Say where values came from in `evidence` (a datasheet URL, `imported` from the seed). Leave out what you don't know; readiness lists it. A person confirms Identity, Mounts and sites, and Capabilities.
+
+## Registered instruments
+
+- `instruments.register` with `{label, kind, shortName?, serial?, variant?, room?, configuration?}` drafts a real machine (`INS-0001`). Its configuration is checked first; a problem refuses it with every message.
+- Change what is installed only with `instruments.change_configuration`: `{id, expectedVersion, changes: [...]}` where each change is `{"change": "place", "equipment": {id, kind, mount, placement, parent?, item?}}`, `{"change": "move", id, mount, placement, parent?}`, `{"change": "remove", id}` or `{"change": "set_item", id, item?}`. All changes apply together. On a confirmed instrument your change becomes a proposal the person approves.
+- Serial-bearing parts (Flex pipettes, gripper, modules) can have their own record, kind `equipment_item` (`EQP-0001`, `{kind, serial}`), named by `item` on the node. One item is on one instrument at a time.
+- `instruments.set_status` (`ready`, `in_use`, `maintenance`, `out_of_service`) and `instruments.log_service` (`{date, note, calibrationDue?}`) are always proposals from you.
+- `instruments.resolve` with `{instrument}` shows what a registered instrument can do now and any problem in its stored configuration.
