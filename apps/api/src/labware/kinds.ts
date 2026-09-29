@@ -54,7 +54,8 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: plate maps and transfers address wells by name`,
     section: 'geometry',
     fix: 'Give the rows and columns, or list each well',
-    test: (a) => a.family === 'lid' || a.wells !== undefined || 'No well layout',
+    applies: (a) => a.family !== 'lid',
+    test: (a) => a.wells !== undefined || 'No well layout',
   },
   {
     id: 'max_volume_known',
@@ -63,8 +64,8 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: transfers check that liquid fits`,
     section: 'volumes',
     fix: 'Add the well volume (for tip racks, the tip volume) from the datasheet',
-    test: (a) =>
-      a.family === 'lid' || a.family === 'rack' || a.maxVolume !== undefined || 'Not given',
+    applies: (a) => a.family !== 'lid' && a.family !== 'rack',
+    test: (a) => a.maxVolume !== undefined || 'Not given',
   },
   {
     id: 'sbs_pitch',
@@ -73,6 +74,7 @@ const checks: KindCheck<Attributes>[] = [
     source: 'ANSI/SLAS 4-2004 (microplate well positions)',
     section: 'geometry',
     fix: 'Check the pitch on the datasheet, or untick SBS if it is not an SBS plate',
+    applies: (a) => a.family !== 'tube',
     test: (a) => {
       const w = a.wells;
       if (!a.footprint?.sbs || w?.layout !== 'grid' || !w.pitch) return true;
@@ -109,6 +111,7 @@ const checks: KindCheck<Attributes>[] = [
     source: 'ANSI/SLAS 1-2004 (microplate footprint)',
     section: 'geometry',
     fix: 'Check the length and width, or untick SBS',
+    applies: (a) => a.family !== 'tube',
     test: (a) => (a.footprint && sbsFootprintProblem(a.footprint)) ?? true,
   },
   {
@@ -118,6 +121,8 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: robots and plate map drawings need them`,
     section: 'geometry',
     fix: 'Add the pitch and the A1 offset from the left and back edges (datasheet drawing)',
+    // A tube is its own single well; lids have none.
+    applies: (a) => a.family !== 'tube' && a.family !== 'lid',
     test: (a) => {
       const w = a.wells;
       if (w?.layout !== 'grid') return true;
@@ -132,6 +137,7 @@ const checks: KindCheck<Attributes>[] = [
     source: LIBRARY,
     section: 'geometry',
     fix: 'Check the A1 offset, pitch and well size',
+    applies: (a) => a.family !== 'tube',
     test: (a) => (a.wells && a.footprint && gridFitProblem(a.wells, a.footprint)) ?? true,
   },
   {
@@ -141,8 +147,9 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: liquid height and pipetting depth come from them`,
     section: 'geometry',
     fix: 'Add the well opening, depth and bottom shape',
+    applies: holdsLiquid,
     test: (a) => {
-      if (!holdsLiquid(a) || !a.wells) return true;
+      if (!a.wells) return true;
       const wells = a.wells.layout === 'grid' ? [a.wells.well] : a.wells.wells.map((w) => w.well);
       return wells.every((w) => w?.top && w.depth && w.bottom)
         ? true
@@ -156,6 +163,7 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: computed from the well size and depth`,
     section: 'volumes',
     fix: 'Check the maximum volume and the well size',
+    applies: holdsLiquid,
     test: (a) => {
       if (!a.maxVolume || a.wells?.layout !== 'grid' || !a.wells.well) return true;
       let capacity: number;
@@ -178,7 +186,8 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: digital SOPs add it to what they prepare`,
     section: 'volumes',
     fix: 'Add the dead volume from the datasheet or from your own measurements',
-    test: (a) => !holdsLiquid(a) || a.deadVolume !== undefined || 'Not given',
+    applies: holdsLiquid,
+    test: (a) => a.deadVolume !== undefined || 'Not given',
   },
   {
     id: 'tip_known',
@@ -187,7 +196,8 @@ const checks: KindCheck<Attributes>[] = [
     source: `${LIBRARY}: needed for pipetting heights`,
     section: 'geometry',
     fix: 'Add the tip length from the datasheet',
-    test: (a) => a.family !== 'tip_rack' || a.tip?.length !== undefined || 'Not given',
+    applies: (a) => a.family === 'tip_rack',
+    test: (a) => a.tip?.length !== undefined || 'Not given',
   },
   {
     id: 'catalog_known',
@@ -200,6 +210,36 @@ const checks: KindCheck<Attributes>[] = [
       a.manufacturer && a.catalogNumber ? true : 'Manufacturer or catalog number is missing',
   },
 ];
+
+/**
+ * What each family is not asked for: a tube is its own well (no grid spacing, A1 offset or SBS size),
+ * a rack holds tubes rather than liquid, a tip rack holds tips, a lid has no wells.
+ */
+const notApplicable: Record<Attributes['family'], string[]> = {
+  plate: ['footprint.diameter', 'tip'],
+  reservoir: ['footprint.diameter', 'tip'],
+  tube: [
+    'footprint.sbs',
+    'footprint.length',
+    'footprint.width',
+    'wells.pitch',
+    'wells.a1',
+    'wells.topHeight',
+    'tip',
+    'echoPlateTypes',
+  ],
+  rack: ['footprint.diameter', 'tip', 'maxVolume', 'workingVolume', 'deadVolume', 'echoPlateTypes'],
+  tip_rack: ['footprint.diameter', 'workingVolume', 'deadVolume', 'echoPlateTypes'],
+  lid: [
+    'footprint.diameter',
+    'wells',
+    'tip',
+    'maxVolume',
+    'workingVolume',
+    'deadVolume',
+    'echoPlateTypes',
+  ],
+};
 
 /** A labware type (ADR 0023): the kind of a plate, reservoir, tube, rack, tip rack or lid. */
 export const labwareType = defineKind({
@@ -235,6 +275,7 @@ export const labwareType = defineKind({
     },
   ],
   checks,
+  notApplicable: (a) => notApplicable[a.family] ?? [],
 });
 
 export const labwareKinds = [vendor, labwareType];

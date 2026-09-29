@@ -65,6 +65,7 @@ export function ReviewBlocks({
           renderValue={renderValue}
           editing={editing === section.id}
           onEdit={(on) => setEditing(on ? section.id : undefined)}
+          notApplicable={readiness.notApplicable}
         />
       ))}
     </>
@@ -261,6 +262,7 @@ function SectionBlock({
   renderValue,
   editing,
   onEdit,
+  notApplicable,
 }: {
   record: RecordEnvelope;
   /** The version the readiness report describes: what the person is looking at and confirming. */
@@ -271,6 +273,7 @@ function SectionBlock({
   renderValue: (value: unknown) => ReactNode;
   editing: boolean;
   onEdit: (on: boolean) => void;
+  notApplicable: string[];
 }) {
   const me = useMe();
   const invalidate = useInvalidate(record.id);
@@ -306,10 +309,16 @@ function SectionBlock({
           <SectionEditor
             record={record}
             fields={section.fields.map((f) => f.field)}
+            notApplicable={notApplicable}
             onDone={() => onEdit(false)}
           />
         ) : (
-          <SectionValues section={section} me={me} renderValue={renderValue} />
+          <SectionValues
+            section={section}
+            me={me}
+            renderValue={renderValue}
+            notApplicable={notApplicable}
+          />
         )}
         {!editing && record.status !== 'archived' && (
           <div className="actions">
@@ -348,37 +357,41 @@ function SectionValues({
   section,
   me,
   renderValue,
+  notApplicable,
 }: {
   section: ReadinessSection;
   me: Me | undefined;
   renderValue: (value: unknown) => ReactNode;
+  notApplicable: string[];
 }) {
   return (
     <div className="table-wrap">
       <table className="review-fields">
         <tbody>
-          {section.fields.map((f) => (
-            <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
-              <td className="name">{fieldLabel(f.field)}</td>
-              <td>
-                {f.state === 'changed' && (
-                  <>
-                    <span className="was">{renderValue(f.confirmedValue)}</span>{' '}
-                  </>
-                )}
-                <span className={f.state === 'changed' ? 'now' : undefined}>
-                  {renderValue(f.value)}
-                </span>
-              </td>
-              <td className="source">
-                {f.assumed ? (
-                  <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
-                ) : (
-                  <Evidence evidence={f.evidence} me={me} />
-                )}
-              </td>
-            </tr>
-          ))}
+          {section.fields
+            .filter((f) => !(notApplicable.includes(f.field) && f.value === undefined))
+            .map((f) => (
+              <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
+                <td className="name">{fieldLabel(f.field)}</td>
+                <td>
+                  {f.state === 'changed' && (
+                    <>
+                      <span className="was">{renderValue(f.confirmedValue)}</span>{' '}
+                    </>
+                  )}
+                  <span className={f.state === 'changed' ? 'now' : undefined}>
+                    {renderValue(f.value)}
+                  </span>
+                </td>
+                <td className="source">
+                  {f.assumed ? (
+                    <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
+                  ) : (
+                    <Evidence evidence={f.evidence} me={me} />
+                  )}
+                </td>
+              </tr>
+            ))}
         </tbody>
       </table>
     </div>

@@ -174,8 +174,6 @@ export function wellSection(a: LabwareTypeAttributes): Section | { missing: stri
     } catch (error) {
       notes.push(error instanceof Error ? error.message : String(error));
     }
-  } else if (a.maxVolume && well?.bottom !== 'flat') {
-    notes.push('Liquid height is worked out for flat-bottomed wells only.');
   }
   if (!well?.bottom) notes.push('Bottom shape not given; drawn flat.');
   return { top, base, depth, bottom: well?.bottom, fill, notes };

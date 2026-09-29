@@ -11,10 +11,11 @@ const fmt = (mm: number) => `${Number(mm.toFixed(2))} mm`;
 export function LabwareDrawing({ attributes }: { attributes: Record<string, unknown> }) {
   const parsed = LabwareTypeAttributes.safeParse(attributes);
   if (!parsed.success) return null;
-  const top = topView(parsed.data);
+  // A tube is drawn by its cut-through only: from above it is a circle.
+  const top = parsed.data.family === 'tube' ? { missing: '' } : topView(parsed.data);
   const section = wellSection(parsed.data);
   const notes = [
-    ...('missing' in top ? [top.missing] : top.notes),
+    ...('missing' in top ? [top.missing].filter(Boolean) : top.notes),
     ...('missing' in section ? [section.missing] : section.notes),
   ];
   const anyDrawn =

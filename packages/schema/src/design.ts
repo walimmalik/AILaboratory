@@ -76,6 +76,8 @@ export interface KindCheck<A = Record<string, unknown>> {
   section?: string;
   /** What to do when it fails. */
   fix?: string;
+  /** Whether the check means anything for these values, e.g. well positions for a single tube. Default yes. */
+  applies?: (attributes: A) => boolean;
   test: (attributes: A) => true | string;
 }
 
@@ -129,5 +131,10 @@ export const Readiness = z.object({
   missing: z.array(z.string()),
   /** Fields holding an agent's unconfirmed estimate. */
   assumed: z.array(z.string()),
+  /**
+   * Attributes that don't apply to this record as it stands, as dotted paths (e.g. "wells.a1" on a
+   * tube). Forms leave them out unless they hold a value.
+   */
+  notApplicable: z.array(z.string()),
 });
 export type Readiness = z.infer<typeof Readiness>;

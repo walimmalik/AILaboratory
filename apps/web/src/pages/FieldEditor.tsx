@@ -30,8 +30,10 @@ interface EditorContext {
   root: JsonSchema;
   /** Record kind by ID prefix, for reference pickers. */
   kindOfPrefix: Record<string, string>;
+  /** Dotted paths that don't apply to this record (`Readiness.notApplicable`); left out unless set. */
+  hidden: ReadonlySet<string>;
 }
-const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {} });
+const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {}, hidden: new Set() });
 
 export function EditorScope({ children, ...value }: EditorContext & { children: ReactNode }) {
   return <Context.Provider value={value}>{children}</Context.Provider>;
@@ -64,21 +66,32 @@ export function ValueEditor({
   value,
   onChange,
   label,
+  path,
 }: {
   schema: JsonSchema;
   value: unknown;
   onChange: Change;
   label: string;
+  /** Dotted path from the attributes, e.g. "wells.a1". */
+  path: string;
 }) {
   const { root } = useContext(Context);
   const s = resolve(schema, root);
   const variants = (s.oneOf ?? s.anyOf)?.map((v) => resolve(v, root));
   if (variants)
-    return <VariantEditor variants={variants} value={value} onChange={onChange} label={label} />;
+    return (
+      <VariantEditor
+        variants={variants}
+        value={value}
+        onChange={onChange}
+        label={label}
+        path={path}
+      />
+    );
   if (isQuantity(s))
     return <QuantityEditor schema={s} value={value} onChange={onChange} label={label} />;
   if (s.type === 'object' && s.properties) {
-    return <ObjectEditor schema={s} value={value} onChange={onChange} />;
+    return <ObjectEditor schema={s} value={value} onChange={onChange} path={path} />;
   }
   if (s.enum) {
     return (
@@ -250,13 +263,16 @@ function ObjectEditor({
   value,
   onChange,
   skip,
+  path,
 }: {
   schema: JsonSchema;
   value: unknown;
   onChange: Change;
   /** A property shown elsewhere (a variant's discriminator). */
   skip?: string;
+  path: string;
 }) {
+  const { hidden } = useContext(Context);
   const current = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
   const set = (key: string, next: unknown) => {
     const updated: Record<string, unknown> = { ...current };
@@ -274,7 +290,16 @@ function ObjectEditor({
   return (
     <div className="form-rows">
       {Object.entries(schema.properties ?? {})
-        .filter(([key, s]) => key !== skip && s.const === undefined)
+        .filter(
+          ([key, s]) =>
+            key !== skip &&
+            s.const === undefined &&
+            // A not-applicable field shows only if it says something (a false flag doesn't).
+            !(
+              hidden.has(`${path}.${key}`) &&
+              (current[key] === undefined || current[key] === false)
+            ),
+        )
         .map(([key, s]) => (
           <FormRow key={key} label={fieldLabel(key)} hint={s.description}>
             <ValueEditor
@@ -282,6 +307,7 @@ function ObjectEditor({
               value={current[key]}
               onChange={(next) => set(key, next)}
               label={fieldLabel(key)}
+              path={`${path}.${key}`}
             />
           </FormRow>
         ))}
@@ -314,11 +340,13 @@ function VariantEditor({
   value,
   onChange,
   label,
+  path,
 }: {
   variants: JsonSchema[];
   value: unknown;
   onChange: Change;
   label: string;
+  path: string;
 }) {
   const key = discriminator(variants);
   if (!key) return <JsonEditor value={value} onChange={onChange} label={label} />;
@@ -353,6 +381,7 @@ function VariantEditor({
           schema={chosen}
           value={current}
           skip={key}
+          path={path}
           onChange={(next) =>
             onChange({ ...((next as Record<string, unknown>) ?? {}), [key]: current?.[key] })
           }

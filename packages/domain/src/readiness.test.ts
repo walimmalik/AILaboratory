@@ -75,7 +75,7 @@ describe('sameValue', () => {
 
 describe('readiness', () => {
   it('lists every unconfirmed section and marks agent estimates as assumed', () => {
-    const result = readiness(widget(), sections, checks);
+    const result = readiness(widget(), { sections, checks });
     expect(result.ready).toBe(false);
     expect(result.missing).toEqual(['Appearance is not confirmed', 'Volume is not confirmed']);
     expect(result.assumed).toEqual(['color']);
@@ -88,7 +88,7 @@ describe('readiness', () => {
       appearance: confirmed(record, sections[0] as KindSection),
       volume: confirmed(record, sections[1] as KindSection),
     };
-    const result = readiness(record, sections, checks);
+    const result = readiness(record, { sections, checks });
     expect(result).toMatchObject({ ready: true, missing: [], assumed: [] });
     expect(result.sections.map((s) => s.state)).toEqual(['confirmed', 'confirmed']);
   });
@@ -97,13 +97,13 @@ describe('readiness', () => {
     const record = widget();
     record.reviews = { volume: confirmed(record, sections[1] as KindSection) };
     record.attributes = { ...record.attributes, volume: { value: '8', unit: 'mL' } };
-    const volume = readiness(record, sections, checks).sections[1];
+    const volume = readiness(record, { sections, checks }).sections[1];
     expect(volume?.state).toBe('needs_review');
     expect(volume?.fields[0]).toMatchObject({
       state: 'changed',
       confirmedValue: { value: '5', unit: 'mL' },
     });
-    expect(readiness(record, sections, checks).missing).toContain(
+    expect(readiness(record, { sections, checks }).missing).toContain(
       'Volume changed since it was confirmed',
     );
   });
@@ -116,13 +116,13 @@ describe('readiness', () => {
       appearance: confirmed(record, sections[0] as KindSection),
       volume: confirmed(record, sections[1] as KindSection),
     };
-    const result = readiness(record, sections, checks);
+    const result = readiness(record, { sections, checks });
     expect(result.missing).toEqual(['Volume must be more than zero']);
     expect(result.checks.map((c) => c.passed)).toEqual([false, false]);
 
     record.attributes = { color: 'unknown', volume: { value: '1', unit: 'mL' } };
     record.reviews.volume = confirmed(record, sections[1] as KindSection);
-    expect(readiness(record, sections, checks).ready).toBe(true);
+    expect(readiness(record, { sections, checks }).ready).toBe(true);
   });
 
   it('a check that throws fails with its error', () => {
@@ -134,9 +134,23 @@ describe('readiness', () => {
         },
       },
     ] as unknown as KindCheck<never>[];
-    expect(readiness(widget(), sections, broken).checks[0]).toMatchObject({
+    expect(readiness(widget(), { sections, checks: broken }).checks[0]).toMatchObject({
       passed: false,
       message: 'no volume',
     });
+  });
+
+  it('leaves out checks and attributes that do not apply to these values', () => {
+    const colorOnlyForBlue = [
+      checks[0],
+      { ...checks[1], applies: (a: { color: string }) => a.color === 'red' },
+    ] as unknown as KindCheck<never>[];
+    const result = readiness(widget(), {
+      sections,
+      checks: colorOnlyForBlue,
+      notApplicable: (a: { color: string }) => (a.color === 'blue' ? ['volume.unit'] : []),
+    } as never);
+    expect(result.checks.map((c) => c.id)).toEqual(['volume_positive']);
+    expect(result.notApplicable).toEqual(['volume.unit']);
   });
 });

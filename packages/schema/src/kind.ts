@@ -22,6 +22,11 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
    */
   sections?: KindSection[];
   checks?: KindCheck<z.infer<A>>[];
+  /**
+   * Attributes that don't apply given the others (e.g. an A1 offset on a tube), as dotted paths. The
+   * review screen leaves them out of forms, so people are asked only what is relevant.
+   */
+  notApplicable?: (attributes: z.infer<A>) => string[];
 }
 
 export function defineKind<A extends z.ZodType>(definition: KindDefinition<A>): KindDefinition<A> {

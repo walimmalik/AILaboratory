@@ -29,4 +29,4 @@ A labware type is a record of kind `labware_type` (readable names like `LWT-0001
 
 ## Review
 
-A person confirms Identity, Geometry, Volumes and Instrument names; confirming the last one makes the type active, unless a blocker fails (outer size unknown, no wells, no maximum volume, non-standard SBS spacing, dead or working volume larger than the maximum). Use `records.readiness` to see what is left and tell the person.
+A person confirms Identity, Geometry, Volumes and Instrument names; confirming the last one makes the type active, unless a blocker fails (outer size unknown, no wells, no maximum volume, non-standard SBS spacing, dead or working volume larger than the maximum). Use `records.readiness` to see what is left and tell the person. Checks that don't apply to the family are left out, and `notApplicable` lists attributes not to fill in (for a tube: pitch, A1 offset, SBS length and width).

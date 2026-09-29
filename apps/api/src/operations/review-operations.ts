@@ -19,7 +19,7 @@ export const reviewOperations = [
         ...drafts.flatMap((record): ReviewItem[] => {
           const kind = kinds.get(record.kind);
           if (!kind) return [];
-          const state = readiness(record, kind.sections ?? [], kind.checks ?? []);
+          const state = readiness(record, kind);
           const item: ReviewItem = {
             type: 'draft',
             at: record.updatedAt,

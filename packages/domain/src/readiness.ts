@@ -40,32 +40,41 @@ export function runChecks(
   checks: readonly KindCheck<never>[],
   attributes: Record<string, unknown>,
 ): CheckResult[] {
-  return checks.map((check) => {
+  return checks.flatMap((check) => {
     let outcome: true | string;
     try {
+      const applies = (check as unknown as KindCheck).applies;
+      if (applies && !applies(attributes)) return [];
       outcome = (check as unknown as KindCheck).test(attributes);
     } catch (error) {
       outcome = error instanceof Error ? error.message : String(error);
     }
-    return {
-      id: check.id,
-      label: check.label,
-      severity: check.severity,
-      source: check.source,
-      ...(check.section ? { section: check.section } : {}),
-      passed: outcome === true,
-      ...(outcome === true ? {} : { message: outcome }),
-      ...(check.fix ? { fix: check.fix } : {}),
-    };
+    return [
+      {
+        id: check.id,
+        label: check.label,
+        severity: check.severity,
+        source: check.source,
+        ...(check.section ? { section: check.section } : {}),
+        passed: outcome === true,
+        ...(outcome === true ? {} : { message: outcome }),
+        ...(check.fix ? { fix: check.fix } : {}),
+      },
+    ];
   });
 }
 
-export function readiness(
-  record: RecordEnvelope,
-  sections: readonly KindSection[],
-  checks: readonly KindCheck<never>[],
-): Readiness {
+/** The parts of a kind definition readiness uses. */
+export interface KindRules {
+  sections?: readonly KindSection[] | undefined;
+  checks?: readonly KindCheck<never>[] | undefined;
+  notApplicable?: ((attributes: never) => string[]) | undefined;
+}
+
+export function readiness(record: RecordEnvelope, kind: KindRules): Readiness {
   const attributes = record.attributes;
+  const sections = kind.sections ?? [];
+  const checks = kind.checks ?? [];
   const sectionStates: ReadinessSection[] = sections.map((section) => {
     const review = record.reviews[section.id];
     const fields = section.fields.map((field) => {
@@ -114,5 +123,16 @@ export function readiness(
     ready: missing.length === 0,
     missing,
     assumed: sectionStates.flatMap((s) => s.fields.filter((f) => f.assumed).map((f) => f.field)),
+    notApplicable: notApplicable(kind, attributes),
   };
+}
+
+/** The kind's not-applicable paths for these values; values that don't parse have none. */
+function notApplicable(kind: KindRules, attributes: Record<string, unknown>): string[] {
+  if (!kind.notApplicable) return [];
+  try {
+    return kind.notApplicable(attributes as never);
+  } catch {
+    return [];
+  }
 }
