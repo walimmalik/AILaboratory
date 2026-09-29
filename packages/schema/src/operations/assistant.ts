@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   AssistantSetup,
+  AttachmentInput,
   Conversation,
   ConversationId,
   ConversationSummary,
@@ -21,11 +22,21 @@ export const assistantAsk = defineContract({
   summary:
     'Send the in-app assistant a message, starting a conversation or continuing one (people only). It answers in the background.',
   effect: 'write',
-  input: z.object({
-    conversationId: ConversationId.optional(),
-    message: z.string().trim().min(1).max(8000),
-    page: PageContext.optional(),
-  }),
+  input: z
+    .object({
+      conversationId: ConversationId.optional(),
+      message: z.string().trim().max(8000),
+      page: PageContext.optional(),
+      attachments: z
+        .array(AttachmentInput)
+        .max(5, 'Attach at most 5 files to one message')
+        .optional()
+        .describe('Text files sent with the message (JSON, CSV, text)'),
+    })
+    .refine((input) => input.message !== '' || (input.attachments?.length ?? 0) > 0, {
+      message: 'Write a message or attach a file',
+      path: ['message'],
+    }),
   output: ConversationSummary,
 });
 

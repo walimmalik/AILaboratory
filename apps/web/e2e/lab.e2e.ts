@@ -323,3 +323,25 @@ test('an Opentrons definition imports from a file and exports as one, on the pag
   await expect(panel.getByText('nest_12_reservoir_15ml.json')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Download' })).toBeVisible();
 });
+
+test('a file attached in the assistant goes to the tool whole, not through the chat', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole('button', { name: 'Assistant' }).click();
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await panel
+    .getByLabel('Attach a file to your message')
+    .setInputFiles(
+      fileURLToPath(
+        new URL('../../../seed/opentrons/nest_12_reservoir_15ml.json', import.meta.url),
+      ),
+    );
+  await expect(panel.getByText('nest_12_reservoir_15ml.json')).toBeVisible();
+  const reply = panel.getByLabel('Message the assistant');
+  await reply.fill('/op labware.import_opentrons {"definition": {"$file": "$attached"}}');
+  await reply.press('Enter');
+  await expect(panel.getByText(/attached nest_12_reservoir_15ml\.json/)).toBeVisible();
+  await expect(panel.getByRole('link', { name: /^LWT-\d+$/ }).first()).toBeVisible();
+  await expect(panel.getByText(/^Done:/)).toBeVisible();
+});

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   assistantAsk,
   assistantGetConversation,
@@ -47,7 +48,12 @@ export const assistantOperations = [
       };
       let conversation = input.conversationId
         ? await findConversation(db, ctx, input.conversationId, { forUpdate: true })
-        : await createConversation(db, ctx, { title: titleFrom(input.message), ...current });
+        : await createConversation(db, ctx, {
+            title: titleFrom(
+              input.message || (input.attachments?.map((a) => a.name).join(', ') ?? ''),
+            ),
+            ...current,
+          });
       if (conversation.status === 'running' || assistant.isRunning(conversation.id)) {
         throw new OperationError(
           'invalid_state',
@@ -58,6 +64,14 @@ export const assistantOperations = [
         role: 'user',
         text: input.message,
         ...(input.page ? { page: input.page } : {}),
+        ...(input.attachments?.length
+          ? {
+              attachments: input.attachments.map((file) => ({
+                ...file,
+                id: `file_${randomUUID().replaceAll('-', '').slice(0, 10)}`,
+              })),
+            }
+          : {}),
       });
       // A conversation continues on whichever model is set up now.
       conversation = await updateConversation(db, conversation.id, {

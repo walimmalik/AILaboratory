@@ -9,6 +9,10 @@ The assistant panel in the web app talks to a model of your choice, which works 
 3. Each tool call runs through `OperationRegistry.execute` as an agent: `{type: "agent", agentName, onBehalfOf: <the person>, sessionRef: <conversation id>}`. Agent policies apply as for any outside agent, so changes to active records come back `proposed` and wait on the Review page. After each turn the panel adds a "Waiting for you" line linking the drafts the turn wrote and the changes it proposed that still wait (computed from the turn's tool results and the live `review.list`, not written by the model). The ledger shows each change under the assistant's name, and the ledger line links back to the conversation.
 4. Results go back to the model until it answers without calling a tool, or until 16 steps; the conversation then becomes `idle` or `failed` with a message that says what happened.
 
+## Files
+
+A person can attach up to 5 text files to a message (JSON, CSV, TXT and similar, up to 2 million characters each; attach button or drop on the reply box). They are kept on the user message as `attachments` with a `file_…` ID. The model sees each as a line naming the ID and size, then the first 4,000 characters. To hand a whole file to a tool it writes `{"$file": "file_…"}` where the value goes (e.g. `{"definition": {"$file": "file_…"}}` for `labware.import_opentrons`); the loop swaps in the file before the operation runs (parsed for JSON files), so the model never retypes a file. The ledger records attachments by name and size only. Files an operation returns (contracts with `file`) show under the step with Download and Copy, and the model is told not to repeat them. PDFs and spreadsheets are not attachable yet.
+
 Messages are stored provider-neutrally in `conversation_messages.body` (user, assistant with tool calls, tool results with an outcome). The provider's own reply is kept in `provider_raw` and sent back unchanged while the same provider and model continue the conversation (Claude requires its thinking blocks unchanged). A conversation continues on whichever model is set up now. After an API restart, conversations left `running` are marked `failed`.
 
 ## Models
@@ -29,7 +33,7 @@ Set in the repo-root `.env`; the API reads it at start.
 | Operation | |
 | --- | --- |
 | `assistant.status` | Which model is set up, or why none is |
-| `assistant.ask` | Send a message (new conversation, or `conversationId` to continue); refused while the conversation is still running |
+| `assistant.ask` | Send a message (new conversation, or `conversationId` to continue), optionally with `attachments`; refused while the conversation is still running |
 | `assistant.list_conversations`, `assistant.get_conversation` | Your conversations; other people's are not found. Agents acting for you can read them. |
 
 `GET /v1/assistant/conversations/{id}/stream` streams one conversation's new messages and status changes (server-sent events). The web panel keeps the shown conversation live over it.

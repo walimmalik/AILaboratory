@@ -1,6 +1,7 @@
 import { ApiError } from '@ailab/client';
 import {
   type AssistantMessage,
+  type AttachmentInput,
   assistantAsk,
   type Conversation,
   type ConversationSummary,
@@ -27,7 +28,10 @@ interface AssistantUi {
   /** Opens the panel on a conversation, or on a fresh one. */
   show: (conversationId?: string) => void;
   /** Sends a message: to the shown conversation, or to a new one with `fresh`. */
-  send: (message: string, options?: { fresh?: boolean }) => Promise<boolean>;
+  send: (
+    message: string,
+    options?: { fresh?: boolean; attachments?: AttachmentInput[] },
+  ) => Promise<boolean>;
   sending: boolean;
   sendError: string | undefined;
   /** The shown conversation's latest state, live. */
@@ -106,7 +110,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const send = useCallback(
-    async (message: string, options: { fresh?: boolean } = {}) => {
+    async (message: string, options: { fresh?: boolean; attachments?: AttachmentInput[] } = {}) => {
       const target = options.fresh ? undefined : conversationId;
       const heading = document.querySelector('.page h1')?.textContent?.trim();
       setOpen(true);
@@ -116,6 +120,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         const summary = await api.run(assistantAsk, {
           message,
           ...(target ? { conversationId: target } : {}),
+          ...(options.attachments?.length ? { attachments: options.attachments } : {}),
           page: { path, ...(heading ? { title: heading.slice(0, 200) } : {}) },
         });
         setRunning(true);

@@ -44,6 +44,7 @@ export async function recordActivity(
     id: newId('act'),
     at: at.toISOString(),
     actor: entry.actor ?? ctx.actor,
+    ...(rest.input === undefined ? {} : { input: ledgerInput(rest.input) }),
   };
   await db.insert(activity).values({
     id: full.id,
@@ -93,4 +94,17 @@ export async function listActivity(
     ...(row.error ? { error: row.error } : {}),
     durationMs: row.durationMs,
   }));
+}
+
+/** The input as the ledger keeps it: attached files by name and size, not their whole text. */
+function ledgerInput(input: unknown): unknown {
+  const files = (input as { attachments?: unknown } | null | undefined)?.attachments;
+  if (!Array.isArray(files)) return input;
+  return {
+    ...(input as object),
+    attachments: files.map((file: { name?: unknown; text?: unknown }) => ({
+      name: file.name,
+      characters: typeof file.text === 'string' ? file.text.length : 0,
+    })),
+  };
 }
