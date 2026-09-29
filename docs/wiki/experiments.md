@@ -1,6 +1,6 @@
 # Experiments and designers
 
-The scientific frame (013), the designers that fill it (014, 016, 017) and the workflows that put a design in order for the scheduler (018). All five are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
+The scientific frame (013), the designers that fill it (014, 016, 017) the workflows that put a design in order (018) and the scheduler that fits them into the lab's week (019). All six are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
 
 ## Campaigns, experiments and runs (plan 013)
 
@@ -81,3 +81,15 @@ These drive the templates and the first end-to-end target (one ELISA): sandwich 
 - When an experiment has a workflow, the **run checklist** follows its steps, plate by plate.
 - **Repeating:** running the same experiment again is another run of the same confirmed workflow with new run settings. For new experiments and routines, any confirmed workflow can be saved as a **workflow template** (roles and capabilities, joins, holds, windows); applying it rebuilds the graph from the new experiment's documents, and assay templates (017) name their workflow template.
 
+## Scheduler and orchestrator (plan 019)
+
+[Plan 019](../plans/019-scheduler-and-orchestrator.md). Locked 2026-09-29; builds after 018a.
+
+- A **schedule** (`SCH-0001`) places every step of one or more workflows on instruments and people, with times, the moves between them and the margin on every timing window and handling rule. The engine drafts it; a person confirms it, which books everything.
+- **Two levels, one engine.** The lab orchestrator plans across standalone instruments (Mantis, STAR, washer), benches and people, and treats the workcell as one resource; each stretch a plate spends in the FlexPod is a **workcell segment**, planned in detail by the ported echo650 kernel and run on the day by Cellario.
+- **Carries:** a person moving a plate between rooms or instruments is a timed task from the lab's travel table, and counts as time out of controlled conditions. People are the only transporters for now.
+- **People** have working hours, absences and training; a person is booked only for set-up, loading and unloading, not an instrument's walk-away time.
+- **Calendar:** the app is the source of truth, with a calendar page where people book instruments and actions directly, and an iCal feed out to Outlook or Google.
+- **Science first:** hard rules are never broken by the engine; a person may loosen one for one schedule with a reason. Durations carry a spread by source (a person can state one), and hard rules must hold in fixed stress cases. The scheduler **learns**: repeatable actions logged by Cellario, robots and instruments get a measured mean and standard deviation that replace estimates as runs accumulate, with drift flagged. Where a step's time depends on what it does (the order of Echo dispenses, a liquid handler's tips and moves), **timing models** fitted from per-action instrument logs predict it from the worklist, and calibrate the digital twins' simulation.
+- **Choosing:** people see three or four option cards (fastest, most margin, keep evenings free) with numbers, and answer one question, "what matters most?"; the agent recommends one and runs what-ifs, but never types times.
+- **Views:** Gantt lanes by instrument, person or plate (with each plate's time out against its limit), simulation playback, prep lists and loading cards. During a run it follows actual times and re-plans only what hasn't started.

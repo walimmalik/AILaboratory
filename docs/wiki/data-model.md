@@ -87,6 +87,12 @@ Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-00
 | Set | `set_` | `SET-001` | 013 |
 | Layout template | `lyt_` | `LYT-0001` | 014 |
 | Plate map | `pmp_` | `PMP-0001` | 014 |
+| Workflow template | `wft_` | `WFT-0001` | 018 |
+| Workflow | `wf_` | `WF-0001` | 018 |
+| Schedule | `sch_` | `SCH-0001` | 019 |
+| Booking | `bkg_` | `BKG-0001` | 019 |
+| Travel table | `trt_` | one per lab | 019 |
+| Timing model | `tmm_` | `TMM-0001` | 019 |
 
 The seed's placeholder `DL` + 6 digit barcodes are replaced by container names (010-V5).
 
