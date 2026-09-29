@@ -1,6 +1,6 @@
 # 006: Seed lab
 
-- Status: round 6 answered by Wali 2026-09-29; first cut of the data written, in review
+- Status: round 6 answered by Wali 2026-09-29; first cut merged as PR #6
 - Depends on: 000 (Kind, Instance, State; units; readable IDs)
 - Feeds: 007 labware, 008 instruments, 009 reagents, 010 inventory, 011 SOP library, and every e2e test
 
