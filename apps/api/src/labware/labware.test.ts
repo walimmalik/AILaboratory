@@ -223,6 +223,27 @@ describe('labware type checks', () => {
     ]);
   });
 
+  it('asks a tube only what applies to a tube', async () => {
+    const record = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'Conical tube',
+      attributes: {
+        family: 'tube',
+        footprint: { sbs: false, diameter: { value: '30', unit: 'mm' } },
+        wells: { layout: 'grid', rows: 1, columns: 1 },
+        maxVolume: { value: '50', unit: 'mL' },
+      },
+    });
+    const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+    const ids = state.checks.map((c) => c.id);
+    expect(ids).not.toContain('wells_placed');
+    expect(ids).not.toContain('sbs_footprint');
+    expect(ids).not.toContain('tip_known');
+    expect(ids).toContain('dead_volume_known');
+    expect(state.notApplicable).toEqual(expect.arrayContaining(['wells.a1', 'wells.pitch', 'tip']));
+    expect(state.notApplicable).not.toContain('footprint.diameter');
+  });
+
   it('refuses attributes outside the schema', async () => {
     const error = await refused(
       run(agent, 'records.create', {

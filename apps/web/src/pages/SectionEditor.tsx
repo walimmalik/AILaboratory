@@ -24,10 +24,13 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function SectionEditor({
   record,
   fields,
+  notApplicable = [],
   onDone,
 }: {
   record: RecordEnvelope;
   fields: string[];
+  /** Paths that don't apply to this record; left out unless they hold a value. */
+  notApplicable?: string[];
   onDone: () => void;
 }) {
   const kinds = useQuery(kindsQuery).data;
@@ -81,7 +84,7 @@ export function SectionEditor({
   const kindOfPrefix = Object.fromEntries(kinds?.map((k) => [k.idPrefix, k.kind]) ?? []);
 
   return (
-    <EditorScope root={root} kindOfPrefix={kindOfPrefix}>
+    <EditorScope root={root} kindOfPrefix={kindOfPrefix} hidden={new Set(notApplicable)}>
       <form
         className="editor"
         onSubmit={(e) => {
@@ -93,6 +96,7 @@ export function SectionEditor({
           {fields.map((field) => {
             const schema = root.properties?.[field];
             if (!schema) return null;
+            if (notApplicable.includes(field) && values[field] === undefined) return null;
             return (
               <FormRow key={field} label={fieldLabel(field)} hint={schema.description}>
                 <ValueEditor
@@ -100,6 +104,7 @@ export function SectionEditor({
                   value={values[field]}
                   onChange={(next) => setValues((v) => ({ ...v, [field]: next }))}
                   label={fieldLabel(field)}
+                  path={field}
                 />
               </FormRow>
             );

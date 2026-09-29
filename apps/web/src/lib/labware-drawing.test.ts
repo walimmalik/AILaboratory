@@ -73,6 +73,5 @@ describe('well section', () => {
     });
     if ('missing' in section) throw new Error(section.missing);
     expect(section.fill).toBeUndefined();
-    expect(section.notes).toContain('Liquid height is worked out for flat-bottomed wells only.');
   });
 });

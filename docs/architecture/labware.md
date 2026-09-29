@@ -31,6 +31,8 @@ Everything is optional except `family`, so an agent can draft what it knows; the
 
 ## Rules
 
+- Each family is asked only what applies to it. A tube is its own single well: no pitch, A1 offset, SBS size or SBS checks; its outer size is diameter and height. Racks hold tubes, not liquid; tip racks have tip length and no dead volume; lids have no wells. `notApplicable` in `kinds.ts` lists the attributes each family is not asked for, and each check says which families it `applies` to.
+
 - Geometry is in mm; 1 mm³ is 1 µL.
 - Well names are canonical (`A1`, not `A01`). `parseWellName` reads other spellings at the edge.
 - Liquid height is computed for flat-bottomed wells only; other bottoms are refused as not modelled.

@@ -245,11 +245,7 @@ export class RecordService {
         };
         const reviews = { ...record.reviews, [section.id]: review };
         // Confirming the last section of a draft, with nothing blocking, is the final confirm too.
-        const after = readiness(
-          { ...toEnvelope(record), reviews },
-          kind.sections ?? [],
-          kind.checks ?? [],
-        );
+        const after = readiness({ ...toEnvelope(record), reviews }, kind);
         return record.status === 'draft' && after.ready
           ? { reviews, status: 'active' as const }
           : { reviews };
@@ -261,7 +257,7 @@ export class RecordService {
   async readiness(ctx: RecordContext, id: string): Promise<Readiness> {
     const record = toEnvelope(await findRecord(this.db, ctx, id));
     const kind = this.kinds.get(record.kind);
-    return readiness(record, kind.sections ?? [], kind.checks ?? []);
+    return readiness(record, kind);
   }
 
   /** Draft → active. */
@@ -277,7 +273,7 @@ export class RecordService {
           throw new RecordError('invalid_state', `${record.name} is ${record.status}, not a draft`);
         }
         if (kind.sections?.length) {
-          const state = readiness(toEnvelope(record), kind.sections, kind.checks ?? []);
+          const state = readiness(toEnvelope(record), kind);
           if (!state.ready) {
             throw new RecordError(
               'not_ready',
