@@ -9,6 +9,7 @@ import {
   recordsHistory,
   recordsLinks,
   recordsList,
+  recordsReadiness,
 } from '@ailab/schema';
 import { queryOptions } from '@tanstack/react-query';
 import { api } from './api.ts';
@@ -55,6 +56,12 @@ export const historyQuery = (id: string) =>
   queryOptions({
     queryKey: ['record', id, 'history'],
     queryFn: async () => (await api.run(recordsHistory, { id })).versions,
+  });
+
+export const readinessQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['record', id, 'readiness'],
+    queryFn: () => api.run(recordsReadiness, { id }),
   });
 
 export const linksQuery = (id: string, direction: 'from' | 'to') =>

@@ -2,13 +2,21 @@ import type { RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
-import { historyQuery, linksQuery, pendingProposalsQuery, recordQuery } from '../queries.ts';
+import {
+  historyQuery,
+  linksQuery,
+  pendingProposalsQuery,
+  readinessQuery,
+  recordQuery,
+} from '../queries.ts';
 import { useMe } from '../session.ts';
+import { fieldLabel, ReviewBlocks } from './Review.tsx';
 
 const operationWords: Record<string, string> = {
   create: 'created',
   update: 'edited',
-  activate: 'activated',
+  activate: 'confirmed and activated',
+  confirm_section: 'confirmed',
   archive: 'archived',
   unarchive: 'unarchived',
   restore: 'restored an earlier version',
@@ -19,6 +27,7 @@ export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
   const record = useQuery(recordQuery(id));
   const history = useQuery(historyQuery(id));
+  const readiness = useQuery(readinessQuery(id)).data;
   const pending = (useQuery(pendingProposalsQuery).data ?? []).filter(
     (p) => (p.input as { id?: unknown } | undefined)?.id === id,
   );
@@ -60,26 +69,30 @@ export function RecordPage() {
         </p>
       )}
 
-      <section className="block">
-        <header>
-          <h2>Fields</h2>
-        </header>
-        <div className="body">
-          {Object.keys(r.attributes).length === 0 ? (
-            <p className="empty">No fields.</p>
-          ) : (
-            <dl className="kv">
-              {Object.entries(r.attributes).map(([key, value]) => (
-                <Field key={key} name={key} value={value} />
-              ))}
-            </dl>
-          )}
-          <details className="tech">
-            <summary>technical details</summary>
-            <pre className="json">{JSON.stringify(r, null, 2)}</pre>
-          </details>
-        </div>
-      </section>
+      {readiness && readiness.sections.length > 0 ? (
+        <ReviewBlocks record={r} readiness={readiness} renderValue={renderValue} />
+      ) : (
+        <section className="block">
+          <header>
+            <h2>Fields</h2>
+          </header>
+          <div className="body">
+            {Object.keys(r.attributes).length === 0 ? (
+              <p className="empty">No fields.</p>
+            ) : (
+              <dl className="kv">
+                {Object.entries(r.attributes).map(([key, value]) => (
+                  <Field key={key} name={key} value={value} />
+                ))}
+              </dl>
+            )}
+            <details className="tech">
+              <summary>technical details</summary>
+              <pre className="json">{JSON.stringify(r, null, 2)}</pre>
+            </details>
+          </div>
+        </section>
+      )}
 
       <section className="block">
         <header>
@@ -110,6 +123,9 @@ export function RecordPage() {
                       </td>
                       <td>
                         {operationWords[v.operation] ?? v.operation}
+                        {v.operation === 'confirm_section' && (
+                          <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
+                        )}
                         {v.operation !== 'create' && changed.length > 0 && (
                           <span className="muted"> ({changed.join(', ')})</span>
                         )}
@@ -129,12 +145,27 @@ export function RecordPage() {
   );
 }
 
-function Field({ name, value }: { name: string; value: unknown }) {
+/** The sections a confirmation added or refreshed, by their ID. */
+function confirmedSections(
+  before: { reviews?: Record<string, { confirmedAt: string }> } | undefined,
+  after: { reviews?: Record<string, { confirmedAt: string }> },
+): string[] {
+  return Object.entries(after.reviews ?? {})
+    .filter(([id, review]) => before?.reviews?.[id]?.confirmedAt !== review.confirmedAt)
+    .map(([id]) => fieldLabel(id));
+}
+
+/** A value as a person reads it: linked records by name, quantities with their unit. */
+function renderValue(value: unknown) {
   const isRef = typeof value === 'string' && /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
+  return isRef ? <LinkedName id={value as string} /> : formatValue(value);
+}
+
+function Field({ name, value }: { name: string; value: unknown }) {
   return (
     <>
-      <dt>{name}</dt>
-      <dd className="mono">{isRef ? <LinkedName id={value as string} /> : formatValue(value)}</dd>
+      <dt>{fieldLabel(name)}</dt>
+      <dd className="mono">{renderValue(value)}</dd>
     </>
   );
 }

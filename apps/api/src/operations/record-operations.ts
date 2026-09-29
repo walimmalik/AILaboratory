@@ -1,6 +1,7 @@
 import {
   recordsActivate,
   recordsArchive,
+  recordsConfirmSection,
   recordsCreate,
   recordsDeleteDraft,
   recordsGet,
@@ -8,6 +9,7 @@ import {
   recordsKinds,
   recordsLinks,
   recordsList,
+  recordsReadiness,
   recordsRestore,
   recordsUnarchive,
   recordsUpdate,
@@ -15,6 +17,7 @@ import {
 import { z } from 'zod';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
+import { OperationError } from './errors.ts';
 import { type AgentPolicy, implement, type OperationDeps } from './registry.ts';
 
 const service = (deps: OperationDeps) => new RecordService(deps.db, deps.kinds);
@@ -27,13 +30,22 @@ const proposeIfActive: AgentPolicy<{ id: string }> = async (ctx: RecordContext, 
 
 export const recordOperations = [
   implement(recordsCreate, {
-    agentPolicy: (_ctx, input) => (input.status === 'active' ? 'propose' : 'direct'),
+    agentPolicy: (_ctx, input, deps) => {
+      if (input.status === 'active' && deps.kinds.get(input.kind).sections?.length) {
+        throw new OperationError(
+          'invalid_state',
+          `An agent creates a ${input.kind} as a draft; a person confirms each section and then the draft`,
+        );
+      }
+      return input.status === 'active' ? 'propose' : 'direct';
+    },
     run: (ctx, input, deps) =>
       service(deps).create(ctx, {
         kind: input.kind,
         label: input.label,
         attributes: input.attributes,
         ...(input.status ? { status: input.status } : {}),
+        ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
       }),
   }),
@@ -48,6 +60,14 @@ export const recordOperations = [
           io: 'input',
           unrepresentable: 'any',
         }) as Record<string, unknown>,
+        sections: definition.sections ?? [],
+        checks: (definition.checks ?? []).map(({ id, label, severity, source, section }) => ({
+          id,
+          label,
+          severity,
+          source,
+          ...(section ? { section } : {}),
+        })),
       })),
     }),
   }),
@@ -64,12 +84,32 @@ export const recordOperations = [
         expectedVersion: input.expectedVersion,
         ...(input.label === undefined ? {} : { label: input.label }),
         ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+        ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
       }),
   }),
   implement(recordsActivate, {
-    agentPolicy: 'propose',
+    // An agent may ask for the final confirm, but only once a person has confirmed every section.
+    agentPolicy: async (ctx, input, deps) => {
+      const state = await service(deps).readiness(ctx, input.id);
+      if (state.status === 'draft' && !state.ready) {
+        throw new OperationError('not_ready', `Not ready to confirm: ${state.missing.join('; ')}`, {
+          missing: state.missing,
+        });
+      }
+      return 'propose' as const;
+    },
     run: (ctx, { id, ...input }, deps) => service(deps).activate(ctx, id, transition(input)),
+  }),
+  implement(recordsConfirmSection, {
+    // Confirming is what a person does after reviewing an agent's draft (ADR 0021).
+    actors: 'people',
+    agentPolicy: 'direct',
+    run: (ctx, { id, section, ...input }, deps) =>
+      service(deps).confirmSection(ctx, id, { section, ...transition(input) }),
+  }),
+  implement(recordsReadiness, {
+    run: (ctx, input, deps) => service(deps).readiness(ctx, input.id),
   }),
   implement(recordsArchive, {
     agentPolicy: 'propose',

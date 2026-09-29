@@ -1,12 +1,16 @@
-import { formatName, newId } from '@ailab/domain';
+import { formatName, newId, readiness, runChecks, sameValue, sectionValues } from '@ailab/domain';
 import {
   type Actor,
+  type EvidenceInput,
+  type FieldEvidence,
   type KindDefinition,
+  type Readiness,
   type RecordEnvelope,
   RecordLink,
   type RecordOperation,
   type RecordStatus,
   type RecordVersion,
+  type SectionReview,
 } from '@ailab/schema';
 import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -31,6 +35,8 @@ export interface CreateRecordInput {
   attributes: unknown;
   /** New records start as drafts unless created active. */
   status?: 'draft' | 'active';
+  /** Where values came from, by attribute. Unnamed values set by an agent are marked assumed. */
+  evidence?: Record<string, EvidenceInput>;
   reason?: string;
 }
 
@@ -48,6 +54,7 @@ export interface UpdateRecordInput {
   expectedVersion: number;
   label?: string;
   attributes?: unknown;
+  evidence?: Record<string, EvidenceInput>;
   reason?: string;
 }
 
@@ -72,6 +79,35 @@ export class RecordService {
     const kind = this.kinds.get(input.kind);
     const attributes = parseAttributes(kind, input.attributes);
     const at = this.now();
+    const evidence = nextEvidence(ctx.actor, at, undefined, attributes, {}, input.evidence);
+    // A person who creates a record active confirms every section as they wrote it (ADR 0021).
+    const reviews: Record<string, SectionReview> = {};
+    if (input.status === 'active' && kind.sections?.length) {
+      if (ctx.actor.type === 'agent') {
+        throw new RecordError(
+          'invalid_state',
+          `An agent creates a ${kind.kind} as a draft; a person confirms it`,
+        );
+      }
+      for (const section of kind.sections) {
+        reviews[section.id] = {
+          confirmedBy: ctx.actor,
+          confirmedAt: at.toISOString(),
+          version: 1,
+          values: sectionValues(section, attributes),
+        };
+      }
+      const blockers = runChecks(kind.checks ?? [], attributes).filter(
+        (c) => c.severity === 'blocker' && !c.passed,
+      );
+      if (blockers.length > 0) {
+        throw new RecordError(
+          'not_ready',
+          `This ${kind.kind} can't be created active: ${blockers.map((c) => c.message ?? c.label).join('; ')}`,
+          { missing: blockers.map((c) => c.message ?? c.label) },
+        );
+      }
+    }
     return this.db.transaction(async (tx) => {
       const name = await allocateName(tx, ctx.labId, kind);
       const [row] = await tx
@@ -86,6 +122,8 @@ export class RecordService {
           status: input.status ?? 'draft',
           version: 1,
           attributes,
+          evidence,
+          reviews,
           createdAt: at,
           createdBy: ctx.actor,
           updatedAt: at,
@@ -136,24 +174,105 @@ export class RecordService {
           `${record.name} is archived; unarchive it to edit it`,
         );
       }
+      const attributes =
+        input.attributes === undefined
+          ? record.attributes
+          : parseAttributes(kind, input.attributes);
       return {
         label: input.label ?? record.label,
-        attributes:
-          input.attributes === undefined
-            ? record.attributes
-            : parseAttributes(kind, input.attributes),
+        attributes,
+        evidence: nextEvidence(
+          ctx.actor,
+          this.now(),
+          record.attributes,
+          attributes,
+          record.evidence,
+          input.evidence,
+        ),
       };
     });
   }
 
+  /**
+   * A person confirms one section as it stands now (ADR 0021). The section stays confirmed while its
+   * values equal the ones confirmed here; any later change sends it back to review.
+   */
+  async confirmSection(
+    ctx: RecordContext,
+    id: string,
+    input: TransitionInput & { section: string },
+  ): Promise<RecordEnvelope> {
+    return this.#change(
+      ctx,
+      id,
+      input.expectedVersion,
+      'confirm_section',
+      input.reason,
+      (record, kind) => {
+        if (record.status === 'archived') {
+          throw new RecordError('invalid_state', `${record.name} is archived`);
+        }
+        const section = kind.sections?.find((s) => s.id === input.section);
+        if (!section) {
+          const known = kind.sections?.map((s) => s.id).join(', ');
+          throw new RecordError(
+            'invalid_input',
+            known
+              ? `A ${kind.kind} has no section "${input.section}"; its sections are ${known}`
+              : `A ${kind.kind} has no sections to confirm`,
+          );
+        }
+        const values = sectionValues(section, record.attributes);
+        const previous = record.reviews[section.id];
+        if (previous && sameValue(previous.values, values)) {
+          throw new RecordError(
+            'invalid_state',
+            `${section.title} on ${record.name} is already confirmed`,
+          );
+        }
+        const review: SectionReview = {
+          confirmedBy: ctx.actor,
+          confirmedAt: this.now().toISOString(),
+          version: record.version,
+          values,
+        };
+        return { reviews: { ...record.reviews, [section.id]: review } };
+      },
+    );
+  }
+
+  /** What is confirmed, what changed, what was assumed, and which checks pass. */
+  async readiness(ctx: RecordContext, id: string): Promise<Readiness> {
+    const record = toEnvelope(await findRecord(this.db, ctx, id));
+    const kind = this.kinds.get(record.kind);
+    return readiness(record, kind.sections ?? [], kind.checks ?? []);
+  }
+
   /** Draft → active. */
   async activate(ctx: RecordContext, id: string, input: TransitionInput): Promise<RecordEnvelope> {
-    return this.#change(ctx, id, input.expectedVersion, 'activate', input.reason, (record) => {
-      if (record.status !== 'draft') {
-        throw new RecordError('invalid_state', `${record.name} is ${record.status}, not a draft`);
-      }
-      return { status: 'active' };
-    });
+    return this.#change(
+      ctx,
+      id,
+      input.expectedVersion,
+      'activate',
+      input.reason,
+      (record, kind) => {
+        if (record.status !== 'draft') {
+          throw new RecordError('invalid_state', `${record.name} is ${record.status}, not a draft`);
+        }
+        if (kind.sections?.length) {
+          const state = readiness(toEnvelope(record), kind.sections, kind.checks ?? []);
+          if (!state.ready) {
+            throw new RecordError(
+              'not_ready',
+              `${record.name} is not ready to confirm: ${state.missing.join('; ')}`,
+              { missing: state.missing },
+            );
+          }
+        }
+        return { status: 'active' };
+      },
+    );
   }
 
   /** Hides a record from pickers. Links to it keep working. */
@@ -208,10 +327,16 @@ export class RecordService {
           );
         }
         const earlier = await findVersion(tx, record.id, input.version);
-        return {
-          label: earlier.snapshot.label,
-          attributes: parseAttributes(kind, earlier.snapshot.attributes),
-        };
+        const attributes = parseAttributes(kind, earlier.snapshot.attributes);
+        // Restored values keep the evidence they had in that version.
+        const evidence: Record<string, FieldEvidence> = {};
+        for (const field of Object.keys(attributes)) {
+          const kept = sameValue(record.attributes[field], attributes[field])
+            ? record.evidence[field]
+            : earlier.snapshot.evidence[field];
+          if (kept) evidence[field] = kept;
+        }
+        return { label: earlier.snapshot.label, attributes, evidence };
       },
     );
   }
@@ -296,8 +421,10 @@ export class RecordService {
       kind: KindDefinition,
       tx: Db,
     ) =>
-      | Partial<Pick<RecordRow, 'label' | 'attributes' | 'status'>>
-      | Promise<Partial<Pick<RecordRow, 'label' | 'attributes' | 'status'>>>,
+      | Partial<Pick<RecordRow, 'label' | 'attributes' | 'status' | 'evidence' | 'reviews'>>
+      | Promise<
+          Partial<Pick<RecordRow, 'label' | 'attributes' | 'status' | 'evidence' | 'reviews'>>
+        >,
   ): Promise<RecordEnvelope> {
     return this.db.transaction(async (tx) => {
       const current = await findRecord(tx, ctx, id, { forUpdate: true });
@@ -319,6 +446,46 @@ export class RecordService {
       return writeVersion(tx, record, operation, ctx.actor, reason);
     });
   }
+}
+
+/**
+ * Evidence after a change (ADR 0021). Each attribute whose value changed gets new evidence from the
+ * actor: what they named, or "assumed" for an agent and "person" for a person. Evidence named for an
+ * unchanged attribute replaces what it had, so an agent can cite a source for an earlier estimate.
+ */
+function nextEvidence(
+  actor: Actor,
+  at: Date,
+  before: Record<string, unknown> | undefined,
+  after: Record<string, unknown>,
+  current: Record<string, FieldEvidence>,
+  named: Record<string, EvidenceInput> | undefined,
+): Record<string, FieldEvidence> {
+  for (const field of Object.keys(named ?? {})) {
+    if (!(field in after)) {
+      throw new RecordError(
+        'invalid_input',
+        `Evidence names "${field}", which is not an attribute with a value`,
+      );
+    }
+  }
+  const evidence: Record<string, FieldEvidence> = {};
+  for (const [field, value] of Object.entries(after)) {
+    const changed = !before || !sameValue(before[field], value);
+    const given = named?.[field];
+    if (given) {
+      evidence[field] = { ...given, by: actor, at: at.toISOString() };
+    } else if (changed) {
+      evidence[field] = {
+        source: actor.type === 'agent' ? 'assumed' : 'person',
+        by: actor,
+        at: at.toISOString(),
+      };
+    } else if (current[field]) {
+      evidence[field] = current[field];
+    }
+  }
+  return evidence;
 }
 
 function parseAttributes(kind: KindDefinition, attributes: unknown): Record<string, unknown> {
@@ -479,6 +646,8 @@ function toEnvelope(row: RecordRow): RecordEnvelope {
     status: row.status as RecordStatus,
     version: row.version,
     attributes: row.attributes,
+    evidence: row.evidence,
+    reviews: row.reviews,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt.toISOString(),

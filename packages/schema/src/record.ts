@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Actor } from './actor.ts';
+import { FieldEvidence, SectionReview } from './design.ts';
 import { RecordId, RecordName } from './ids.ts';
 
 export const RecordStatus = z.enum(['draft', 'active', 'archived']);
@@ -19,6 +20,10 @@ export function recordEnvelope<A extends z.ZodType>(attributes: A) {
     status: RecordStatus,
     version: z.number().int().positive(),
     attributes,
+    /** Where each attribute's value came from (plan 004c). */
+    evidence: z.record(z.string(), FieldEvidence),
+    /** Section confirmations by people, keyed by section ID (plan 004c). */
+    reviews: z.record(z.string(), SectionReview),
     createdAt: z.iso.datetime(),
     createdBy: Actor,
     updatedAt: z.iso.datetime(),
@@ -40,6 +45,7 @@ export const RecordOperation = z.enum([
   'archive',
   'unarchive',
   'restore',
+  'confirm_section',
 ]);
 export type RecordOperation = z.infer<typeof RecordOperation>;
 

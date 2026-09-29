@@ -117,13 +117,17 @@ describe('history', () => {
       attributes: attrs('navy'),
       reason: 'Matched the catalog color',
     });
-    await service.activate(ctx, created.id, { expectedVersion: 2 });
+    await service.confirmSection(ctx, created.id, { expectedVersion: 2, section: 'appearance' });
+    await service.confirmSection(ctx, created.id, { expectedVersion: 3, section: 'volume' });
+    await service.activate(ctx, created.id, { expectedVersion: 4 });
 
     const history = await service.history(ctx, created.id);
     expect(history.map((v) => [v.version, v.operation, v.actor.type])).toEqual([
       [1, 'create', 'user'],
       [2, 'update', 'agent'],
-      [3, 'activate', 'user'],
+      [3, 'confirm_section', 'user'],
+      [4, 'confirm_section', 'user'],
+      [5, 'activate', 'user'],
     ]);
     expect(history[1]?.reason).toBe('Matched the catalog color');
     expect(history[1]?.snapshot.attributes).toMatchObject({ color: 'navy' });
@@ -326,5 +330,147 @@ describe('quantities in attributes', () => {
     const stored = (await service.get(ctx, record.id)).attributes as { volume: Quantity };
     expect(stored.volume).toEqual({ value: '0.1', unit: 'uL' });
     expect(convert(stored.volume, 'nL')).toEqual({ value: '100', unit: 'nL' });
+  });
+});
+
+describe('draft and confirm', () => {
+  const draft = () =>
+    service.create(agentCtx, {
+      kind: 'widget',
+      label: 'Drafted',
+      attributes: attrs('blue'),
+      evidence: { volume: { source: 'datasheet', reference: 'https://example.org/widget.pdf' } },
+    });
+
+  it('marks what an agent sets as assumed unless it names a source', async () => {
+    const record = await draft();
+    expect(record.evidence.color).toMatchObject({ source: 'assumed', by: agentCtx.actor });
+    expect(record.evidence.volume).toMatchObject({
+      source: 'datasheet',
+      reference: 'https://example.org/widget.pdf',
+    });
+    const state = await service.readiness(ctx, record.id);
+    expect(state).toMatchObject({ ready: false, assumed: ['color'] });
+    expect(state.missing).toEqual(['Appearance is not confirmed', 'Volume is not confirmed']);
+  });
+
+  it("a person's edit replaces an agent's estimate, and unchanged values keep their evidence", async () => {
+    const record = await draft();
+    const edited = await service.update(ctx, record.id, {
+      expectedVersion: 1,
+      attributes: attrs('navy'),
+    });
+    expect(edited.evidence.color).toMatchObject({ source: 'person', by: ctx.actor });
+    expect(edited.evidence.volume).toEqual(record.evidence.volume);
+    expect((await service.readiness(ctx, record.id)).assumed).toEqual([]);
+  });
+
+  it('refuses evidence for an attribute that has no value', async () => {
+    const error = await expectError(
+      service.create(agentCtx, {
+        kind: 'widget',
+        label: 'x',
+        attributes: attrs('blue'),
+        evidence: { partOf: { source: 'measured' } },
+      }),
+      'invalid_input',
+    );
+    expect(error.message).toContain('partOf');
+  });
+
+  it('confirms section by section, then activates', async () => {
+    const record = await draft();
+    await expectError(service.activate(ctx, record.id, { expectedVersion: 1 }), 'not_ready');
+    const one = await service.confirmSection(ctx, record.id, {
+      expectedVersion: 1,
+      section: 'appearance',
+    });
+    expect(one.reviews.appearance).toMatchObject({
+      confirmedBy: ctx.actor,
+      version: 1,
+      values: { color: 'blue' },
+    });
+    await service.confirmSection(ctx, record.id, { expectedVersion: 2, section: 'volume' });
+    const state = await service.readiness(ctx, record.id);
+    expect(state).toMatchObject({ ready: true, missing: [], assumed: [] });
+    const active = await service.activate(ctx, record.id, { expectedVersion: 3 });
+    expect(active.status).toBe('active');
+  });
+
+  it('sends a confirmed section back to review when a value changes', async () => {
+    const record = await draft();
+    await service.confirmSection(ctx, record.id, { expectedVersion: 1, section: 'volume' });
+    await service.update(agentCtx, record.id, {
+      expectedVersion: 2,
+      attributes: { ...attrs('blue'), volume: { value: '80', unit: 'uL' } },
+    });
+    const volume = (await service.readiness(ctx, record.id)).sections.find(
+      (s) => s.id === 'volume',
+    );
+    expect(volume?.state).toBe('needs_review');
+    expect(volume?.fields[0]).toMatchObject({
+      field: 'volume',
+      state: 'changed',
+      assumed: true,
+      value: { value: '80', unit: 'uL' },
+      confirmedValue: { value: '50', unit: 'uL' },
+    });
+  });
+
+  it('refuses unknown sections, repeat confirmations and failing blockers', async () => {
+    const record = await draft();
+    await expectError(
+      service.confirmSection(ctx, record.id, { expectedVersion: 1, section: 'shape' }),
+      'invalid_input',
+    );
+    await service.confirmSection(ctx, record.id, { expectedVersion: 1, section: 'appearance' });
+    await expectError(
+      service.confirmSection(ctx, record.id, { expectedVersion: 2, section: 'appearance' }),
+      'invalid_state',
+    );
+
+    const empty = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Empty',
+      attributes: { color: 'red', volume: { value: '0', unit: 'uL' } },
+    });
+    await service.confirmSection(ctx, empty.id, { expectedVersion: 1, section: 'appearance' });
+    await service.confirmSection(ctx, empty.id, { expectedVersion: 2, section: 'volume' });
+    const error = await expectError(
+      service.activate(ctx, empty.id, { expectedVersion: 3 }),
+      'not_ready',
+    );
+    expect(error.message).toContain('Volume is 0 uL');
+  });
+
+  it('a person may create a record active, which confirms every section; an agent may not', async () => {
+    const record = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Mine',
+      attributes: attrs('red'),
+      status: 'active',
+    });
+    const state = await service.readiness(ctx, record.id);
+    expect(state.sections.map((s) => s.state)).toEqual(['confirmed', 'confirmed']);
+    await expectError(
+      service.create(agentCtx, {
+        kind: 'widget',
+        label: 'x',
+        attributes: attrs('red'),
+        status: 'active',
+      }),
+      'invalid_state',
+    );
+  });
+
+  it('restoring an earlier version brings back its evidence', async () => {
+    const record = await draft();
+    await service.update(ctx, record.id, { expectedVersion: 1, attributes: attrs('navy') });
+    const restored = await service.restore(ctx, record.id, { expectedVersion: 2, version: 1 });
+    expect(restored.attributes.color).toBe('blue');
+    expect(restored.evidence.color).toMatchObject({ source: 'assumed', by: agentCtx.actor });
+    expect((await service.history(ctx, record.id))[0]?.snapshot.evidence.color?.source).toBe(
+      'assumed',
+    );
   });
 });

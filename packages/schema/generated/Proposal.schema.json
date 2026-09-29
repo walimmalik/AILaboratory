@@ -151,6 +151,7 @@
             "version_conflict",
             "invalid_link",
             "linked",
+            "not_ready",
             "internal"
           ]
         },

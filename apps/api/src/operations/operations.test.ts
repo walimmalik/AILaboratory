@@ -1,11 +1,17 @@
-import type { Actor, Proposal, RecordEnvelope } from '@ailab/schema';
+import {
+  type Actor,
+  type Proposal,
+  type Readiness,
+  type RecordEnvelope,
+  recordsReadiness,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
-import { widget } from '../records/test-kinds.ts';
+import { gadget, widget } from '../records/test-kinds.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -30,7 +36,7 @@ beforeEach(async () => {
   person = { actor: user, orgId: tenant.orgId, labId: tenant.labId };
   agent = { ...person, actor: claude };
   bus = new ActivityBus();
-  registry = createRegistry(db, new KindRegistry().register(widget), bus);
+  registry = createRegistry(db, new KindRegistry().register(widget).register(gadget), bus);
 });
 afterEach(() => close());
 
@@ -168,9 +174,9 @@ describe('finding records', () => {
 
   it('names a record an agent proposed to create, before it exists', async () => {
     await registry.execute(agent, 'records.create', {
-      kind: 'widget',
+      kind: 'gadget',
       label: 'New',
-      attributes,
+      attributes: { color: 'teal' },
       status: 'active',
     });
     const [entry] = (
@@ -181,7 +187,7 @@ describe('finding records', () => {
       )
     ).entries;
     expect(entry?.outcome).toBe('proposed');
-    expect(Object.values(entry?.recordNames ?? {})).toEqual(['WDG-0001']);
+    expect(Object.values(entry?.recordNames ?? {})).toEqual(['GDG-0001']);
   });
 });
 
@@ -232,9 +238,15 @@ describe('agents', () => {
 
   it('propose activation even of their own drafts', async () => {
     const draft = await create(agent);
+    for (const [section, expectedVersion] of [
+      ['appearance', 1],
+      ['volume', 2],
+    ] as const) {
+      await run(person, 'records.confirm_section', { id: draft.id, expectedVersion, section });
+    }
     const result = await registry.execute(agent, 'records.activate', {
       id: draft.id,
-      expectedVersion: 1,
+      expectedVersion: 3,
     });
     expect(result.status).toBe('proposed');
   });
@@ -293,5 +305,94 @@ describe('agents', () => {
       status: 'failed',
     });
     expect(listed.proposals.map((p) => p.id)).toEqual([proposal.id]);
+  });
+});
+
+describe('draft and confirm', () => {
+  it('a person confirms sections and the readiness report follows', async () => {
+    const draft = await create(agent, {
+      evidence: { volume: { source: 'measured', note: 'Weighed on the bench balance' } },
+    });
+    const before = await run<Readiness>(person, 'records.readiness', { id: draft.id });
+    // What the web client parses, including fields with no value (partOf).
+    expect(() => recordsReadiness.output.parse(before)).not.toThrow();
+    expect(before).toMatchObject({ ready: false, assumed: ['color'] });
+    expect(before.checks.map((c) => [c.id, c.passed])).toEqual([
+      ['volume_positive', true],
+      ['color_known', true],
+    ]);
+
+    await run(person, 'records.confirm_section', {
+      id: draft.id,
+      expectedVersion: 1,
+      section: 'appearance',
+    });
+    await run(person, 'records.confirm_section', {
+      id: draft.id,
+      expectedVersion: 2,
+      section: 'volume',
+      reason: 'Checked against the tube',
+    });
+    expect(await run<Readiness>(agent, 'records.readiness', { id: draft.id })).toMatchObject({
+      ready: true,
+      assumed: [],
+    });
+    const active = await run<RecordEnvelope>(person, 'records.activate', {
+      id: draft.id,
+      expectedVersion: 3,
+    });
+    expect(active.status).toBe('active');
+  });
+
+  it('refuses invalid input', async () => {
+    const draft = await create(person);
+    expect(
+      (await refused(registry.execute(person, 'records.confirm_section', { id: draft.id }))).code,
+    ).toBe('invalid_input');
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'records.create', {
+            kind: 'widget',
+            label: 'x',
+            attributes,
+            evidence: { color: { source: 'person' } },
+          }),
+        )
+      ).code,
+    ).toBe('invalid_input');
+    expect(
+      (await refused(registry.execute(person, 'records.readiness', { id: 'nope' }))).code,
+    ).toBe('invalid_input');
+  });
+
+  it('only people confirm; agents cannot skip review or ask to activate an unready draft', async () => {
+    const draft = await create(agent);
+    const forbidden = await refused(
+      registry.execute(agent, 'records.confirm_section', {
+        id: draft.id,
+        expectedVersion: 1,
+        section: 'appearance',
+      }),
+    );
+    expect(forbidden.code).toBe('forbidden');
+    expect(
+      (
+        await refused(
+          registry.execute(agent, 'records.activate', { id: draft.id, expectedVersion: 1 }),
+        )
+      ).code,
+    ).toBe('not_ready');
+    expect((await refused(create(agent, { status: 'active' }))).code).toBe('invalid_state');
+  });
+
+  it('lists each kind with its sections and checks', async () => {
+    const { kinds } = await run<{
+      kinds: { kind: string; sections: { id: string }[]; checks: { id: string }[] }[];
+    }>(agent, 'records.kinds', {});
+    const found = kinds.find((k) => k.kind === 'widget');
+    expect(found?.sections.map((s) => s.id)).toEqual(['appearance', 'volume']);
+    expect(found?.checks.map((c) => c.id)).toEqual(['volume_positive', 'color_known']);
+    expect(kinds.find((k) => k.kind === 'gadget')?.sections).toEqual([]);
   });
 });

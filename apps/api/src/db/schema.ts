@@ -1,10 +1,12 @@
 import type {
   Actor,
   AssistantMessage,
+  FieldEvidence,
   OperationErrorBody,
   RecordEnvelope,
   RecordOperation,
   RecordStatus,
+  SectionReview,
 } from '@ailab/schema';
 import { sql } from 'drizzle-orm';
 import {
@@ -87,6 +89,10 @@ export const records = pgTable(
     status: text('status').$type<RecordStatus>().notNull(),
     version: integer('version').notNull(),
     attributes: jsonb('attributes').$type<Record<string, unknown>>().notNull(),
+    /** Where each attribute's value came from (plan 004c, ADR 0021). */
+    evidence: jsonb('evidence').$type<Record<string, FieldEvidence>>().notNull().default({}),
+    /** Section confirmations by people (plan 004c, ADR 0021). */
+    reviews: jsonb('reviews').$type<Record<string, SectionReview>>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     createdBy: jsonb('created_by').$type<Actor>().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
