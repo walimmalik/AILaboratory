@@ -1,6 +1,13 @@
 import type { ActivityEntry, Me } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
-import { actorLabel, describeEntry, describeToolStep, diffRecords, formatValue } from './format.ts';
+import {
+  actorLabel,
+  describeEntry,
+  describeToolStep,
+  diffRecords,
+  formatValue,
+  waitingForYou,
+} from './format.ts';
 
 const me = { user: { id: 'usr_A' } } as unknown as Me;
 
@@ -94,5 +101,41 @@ describe('describeToolStep', () => {
         result: { output: { records: [] } },
       }),
     ).toEqual({ text: 'looked up records', tone: 'muted' });
+  });
+});
+
+describe('waitingForYou', () => {
+  const done = (operationId: string, output: unknown) =>
+    ({ operationId, outcome: 'done', result: { status: 'done', output } }) as const;
+
+  it('lists drafts the turn wrote and counts changes it proposed', () => {
+    expect(
+      waitingForYou([
+        done('records.create', { id: 'wdg_1', name: 'WDG-0001', status: 'draft' }),
+        done('records.create', { id: 'wdg_2', name: 'WDG-0002', status: 'draft' }),
+        done('records.update', { id: 'wdg_1', name: 'WDG-0001', status: 'draft' }),
+        {
+          operationId: 'records.update',
+          outcome: 'proposed',
+          result: { status: 'proposed', proposal: { id: 'prp_1' } },
+        },
+        done('records.get', { id: 'wdg_9', name: 'WDG-0009', status: 'draft' }),
+      ]),
+    ).toEqual({
+      drafts: [
+        { id: 'wdg_2', name: 'WDG-0002' },
+        { id: 'wdg_1', name: 'WDG-0001' },
+      ],
+      changes: ['prp_1'],
+    });
+  });
+
+  it('leaves nothing when the turn only read or failed', () => {
+    expect(
+      waitingForYou([
+        done('records.list', { items: [] }),
+        { operationId: 'records.update', outcome: 'failed', result: undefined },
+      ]),
+    ).toEqual({ drafts: [], changes: [] });
   });
 });

@@ -11,7 +11,7 @@ const verbs: Record<string, [string, string]> = {
   'records.restore': ['restored an earlier version of', 'restore an earlier version of'],
   'records.delete_draft': ['deleted the draft', 'delete the draft'],
   'records.confirm_section': ['confirmed a section of', 'confirm a section of'],
-  'proposals.approve': ['approved a proposed change', 'approve a proposed change'],
+  'proposals.approve': ['confirmed a proposed change', 'confirm a proposed change'],
   'proposals.reject': ['rejected a proposed change', 'reject a proposed change'],
   'assistant.ask': ['asked the assistant', 'ask the assistant'],
   // Reads, as the assistant's steps show them.
@@ -22,6 +22,7 @@ const verbs: Record<string, [string, string]> = {
   'records.links': ['looked at the links of', 'look at the links of'],
   'records.readiness': ['checked what still needs review on', 'check what still needs review on'],
   'proposals.list': ['looked at the proposals', 'look at the proposals'],
+  'review.list': ['looked at what is waiting for you', 'look at what is waiting for you'],
   'activity.list': ['read the activity ledger', 'read the activity ledger'],
 };
 
@@ -33,6 +34,7 @@ const reads = new Set([
   'records.links',
   'records.readiness',
   'proposals.list',
+  'review.list',
   'activity.list',
 ]);
 
@@ -72,8 +74,8 @@ export function describeEntry(entry: ActivityEntry): string {
 const outcomeWords: Record<ActivityEntry['outcome'], string> = {
   succeeded: 'done',
   failed: 'failed',
-  proposed: 'waiting for review',
-  approved: 'approved',
+  proposed: 'waiting for you',
+  approved: 'confirmed',
   rejected: 'rejected',
 };
 
@@ -167,7 +169,7 @@ export interface ToolLine {
   tone: 'ok-ink' | 'agent-ink' | 'crit-ink' | 'muted';
   /** The record the step produced or read, when there is one. */
   record?: { id: string; name: string };
-  /** True when the step waits for a person on the Proposals page. */
+  /** True when the step waits for a person on the Review page. */
   proposed?: boolean;
 }
 
@@ -207,4 +209,38 @@ export function describeToolStep(step: {
     tone: record && !reads.has(step.operationId) ? 'ok-ink' : 'muted',
     ...(record ? { record } : {}),
   };
+}
+
+/** What a turn of the assistant's work leaves for the person: drafts to confirm, changes proposed. */
+export interface WaitingForYou {
+  drafts: { id: string; name: string }[];
+  /** Ids of the proposals the turn made. */
+  changes: string[];
+}
+
+/**
+ * Reads a turn's steps (in order) for what now waits on the person (plan 004d, R4): records whose
+ * latest state the turn saw is a draft it wrote, and changes it proposed.
+ */
+export function waitingForYou(
+  steps: {
+    operationId: string;
+    outcome: 'done' | 'preview' | 'proposed' | 'failed';
+    result: unknown;
+  }[],
+): WaitingForYou {
+  const drafts = new Map<string, { id: string; name: string } | undefined>();
+  const changes: string[] = [];
+  for (const step of steps) {
+    const proposal = (step.result as { proposal?: { id?: unknown } } | undefined)?.proposal;
+    if (step.outcome === 'proposed' && typeof proposal?.id === 'string') changes.push(proposal.id);
+    if (step.outcome !== 'done' || reads.has(step.operationId)) continue;
+    const output = (step.result as { output?: unknown } | undefined)?.output;
+    const record = recordOf(output);
+    if (!record) continue;
+    const { status } = output as { status?: unknown };
+    drafts.delete(record.id);
+    drafts.set(record.id, status === 'draft' ? record : undefined);
+  }
+  return { drafts: [...drafts.values()].filter((d) => d !== undefined), changes };
 }

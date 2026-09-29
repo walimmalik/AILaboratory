@@ -29,6 +29,10 @@ export function ReviewBlocks({
   readiness: Readiness;
   renderValue: (value: unknown) => ReactNode;
 }) {
+  const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
+  const blocked = readiness.checks.some((c) => !c.passed && c.severity === 'blocker');
+  // Confirming the last section of a draft that nothing blocks also activates it (plan 004d, R6).
+  const activates = record.status === 'draft' && toReview.length === 1 && !blocked;
   return (
     <>
       <ReadinessBlock record={record} readiness={readiness} />
@@ -38,6 +42,7 @@ export function ReviewBlocks({
           record={record}
           version={readiness.version}
           section={section}
+          activates={activates && section.state === 'needs_review'}
           renderValue={renderValue}
         />
       ))}
@@ -47,7 +52,11 @@ export function ReviewBlocks({
 
 function useInvalidate(id: string) {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['record', id] });
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['record', id] }),
+      queryClient.invalidateQueries({ queryKey: ['review'] }),
+    ]);
 }
 
 function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readiness: Readiness }) {
@@ -103,7 +112,7 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
             </button>
             <span className="muted">
               {readiness.ready
-                ? 'All sections are confirmed. Confirm it to make it active for the lab.'
+                ? 'Everything is confirmed. Confirm it to make it active for the lab.'
                 : toReview > 0
                   ? `Confirm ${toReview === 1 ? 'the remaining section' : `the ${toReview} remaining sections`} first.`
                   : 'Fix what blocks it first.'}
@@ -163,12 +172,15 @@ function SectionBlock({
   record,
   version,
   section,
+  activates,
   renderValue,
 }: {
   record: RecordEnvelope;
   /** The version the readiness report describes: what the person is looking at and confirming. */
   version: number;
   section: ReadinessSection;
+  /** Whether confirming this section also makes the draft active. */
+  activates: boolean;
   renderValue: (value: unknown) => ReactNode;
 }) {
   const me = useMe();
@@ -233,16 +245,19 @@ function SectionBlock({
           <div className="actions">
             <button
               type="button"
-              className="btn"
+              className={activates ? 'btn primary' : 'btn'}
               disabled={confirm.isPending}
               onClick={() => confirm.mutate()}
             >
               Confirm {section.title.toLowerCase()}
+              {activates && ' and activate'}
             </button>
             <span className="muted">
               {changed
                 ? 'Highlighted values changed since this was last confirmed.'
                 : 'Check these values, correct any that are wrong, then confirm.'}
+              {activates &&
+                ` This is the last section, so ${record.name} becomes active for the lab.`}
             </span>
           </div>
         )}

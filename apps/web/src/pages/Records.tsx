@@ -4,6 +4,7 @@ import { useDeferredValue, useState } from 'react';
 import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import { recordsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
+import { StatusChip } from './StatusChip.tsx';
 
 type StatusFilter = 'current' | 'draft' | 'active' | 'archived';
 const filters: [StatusFilter, string][] = [
@@ -109,7 +110,7 @@ export function RecordsPage() {
                       <td>{r.label}</td>
                       <td className="muted">{r.kind}</td>
                       <td>
-                        <span className={`chip ${r.status}`}>{r.status}</span>
+                        <StatusChip record={r} />
                       </td>
                       <td className="when">{formatWhen(r.updatedAt)}</td>
                       <td className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>

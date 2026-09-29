@@ -371,6 +371,16 @@ a {
 .chip.failed {
   color: var(--crit);
 }
+.status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.status-note {
+  font-size: 12px;
+  white-space: nowrap;
+}
 .error-text {
   color: var(--crit);
   font-size: 13px;
@@ -698,6 +708,11 @@ details.tech[open] summary {
 .transcript .working,
 .transcript .stopped {
   font: 12px var(--font-mono);
+}
+.transcript .waiting {
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
 }
 .assistant .setup {
   margin: 0;

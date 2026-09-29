@@ -38,7 +38,7 @@ test('refuses a wrong password', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Wrong email or password');
 });
 
-test('an agent proposes a change, a person reviews and approves it, and the ledger shows it live', async ({
+test('an agent proposes a change, a person confirms it on the Review page, and the ledger shows it live', async ({
   page,
   request,
 }) => {
@@ -62,13 +62,16 @@ test('an agent proposes a change, a person reviews and approves it, and the ledg
   });
   expect(result.status).toBe('proposed');
 
-  await page.getByRole('link', { name: /^Proposals/ }).click();
+  // The record says a change is waiting; the Review page holds it.
+  await page.goto(`/records/${record.id}`);
+  await expect(page.getByText('change waiting')).toBeVisible();
+  await page.getByRole('link', { name: 'Review it' }).click();
   const proposal = page
-    .getByRole('article', { name: 'Proposal to edit' })
+    .getByRole('article', { name: 'Change: edit' })
     .filter({ hasText: record.name });
   await expect(proposal.getByText('“Match the ELISA SOP”')).toBeVisible();
   await expect(proposal.getByRole('cell', { name: `${label} (ELISA)` })).toBeVisible();
-  await proposal.getByRole('button', { name: 'Approve' }).click();
+  await proposal.getByRole('button', { name: 'Confirm change' }).click();
   await expect(proposal).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Records' }).click();
@@ -80,7 +83,9 @@ test('an agent proposes a change, a person reviews and approves it, and the ledg
   await expect(history).toContainText('“Match the ELISA SOP”');
 
   await page.getByRole('link', { name: 'Activity' }).click();
-  await expect(page.getByRole('row', { name: /approved a proposed change/ }).first()).toBeVisible();
+  await expect(
+    page.getByRole('row', { name: /confirmed a proposed change/ }).first(),
+  ).toBeVisible();
 });
 
 test('agents edit drafts directly, with no review', async ({ page, request }) => {
@@ -108,10 +113,13 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await ask.press('Enter');
 
   const panel = page.getByRole('complementary', { name: 'Assistant' });
-  const created = panel.getByRole('link', { name: /^WDG-\d+$/ });
+  const created = panel.getByRole('link', { name: /^WDG-\d+$/ }).first();
   await expect(created).toBeVisible();
   await expect(panel.getByText(/^Done:/)).toBeVisible();
   const name = (await created.textContent()) ?? '';
+  // The turn ends with what it left for you: the draft to confirm, linked.
+  await expect(panel.getByText('Waiting for you:')).toBeVisible();
+  await expect(panel.locator('.waiting').getByRole('link', { name })).toBeVisible();
 
   // Replies continue the same conversation.
   const reply = panel.getByLabel('Message the assistant');
@@ -129,7 +137,7 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await expect(panel.getByText('You said: thanks')).toBeVisible();
 });
 
-test('an agent drafts a record, a person reviews it section by section and confirms it', async ({
+test('an agent drafts a record, a person reviews it section by section, and the last confirm activates it', async ({
   page,
   request,
 }) => {
@@ -141,12 +149,17 @@ test('an agent drafts a record, a person reviews it section by section and confi
     evidence: { volume: { source: 'datasheet', note: 'Vendor sheet, p. 2' } },
   });
   const record = drafted.output;
-  await page.goto(`/records/${record.id}`);
+
+  // The draft waits on the Review page, which opens it.
+  await page.getByRole('link', { name: /^Review/ }).click();
+  const waiting = page.getByRole('article', { name: `Draft ${record.name}` });
+  await expect(waiting).toContainText('Confirm appearance and volume');
+  await waiting.getByRole('link', { name: `Review ${record.name}` }).click();
+  await expect(page.getByText('needs your review').first()).toBeVisible();
 
   const readiness = page.getByRole('region', { name: 'Readiness' });
   const appearance = page.getByRole('region', { name: 'Appearance' });
   const volume = page.getByRole('region', { name: 'Volume' });
-  const confirmRecord = readiness.getByRole('button', { name: `Confirm ${record.name}` });
 
   // What the agent assumed is marked; what it took from a datasheet says so.
   await expect(appearance.getByText('assumed by E2E agent')).toBeVisible();
@@ -154,7 +167,6 @@ test('an agent drafts a record, a person reviews it section by section and confi
     volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
   ).toBeVisible();
   await expect(readiness.getByText('Appearance is not confirmed')).toBeVisible();
-  await expect(confirmRecord).toBeDisabled();
 
   await volume.getByRole('button', { name: 'Confirm volume' }).click();
   await expect(volume.getByText(/confirmed by you/)).toBeVisible();
@@ -172,9 +184,11 @@ test('an agent drafts a record, a person reviews it section by section and confi
 
   await volume.getByRole('button', { name: 'Confirm volume' }).click();
   await expect(volume.getByText(/confirmed by you/)).toBeVisible();
-  await appearance.getByRole('button', { name: 'Confirm appearance' }).click();
-  await expect(readiness.getByText('ready to confirm')).toBeVisible();
-  await confirmRecord.click();
+  // The last section's button says it activates the record, and it does.
+  await appearance.getByRole('button', { name: 'Confirm appearance and activate' }).click();
   await expect(page.locator('.chip.active')).toBeVisible();
   await expect(readiness.getByText('✓ confirmed')).toBeVisible();
+  await expect(page.getByRole('row', { name: /v5/ })).toContainText(
+    'confirmed appearance and activated',
+  );
 });

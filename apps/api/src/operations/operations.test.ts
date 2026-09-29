@@ -3,7 +3,9 @@ import {
   type Proposal,
   type Readiness,
   type RecordEnvelope,
+  type ReviewItem,
   recordsReadiness,
+  reviewList,
 } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
@@ -237,16 +239,14 @@ describe('agents', () => {
   });
 
   it('propose activation even of their own drafts', async () => {
-    const draft = await create(agent);
-    for (const [section, expectedVersion] of [
-      ['appearance', 1],
-      ['volume', 2],
-    ] as const) {
-      await run(person, 'records.confirm_section', { id: draft.id, expectedVersion, section });
-    }
+    const draft = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'Clip',
+      attributes: { color: 'red' },
+    });
     const result = await registry.execute(agent, 'records.activate', {
       id: draft.id,
-      expectedVersion: 3,
+      expectedVersion: 1,
     });
     expect(result.status).toBe('proposed');
   });
@@ -336,12 +336,9 @@ describe('draft and confirm', () => {
     expect(await run<Readiness>(agent, 'records.readiness', { id: draft.id })).toMatchObject({
       ready: true,
       assumed: [],
+      status: 'active',
+      version: 3,
     });
-    const active = await run<RecordEnvelope>(person, 'records.activate', {
-      id: draft.id,
-      expectedVersion: 3,
-    });
-    expect(active.status).toBe('active');
   });
 
   it('refuses invalid input', async () => {
@@ -412,5 +409,42 @@ describe('draft and confirm', () => {
     expect(found?.sections.map((s) => s.id)).toEqual(['appearance', 'volume']);
     expect(found?.checks.map((c) => c.id)).toEqual(['volume_positive', 'color_known']);
     expect(kinds.find((k) => k.kind === 'gadget')?.sections).toEqual([]);
+  });
+});
+
+describe('review inbox', () => {
+  it('lists drafts to confirm and proposed changes, newest first', async () => {
+    const draft = await create(agent);
+    await run(person, 'records.confirm_section', {
+      id: draft.id,
+      expectedVersion: 1,
+      section: 'appearance',
+    });
+    const active = await create(person, { status: 'active', label: 'Rack' });
+    await registry.execute(agent, 'records.update', {
+      id: active.id,
+      expectedVersion: 1,
+      label: 'Rack (blue)',
+    });
+
+    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(() => reviewList.output.parse({ items })).not.toThrow();
+    expect(items.map((i) => i.type)).toEqual(['change', 'draft']);
+    expect(items[1]).toMatchObject({
+      type: 'draft',
+      record: { id: draft.id, name: 'WDG-0001' },
+      sectionsToConfirm: ['Volume'],
+      missing: ['Volume is not confirmed'],
+      ready: false,
+      assumed: 1,
+    });
+  });
+
+  it('is empty when nothing waits, and refuses unknown input', async () => {
+    await create(person, { status: 'active' });
+    expect((await run<{ items: unknown[] }>(agent, 'review.list', {})).items).toEqual([]);
+    expect((await refused(registry.execute(person, 'review.list', { x: 1 }))).code).toBe(
+      'invalid_input',
+    );
   });
 });

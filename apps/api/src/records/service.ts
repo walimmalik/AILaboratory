@@ -201,7 +201,8 @@ export class RecordService {
 
   /**
    * A person confirms one section as it stands now (ADR 0021). The section stays confirmed while its
-   * values equal the ones confirmed here; any later change sends it back to review.
+   * values equal the ones confirmed here; any later change sends it back to review. Confirming the
+   * last section of a draft with no failing blocker also activates it (plan 004d, R6).
    */
   async confirmSection(
     ctx: RecordContext,
@@ -242,7 +243,16 @@ export class RecordService {
           version: record.version,
           values,
         };
-        return { reviews: { ...record.reviews, [section.id]: review } };
+        const reviews = { ...record.reviews, [section.id]: review };
+        // Confirming the last section of a draft, with nothing blocking, is the final confirm too.
+        const after = readiness(
+          { ...toEnvelope(record), reviews },
+          kind.sections ?? [],
+          kind.checks ?? [],
+        );
+        return record.status === 'draft' && after.ready
+          ? { reviews, status: 'active' as const }
+          : { reviews };
       },
     );
   }

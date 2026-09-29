@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
 import { LiveProvider, useLive } from '../live.tsx';
-import { pendingProposalsQuery } from '../queries.ts';
+import { reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { type ThemeChoice, useTheme } from '../theme.ts';
 import { AssistantPanel } from './AssistantPanel.tsx';
@@ -29,7 +29,7 @@ function ShellLayout() {
   const me = useMe();
   const live = useLive();
   const [theme, setTheme] = useTheme();
-  const pending = useQuery(pendingProposalsQuery).data?.length ?? 0;
+  const pending = useQuery(reviewQuery).data?.length ?? 0;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const assistant = useAssistant();
@@ -84,8 +84,8 @@ function ShellLayout() {
               </Link>
             </li>
             <li>
-              <Link to="/proposals">
-                Proposals
+              <Link to="/review">
+                Review
                 <span className={`count num ${pending ? 'pending' : ''}`}>{pending}</span>
               </Link>
             </li>
@@ -119,8 +119,8 @@ function ShellLayout() {
           </button>
         )}
         {pending > 0 && (
-          <Link to="/proposals" className="agent-ink">
-            {pending} {pending === 1 ? 'change waits' : 'changes wait'} for review
+          <Link to="/review" className="agent-ink">
+            {pending} waiting for you
           </Link>
         )}
         <span className="push muted">{me?.user.displayName}</span>
