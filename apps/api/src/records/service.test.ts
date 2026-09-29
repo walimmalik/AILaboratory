@@ -1,0 +1,344 @@
+import { convert } from '@ailab/domain';
+import { type Actor, defineKind, Quantity, recordIdOf } from '@ailab/schema';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { createTenant } from '../auth.ts';
+import type { Db } from '../db/client.ts';
+import { createTestDb } from '../db/testing.ts';
+import { RecordError } from './errors.ts';
+import { KindRegistry } from './kinds.ts';
+import { type RecordContext, RecordService } from './service.ts';
+
+/** A test-only kind: a colored widget with a volume, optionally part of another widget. */
+const widget = defineKind({
+  kind: 'widget',
+  idPrefix: 'wdg',
+  namePrefix: 'WDG',
+  nameWidth: 4,
+  attributes: z.object({
+    color: z.string(),
+    volume: Quantity,
+    partOf: recordIdOf('wdg').optional(),
+  }),
+  links: (a) => (a.partOf ? [{ toId: a.partOf, relation: 'part_of' }] : []),
+});
+
+let db: Db;
+let close: () => Promise<void>;
+let ctx: RecordContext;
+let agentCtx: RecordContext;
+let service: RecordService;
+
+const attrs = (color: string, partOf?: string) => ({
+  color,
+  volume: { value: '50', unit: 'uL' },
+  ...(partOf ? { partOf } : {}),
+});
+
+async function expectError(promise: Promise<unknown>, code: RecordError['code']) {
+  const error = await promise.then(
+    () => undefined,
+    (e: unknown) => e,
+  );
+  expect(error).toBeInstanceOf(RecordError);
+  expect((error as RecordError).code).toBe(code);
+  return error as RecordError;
+}
+
+beforeEach(async () => {
+  ({ db, close } = await createTestDb());
+  const tenant = await createTenant(db, { orgName: 'Org', labName: 'Lab', userName: 'Wali' });
+  const user: Actor = { type: 'user', userId: tenant.userId };
+  const agent: Actor = { type: 'agent', agentName: 'Claude', onBehalfOf: tenant.userId };
+  ctx = { actor: user, orgId: tenant.orgId, labId: tenant.labId };
+  agentCtx = { ...ctx, actor: agent };
+  service = new RecordService(db, new KindRegistry().register(widget));
+});
+afterEach(() => close());
+
+describe('create and read', () => {
+  it('creates a draft with a readable name and version 1', async () => {
+    const record = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: attrs('blue'),
+    });
+    expect(record).toMatchObject({
+      kind: 'widget',
+      name: 'WDG-0001',
+      label: 'Blue',
+      status: 'draft',
+      version: 1,
+      createdBy: ctx.actor,
+    });
+    expect(record.id).toMatch(/^wdg_/);
+    expect(await service.get(ctx, record.id)).toEqual(record);
+  });
+
+  it('numbers names per lab and never reuses them', async () => {
+    const a = await service.create(ctx, { kind: 'widget', label: 'A', attributes: attrs('a') });
+    await service.deleteDraft(ctx, a.id, { expectedVersion: 1 });
+    const b = await service.create(ctx, { kind: 'widget', label: 'B', attributes: attrs('b') });
+    expect(b.name).toBe('WDG-0002');
+
+    const other = await createTenant(db, { orgName: 'Other', labName: 'Other lab', userName: 'X' });
+    const otherCtx = { actor: ctx.actor, orgId: other.orgId, labId: other.labId };
+    const c = await service.create(otherCtx, {
+      kind: 'widget',
+      label: 'C',
+      attributes: attrs('c'),
+    });
+    expect(c.name).toBe('WDG-0001');
+  });
+
+  it('keeps labs apart', async () => {
+    const record = await service.create(ctx, {
+      kind: 'widget',
+      label: 'A',
+      attributes: attrs('a'),
+    });
+    const other = await createTenant(db, { orgName: 'Other', labName: 'Other lab', userName: 'X' });
+    const otherCtx = { actor: ctx.actor, orgId: other.orgId, labId: other.labId };
+    await expectError(service.get(otherCtx, record.id), 'not_found');
+  });
+
+  it('rejects unknown kinds and invalid attributes with a readable message', async () => {
+    await expectError(
+      service.create(ctx, { kind: 'gadget', label: 'x', attributes: {} }),
+      'unknown_kind',
+    );
+    const error = await expectError(
+      service.create(ctx, {
+        kind: 'widget',
+        label: 'x',
+        attributes: { color: 'red', volume: { value: 5, unit: 'uL' } },
+      }),
+      'invalid_attributes',
+    );
+    expect(error.message).toContain('volume.value');
+  });
+});
+
+describe('history', () => {
+  it('records every change with its actor, operation and reason', async () => {
+    const created = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: attrs('blue'),
+    });
+    await service.update(agentCtx, created.id, {
+      expectedVersion: 1,
+      attributes: attrs('navy'),
+      reason: 'Matched the catalog color',
+    });
+    await service.activate(ctx, created.id, { expectedVersion: 2 });
+
+    const history = await service.history(ctx, created.id);
+    expect(history.map((v) => [v.version, v.operation, v.actor.type])).toEqual([
+      [1, 'create', 'user'],
+      [2, 'update', 'agent'],
+      [3, 'activate', 'user'],
+    ]);
+    expect(history[1]?.reason).toBe('Matched the catalog color');
+    expect(history[1]?.snapshot.attributes).toMatchObject({ color: 'navy' });
+    expect(history[1]?.snapshot.updatedBy).toEqual(agentCtx.actor);
+    expect((await service.getVersion(ctx, created.id, 1)).snapshot.attributes).toMatchObject({
+      color: 'blue',
+    });
+  });
+
+  it('restores an earlier version as a new version', async () => {
+    const created = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: attrs('blue'),
+    });
+    await service.update(ctx, created.id, {
+      expectedVersion: 1,
+      label: 'Red',
+      attributes: attrs('red'),
+    });
+    const restored = await service.restore(ctx, created.id, { version: 1, expectedVersion: 2 });
+    expect(restored).toMatchObject({ version: 3, label: 'Blue', attributes: { color: 'blue' } });
+    const history = await service.history(ctx, created.id);
+    expect(history.map((v) => v.operation)).toEqual(['create', 'update', 'restore']);
+    expect(history[2]?.reason).toBe('Restored version 1');
+    await expectError(
+      service.restore(ctx, created.id, { version: 3, expectedVersion: 3 }),
+      'invalid_state',
+    );
+  });
+
+  it('refuses changes made against a stale version', async () => {
+    const created = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: attrs('blue'),
+    });
+    await service.update(ctx, created.id, { expectedVersion: 1, label: 'Blue 2' });
+    const error = await expectError(
+      service.update(agentCtx, created.id, { expectedVersion: 1, label: 'Agent edit' }),
+      'version_conflict',
+    );
+    expect(error.details).toEqual({ currentVersion: 2 });
+  });
+});
+
+describe('archive and delete', () => {
+  it('archives and unarchives to the earlier status', async () => {
+    const created = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: attrs('blue'),
+      status: 'active',
+    });
+    const archived = await service.archive(ctx, created.id, { expectedVersion: 1 });
+    expect(archived.status).toBe('archived');
+    await expectError(
+      service.update(ctx, created.id, { expectedVersion: 2, label: 'x' }),
+      'invalid_state',
+    );
+    await expectError(service.archive(ctx, created.id, { expectedVersion: 2 }), 'invalid_state');
+    const unarchived = await service.unarchive(ctx, created.id, { expectedVersion: 2 });
+    expect(unarchived).toMatchObject({ status: 'active', version: 3 });
+  });
+
+  it('deletes only drafts that nothing links to', async () => {
+    const active = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Active',
+      attributes: attrs('a'),
+      status: 'active',
+    });
+    await expectError(service.deleteDraft(ctx, active.id, { expectedVersion: 1 }), 'invalid_state');
+
+    const parent = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Parent',
+      attributes: attrs('p'),
+    });
+    await service.create(ctx, {
+      kind: 'widget',
+      label: 'Child',
+      attributes: attrs('c', parent.id),
+    });
+    await expectError(service.deleteDraft(ctx, parent.id, { expectedVersion: 1 }), 'linked');
+
+    const lonely = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Lonely',
+      attributes: attrs('l'),
+    });
+    await service.deleteDraft(ctx, lonely.id, { expectedVersion: 1 });
+    await expectError(service.get(ctx, lonely.id), 'not_found');
+  });
+});
+
+describe('links', () => {
+  it('keeps links in sync with attributes, both directions', async () => {
+    const parent = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Parent',
+      attributes: attrs('p'),
+    });
+    const other = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Other',
+      attributes: attrs('o'),
+    });
+    const child = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Child',
+      attributes: attrs('c', parent.id),
+    });
+
+    expect(await service.linksFrom(ctx, child.id)).toEqual([
+      { fromId: child.id, toId: parent.id, relation: 'part_of' },
+    ]);
+    expect(await service.linksTo(ctx, parent.id)).toEqual([
+      { fromId: child.id, toId: parent.id, relation: 'part_of' },
+    ]);
+
+    await service.update(ctx, child.id, { expectedVersion: 1, attributes: attrs('c', other.id) });
+    expect(await service.linksTo(ctx, parent.id)).toEqual([]);
+    expect((await service.linksTo(ctx, other.id)).map((l) => l.fromId)).toEqual([child.id]);
+
+    await service.update(ctx, child.id, { expectedVersion: 2, attributes: attrs('c') });
+    expect(await service.linksFrom(ctx, child.id)).toEqual([]);
+  });
+
+  it('refuses links to missing, archived, other-lab or self records', async () => {
+    const missing = 'wdg_01J9Z3K8Q4ABCDEFGHJKMNPQRS';
+    await expectError(
+      service.create(ctx, { kind: 'widget', label: 'x', attributes: attrs('x', missing) }),
+      'invalid_link',
+    );
+
+    const archived = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Old',
+      attributes: attrs('o'),
+    });
+    await service.archive(ctx, archived.id, { expectedVersion: 1 });
+    const error = await expectError(
+      service.create(ctx, { kind: 'widget', label: 'x', attributes: attrs('x', archived.id) }),
+      'invalid_link',
+    );
+    expect(error.message).toContain('archived');
+
+    const other = await createTenant(db, { orgName: 'Other', labName: 'Other lab', userName: 'X' });
+    const otherCtx = { actor: ctx.actor, orgId: other.orgId, labId: other.labId };
+    const foreign = await service.create(otherCtx, {
+      kind: 'widget',
+      label: 'F',
+      attributes: attrs('f'),
+    });
+    await expectError(
+      service.create(ctx, { kind: 'widget', label: 'x', attributes: attrs('x', foreign.id) }),
+      'invalid_link',
+    );
+
+    const self = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Self',
+      attributes: attrs('s'),
+    });
+    await expectError(
+      service.update(ctx, self.id, { expectedVersion: 1, attributes: attrs('s', self.id) }),
+      'invalid_link',
+    );
+  });
+
+  it('keeps an existing link when its target is archived later', async () => {
+    const parent = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Parent',
+      attributes: attrs('p'),
+    });
+    const child = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Child',
+      attributes: attrs('c', parent.id),
+    });
+    await service.archive(ctx, parent.id, { expectedVersion: 1 });
+    const updated = await service.update(ctx, child.id, {
+      expectedVersion: 1,
+      attributes: { ...attrs('green', parent.id) },
+    });
+    expect(updated.version).toBe(2);
+    expect(await service.linksTo(ctx, parent.id)).toHaveLength(1);
+  });
+});
+
+describe('quantities in attributes', () => {
+  it('stores exact decimal strings unchanged', async () => {
+    const record = await service.create(ctx, {
+      kind: 'widget',
+      label: 'Precise',
+      attributes: { color: 'x', volume: { value: '0.1', unit: 'uL' } },
+    });
+    const stored = (await service.get(ctx, record.id)).attributes as { volume: Quantity };
+    expect(stored.volume).toEqual({ value: '0.1', unit: 'uL' });
+    expect(convert(stored.volume, 'nL')).toEqual({ value: '100', unit: 'nL' });
+  });
+});

@@ -10,9 +10,13 @@ Requirements: Node.js 22 or newer with pnpm, Python 3.12 with [uv](https://docs.
 
 ```sh
 pnpm install
+cp .env.example .env
 docker compose up -d db
+pnpm --filter @ailab/api bootstrap
 pnpm dev
 ```
+
+The API reads `.env` from the repo root. `bootstrap` creates your org, lab and user and prints an API token once; keep it private.
 
 The web app is at http://localhost:5173 and the API at http://localhost:3001. To run everything in containers instead: `docker compose up --build` (web on http://localhost:8080).
 

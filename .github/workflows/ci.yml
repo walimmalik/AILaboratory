@@ -20,6 +20,44 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Generated files are up to date
+        run: |
+          pnpm generate
+          git add --intent-to-add --all
+          git diff --exit-code -- packages/schema/generated apps/api/drizzle
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: ailab
+          POSTGRES_PASSWORD: ailab-ci
+          POSTGRES_DB: ailab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ailab -d ailab"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://ailab:ailab-ci@localhost:5432/ailab
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrations apply to a real Postgres
+        run: pnpm --filter @ailab/api db:migrate
+      - name: Bootstrap is idempotent
+        run: |
+          pnpm --filter @ailab/api bootstrap | grep -v "API token"
+          pnpm --filter @ailab/api bootstrap | grep "Already bootstrapped"
 
   python:
     runs-on: ubuntu-latest

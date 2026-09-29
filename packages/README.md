@@ -1,6 +1,6 @@
 # packages
 
-Shared libraries live here, one folder per package. None exist yet; plan 002 adds `schema` and `domain`.
+Shared libraries live here, one folder per package. Packages export TypeScript source under the `source` condition (used by tests, tsx and typecheck) and built `dist/` otherwise.
 
 | Package | Plan | Purpose |
 | --- | --- | --- |
