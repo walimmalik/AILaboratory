@@ -1,4 +1,10 @@
-import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
+import {
+  type Actor,
+  type Proposal,
+  type Readiness,
+  type RecordEnvelope,
+  recordsReadiness,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -308,6 +314,8 @@ describe('draft and confirm', () => {
       evidence: { volume: { source: 'measured', note: 'Weighed on the bench balance' } },
     });
     const before = await run<Readiness>(person, 'records.readiness', { id: draft.id });
+    // What the web client parses, including fields with no value (partOf).
+    expect(() => recordsReadiness.output.parse(before)).not.toThrow();
     expect(before).toMatchObject({ ready: false, assumed: ['color'] });
     expect(before.checks.map((c) => [c.id, c.passed])).toEqual([
       ['volume_positive', true],

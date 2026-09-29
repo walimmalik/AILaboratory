@@ -700,6 +700,50 @@ details.tech[open] summary {
   margin: 0;
 }
 
+/* Draft and confirm (plan 004c) */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+ul.todo {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+table.review-fields td.name {
+  width: 1%;
+  white-space: nowrap;
+  font: 12px var(--font-mono);
+  color: var(--ink-3);
+}
+table.review-fields td.source,
+table.checks td.source {
+  font-size: 12px;
+  width: 1%;
+  white-space: nowrap;
+}
+table.review-fields tr.changed td {
+  background: var(--warn-soft);
+}
+table.review-fields .was {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-3) 60%, transparent);
+}
+table.review-fields .now {
+  font-weight: 600;
+}
+table.checks td.mark {
+  width: 1%;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);

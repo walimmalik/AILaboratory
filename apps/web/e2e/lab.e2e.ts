@@ -128,3 +128,52 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await page.getByRole('button', { name: 'open in the assistant' }).click();
   await expect(panel.getByText('You said: thanks')).toBeVisible();
 });
+
+test('an agent drafts a record, a person reviews it section by section and confirms it', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'widget',
+    label: `Reservoir ${Date.now()}`,
+    attributes,
+    evidence: { volume: { source: 'datasheet', note: 'Vendor sheet, p. 2' } },
+  });
+  const record = drafted.output;
+  await page.goto(`/records/${record.id}`);
+
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  const appearance = page.getByRole('region', { name: 'Appearance' });
+  const volume = page.getByRole('region', { name: 'Volume' });
+  const confirmRecord = readiness.getByRole('button', { name: `Confirm ${record.name}` });
+
+  // What the agent assumed is marked; what it took from a datasheet says so.
+  await expect(appearance.getByText('assumed by E2E agent')).toBeVisible();
+  await expect(
+    volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
+  ).toBeVisible();
+  await expect(readiness.getByText('Appearance is not confirmed')).toBeVisible();
+  await expect(confirmRecord).toBeDisabled();
+
+  await volume.getByRole('button', { name: 'Confirm volume' }).click();
+  await expect(volume.getByText(/confirmed by you/)).toBeVisible();
+
+  // The agent changes a confirmed value: the section goes back to review, showing the change.
+  await asAgent(request, 'records.update', {
+    id: record.id,
+    expectedVersion: 2,
+    attributes: { ...attributes, volume: { value: '250', unit: 'uL' } },
+  });
+  await expect(volume.getByText('changed, needs review')).toBeVisible();
+  await expect(volume.locator('.was')).toHaveText('200 µL');
+  await expect(volume.locator('.now')).toHaveText('250 µL');
+  await expect(readiness.getByText('Volume changed since it was confirmed')).toBeVisible();
+
+  await volume.getByRole('button', { name: 'Confirm volume' }).click();
+  await appearance.getByRole('button', { name: 'Confirm appearance' }).click();
+  await expect(readiness.getByText('ready to confirm')).toBeVisible();
+  await confirmRecord.click();
+  await expect(page.locator('.chip.active')).toBeVisible();
+  await expect(readiness.getByText('✓ confirmed')).toBeVisible();
+});

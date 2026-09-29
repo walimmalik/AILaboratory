@@ -80,7 +80,8 @@ export const FieldState = z.enum(['confirmed', 'changed', 'unconfirmed']);
 /** One attribute as the review screen shows it. */
 export const ReadinessField = z.object({
   field: z.string(),
-  value: z.unknown(),
+  /** Absent when the field has no value. */
+  value: z.unknown().optional(),
   /** confirmed: equals what a person confirmed. changed: differs from it. unconfirmed: never confirmed. */
   state: FieldState,
   /** An agent's estimate that no person has confirmed yet. */

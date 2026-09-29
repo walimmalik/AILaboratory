@@ -1,6 +1,6 @@
 # 004: Agent shell and UI foundation
 
-- Status: accepted (round 5 answered by Wali 2026-09-29, all as recommended); 004a merged, building 004b. Direction and design system accepted by Wali on 2026-09-29 (mockup v3: console layer, single outlines, no side stripes, no nested containers)
+- Status: accepted (round 5 answered by Wali 2026-09-29, all as recommended); 004a and 004b merged; round 6 answered (all A); building 004c. Direction and design system accepted by Wali on 2026-09-29 (mockup v3: console layer, single outlines, no side stripes, no nested containers)
 - Depends on: 003 (operation registry)
 - Mockup: https://claude.ai/artifact/4ECfKnRveEYembEY1ToNJs
 
@@ -74,3 +74,26 @@ Routine choices (not asking): TanStack Router and TanStack Query, Radix primitiv
 | Limits | 16 model turns per message, 180 s per model call | Bounds cost and stuck runs until there is a stop button. |
 | Models | `openrouter` (default `deepseek/deepseek-chat`), `anthropic` (default `claude-opus-5-5`), `openai-compatible` (e.g. Ollama) | Your key first; local models for free testing. |
 | New read operation | `records.kinds` lists kinds with their attribute schemas | The assistant (and any agent) needs it before creating records. |
+
+## Round 6: 004c draft-and-confirm questions (answered by Wali 2026-09-29: all A, as recommended)
+
+Already decided in round 3: confirm section by section, then one final confirm; downstream work uses confirmed versions only; agent changes are highlighted like track changes, with a list of changes. Plans 007 and 008 depend on this: evidence per field group, estimated values in agent ink until confirmed, a readiness panel per use, and a confirm operation that is proposed for agents.
+
+| # | Question | Options | Recommendation |
+| --- | --- | --- | --- |
+| C1 | What a draft is | A) A record in draft status, plus per-field evidence and section confirmations stored with it; final confirm makes it active · B) A separate design-document store that writes a record when confirmed | **A.** Records already have drafts, versions, history and proposals; one path, no second store. |
+| C2 | How values get marked as assumed | A) Anything an agent sets is marked "assumed by <agent>" unless it names a source (datasheet, import, measurement); a person's edit or a section confirm clears it · B) The agent has to mark assumptions itself | **A.** Nothing an agent guessed can slip through unmarked. |
+| C3 | When a confirmed section changes | A) It goes back to "needs review", with the change highlighted · B) It stays confirmed | **A.** A confirmation means a person saw these exact values. |
+| C4 | What the highlighting compares against | A) The values when the section was last confirmed (or first drafted) · B) The previous version | **A.** Shows everything you haven't approved yet, however many edits it took. |
+| C5 | Where readiness checks live | A) Per kind, in code: each check has a plain-language message, a severity (blocks confirm or just warns), a source and a suggested fix · B) Editable rules stored in the database | **A.** Checks come from the science and need tests; editable rules can come later if needed. |
+| C6 | What to build it against before labware exists | A) Give the test widget kind sections and a couple of checks, with an end-to-end test; labware (007) is the first real user · B) Build 007a at the same time | **A.** Keeps 004c small and proves the framework without waiting on labware. |
+
+## 004c: defaults chosen while building (routine; say if any should change)
+
+| Choice | Default | Why |
+| --- | --- | --- |
+| Where evidence lives | Per top-level attribute, on the record, in every history snapshot | Enough for labware and instruments; deeper structures (well maps, step lists) decide finer evidence with their first kind. |
+| Who can confirm | Sections: people only (`records.confirm_section`). Final confirm: `records.activate`, which agents can ask for (proposed) once the draft is ready | Matches "agent drafts, person confirms"; an agent can't ask for a confirm that would fail. |
+| A person creating a record active | Allowed; confirms every section as written, and blocker checks must pass | Entering something yourself shouldn't need a second round of clicks. Agents can't. |
+| Naming a source | Optional `evidence` on `records.create` and `records.update`; nobody can claim "entered by a person" | Agents cite datasheets and imports; people are credited by who they are. |
+| Readiness | `records.readiness` returns sections, per-field state, checks and what is missing in plain words | One read for the review screen and for agents. |

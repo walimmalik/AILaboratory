@@ -20,6 +20,7 @@ React + Vite (`apps/web`). Plan 004: the shell, sign-in, the live activity ledge
 | Activity (the live ledger; select a line for details) | `src/pages/Activity.tsx` |
 | Proposals (before and after, approve or reject with a note) | `src/pages/Proposals.tsx` |
 | Records list and record detail (fields, history, links) | `src/pages/Records.tsx`, `src/pages/Record.tsx` |
+| Review (kinds with sections): a readiness block (what is missing, the agent's estimates, checks with their source and fix, the final Confirm), then one block per section with each value, where it came from ("assumed by …" in agent ink, "from a datasheet", "entered by you"), changed values highlighted with the confirmed value struck through, and Confirm section | `src/pages/Review.tsx` |
 | Assistant state: open or closed, the shown conversation (kept live over its stream), sending | `src/assistant.tsx` |
 | Ask bar (top bar; `/` focuses it; starts a new conversation) and the assistant panel (right column; replies continue the shown conversation; each step it took as a plain line with the record or the proposal to review, and technical details) | `src/pages/Shell.tsx`, `src/pages/AssistantPanel.tsx` |
 
