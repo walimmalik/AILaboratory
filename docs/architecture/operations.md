@@ -25,6 +25,7 @@ Every capability is an **operation**. People (through the web app) and agents (t
    - **Agent with a `propose` policy**: previews, stores a proposal with that preview, logs `proposed`, and returns `{status: "proposed", proposal}`.
    - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
 5. Output is checked against the contract before it leaves the server.
+6. An implementation may declare `after`, which runs once a write is committed and logged (never on previews or proposals). `assistant.ask` uses it to start the assistant in the background.
 
 ## Agent policies
 
@@ -36,6 +37,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `records.update`, `records.restore` | direct on drafts, proposed on active records |
 | `records.activate`, `records.archive`, `records.unarchive` | proposed |
 | `records.delete_draft` | direct |
+| `assistant.ask` | people only |
 
 Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.
 
@@ -45,6 +47,7 @@ Approving (`proposals.approve`, people only) runs the stored input as the propos
 | --- | --- |
 | REST | `GET /v1/operations` (contracts with JSON Schemas), `POST /v1/ops/{id}` with a JSON body and optional `?preview=true`, `GET /v1/openapi.json` |
 | Errors | HTTP 400/401/403/404/409/500 with `{code, message, details?}` |
+| Live conversation | `GET /v1/assistant/conversations/{id}/stream`: `ready` and `status` (the conversation's state), `message` (each new message), `ping`. Only the conversation's owner. See [assistant.md](assistant.md). |
 | Live ledger | `GET /v1/activity/stream`: server-sent events `ready`, `activity` (one ledger entry) and `ping` every 25 s, for the caller's lab. Each entry carries `recordNames` (readable names at the time of the change) so a ledger line can say "archived WDG-0001" even after a draft is deleted. |
 | MCP | `POST /mcp` (Streamable HTTP, stateless, JSON responses). Two tools: `describe_operations` (optionally by namespace or IDs) and `run_operation` (`operation`, `input`, `preview`). Refusals come back as tool errors with `{code, message}`. |
 | Web app | `@ailab/client`: `call(contract, input, {preview})` returns the typed result; `run` returns the output or throws. `apps/web/src` may not use `fetch` (lint rule). |
@@ -70,3 +73,4 @@ claude mcp add --transport http ailab http://localhost:3001/mcp --header "Author
 
 - The live stream uses an in-process bus. Several API replicas will need Postgres `LISTEN/NOTIFY`.
 - No roles yet: any person in the lab may approve.
+- Every ask to the in-app assistant is a write, so it shows in the ledger as "asked the assistant".

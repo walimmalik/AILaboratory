@@ -22,6 +22,7 @@ Every lab thing (a labware type, a plate, a plasmid, an SOP) is a record with th
 - **Versions protect against overwriting.** Every change needs `expectedVersion`, the version you last read. A `version_conflict` means someone changed the record: read it again with `records.get`, re-apply your change, and retry.
 - **Nothing is deleted.** Active records are archived. Only unlinked drafts can be deleted (`records.delete_draft`).
 - **History is complete.** `records.history` returns every version with its actor and reason; `records.restore` makes an old version current again as a new version.
+- **Kinds first.** `records.kinds` lists the kinds this lab can hold, with each kind's attribute JSON Schema. Read it before `records.create`.
 - **Finding records.** `records.list` returns records newest first; filter by `kind`, `status` or `search` (label or readable name). Archived records appear only with `status: "archived"`.
 - **Links.** `records.links` with `direction: "from"` shows what a record points to; `"to"` shows where it is used.
 

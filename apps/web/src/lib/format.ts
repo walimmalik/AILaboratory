@@ -12,7 +12,26 @@ const verbs: Record<string, [string, string]> = {
   'records.delete_draft': ['deleted the draft', 'delete the draft'],
   'proposals.approve': ['approved a proposed change', 'approve a proposed change'],
   'proposals.reject': ['rejected a proposed change', 'reject a proposed change'],
+  'assistant.ask': ['asked the assistant', 'ask the assistant'],
+  // Reads, as the assistant's steps show them.
+  'records.get': ['looked at', 'look at'],
+  'records.list': ['looked up records', 'look up records'],
+  'records.kinds': ['checked which record kinds exist', 'check which record kinds exist'],
+  'records.history': ['read the history of', 'read the history of'],
+  'records.links': ['looked at the links of', 'look at the links of'],
+  'proposals.list': ['looked at the proposals', 'look at the proposals'],
+  'activity.list': ['read the activity ledger', 'read the activity ledger'],
 };
+
+const reads = new Set([
+  'records.get',
+  'records.list',
+  'records.kinds',
+  'records.history',
+  'records.links',
+  'proposals.list',
+  'activity.list',
+]);
 
 /** "edited" (what happened). */
 export function operationVerb(operationId: string): string {
@@ -138,4 +157,51 @@ export function diffRecords(
     if (!same(a, b)) changes.push({ field: key, before: a, after: b });
   }
   return changes;
+}
+
+export interface ToolLine {
+  text: string;
+  tone: 'ok-ink' | 'agent-ink' | 'crit-ink' | 'muted';
+  /** The record the step produced or read, when there is one. */
+  record?: { id: string; name: string };
+  /** True when the step waits for a person on the Proposals page. */
+  proposed?: boolean;
+}
+
+/** A record envelope's id and name, if `value` is one. */
+function recordOf(value: unknown): { id: string; name: string } | undefined {
+  const { id, name } = (value ?? {}) as { id?: unknown; name?: unknown };
+  return typeof id === 'string' && typeof name === 'string' ? { id, name } : undefined;
+}
+
+/** One step the assistant took (an operation it ran), as a line for people. */
+export function describeToolStep(step: {
+  operationId: string;
+  outcome: 'done' | 'preview' | 'proposed' | 'failed';
+  result: unknown;
+  error?: { message: string } | undefined;
+}): ToolLine {
+  const result = (step.result ?? {}) as { output?: unknown; proposal?: { preview?: unknown } };
+  if (step.outcome === 'failed') {
+    return {
+      text: `could not ${operationIntent(step.operationId)}: ${step.error?.message ?? 'refused'}`,
+      tone: 'crit-ink',
+    };
+  }
+  if (step.outcome === 'proposed') {
+    const record = recordOf(result.proposal?.preview);
+    return {
+      text: `proposed to ${operationIntent(step.operationId)}${record ? ` ${record.name}` : ''}; waits for your review`,
+      tone: 'agent-ink',
+      proposed: true,
+      ...(record ? { record } : {}),
+    };
+  }
+  const record = recordOf(result.output);
+  const verb = operationVerb(step.operationId);
+  return {
+    text: step.outcome === 'preview' ? `previewed: ${verb}` : verb,
+    tone: record && !reads.has(step.operationId) ? 'ok-ink' : 'muted',
+    ...(record ? { record } : {}),
+  };
 }

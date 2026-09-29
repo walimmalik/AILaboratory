@@ -2,6 +2,7 @@ import type { ActivityEntry } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Fragment, useState } from 'react';
+import { useAssistant } from '../assistant.tsx';
 import {
   actorLabel,
   formatWhen,
@@ -135,6 +136,8 @@ function Row({
 }
 
 function Details({ entry }: { entry: ActivityEntry }) {
+  const assistant = useAssistant();
+  const conversationId = conversationOf(entry);
   return (
     <tr className="details">
       <td colSpan={4}>
@@ -156,6 +159,20 @@ function Details({ entry }: { entry: ActivityEntry }) {
               <dt>proposal</dt>
               <dd>
                 <Link to="/proposals">see proposals</Link>
+              </dd>
+            </>
+          )}
+          {conversationId && (
+            <>
+              <dt>conversation</dt>
+              <dd>
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => assistant.show(conversationId)}
+                >
+                  open in the assistant
+                </button>
               </dd>
             </>
           )}
@@ -184,6 +201,19 @@ function Details({ entry }: { entry: ActivityEntry }) {
 }
 
 function inputLabel(entry: ActivityEntry): string | undefined {
-  const label = (entry.input as { label?: unknown } | undefined)?.label;
-  return typeof label === 'string' && label ? label : undefined;
+  const { label, message } = (entry.input ?? {}) as { label?: unknown; message?: unknown };
+  if (typeof label === 'string' && label) return label;
+  // What someone asked the assistant.
+  if (typeof message === 'string' && message) {
+    return message.length > 80 ? `${message.slice(0, 79)}…` : message;
+  }
+  return undefined;
+}
+
+/** The assistant conversation behind an entry: the agent's session, or the conversation asked in. */
+function conversationOf(entry: ActivityEntry): string | undefined {
+  const ref = entry.actor.type === 'agent' ? entry.actor.sessionRef : undefined;
+  if (ref?.startsWith('cnv_')) return ref;
+  const id = (entry.input as { conversationId?: unknown } | undefined)?.conversationId;
+  return typeof id === 'string' ? id : undefined;
 }

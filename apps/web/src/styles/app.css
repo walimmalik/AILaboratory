@@ -554,6 +554,152 @@ details.tech[open] summary {
   margin: 0;
 }
 
+/* Ask bar (topbar) and assistant panel (right). The panel is a column like the nav, not a box. */
+.ask-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 640px;
+  margin: 0 auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--field);
+  padding: 0 10px;
+}
+.ask-bar:focus-within {
+  border-color: var(--accent);
+}
+.ask-bar .prompt {
+  color: var(--agent);
+  font-weight: 600;
+}
+.ask-bar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 5px 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.ask-bar input::placeholder {
+  color: var(--ink-3);
+}
+.shell.with-assistant {
+  grid-template-columns: 200px minmax(0, 1fr) minmax(320px, 400px);
+}
+.assistant {
+  border-left: 1px solid var(--rule);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.assistant > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+}
+.assistant > header h2 {
+  margin: 0;
+  font: 500 12px / 1.2 var(--font-display);
+  font-variation-settings: "wdth" 80;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.assistant > header .model {
+  font-size: 12px;
+  color: var(--agent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assistant > header .spacer {
+  flex: 1;
+}
+.assistant .picker {
+  padding: 0 14px 8px;
+}
+.assistant .picker select {
+  width: 100%;
+  font-size: 13px;
+}
+.transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 14px 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--rule);
+}
+.transcript .msg .who {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.transcript .text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.transcript .steps {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font: 12px / 1.45 var(--font-mono);
+}
+.transcript .step details.tech {
+  margin-left: 14px;
+}
+.transcript .step details.tech summary {
+  font-size: 11px;
+}
+.transcript .working,
+.transcript .stopped {
+  font: 12px var(--font-mono);
+}
+.assistant .setup {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+}
+.composer {
+  border-top: 1px solid var(--rule);
+  padding: 10px 14px 12px;
+  display: grid;
+  gap: 8px;
+}
+.composer textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+}
+.composer .row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.composer .hint {
+  font-size: 12px;
+}
+.composer .error-text {
+  margin: 0;
+}
+
 @media (max-width: 720px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
@@ -578,6 +724,22 @@ details.tech[open] summary {
   }
   .page {
     padding: 16px;
+  }
+  .shell.with-assistant {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .ask-bar {
+    order: 5;
+    flex-basis: 100%;
+  }
+  .assistant {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    border-left: 0;
   }
 }
 

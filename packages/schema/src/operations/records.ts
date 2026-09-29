@@ -121,3 +121,21 @@ export const recordsLinks = defineContract({
   input: z.object({ id: RecordId, direction: z.enum(['from', 'to']) }),
   output: z.object({ links: z.array(RecordLink) }),
 });
+
+export const recordsKinds = defineContract({
+  id: 'records.kinds',
+  summary:
+    "List the record kinds this lab can hold, with the JSON Schema of each kind's attributes (read this before records.create)",
+  effect: 'read',
+  input: z.object({}),
+  output: z.object({
+    kinds: z.array(
+      z.object({
+        kind: z.string(),
+        idPrefix: z.string(),
+        namePrefix: z.string(),
+        attributes: z.record(z.string(), z.unknown()),
+      }),
+    ),
+  }),
+});

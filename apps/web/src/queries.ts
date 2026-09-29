@@ -1,6 +1,9 @@
 import {
   type ActivityEntry,
   activityList,
+  assistantGetConversation,
+  assistantListConversations,
+  assistantStatus,
   proposalsList,
   recordsGet,
   recordsHistory,
@@ -58,4 +61,21 @@ export const linksQuery = (id: string, direction: 'from' | 'to') =>
   queryOptions({
     queryKey: ['record', id, 'links', direction],
     queryFn: async () => (await api.run(recordsLinks, { id, direction })).links,
+  });
+
+export const assistantSetupQuery = queryOptions({
+  queryKey: ['assistant', 'setup'],
+  queryFn: () => api.run(assistantStatus, {}),
+  staleTime: 60_000,
+});
+
+export const conversationsQuery = queryOptions({
+  queryKey: ['assistant', 'conversations'],
+  queryFn: async () => (await api.run(assistantListConversations, { limit: 30 })).conversations,
+});
+
+export const conversationQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['assistant', 'conversation', id],
+    queryFn: () => api.run(assistantGetConversation, { id }),
   });

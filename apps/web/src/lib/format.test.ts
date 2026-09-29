@@ -1,6 +1,6 @@
 import type { ActivityEntry, Me } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
-import { actorLabel, describeEntry, diffRecords, formatValue } from './format.ts';
+import { actorLabel, describeEntry, describeToolStep, diffRecords, formatValue } from './format.ts';
 
 const me = { user: { id: 'usr_A' } } as unknown as Me;
 
@@ -56,5 +56,43 @@ describe('diffRecords', () => {
         (c) => c.field,
       ),
     ).toEqual(['label', 'status', 'a']);
+  });
+});
+
+describe('describeToolStep', () => {
+  it('names the record a step made, and marks proposals and failures', () => {
+    expect(
+      describeToolStep({
+        operationId: 'records.create',
+        outcome: 'done',
+        result: { status: 'done', output: { id: 'wdg_1', name: 'WDG-0001' } },
+      }),
+    ).toEqual({ text: 'created', tone: 'ok-ink', record: { id: 'wdg_1', name: 'WDG-0001' } });
+    expect(
+      describeToolStep({
+        operationId: 'records.update',
+        outcome: 'proposed',
+        result: { status: 'proposed', proposal: { preview: { id: 'wdg_1', name: 'WDG-0001' } } },
+      }),
+    ).toMatchObject({
+      text: 'proposed to edit WDG-0001; waits for your review',
+      tone: 'agent-ink',
+      proposed: true,
+    });
+    expect(
+      describeToolStep({
+        operationId: 'records.create',
+        outcome: 'failed',
+        result: {},
+        error: { message: 'color is required' },
+      }),
+    ).toEqual({ text: 'could not create: color is required', tone: 'crit-ink' });
+    expect(
+      describeToolStep({
+        operationId: 'records.list',
+        outcome: 'done',
+        result: { output: { records: [] } },
+      }),
+    ).toEqual({ text: 'looked up records', tone: 'muted' });
   });
 });

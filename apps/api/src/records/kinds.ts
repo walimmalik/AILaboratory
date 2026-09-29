@@ -21,6 +21,10 @@ export class KindRegistry {
     return this;
   }
 
+  list(): KindDefinition[] {
+    return [...this.#kinds.values()].sort((a, b) => a.kind.localeCompare(b.kind));
+  }
+
   get(kind: string): KindDefinition {
     const definition = this.#kinds.get(kind);
     if (!definition) throw new RecordError('unknown_kind', `Unknown record kind "${kind}"`);

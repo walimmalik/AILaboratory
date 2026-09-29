@@ -5,12 +5,14 @@ import {
   recordsDeleteDraft,
   recordsGet,
   recordsHistory,
+  recordsKinds,
   recordsLinks,
   recordsList,
   recordsRestore,
   recordsUnarchive,
   recordsUpdate,
 } from '@ailab/schema';
+import { z } from 'zod';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
 import { type AgentPolicy, implement, type OperationDeps } from './registry.ts';
@@ -34,6 +36,20 @@ export const recordOperations = [
         ...(input.status ? { status: input.status } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
       }),
+  }),
+  implement(recordsKinds, {
+    run: async (_ctx, _input, deps) => ({
+      kinds: deps.kinds.list().map((definition) => ({
+        kind: definition.kind,
+        idPrefix: definition.idPrefix,
+        namePrefix: definition.namePrefix,
+        attributes: z.toJSONSchema(definition.attributes, {
+          target: 'draft-2020-12',
+          io: 'input',
+          unrepresentable: 'any',
+        }) as Record<string, unknown>,
+      })),
+    }),
   }),
   implement(recordsGet, {
     run: (ctx, input, deps) => service(deps).get(ctx, input.id),

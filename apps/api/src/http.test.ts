@@ -182,3 +182,20 @@ describe('MCP', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('assistant stream', () => {
+  it('streams only your own conversations', async () => {
+    const response = await app.request(
+      '/v1/assistant/conversations/cnv_01M3QAEF94RR3KEZJ0GSG3GNKF/stream',
+      { headers: { authorization: `Bearer ${personToken}` } },
+    );
+    expect(response.status).toBe(404);
+    expect((await response.json()).code).toBe('not_found');
+  });
+
+  it('says what to set up when no model is configured', async () => {
+    const response = await post('/v1/ops/assistant.ask', { message: 'Hello' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).message).toContain('No model is set up');
+  });
+});

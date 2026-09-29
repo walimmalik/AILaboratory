@@ -6,6 +6,7 @@ import type {
 } from '@ailab/schema';
 import { RecordId } from '@ailab/schema';
 import { z } from 'zod';
+import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -18,6 +19,7 @@ export interface OperationDeps {
   kinds: KindRegistry;
   registry: OperationRegistry;
   bus: ActivityBus;
+  assistant: Assistant;
 }
 
 type Policy = 'direct' | 'propose';
@@ -40,6 +42,8 @@ export interface OperationImplementation<
   touches?(input: z.infer<I>, output: z.infer<O> | undefined): string[];
   /** Ledger outcome for a successful call. Defaults to "succeeded". */
   outcome?(output: z.infer<O>): ActivityEntry['outcome'];
+  /** Runs after a write is committed and logged, e.g. to start background work. Never on previews or proposals. */
+  after?(ctx: RecordContext, input: z.infer<I>, output: z.infer<O>, deps: OperationDeps): void;
 }
 
 export function implement<I extends z.ZodType, O extends z.ZodType>(
@@ -170,6 +174,7 @@ export class OperationRegistry {
         input,
         durationMs: Date.now() - started,
       });
+      operation.after?.(ctx, input, output, deps);
       return { status: 'done', output };
     } catch (error) {
       await recordActivity(db, this.deps.bus, ctx, {
