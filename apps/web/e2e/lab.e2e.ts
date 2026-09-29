@@ -233,3 +233,40 @@ test('labware has its own page in the library, and the Review page groups drafts
   await page.getByRole('button', { name: /^Labware \d+/ }).click();
   await expect(page.getByRole('article', { name: `Draft ${name}` })).toBeVisible();
 });
+
+test('a failing check links to its section, where a person fills in the value and says where it came from', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'labware_type',
+    label: `Tip tray ${Date.now()}`,
+    attributes: {
+      family: 'tip_rack',
+      footprint: {
+        sbs: true,
+        length: { value: '127.76', unit: 'mm' },
+        width: { value: '85.48', unit: 'mm' },
+      },
+      wells: { layout: 'grid', rows: 16, columns: 24 },
+      maxVolume: { value: '60', unit: 'uL' },
+    },
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  const geometry = page.getByRole('region', { name: 'Geometry' });
+
+  // Failing checks come first; passing ones are folded away.
+  await expect(readiness.getByText('Length, width or height is missing')).toBeVisible();
+  await expect(readiness.getByText(/checks pass/)).toBeVisible();
+
+  await readiness.getByRole('button', { name: 'Fix in geometry' }).first().click();
+  await geometry.getByRole('textbox', { name: 'height', exact: true }).first().fill('30.5');
+  await geometry.getByRole('button', { name: 'Measured' }).click();
+  await geometry.getByRole('textbox', { name: 'Note' }).fill('calipers');
+  await geometry.getByRole('button', { name: 'Save' }).click();
+
+  await expect(geometry.getByText(/measured · calipers/).first()).toBeVisible();
+  await expect(readiness.getByText('Length, width or height is missing')).toHaveCount(0);
+});

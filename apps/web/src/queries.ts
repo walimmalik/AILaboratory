@@ -7,6 +7,7 @@ import {
   proposalsList,
   recordsGet,
   recordsHistory,
+  recordsKinds,
   recordsLinks,
   recordsList,
   recordsReadiness,
@@ -95,3 +96,10 @@ export const conversationQuery = (id: string) =>
     queryKey: ['assistant', 'conversation', id],
     queryFn: () => api.run(assistantGetConversation, { id }),
   });
+
+/** The kinds this lab holds, with the JSON Schema of their attributes (drives the edit forms). */
+export const kindsQuery = queryOptions({
+  queryKey: ['kinds'],
+  queryFn: async () => (await api.run(recordsKinds, {})).kinds,
+  staleTime: Number.POSITIVE_INFINITY,
+});

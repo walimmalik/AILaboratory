@@ -476,6 +476,11 @@ pre.json {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.passing > summary {
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 0;
+}
 details.tech summary {
   cursor: pointer;
   font: 12px var(--font-mono);
@@ -841,4 +846,77 @@ table.checks td.mark {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* Editing values in place (SectionEditor, FieldEditor). No boxes inside the block: rows and indents. */
+.editor {
+  display: grid;
+  gap: 14px;
+}
+.form-rows {
+  display: grid;
+  gap: 8px;
+}
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 170px) minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+}
+.form-row > .name {
+  padding-top: 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.form-row > .control {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  justify-items: start;
+}
+.form-row > .control > .grow,
+.form-row > .control > input.grow {
+  width: 100%;
+  max-width: 48ch;
+}
+.form-row .form-rows {
+  padding-left: 12px;
+  width: 100%;
+}
+.form-row .hint {
+  font-size: 12px;
+}
+.quantity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.quantity input {
+  width: 9ch;
+}
+.quantity input:invalid,
+.json-field:invalid {
+  border-color: var(--crit);
+}
+.variant {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  justify-items: start;
+}
+.json-field {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form-row > .name {
+    padding-top: 0;
+  }
+}
+.form-row .form-row {
+  grid-template-columns: minmax(70px, 100px) minmax(0, 1fr);
 }
