@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
 import { describeToolStep, formatWhen, type ToolLine } from '../lib/format.ts';
+import { RichText } from '../lib/RichText.tsx';
 import { assistantSetupQuery, conversationQuery, conversationsQuery } from '../queries.ts';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
@@ -160,7 +161,7 @@ function Message({
   return (
     <li className="msg">
       <div className="who mono agent-ink">{agentName}</div>
-      {message.text && <p className="text">{message.text}</p>}
+      {message.text && <RichText className="text rich" text={message.text} />}
       {message.toolCalls.length > 0 && (
         <ul className="steps">
           {message.toolCalls.map((call) => {

@@ -23,7 +23,8 @@ export const proposalOperations = [
       if (row.status !== 'pending') {
         throw new OperationError('invalid_state', `Proposal ${row.id} is already ${row.status}`);
       }
-      const agentCtx = { ...ctx, actor: row.proposedBy };
+      // The approver reviewed the change, so it confirms the sections it touches (ADR 0021).
+      const agentCtx = { ...ctx, actor: row.proposedBy, approvedBy: ctx.actor };
       try {
         await deps.registry.execute(
           agentCtx,

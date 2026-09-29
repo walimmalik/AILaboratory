@@ -6,9 +6,13 @@ import { Actor } from './actor.ts';
  * confirms one by one; every value carries where it came from; readiness checks say what is missing.
  */
 
-/** Where a value came from. "assumed" is an agent's estimate that no person has confirmed. */
+/**
+ * Where a value came from. "assumed" is an agent's estimate. "stated" is a value the person the agent
+ * works for told it (e.g. in a conversation). "person" is a value a person entered themselves.
+ */
 export const EvidenceSource = z.enum([
   'assumed',
+  'stated',
   'person',
   'datasheet',
   'imported',

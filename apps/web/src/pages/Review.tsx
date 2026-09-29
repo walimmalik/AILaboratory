@@ -12,6 +12,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { api } from '../api.ts';
+import { useAssistant } from '../assistant.tsx';
 import { formatWhen, isAgent } from '../lib/format.ts';
 import { useMe } from '../session.ts';
 
@@ -102,7 +103,7 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
             </button>
             <span className="muted">
               {readiness.ready
-                ? 'Everything is confirmed. Confirming makes it available to the rest of the lab.'
+                ? 'All sections are confirmed. Confirm it to make it active for the lab.'
                 : toReview > 0
                   ? `Confirm ${toReview === 1 ? 'the remaining section' : `the ${toReview} remaining sections`} first.`
                   : 'Fix what blocks it first.'}
@@ -252,7 +253,9 @@ function SectionBlock({
 }
 
 const sourceWords: Record<FieldEvidence['source'], string> = {
-  assumed: 'assumed',
+  // Only shown once a person has confirmed the value; before that it reads "assumed by …".
+  assumed: 'estimated',
+  stated: 'told',
   person: 'entered',
   datasheet: 'from a datasheet',
   imported: 'imported',
@@ -261,14 +264,30 @@ const sourceWords: Record<FieldEvidence['source'], string> = {
 };
 
 function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: Me | undefined }) {
+  const assistant = useAssistant();
   if (!evidence) return <span className="muted">—</span>;
+  const by = evidence.by;
   const words =
     evidence.source === 'person'
-      ? `entered by ${who(evidence.by, me)}`
-      : `${sourceWords[evidence.source]}${isAgent(evidence.by) ? ` by ${who(evidence.by, me)}` : ''}`;
+      ? `entered by ${who(by, me)}`
+      : evidence.source === 'stated' && by.type === 'agent'
+        ? `${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} told ${by.agentName}`
+        : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;
+  const conversation =
+    evidence.source === 'stated' && by.type === 'agent' && by.sessionRef?.startsWith('cnv_')
+      ? by.sessionRef
+      : undefined;
   return (
     <span className="muted">
       {words}
+      {conversation && (
+        <>
+          {' · '}
+          <button type="button" className="link-btn" onClick={() => assistant.show(conversation)}>
+            conversation
+          </button>
+        </>
+      )}
       {evidence.note && ` · ${evidence.note}`}
       {evidence.reference &&
         (/^https?:\/\//.test(evidence.reference) ? (

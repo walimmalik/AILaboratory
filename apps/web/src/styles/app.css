@@ -587,6 +587,18 @@ details.tech[open] summary {
 .ask-bar input::placeholder {
   color: var(--ink-3);
 }
+.ask-bar .key-hint {
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0 6px;
+  font: 11px / 18px var(--font-mono);
+  color: var(--ink-3);
+  cursor: help;
+}
+.ask-bar:focus-within .key-hint {
+  visibility: hidden;
+}
 .shell.with-assistant {
   grid-template-columns: 200px minmax(0, 1fr) minmax(320px, 400px);
 }
@@ -651,6 +663,23 @@ details.tech[open] summary {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.transcript .text.rich {
+  white-space: normal;
+  display: grid;
+  gap: 6px;
+}
+.transcript .text.rich p,
+.transcript .text.rich ul,
+.transcript .text.rich ol {
+  margin: 0;
+}
+.transcript .text.rich ul,
+.transcript .text.rich ol {
+  padding-left: 18px;
+}
+.transcript .text.rich code {
+  font: 0.92em var(--font-mono);
 }
 .transcript .steps {
   margin: 6px 0 0;

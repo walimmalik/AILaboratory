@@ -138,6 +138,7 @@
                 "type": "string",
                 "enum": [
                   "assumed",
+                  "stated",
                   "person",
                   "datasheet",
                   "imported",

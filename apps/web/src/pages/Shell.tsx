@@ -168,9 +168,15 @@ function AskBar() {
         ref={input}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Ask the assistant, or tell it what to draft   ( / )"
+        placeholder="Ask the assistant, or tell it what to draft"
         autoComplete="off"
       />
+      {/* A keyboard hint, not a command: "/" anywhere on the page jumps here. */}
+      {!text && (
+        <kbd className="key-hint" title="Press / anywhere to jump here">
+          /
+        </kbd>
+      )}
     </form>
   );
 }
