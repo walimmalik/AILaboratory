@@ -41,15 +41,15 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [017 Experiment designer](../plans/017-experiment-designer.md) | Assay templates, custom builder, the designer, factorial designs | Locked; after 013d, 014 and 016a | |
 | [018 Workflow creator](../plans/018-workflow-creator.md) | Workflows as one-work-unit graphs chaining SOPs and transfer plans, labware paths, timing windows and handling rules with sources, the schedule request for 019 | Locked; after 012, 014a and 016a | 018a to 018c |
 | [019 Scheduler and orchestrator](../plans/019-scheduler-and-orchestrator.md) | Schedules for one or more workflows across the workcell (planned in detail, run by Cellario), standalone instruments and people; carries, calendars and bookings, science-aware margins with stress cases, Gantt and simulation, prep lists, live re-planning | Locked; after 018a (019b's calendar after 008b) | 019a to 019e |
+| [020 Analysis](../plans/020-analysis.md) | Reader imports, analysis templates and a vetted method catalog (4PL, Z', initial rates, tests), Vega-Lite graphs with a format panel, exclusions, hits to sets and verdicts, exploration across runs, power and drift | Locked; after 013c and 014a | 020a to 020g |
 
 ## Later
 
 | Plan | Delivers |
 | --- | --- |
-| 020 Analysis | Templates, statistics, charts, agent analysis |
 | 021 Lab notebook | Entries on top of the event log plus free writing |
 | 022 Device gateway | Python gateway implementing capability contracts on real hardware; Cellario hand-off |
 
 ## Build order
 
-007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018 and 019 follow in the order their rows say. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
+007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.

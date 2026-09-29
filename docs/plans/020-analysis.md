@@ -1,0 +1,134 @@
+# 020: Analysis
+
+- Status: accepted. Rounds 1 to 3 (A1 to A18) all A, chosen by Wali 2026-09-29, with a note on A4 answered by A7. Ready to build after 013c (runs with data files) and 014a (well plans); 020a can start its import formats and methods earlier against seed files.
+- Depends on: 011 (file store for reader exports), 012 (the analysis section of a digital SOP, the expression language), 013 (runs carry data files; experiments carry hypotheses with testable predictions, E3, and results, E9; sets, E10), 014 (the well plan: roles, subjects, series, analysis groups, M2 and M6), 016 (achieved concentrations per well, the Echo transfer report's failed wells), 017 (assay templates carry the analysis plan, quality criteria and hit rule)
+- Feeds: 013 (key numbers, verdicts on predictions, sets of hits), 017 (power analysis from past variance, D6), 005 (lessons and drift proposed from results), 021 (notebook entries embed charts and results)
+
+## What this plan delivers
+
+A Prism and Spotfire hybrid, where agents do everything a person can:
+
+- **Templated analysis (the Prism side):** each assay's analysis is a template: read the reader export, join it to the plate map, normalize to controls, fit (4PL for the ELISA standard curve and dose-response, initial rates for kinetics, ratios for Dual-Glo), check quality (Z', CV, fit quality), call hits and draw the lab's standard graphs. When a run's data arrives the analysis drafts itself; a person reviews and confirms.
+- **Your own analysis:** pick data, choose methods from a catalog of vetted statistical methods, build graphs, and save what works as a new template. No code needed.
+- **Exploration (the Spotfire side):** results from many plates, runs, experiments and campaigns in linked views (plate heatmaps, scatter, curves, tables) that filter each other.
+- **Agents analyze too:** the same methods and chart specs are operations, so an agent can draft an analysis, a graph or a conclusion, with every number coming from a method (ADR 0024), never from the model's own arithmetic.
+
+## Starting point
+
+- `seed/assays.yaml` already names each assay's analysis: ELISA "4PL fit of standards, interpolate samples"; single point "Z' ≥ 0.5 per plate", hit rule "viability below 3 SD of the neutral controls"; dose-response "4PL fit, IC50 (or DC50 for HiBiT) with confidence interval"; pNPP "initial rate (mOD/min) per well, percent activity"; Dual-Glo "firefly/Renilla ratio, fold change over untreated".
+- 014 M6: wells carry role, subject, replicate and series point, and the layout declares the analysis groups (a curve per compound, Z' per plate). Analysis reads these rather than guessing.
+- 016 O2: the achieved concentration is stored per well, so fits use the real value, not the nominal one.
+- 013 E9: runs attach data files through the file store, linked to the plate and read step. 013 E3: predictions name a readout, a measure, a comparison and a threshold with a unit.
+- 000 D1 and ADR 0001: statistics and curve fits run in the Python science service (`apps/science`, scipy and statsmodels), which owns no records. 000 deferred the charting library and the method catalog to this plan.
+- ADR 0024: numbers agents rely on come from calculator operations.
+- Readers in the seed lab: Tecan Spark Cyto (absorbance, fluorescence, luminescence, imaging), qTOWER3 (qPCR), and the Opentrons Flex absorbance module.
+
+## Model (from the answers)
+
+| Layer | Record | Holds |
+| --- | --- | --- |
+| Kind | **Import format** (`imf_`, `IMF-0001`) | Which instrument kind and export it reads (Spark Excel, qTOWER3 CSV, Flex absorbance JSON, generic CSV), how to find plate, well, channel, read time or cycle, value and unit in it, and how to match the file to a plate and read step; versioned; an unknown file gets an agent-drafted column mapping, confirmed by a person (A3) |
+| Kind | **Analysis template** (`ant_`, `ANT-0001`) | The steps written against plate-map roles and groups (import, derived columns in the expression language, normalize, fit, quality, hit call, graphs), each naming a catalog method and version with its settings; the quality criteria and hit rule from the assay template (017); the graphs as Vega-Lite specs. Linked from the assay template's analysis plan; versioned and confirmed (A1) |
+| Instance | **Analysis** (`ana_`, `ANA-0001`) | A template (or custom steps) applied to runs and plates: the data files and import format versions, exclusions with reasons, proposed exclusions, quality results as its readiness panel, graphs, the drafted conclusion and proposed sets; drafted by the engine when data arrives or by a person or agent, confirmed by a person; a re-analysis is a new version (A1, A6, A9) |
+| State | **Measurements** (analysis-owned table) | One row per plate, well, channel or wavelength, read time or cycle: value and unit, the file and import format version it came from. Never edited (A8) |
+| State | **Results** (analysis-owned tables, per analysis version) | Per well: derived and normalized values, excluded or not. Per group (curve per compound, replicate mean, standard curve): fit parameters with confidence intervals, fit quality, interpolated values flagged outside the range, "cannot be determined" with the reason. Per plate: Z', S/B, CV, pass or fail. Across runs: summaries with n and which runs went in (A8, A12) |
+| Instance | **View** (`viw_`, `VIW-0001`) | A saved exploration: a view spec (which runs, experiments, campaigns or sets; filters, joins, groupings, aggregates) and its linked charts. Built by a person or by an agent from a question (A5, A14) |
+| Code | **Method catalog** | Vetted, versioned statistical methods in `apps/science` (scipy, statsmodels, lmfit), each with reference tests; listed by `analysis.methods`. Added by PR, never by an agent at run time (A2, A10) |
+
+- Every result links to the file, import format version, template version and method versions that made it, so an analysis re-runs exactly.
+- Values in results carry evidence `calculated` with the method named (ADR 0024). Agent-drafted text and proposed exclusions show in agent ink until confirmed.
+- Pure helpers that the TypeScript side needs (plate QC arithmetic for readiness, verdict rules, view aggregates) live in `packages/domain/analysis`; fitting and statistics live in the science service.
+
+## Operations (first cut)
+
+| Operation | Agents |
+| --- | --- |
+| `analysis.import` (file to measurements, by import format), `analysis.draft_import_format` (for an unknown file) | direct; confirming a format is people, or proposed |
+| `analysis.start` (from a run, plates or a template; also fired when a run's data file is matched), `analysis.update` (steps, settings, graphs), `analysis.propose_exclusion`, `analysis.exclude` | direct on drafts; exclusions on a draft are proposals to a person |
+| `analysis.confirm` | people |
+| `analysis.templates.draft`, `analysis.templates.save_from_analysis`, `analysis.templates.confirm` | direct on drafts; confirm by people |
+| `analysis.methods` (the catalog), `analysis.run_method` (one method on given data, for what-ifs), `analysis.power`, `analysis.verdict` (a prediction against results), `analysis.hits` (hit rule to a proposed set) | read, calculators |
+| `analysis.results`, `analysis.get`, `analysis.search` | read |
+| `views.draft` (from a question or by hand), `views.run`, `views.save` | direct |
+| `analysis.export` (report as HTML or PDF; data with spec as CSV, Excel, Python notebook, Prism .pzfx) | read |
+| `analysis.control_charts` (per template, split by instrument, lot, operator; Westgard-style rule breaks) | read; rule breaks draft readiness notes and lab memory proposals |
+
+## Screens
+
+- **Analysis page:** quality first (failing plates and wells with the fix, proposed exclusions to accept or reject), plate heatmaps, a grid of small curves (one per compound with its IC50, click to open and exclude points), the results table, graphs with the format panel (A7), the drafted conclusion with verdicts and proposed sets, agent panel.
+- **Explore page:** pick runs, experiments, campaigns or a set; linked plate heatmap, scatter, curves, histogram and table that filter each other; the view spec visible and editable; "make a set from selection".
+- **Analysis templates:** the lab's templates with where they are used, control charts per template.
+- Reports export as HTML or PDF and embed in the notebook (021).
+
+## Round 1 answers
+
+Wali chose A for A1 to A6 on 2026-09-29.
+
+- A4 note (Wali): scientists like control over their graphs and playing with their data; should there be a Plotly option too? Asked as A7 in round 2.
+
+## Round 1 questions: what an analysis is, where the math runs, data in, charts, exploration, templates
+
+Recommended option starred. Asked 2026-09-29.
+
+| # | Question | Options | Recommendation and why |
+| --- | --- | --- | --- |
+| A1 | What is an analysis? | A) A schema'd design document like the others: an **analysis template** (kind, `ant_`) is a pipeline of steps written against plate-map roles and groups (import, normalize, fit, quality, hit call, graphs); an **analysis** (`ana_`) applies it to specific runs and plates, is drafted by the engine or an agent and confirmed by a person; its **results** (per-well values, per-group fits, per-plate quality) are computed, versioned and linked to the runs, plates and data files they came from · B) A notebook of free cells (like Jupyter) per experiment · C) Prism-style data tables typed by kind (XY, column, grouped) with analyses and graphs hung off each table | ★ **A.** It fits draft and confirm, the readiness panel and the plate map's groups, and a template is what lets the same ELISA analysis run on every run without anyone redoing it. B is unreviewable and makes every analysis a one-off; C makes people reshape data by hand, which the plate map already tells us. |
+| A2 | Where does the math run, and how do people build their own analyses? | A) Every statistical method is a vetted, versioned entry in a **method catalog** in the science service (scipy, statsmodels, lmfit), exposed as an operation; people and agents compose methods, and derived columns ("ratio = firefly / renilla") are written in 012's expression language, evaluated by code. New methods arrive by PR with reference tests · B) A, plus a sandboxed Python step anyone (or an agent) can write, whose results are labeled "custom code, not validated" · C) Catalog only, no derived columns | ★ **A.** It keeps ADR 0024's rule (no number comes from the model), and the expression language already exists. B is the escape hatch Spotfire and Prism users eventually want, but it reopens the door to unchecked math; worth a later step once the catalog covers the lab's assays. C can't express the Dual-Glo ratio. |
+| A3 | How do reader files become data? | A) An **import format** per instrument export (Spark Excel/XML, qTOWER3 CSV, Flex absorbance JSON, generic CSV) turns a file into a tidy measurement table (plate, well, channel or wavelength, read time or cycle, value, unit) matched to the plate map by barcode and read step; formats are versioned records, and for an unknown file the agent drafts a column mapping (data, not code) that a person confirms · B) People export a tidy CSV themselves in one fixed shape · C) The agent reads each file and extracts values ad hoc | ★ **A.** Reader exports vary by protocol and version, so a confirmed mapping is how a new layout gets handled once and then deterministically forever. B pushes Excel work onto people; C is an agent doing data entry nobody can check. |
+| A4 | Which charting approach? (deferred from 000) | A) **Vega-Lite**: every graph is a JSON spec (a schema'd document an agent can write), rendered live in the web app and exported to SVG, PNG and PDF by the same spec in the science service (vl-convert); bench console theme as a Vega config; curve-fit lines, error bars, log axes and significance marks as layers from the results · B) Plotly: JSON too, Python and JS, more built-in interaction, heavier and harder to style to the bench console · C) Custom React components (Observable Plot or D3): best look, but no spec agents can write and store · D) ECharts | ★ **A.** A chart that is data is the only kind an agent can draft and a person can review and version; Vega-Lite's selections and cross-filtering cover the Spotfire linked views. B is a fine runner-up if Vega-Lite's interaction falls short. C and D lose "chart as a document". |
+| A5 | How far does exploration (the Spotfire side) go? | A) Over analysis results and measurements: pick any runs, plates, experiments or campaigns (or a set), and see linked views (plate heatmap, scatter, curves, histogram, table) that filter each other, with brushing, color by any field, and trellis by plate or run. Saved views are records an agent can build. Hits selected in a view can become a set (013 E10) · B) Full ad hoc BI over every table in the app (inventory, schedules, activity) · C) No exploration, only each analysis's own report | ★ **A.** Results joined to the plate map and entities are what screens need (compare runs, spot edge effects, pick hits); B is a BI tool of its own and can come later on the same views. C leaves out the half you asked for. |
+| A6 | How does an analysis start? | A) When a run's data file is attached and matched, the analysis drafts itself from the experiment's template (017 analysis plan), runs, and shows up in Review with its quality checks (Z' per plate, fit quality, CV of replicates, failed Echo wells) as the readiness panel; a person looks, excludes or adjusts, and confirms. Anyone can also start one by hand or ask an agent · B) Always started by hand · C) Auto-run and auto-confirm when every quality check passes | ★ **A.** It's the same draft and confirm as every design, and you see the numbers minutes after the read. C would feed unreviewed IC50s into sets and conclusions. |
+
+## Round 2 answers
+
+Wali chose A for A7 to A12 on 2026-09-29.
+
+## Round 2 questions: graph control, storage, exclusions, the method catalog, verdicts and hits, repeats
+
+Recommended option starred. Asked 2026-09-29.
+
+| # | Question | Options | Recommendation and why |
+| --- | --- | --- | --- |
+| A7 | How much control do people get over graphs, and is there a Plotly option? (A4 note) | A) One engine, Vega-Lite, with a Prism-style **format panel**: click an axis, a series, a legend or a label to change scale (log, range, ticks), colors, symbols, error bars (SD, SEM, 95% CI), fit lines, annotations and significance marks; drag to zoom and brush, hover for values. Every edit changes the spec, so an agent can make the same edit and the graph stays a versioned document. A spec view for power users, and **export** of the tidy data with the spec (CSV, Excel, a ready Python notebook with Plotly or matplotlib, Prism's .pzfx) for anyone who wants to play outside the app · B) Plotly as a second engine you can switch any graph to · C) Plotly instead of Vega-Lite | ★ **A.** Control comes from the editor, not from a second engine: two engines means two themes, two exports and two things agents must learn, and a graph made in one can't be edited in the other. The exports give full freedom outside the app without a second path inside it. |
+| A8 | Where do measurements and results live? | A) All in Postgres, in tables the analysis module owns: measurements (one row per plate, well, channel, read time or cycle), per-well results (normalized values, exclusions), per-group results (fit parameters with CI, interpolations) and per-plate quality. Cross-experiment exploration is a query. Size check: a 100-plate 384-well kinetic screen is about 3 million measurement rows, well within Postgres · B) Measurements as Parquet files in the file store queried with DuckDB in the science service; results in Postgres · C) Results as a JSON blob on each analysis record | ★ **A.** One database (000 D2), tests on PGlite, and results joined to plate maps and entities in SQL. B is the right move once per-cell imaging data arrives (millions of rows per plate), so that's when to add it. C can't be queried across experiments, which A5 needs. |
+| A9 | How are outliers and exclusions handled? | A) A person excludes a well, a point or a whole plate with a reason; nothing is deleted and results show what was excluded. Outlier tests (ROUT at Q = 1%, Grubbs) and QC rules only **propose** exclusions, shown in agent ink, and a person confirms them. Plates failing QC (Z' below 0.5) are flagged, not dropped · B) Rules exclude automatically, and a person can undo · C) Manual only, no outlier tests | ★ **A.** Excluding points changes IC50s and hit lists, so it's a decision a person owns; the tests save the looking. B hides decisions in defaults. |
+| A10 | What's in the first method catalog, and how is it validated? | A) What the five seed assays need: descriptives; normalization (percent of control, percent inhibition, fold change, background subtraction); plate quality (Z', Z, S/B, S/N, CV); 4PL, 5PL and 3PL fits with constraints, confidence intervals and interpolation of unknowns flagged outside the standard range; linear regression and initial rate with a detected linear range; Michaelis-Menten; t-tests, one- and two-way ANOVA with Tukey and Dunnett, Mann-Whitney and Kruskal-Wallis. Each method is checked in tests against published reference results (NIST StRD for regression, R's drc package for dose-response, textbook ANOVA sets) · B) Broad Prism parity from the start (survival, nonlinear model library, PCA) · C) Only 4PL and Z' first | ★ **A.** It covers every seed assay end to end with numbers you can trust; the rest grows by PR (A2). B delays the first useful analysis by a lot. |
+| A11 | How do hit calls and verdicts on predictions work? | A) Both are computed. The template's hit rule ("viability below 3 SD of the neutral controls") is a method that produces a proposed set (013 E10). A prediction (013 E3, "IC50 of CMP-0003 below 1 µM") gets supported when the whole confidence interval passes the threshold, refuted when it lies entirely on the other side, inconclusive otherwise. The agent drafts the conclusion text citing those numbers; a person confirms · B) The agent judges hits and verdicts from the results · C) People only | ★ **A.** Same rule as every number: code decides, the agent explains, a person confirms. Using the interval stops a point estimate of 0.9 µM with a CI up to 3 µM from counting as supported. |
+| A12 | How are biological repeats combined? | A) Fit each run on its own, then summarize across runs (IC50 as geometric mean with pIC50 SD and n; other measures as mean, SD, n), listing which runs went in. A shared-parameter (global) fit is an option in the catalog. Curves that can't give a value are reported honestly ("IC50 > 10 µM", "no top plateau") and never extrapolated · B) Pool all points from all runs into one fit · C) Per-run only, no summary | ★ **A.** It's the standard for dose-response and keeps day-to-day variation visible; pooling hides it and understates the uncertainty. |
+
+## Round 3 answers
+
+Wali chose A for A13 to A18 on 2026-09-29.
+
+## Round 3 questions (as asked): agents, questions about data, power, drift, screens, split
+
+Recommended option starred. Asked 2026-09-29.
+
+| # | Question | Options | Recommendation and why |
+| --- | --- | --- | --- |
+| A13 | What can an agent do in analysis? | A) Everything a person can, through the same operations: start and draft analyses, pick methods, write and edit graph specs, build exploration views, propose exclusions, draft conclusions and sets, and explain results in plain language, citing every number with its method and inputs. It may not confirm an analysis, an exclusion or a verdict. The analysis skill teaches when to use which method and what each quality flag means · B) The agent only explains results; people build analyses · C) The agent can also run its own code | ★ **A.** Human = agent (rule 2) with draft and confirm (rule 3); C breaks ADR 0024. |
+| A14 | How do you ask questions of your data ("which compounds were active in both runs and not cytotoxic")? | A) The agent turns the question into a **view spec**: filters, joins to plate maps, entities and sets, groupings and aggregates, which the API runs and shows as a table or chart with the spec visible and editable. No free SQL; the aggregates are computed by the API · B) The agent writes read-only SQL · C) No natural-language questions, only the view builder | ★ **A.** The answer is reproducible, checkable and saved like any view, and it can't read outside the lab's scope. B is powerful but hard for a person to review and easy to get subtly wrong. |
+| A15 | Where does power analysis for the designer (017 D6) come from? | A) A calculator (`analysis.power`) that takes the effect size you care about and the variance from this template's confirmed past results (control SD, Z', pIC50 SD between runs), cites which runs it used, and returns replicates or runs needed; the designer uses it to suggest replicate counts. With no history it asks for an estimate and marks it assumed · B) Effect size and variance always typed in · C) Leave power analysis for later | ★ **A.** The lab's own history is the best variance estimate there is, and it gets better with every run. |
+| A16 | Does analysis watch for drift across runs? | A) Yes: control charts per template (Z', control means, standard curve top and EC50, blank level) across runs, split by instrument, reagent lot and operator. Rule breaks (Westgard-style: a point beyond 3 SD, 7 in a row on one side) raise a readiness note and a proposed lab memory ("IL-6 standard top dropped 20% since lot L-0042"), which a person confirms · B) Control charts to look at, no alerts · C) Later | ★ **A.** It catches a bad lot or a drifting reader before a screen's worth of plates is wasted, and it's what lab memory (005) is for. |
+| A17 | What are the screens? | A) **Analysis page:** quality block first (failing plates and wells with the fix), plate heatmaps, a grid of small curves (one per compound, IC50 on each, click to open), results table, graphs with the format panel, agent panel. **Explore page:** linked views over any runs, experiments or sets. **Templates page.** An analysis can be exported as a report (HTML or PDF) and embedded in the notebook (021) · B) One combined page for analyses and exploration · C) Reports only | ★ **A.** Review of one run and exploring many runs are different jobs; the curve grid is how people check 16 fits at a glance. |
+| A18 | How do we split the build? | A) **020a** import formats, measurements, analysis and result records, first methods (normalization, Z', 4PL with reference tests), ELISA template end to end; **020b** charts: Vega-Lite theme, spec schema, format panel, exports; **020c** the analysis page, auto-draft on data arrival, exclusions and outlier proposals; **020d** single-point and dose-response: hits to sets, verdicts, combining repeats; **020e** kinetics, Dual-Glo and the statistical tests; **020f** exploration, view specs and natural-language questions; **020g** power and drift. Each is one PR · B) Three larger steps · C) One step | ★ **A.** Small PRs, and 020a proves the whole chain on the ELISA (the first end-to-end target) before anything else is built on it. |
+
+## Defaults (accepted with the rounds)
+
+- The Python service computes; the TypeScript API owns the analysis and result records and calls the science service, as ADR 0001 says.
+- Raw files are never changed. Every result links back to the file, the import format version, the template version and the method versions that produced it, so an analysis can be re-run exactly.
+- Excluding a well or a point is recorded with a reason and who did it; data is never deleted.
+- Imaging (Spark Cyto cell counts and confluence) comes in as the instrument's own per-well numbers, not raw images, until a later plan.
+- qPCR (qTOWER3) Ct and melt analysis is in the catalog but after the five assays in `seed/assays.yaml`.
+
+## Split
+
+- **020a:** import formats (Spark and generic CSV first), measurements, the analysis template, analysis and result records, the first methods (normalization, Z', 4PL with reference tests), the ELISA template end to end.
+- **020b:** charts: the Vega-Lite theme and spec schema, the format panel, exports.
+- **020c:** the analysis page, auto-draft when a run's data arrives, exclusions and outlier proposals.
+- **020d:** single-point screen and dose-response: hit calls to sets, verdicts on predictions, combining repeats.
+- **020e:** kinetics (initial rate, Michaelis-Menten), Dual-Glo, the statistical tests; qTOWER3 import.
+- **020f:** exploration: views, view specs, questions about data.
+- **020g:** power analysis for the designer and drift control charts.
+
+Each is one PR with its ADRs, the analysis skill and `docs/architecture/analysis.md` kept current. First ADRs: analysis as design documents with a method catalog (A1, A2), Vega-Lite as the one chart engine (A4, A7), results in Postgres (A8).

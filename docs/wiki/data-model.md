@@ -93,6 +93,10 @@ Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-00
 | Booking | `bkg_` | `BKG-0001` | 019 |
 | Travel table | `trt_` | one per lab | 019 |
 | Timing model | `tmm_` | `TMM-0001` | 019 |
+| Import format | `imf_` | `IMF-0001` | 020 |
+| Analysis template | `ant_` | `ANT-0001` | 020 |
+| Analysis | `ana_` | `ANA-0001` | 020 |
+| View | `viw_` | `VIW-0001` | 020 |
 
 The seed's placeholder `DL` + 6 digit barcodes are replaced by container names (010-V5).
 
@@ -150,4 +154,4 @@ Rules flow: entity kinds and products carry them, an entity can tighten its kind
 
 ## Design documents
 
-Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, layout templates, plate maps, transfer plans, worklist formats, assay templates, workflows and workflow templates. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).
+Designs are records too, with sections and readiness checks: labware types, instrument configurations and workcells, products and liquid classes, entity kinds and imports, digital SOPs, experiments, layout templates, plate maps, transfer plans, worklist formats, assay templates, workflows and workflow templates, schedules, import formats, analysis templates and analyses. Downstream work uses confirmed versions only. See [Agents, drafts and review](agents-and-review.md).
