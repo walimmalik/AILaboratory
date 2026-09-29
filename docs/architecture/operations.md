@@ -37,6 +37,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `records.update`, `records.restore` | direct on drafts, proposed on active records |
 | `records.activate`, `records.archive`, `records.unarchive` | proposed |
 | `records.delete_draft` | direct |
+| `records.confirm_section` | people only |
 | `assistant.ask` | people only |
 
 Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.

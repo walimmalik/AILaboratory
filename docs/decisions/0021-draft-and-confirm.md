@@ -1,6 +1,6 @@
 # 0021: Draft and confirm: evidence, section confirmations and readiness checks
 
-- Status: accepted
+- Status: accepted; final confirm amended by 0022
 - Date: 2026-09-29
 - Plan: 004c (round 6, questions C1 to C6)
 

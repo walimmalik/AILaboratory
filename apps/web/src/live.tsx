@@ -29,6 +29,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       );
       setFresh((old) => new Set(old).add(entry.id));
       void queryClient.invalidateQueries({ queryKey: ['proposals'] });
+      void queryClient.invalidateQueries({ queryKey: ['review'] });
       if (entry.outcome !== 'failed') {
         void queryClient.invalidateQueries({ queryKey: ['records'] });
         for (const id of entry.recordIds)

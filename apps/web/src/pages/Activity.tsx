@@ -158,7 +158,7 @@ function Details({ entry }: { entry: ActivityEntry }) {
             <>
               <dt>proposal</dt>
               <dd>
-                <Link to="/proposals">see proposals</Link>
+                <Link to="/review">see the Review page</Link>
               </dd>
             </>
           )}

@@ -10,6 +10,7 @@ import {
   recordsLinks,
   recordsList,
   recordsReadiness,
+  reviewList,
 } from '@ailab/schema';
 import { queryOptions } from '@tanstack/react-query';
 import { api } from './api.ts';
@@ -23,6 +24,12 @@ export const activityQuery = queryOptions({
 export const pendingProposalsQuery = queryOptions({
   queryKey: ['proposals', 'pending'],
   queryFn: async () => (await api.run(proposalsList, { status: 'pending' })).proposals,
+});
+
+/** Everything waiting for a person: drafts to confirm and proposed changes (plan 004d). */
+export const reviewQuery = queryOptions({
+  queryKey: ['review'],
+  queryFn: async () => (await api.run(reviewList, {})).items,
 });
 
 export const decidedProposalsQuery = queryOptions({

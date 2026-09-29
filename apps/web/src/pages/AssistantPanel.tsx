@@ -3,9 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
-import { describeToolStep, formatWhen, type ToolLine } from '../lib/format.ts';
+import { describeToolStep, formatWhen, type ToolLine, waitingForYou } from '../lib/format.ts';
 import { RichText } from '../lib/RichText.tsx';
-import { assistantSetupQuery, conversationQuery, conversationsQuery } from '../queries.ts';
+import {
+  assistantSetupQuery,
+  conversationQuery,
+  conversationsQuery,
+  reviewQuery,
+} from '../queries.ts';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
 export function AssistantPanel() {
@@ -102,7 +107,7 @@ function Transcript({
           <p className="empty">
             Ask about records, proposals or recent activity, or ask for a draft. The assistant works
             through the same operations you do: everything it changes shows in the ledger, and
-            changes to active records wait for your approval.
+            changes to active records wait for you on the Review page.
           </p>
         )}
         <div ref={end} />
@@ -134,12 +139,52 @@ function Transcript({
       {!running && conversation.status === 'failed' && conversation.error && (
         <li className="stopped crit-ink">Stopped: {conversation.error}</li>
       )}
+      {!running && <WaitingLine messages={conversation.messages} />}
       <div ref={end} />
     </ol>
   );
 }
 
 type ToolMessage = Extract<AssistantMessage, { role: 'tool' }>;
+
+/**
+ * Ends the latest turn with what it left for you (plan 004d, R4): drafts it wrote and changes it
+ * proposed that still wait on the Review page, each linked to where you act on it.
+ */
+function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
+  const review = useQuery(reviewQuery).data;
+  const lastAsk = messages.findLastIndex((m) => m.role === 'user');
+  const steps = messages.slice(lastAsk + 1).filter((m): m is ToolMessage => m.role === 'tool');
+  if (!review || steps.length === 0) return null;
+  const turn = waitingForYou(steps);
+  const waitingIds = new Set(
+    review.map((item) => (item.type === 'draft' ? item.record.id : item.proposal.id)),
+  );
+  const drafts = turn.drafts.filter((d) => waitingIds.has(d.id));
+  const changes = turn.changes.filter((id) => waitingIds.has(id)).length;
+  if (drafts.length === 0 && changes === 0) return null;
+  return (
+    <li className="waiting">
+      <b>Waiting for you:</b>{' '}
+      {drafts.map((d, i) => (
+        <span key={d.id}>
+          {i > 0 && ', '}
+          confirm{' '}
+          <Link to="/records/$id" params={{ id: d.id }} className="mono">
+            {d.name}
+          </Link>
+        </span>
+      ))}
+      {drafts.length > 0 && changes > 0 && '; '}
+      {changes > 0 && (
+        <Link to="/review">
+          {changes === 1 ? 'confirm 1 proposed change' : `confirm ${changes} proposed changes`}
+        </Link>
+      )}
+      .
+    </li>
+  );
+}
 
 function Message({
   message,
@@ -198,7 +243,7 @@ function Step({
       {line.proposed && (
         <>
           {' '}
-          <Link to="/proposals">review</Link>
+          <Link to="/review">review</Link>
         </>
       )}
       <details className="tech">

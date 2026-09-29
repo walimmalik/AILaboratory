@@ -4,6 +4,7 @@ import {
   proposalsApprove,
   proposalsReject,
   type RecordEnvelope,
+  type ReviewItem,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -17,49 +18,59 @@ import {
   operationIntent,
   operationVerb,
 } from '../lib/format.ts';
-import { decidedProposalsQuery, pendingProposalsQuery, recordQuery } from '../queries.ts';
+import { decidedProposalsQuery, recordQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
-/** Changes agents asked for. A person looks at what would change and approves or rejects. */
-export function ProposalsPage() {
-  const pending = useQuery(pendingProposalsQuery);
+/**
+ * Everything waiting for you (plan 004d): drafts to review and confirm, and changes agents proposed
+ * to active records. Each line says what to do and opens where you do it.
+ */
+export function ReviewPage() {
+  const waiting = useQuery(reviewQuery);
   const decided = useQuery(decidedProposalsQuery);
   const me = useMe();
+  const items = waiting.data ?? [];
 
   return (
     <>
       <div className="page-head">
         <div>
           <div className="crumbs">
-            lab / <b>proposals</b>
+            lab / <b>review</b>
           </div>
-          <h1>Proposals</h1>
+          <h1>Review</h1>
           <p className="lede">
-            Agents change drafts on their own. Changes to active records wait here until you approve
-            them.
+            Everything waiting for you. Agents draft new records and you confirm them section by
+            section; changes to active records wait here until you confirm them.
           </p>
         </div>
       </div>
 
       <section className="block">
         <header>
-          <h2>Waiting for review</h2>
-          <span className="state agent-ink">{pending.data?.length ?? 0} pending</span>
+          <h2>Waiting for you</h2>
+          <span className={`state ${items.length ? 'agent-ink' : 'muted'}`}>
+            {items.length} waiting
+          </span>
         </header>
         <div className="body">
-          {pending.error && <p className="error-text">{pending.error.message}</p>}
-          {pending.data?.length === 0 && (
-            <p className="empty">Nothing waiting. Agent proposals appear here live.</p>
+          {waiting.error && <p className="error-text">{waiting.error.message}</p>}
+          {waiting.data?.length === 0 && (
+            <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
           )}
-          {pending.data?.map((proposal) => (
-            <PendingProposal key={proposal.id} proposal={proposal} />
-          ))}
+          {items.map((item) =>
+            item.type === 'draft' ? (
+              <WaitingDraft key={item.record.id} item={item} />
+            ) : (
+              <PendingProposal key={item.proposal.id} proposal={item.proposal} />
+            ),
+          )}
         </div>
       </section>
 
       <section className="block">
         <header>
-          <h2>Decided</h2>
+          <h2>Decided changes</h2>
         </header>
         <div className="body">
           {decided.data?.length === 0 ? (
@@ -84,7 +95,7 @@ export function ProposalsPage() {
                         {operationVerb(p.operationId)} <TargetName proposal={p} />
                       </td>
                       <td>
-                        <span className={`chip ${p.status}`}>{p.status}</span>
+                        <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
                         {p.error && <span className="crit-ink"> {p.error.message}</span>}
                         {p.decisionReason && <span className="muted"> · {p.decisionReason}</span>}
                       </td>
@@ -97,6 +108,51 @@ export function ProposalsPage() {
         </div>
       </section>
     </>
+  );
+}
+
+const decisionWords: Record<Proposal['status'], string> = {
+  pending: 'waiting',
+  approved: 'confirmed',
+  rejected: 'rejected',
+  failed: 'failed',
+};
+
+/** A draft to review: what is left, and a link to its review. */
+function WaitingDraft({ item }: { item: Extract<ReviewItem, { type: 'draft' }> }) {
+  const me = useMe();
+  const { record } = item;
+  const todo = item.sectionsToConfirm.length
+    ? `Confirm ${item.sectionsToConfirm.map((t) => t.toLowerCase()).join(' and ')}`
+    : item.missing.length
+      ? item.missing.join('; ')
+      : 'Confirm it';
+  return (
+    <article className="proposal" aria-label={`Draft ${record.name}`}>
+      <div className="line">
+        <Link to="/records/$id" params={{ id: record.id }} className="mono">
+          {record.name}
+        </Link>
+        <span>{record.label}</span>
+        <span className="agent-ink">draft · needs your review</span>
+        <span className="muted mono">{formatWhen(item.at)}</span>
+      </div>
+      <p className="reason">
+        {todo}.
+        {item.assumed > 0 && (
+          <span className="agent-ink">
+            {' '}
+            {item.assumed === 1 ? 'One value is' : `${item.assumed} values are`} an estimate by{' '}
+            {actorLabel(record.updatedBy, me)}.
+          </span>
+        )}
+      </p>
+      <div className="decide">
+        <Link to="/records/$id" params={{ id: record.id }} className="btn primary">
+          Review {record.name}
+        </Link>
+      </div>
+    </article>
   );
 }
 
@@ -140,15 +196,16 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
       const input = { id: proposal.id, ...(note.trim() ? { reason: note.trim() } : {}) };
       return api.run(approve ? proposalsApprove : proposalsReject, input);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['proposals'] }),
+        queryClient.invalidateQueries({ queryKey: ['review'] }),
+      ]),
   });
   const failed = decide.data?.status === 'failed' ? decide.data.error?.message : undefined;
 
   return (
-    <article
-      className="proposal"
-      aria-label={`Proposal to ${operationIntent(proposal.operationId)}`}
-    >
+    <article className="proposal" aria-label={`Change: ${operationIntent(proposal.operationId)}`}>
       <div className="line">
         <span className="agent-ink">{actorLabel(proposal.proposedBy, me)}</span>
         <span>
@@ -177,7 +234,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
       )}
       {id && current.data && after && current.data.version + 1 !== after.version && (
         <p className="warn-ink">
-          The record has changed since this was proposed; approving will fail.
+          The record has changed since this was proposed; confirming will fail.
         </p>
       )}
 
@@ -195,7 +252,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
           disabled={decide.isPending}
           onClick={() => decide.mutate(true)}
         >
-          Approve
+          Confirm change
         </button>
         <button
           type="button"

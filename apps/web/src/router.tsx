@@ -7,9 +7,9 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
-import { ProposalsPage } from './pages/Proposals.tsx';
 import { RecordPage } from './pages/Record.tsx';
 import { RecordsPage } from './pages/Records.tsx';
+import { ReviewPage } from './pages/ReviewInbox.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
 import { meQuery } from './session.ts';
@@ -46,10 +46,10 @@ const activity = createRoute({
   path: '/activity',
   component: ActivityPage,
 });
-const proposals = createRoute({
+const review = createRoute({
   getParentRoute: () => app,
-  path: '/proposals',
-  component: ProposalsPage,
+  path: '/review',
+  component: ReviewPage,
 });
 const records = createRoute({
   getParentRoute: () => app,
@@ -64,7 +64,7 @@ const record = createRoute({
 
 const routeTree = root.addChildren([
   signIn,
-  app.addChildren([index, activity, proposals, records, record]),
+  app.addChildren([index, activity, review, records, record]),
 ]);
 
 export function makeRouter(queryClient: QueryClient) {

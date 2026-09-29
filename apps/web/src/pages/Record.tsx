@@ -10,7 +10,8 @@ import {
   recordQuery,
 } from '../queries.ts';
 import { useMe } from '../session.ts';
-import { fieldLabel, ReviewBlocks } from './Review.tsx';
+import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
+import { StatusChip } from './StatusChip.tsx';
 
 const operationWords: Record<string, string> = {
   create: 'created',
@@ -57,7 +58,7 @@ export function RecordPage() {
             </span>
           </p>
         </div>
-        <span className={`chip ${r.status}`}>{r.status}</span>
+        <StatusChip record={r} />
       </div>
 
       {pending.length > 0 && (
@@ -65,7 +66,7 @@ export function RecordPage() {
           {pending.length === 1
             ? 'An agent has proposed a change'
             : `Agents have proposed ${pending.length} changes`}{' '}
-          to this record. <Link to="/proposals">Review</Link>
+          to this record. <Link to="/review">Review it</Link>
         </p>
       )}
 
@@ -126,6 +127,9 @@ export function RecordPage() {
                         {v.operation === 'confirm_section' && (
                           <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
                         )}
+                        {v.operation === 'confirm_section' &&
+                          previous?.status === 'draft' &&
+                          v.snapshot.status === 'active' && <span> and activated</span>}
                         {v.operation !== 'create' && changed.length > 0 && (
                           <span className="muted"> ({changed.join(', ')})</span>
                         )}

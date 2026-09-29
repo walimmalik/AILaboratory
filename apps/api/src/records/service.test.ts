@@ -119,7 +119,6 @@ describe('history', () => {
     });
     await service.confirmSection(ctx, created.id, { expectedVersion: 2, section: 'appearance' });
     await service.confirmSection(ctx, created.id, { expectedVersion: 3, section: 'volume' });
-    await service.activate(ctx, created.id, { expectedVersion: 4 });
 
     const history = await service.history(ctx, created.id);
     expect(history.map((v) => [v.version, v.operation, v.actor.type])).toEqual([
@@ -127,8 +126,8 @@ describe('history', () => {
       [2, 'update', 'agent'],
       [3, 'confirm_section', 'user'],
       [4, 'confirm_section', 'user'],
-      [5, 'activate', 'user'],
     ]);
+    expect(history[3]?.snapshot.status).toBe('active');
     expect(history[1]?.reason).toBe('Matched the catalog color');
     expect(history[1]?.snapshot.attributes).toMatchObject({ color: 'navy' });
     expect(history[1]?.snapshot.updatedBy).toEqual(agentCtx.actor);
@@ -399,7 +398,7 @@ describe('draft and confirm', () => {
     expect(error.message).toContain('partOf');
   });
 
-  it('confirms section by section, then activates', async () => {
+  it('confirms section by section; the last one also activates the draft', async () => {
     const record = await draft();
     await expectError(service.activate(ctx, record.id, { expectedVersion: 1 }), 'not_ready');
     const one = await service.confirmSection(ctx, record.id, {
@@ -411,11 +410,14 @@ describe('draft and confirm', () => {
       version: 1,
       values: { color: 'blue' },
     });
-    await service.confirmSection(ctx, record.id, { expectedVersion: 2, section: 'volume' });
+    expect(one.status).toBe('draft');
+    const last = await service.confirmSection(ctx, record.id, {
+      expectedVersion: 2,
+      section: 'volume',
+    });
+    expect(last).toMatchObject({ status: 'active', version: 3 });
     const state = await service.readiness(ctx, record.id);
     expect(state).toMatchObject({ ready: true, missing: [], assumed: [] });
-    const active = await service.activate(ctx, record.id, { expectedVersion: 3 });
-    expect(active.status).toBe('active');
   });
 
   it('sends a confirmed section back to review when a value changes', async () => {

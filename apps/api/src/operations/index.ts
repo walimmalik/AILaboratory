@@ -6,6 +6,7 @@ import { assistantOperations } from './assistant-operations.ts';
 import { proposalOperations } from './proposal-operations.ts';
 import { recordOperations } from './record-operations.ts';
 import { OperationRegistry } from './registry.ts';
+import { reviewOperations } from './review-operations.ts';
 
 export { ActivityBus } from './activity.ts';
 export { OperationError } from './errors.ts';
@@ -21,6 +22,7 @@ export function createRegistry(
   return new OperationRegistry({ db, kinds, bus, assistant }).register(
     ...recordOperations,
     ...proposalOperations,
+    ...reviewOperations,
     ...assistantOperations,
   );
 }

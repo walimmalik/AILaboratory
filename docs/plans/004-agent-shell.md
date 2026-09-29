@@ -98,3 +98,16 @@ Already decided in round 3: confirm section by section, then one final confirm; 
 | Naming a source | Optional `evidence` on `records.create` and `records.update`; nobody can claim "entered by a person" | Agents cite datasheets and imports; people are credited by who they are. |
 | After Wali tried it | Values the person told the agent are marked "stated" ("you told …", linked to the conversation), not assumed; approving an agent's proposal confirms the sections it changed; assistant replies render bold and lists; edits must send all attributes (now said in the tool description) | Chosen by Wali on 2026-09-29 (first two), fixes for the rest. |
 | Readiness | `records.readiness` returns sections, per-field state, checks and what is missing in plain words | One read for the review screen and for agents. |
+
+## Round 7: 004d one place to review (answered by Wali 2026-09-29: all A, as recommended)
+
+Trying 004c showed that it was unclear what needs approval where: new drafts were reviewed on the record's page, changes to active records on the Proposals page, and confirming every section still left a separate final confirm.
+
+| # | Question | Options | Answer |
+| --- | --- | --- | --- |
+| R1 | One place to look | A) Proposals becomes one **Review** page listing everything waiting on you (drafts to confirm, changes to confirm), each opening where you act · B) Keep both, explain better | **A** |
+| R2 | Agent changes to active records | A) Stay proposals (before and after), shown in the inbox · B) Become a new draft revision reviewed section by section | **A** for now |
+| R3 | Nav count | A) One Review count for both · B) Separate counts | **A** |
+| R4 | Where the assistant says to go | A) Every reply that leaves you something to do ends with "Waiting for you:" and a link · B) Model's own wording | **A** |
+| R5 | Words and record status | A) One verb, "Confirm" ("Confirm change" for proposals); every record states "Draft, needs your review", "Active" or "Active, change waiting" · B) Keep Approve and Confirm | **A** |
+| R6 | The last section | A) Confirming the last section, with nothing blocking, activates the record in the same click, and the button says so · B) Keep a separate final Confirm | **A** |

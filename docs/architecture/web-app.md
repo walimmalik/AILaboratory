@@ -15,14 +15,15 @@ React + Vite (`apps/web`). Plan 004: the shell, sign-in, the live activity ledge
 | --- | --- |
 | Routes (TanStack Router; everything but sign-in requires a session) | `src/router.tsx` |
 | Server state (TanStack Query) | `src/queries.ts`, `src/session.ts` |
-| Live updates: one activity stream per tab, which prepends ledger entries and refreshes proposals and records | `src/live.tsx` |
+| Live updates: one activity stream per tab, which prepends ledger entries and refreshes the review list, proposals and records | `src/live.tsx` |
 | Shell: top bar, module nav with lamps, status bar | `src/pages/Shell.tsx` |
 | Activity (the live ledger; select a line for details) | `src/pages/Activity.tsx` |
-| Proposals (before and after, approve or reject with a note) | `src/pages/Proposals.tsx` |
+| Review (everything waiting for you, from `review.list`: drafts with what is left, linking to their review; changes to active records, before and after, Confirm change or Reject with a note; decided changes). The nav shows one count | `src/pages/ReviewInbox.tsx` |
+| Record status in plain words ("draft · needs your review", "active · change waiting") | `src/pages/StatusChip.tsx` |
 | Records list and record detail (fields, history, links) | `src/pages/Records.tsx`, `src/pages/Record.tsx` |
-| Review (kinds with sections): a readiness block (what is missing, the agent's estimates, checks with their source and fix, the final Confirm), then one block per section with each value, where it came from ("assumed by …" in agent ink, "from a datasheet", "entered by you"), changed values highlighted with the confirmed value struck through, and Confirm section | `src/pages/Review.tsx` |
+| Review (kinds with sections): a readiness block (what is missing, the agent's estimates, checks with their source and fix, Confirm for kinds without sections), then one block per section with each value, where it came from ("assumed by …" in agent ink, "from a datasheet", "entered by you"), changed values highlighted with the confirmed value struck through, and Confirm section; the last one reads "Confirm … and activate" | `src/pages/RecordReview.tsx` |
 | Assistant state: open or closed, the shown conversation (kept live over its stream), sending | `src/assistant.tsx` |
-| Ask bar (top bar; `/` focuses it; starts a new conversation) and the assistant panel (right column; replies continue the shown conversation; each step it took as a plain line with the record or the proposal to review, and technical details) | `src/pages/Shell.tsx`, `src/pages/AssistantPanel.tsx` |
+| Ask bar (top bar; `/` focuses it; starts a new conversation) and the assistant panel (right column; replies continue the shown conversation; each step it took as a plain line with the record or the proposal to review, and technical details; after a turn, a linked "Waiting for you" line for the drafts and changes it left) | `src/pages/Shell.tsx`, `src/pages/AssistantPanel.tsx` |
 
 ## Sign-in
 
@@ -35,4 +36,4 @@ Email and password (ADR 0019). `POST /auth/login` sets an HttpOnly, SameSite=Str
 ## Tests
 
 - Unit tests for the plain-language and diff helpers: `pnpm --filter @ailab/web test`.
-- End-to-end (Playwright, `e2e/*.e2e.ts`): sign-in, an agent proposal reviewed and approved in the UI with history and ledger checks, live ledger updates, and the assistant running an operation from the ask bar with the ledger linking back to the conversation. The API runs with `AGENT_PROVIDER=scripted`, a test-only model with no network. CI runs them in the `postgres` job against a real API and Postgres. The API runs with `AILAB_TEST_KINDS=1`, which registers the test-only `widget` kind until real kinds arrive (plan 007).
+- End-to-end (Playwright, `e2e/*.e2e.ts`): sign-in, an agent proposal confirmed on the Review page with history and ledger checks, a draft opened from the Review page and confirmed section by section (the last confirm activates it), live ledger updates, and the assistant running an operation from the ask bar with the ledger linking back to the conversation. The API runs with `AGENT_PROVIDER=scripted`, a test-only model with no network. CI runs them in the `postgres` job against a real API and Postgres. The API runs with `AILAB_TEST_KINDS=1`, which registers the test-only `widget` kind until real kinds arrive (plan 007).
