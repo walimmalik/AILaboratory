@@ -12,7 +12,9 @@
       "!**/uv.lock",
       "!apps/science",
       "!packages/schema/generated",
-      "!apps/api/drizzle"
+      "!apps/api/drizzle",
+      "!docs/sop-library/sops",
+      "!docs/sop-library/literature"
     ]
   },
   "formatter": {

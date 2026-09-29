@@ -6,7 +6,7 @@ A small test set for the SOP and literature library (plan 011) and digital SOPs 
 
 Status on 2026-09-29: the GitHub-hosted items are saved in this folder. The other 21 files were downloaded on Wali's laptop to `C:\dev\sop-library` with the same layout (this cloud environment's network policy blocks the source sites); `manifest.json` records their size and sha256. The Assay Guidance Manual chapter was downloaded by hand in a browser because NCBI serves a CAPTCHA to scripts. Items marked "pending" in the table below refer to this folder only.
 
-In the repo: only this index (`README.md`, `manifest.json`, `fetch.py`) is committed. The SOP and literature files themselves, including the GitHub-hosted items and `licenses/`, live in `C:\dev\sop-library` on Wali's laptop; run `fetch.py` there to fill in anything missing.
+In the repo: this index (`README.md`, `manifest.json`, `fetch.py`) plus the openly licensed and Creative Commons files: 12 SOPs under `sops/` (the CC BY 4.0 protocols.io, NEB and Thermo PDFs, and the two CC BY-SA / GNU FDL OpenWetWare pages) and 7 papers under `literature/` (six CC BY 4.0, plus the CC BY-NC-SA Assay Guidance Manual chapter, which is for internal, non-commercial testing only). Each matches the `sha256` in `manifest.json`. The three Promega manuals (CellTiter-Glo TB288, Nano-Glo HiBiT TM516, Dual-Glo TM058) are All Rights Reserved and stay in `C:\dev\sop-library` on Wali's laptop. The GitHub-hosted items (iGEM InterLab, LabOP, Opentrons, PyLabRobot) and `licenses/` are not committed yet; run `fetch.py` to download them.
 
 ## Licensing rules for this set
 
