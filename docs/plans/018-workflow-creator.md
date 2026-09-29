@@ -36,13 +36,25 @@
 
 | Layer | Record | Holds |
 | --- | --- | --- |
-| Kind | **Workflow template** (`wft_`, `WFT-0001`), if W1 is A | A reusable workflow for an assay or a routine ("compound screen, 3 days", "HEK293 passaging, twice a week"), saved from a workflow or drafted by the agent |
+| Kind | **Workflow template** (`wft_`, `WFT-0001`) | A reusable workflow for an assay or a routine ("compound screen, 3 days", "HEK293 passaging, twice a week"), written against roles and capabilities, saved from a workflow or drafted by the agent; see "Repeating a workflow" below |
 | Instance | **Workflow** (`wf_`, `WF-0001`) | For one experiment (or standalone): the work-unit graph (labware nodes, steps, connections, ends), links to the SOP versions, plate maps and transfer plans it came from, candidate instruments per step, timing windows and handling rules with sources, duration estimates, readiness, out-of-date flag (P6) |
 | Part | **Labware node** | A plate, tube, reservoir or trough in the work unit: type (or requirement), planned contents (from the plate map), lid or seal state, one per unit or shared across units |
 | Part | **Step** | Intent (a 012 action or an instrument session from a transfer plan), the SOP step it came from, inputs and outputs, capability and candidate instruments, parameters owned by the SOP or transfer plan (linked, not copied), duration estimate and its source |
 | Part | **Connection** | Labware flow (output of one step to input of the next), wait-for, timing window (min, max, target with tolerance) with its source and hard or soft |
 | Part | **End** | Where a labware path finishes: store (location and condition), return, discard, or hand over to another workflow |
 | Contract | **Schedule request** | A confirmed workflow version plus run settings (units, shared roles, earliest start, deadline, how many units at once), validated, for 019 |
+
+### Repeating a workflow: runs and templates
+
+Wali asked (2026-09-29) that workflows be easy to repeat. There are two ways, depending on what is repeated:
+
+- **The same experiment again** (biological repeat, another day, more plates) needs no template. Each run pins the same confirmed workflow version and gives new run settings in its schedule request: how many units, which plates are shared, start time, deadline. Nothing is redrafted and nothing is confirmed again (W1, 013 E2).
+- **The same kind of work for a new experiment or routine** uses a workflow template:
+  - **What a template holds:** the graph for one work unit written against roles and capabilities, not particular records: "assay plate, 384-well", "compound source plate", "reader: luminescence", SOPs by key with the version it was made from. It also keeps the joins between SOPs, the holds between them (Cytomat 48 h ± 4 h), the timing windows and the default run settings (units at once, recurrence for routines). Candidates, durations and handling rules are not stored; they are recomputed when it is applied, so they follow the lab's instruments and the science as they are now.
+  - **Making one:** "save as template" on any confirmed workflow (`workflow_templates.save_from`), or the agent drafts one from a description; either way a person confirms it, like any design.
+  - **Applying one:** `workflows.draft` from a template binds its roles to the new experiment's confirmed SOP versions, plate maps and transfer plans; code rebuilds the graph and reuses the template's joins and holds, so the agent has nothing left to decide unless something doesn't fit (a role the new plate maps don't fill, a newer SOP version whose steps changed). Those become readiness items with ranked options, not silent guesses. The result is a normal workflow draft that a person confirms.
+  - **Assay templates (017) name their workflow template**, so the designer drafts experiment, plate maps, transfer plans and workflow together in one ask. Routines (passaging, reagent prep) are started straight from their template with a recurrence on the schedule request (W10).
+  - **Templates are versioned.** A workflow remembers the template version it came from; a new template version flags workflows still in draft, and confirmed ones keep theirs (P6).
 
 Pure logic in `packages/domain/workflows`: graph checks (acyclic, every input connected, every path ends, one state per plate at a time), expansion of one unit to N units with shared roles, timing arithmetic (can the windows all be met ignoring resources, critical path, earliest and latest start per step), merging handling rules along a labware path. All unit tested.
 

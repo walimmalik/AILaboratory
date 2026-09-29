@@ -78,4 +78,5 @@ These drive the templates and the first end-to-end target (one ELISA): sandwich 
 - **Timing and science:** durations, timing windows and handling rules (from what the plate map puts in each plate) all show their source. Agents can research a missing rule and propose it with citations.
 - The **schedule request** (a confirmed workflow plus run settings) is what the scheduler (019) plans; the workflow page shows only a timeline that assumes every instrument is free, labelled "not a schedule".
 - When an experiment has a workflow, the **run checklist** follows its steps, plate by plate.
+- **Repeating:** running the same experiment again is another run of the same confirmed workflow with new run settings. For new experiments and routines, any confirmed workflow can be saved as a **workflow template** (roles and capabilities, joins, holds, windows); applying it rebuilds the graph from the new experiment's documents, and assay templates (017) name their workflow template.
 
