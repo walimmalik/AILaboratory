@@ -47,6 +47,7 @@ So 019 ports the kernel, the exposure kernel and the pending re-planner for the 
 | State | **Booking** (`bkg_`, `BKG-0001`) | An instrument, station or person held for a time: from a confirmed schedule (tentative while the schedule is a draft), made directly on the calendar page (S7), maintenance, or an absence. One booking operation for all of them |
 | Instance | **Person profile** (on the lab member) | Working hours, absences (as bookings), training per instrument kind or station, which the scheduler uses to pick who (S4) |
 | Instance | **Travel table** (`trt_`, one per lab) | Travel times between places (010 locations, instrument load points, the workcell's hotels), estimated until run records replace them (S3) |
+| State | **Timing model** (`tmm_`, versioned, per instrument kind or instrument) | The parts an instrument's time is made of (per dispense, per stage or arm move, per tip pickup, per plate swap) with fitted time and spread each, the logs it was fitted from, fit quality and held-out error; also the twin's calibrated simulation parameters (S13 second note) |
 | State | **Duration statistics** (derived, per lab) | For each repeatable action, keyed by what makes it repeatable (action or capability, instrument, method or worklist shape, labware type, and for transfers the transfer count and volume band): number of observations, mean, standard deviation, percentiles, the last few values and the logs they came from. Recomputed from logs, never typed (S13 later note) |
 | Part | **Step time split** | Per step, person time (set up, load, unload, check) and walk-away time, from the instrument kind or method, with source (S5) |
 
@@ -67,6 +68,7 @@ Pure logic in `packages/scheduler` (TypeScript, no I/O): the ported event-driven
 | `people.set_hours`, `people.set_training`, `travel.set_time` | proposed |
 | `schedules.prep_list`, `schedules.loading_card`, `schedules.cellario_export` | read |
 | `runs.record_actual` feeds live following (013); `schedules.forecast` | read |
+| `timing_models.predict` (time and spread for a method or worklist on an instrument), `timing_models.explain` (parts, fit quality, held-out error, logs used), `timing_models.fit` (runs in the science service on new logs) | read calculators; fit runs on import |
 | `durations.stats`, `durations.explain` (learned mean, standard deviation, observations and their logs per repeatable action), `durations.exclude` (leave one run out, with a reason) | read calculators; exclude is people, agents propose |
 
 ## Defaults I'm assuming (say if any is wrong)
@@ -135,7 +137,15 @@ Wali chose A for S13 to S18 on 2026-09-29, with these notes.
   - **How the scheduler uses them:** a learned duration replaces the estimate once it has enough observations (default 5), and until then blends with its prior (the stated, simulated or transfer-plan figure). The spread in stress cases (S13) is the learned one (default mean plus two standard deviations), so steps the lab does often get tight, trustworthy plans and new ones stay cautious.
   - **Keeping it honest:** aborted, paused or failed runs are left out and listed; values far outside the spread are flagged, not silently averaged; recent runs weigh more so a drift (a slower reader after service) shows up, and a clear shift raises a readiness note ("Spark reads are 20% slower since 12 Oct") that can become a lab memory. Nobody edits the statistics; a person can exclude a run with a reason.
   - This is code, not the agent: `durations.stats` and `durations.explain` are read calculators (ADR 0024). The math lives in `packages/scheduler` (019a); importing logs into it arrives with 019e.
+- **S13 second note (Wali, 2026-09-29): learn inside the step, and calibrate the twins.** A whole-step average is too coarse where the time depends on what the step does: an Echo run's time depends on the order of dispenses (how far the source and destination stages travel between each source-destination pair, how often a source plate is swapped), and a liquid handler's on its aspirates, dispenses, tip pickups, arm moves and mixing. So the scheduler also learns **timing models**:
+  - **A timing model per instrument kind, made of parts:** time = sum over the actions the method will do, each with a learned time (Echo: per droplet burst, per source-well change weighted by stage travel, per destination move by distance, per plate swap; liquid handler: per tip pickup, aspirate and dispense by volume and liquid class, per arm move by distance, per mix cycle, per labware move). The method's own worklist (016) says exactly which actions will happen and in what order, so the prediction follows the real dispense order, not a flat per-transfer average.
+  - **Fitted from logs that time each action:** instrument logs with per-action timestamps (Hamilton trace files, Opentrons run logs, the Echo's report and instrument log, Cellario's action log, later the gateway). Which of these carry per-action times in the lab's real files is checked when each importer is built; the mocks in `seed/worklists` have none yet. Fitting (regression per part, with the leftover spread as the standard deviation) is statistics, so it runs in the science service (`apps/science`), and its result is plain data the scheduler and twins read.
+  - **The twins use the same parts.** A digital twin (015) is where the parts come from before any log exists (motion profiles, stage speeds, datasheet figures, marked simulated); logs then calibrate the twin's simulation parameters (008's separate simulation layer), so simulating a new worklist predicts it with learned accuracy. Every calibration is a new version with the logs it came from, its fit quality and the error on runs it did not see (held out), shown as "predicts Echo runs within ±4%, from 23 runs".
+  - **When a calibration is used:** a new fit applies automatically when it predicts held-out runs at least as well as the one in use; a large change (default more than 15% on any part) or a worse fit waits as a readiness note for a person, like a drift. Nobody types the fitted numbers.
+  - **What this opens (not decided here):** once the Echo's timing is modelled, 016 could order transfers to save time within what the chemistry allows; a later plan decides that.
+  - Step-level statistics (the note above) remain the fallback for instruments whose logs only give start and end.
 
+## Round 3 questions: uncertainty
 ## Round 3 questions: uncertainty, live runs, views, setup, objective, split
 
 Recommended option starred. Asked 2026-09-29.
@@ -155,4 +165,4 @@ Recommended option starred. Asked 2026-09-29.
 - **019b:** people (hours, absences, training), bookings, the calendar page where people book instruments and actions, the iCal feed.
 - **019c:** the two levels: workcell segments with the workcell scheduler, carries with the travel table, the Cellario export.
 - **019d:** the schedule page (Gantt lanes by instrument, person and plate, option cards, simulation playback on the 2D decks, confirm), prep lists and loading cards; 3D playback when 015 lands.
-- **019e:** live following from checklist ticks and instrument logs, forecasts, re-planning the pending part, and learning duration statistics from Cellario, gateway and instrument logs.
+- **019e:** live following from checklist ticks and instrument logs, forecasts, re-planning the pending part, and learning duration statistics from Cellario, gateway and instrument logs; timing models fitted in the science service from per-action instrument logs and used to calibrate the twins (with 015).

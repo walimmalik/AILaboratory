@@ -59,6 +59,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Site** | A place on an instrument where labware can sit |
 | **Skill** | A markdown guide in `skills/` that teaches agents a module's operations |
 | **Stated** | A value the person told the agent; confirmed with its section like any other |
+| **Timing model** | How long an instrument's method takes, built from parts (per dispense, move, tip pickup) fitted from instrument logs; also calibrates the twin (plan 019) |
 | **Transfer plan** | How liquid gets from sources to targets: transfers, instruments, liquid classes, decks, worklists (plan 016) |
 | **Twin** | A digital simulation of an instrument, sharing capability contracts with the real hardware |
 | **Walk-away time** | The part of an instrument step that needs no person (plan 019) |
