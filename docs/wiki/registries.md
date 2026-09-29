@@ -4,14 +4,16 @@ The four registries hold what the lab has: labware, instruments, reagents and ph
 
 ## Labware (plan 007)
 
-[Plan 007](../plans/007-labware-library.md). **Labware types only**: the Corning 3570, not the barcoded plate (that is a container in 010).
+[Plan 007](../plans/007-labware-library.md), [ADR 0023](../decisions/0023-labware-types.md), [labware.md](../architecture/labware.md). **Labware types only**: the Corning 3570, not the barcoded plate (that is a container in 010).
+
+**Built (007a, PR #13):** kinds `labware_type` and `vendor`; sections Identity, Geometry, Volumes and Instrument names; blocker and warning checks that each name their source (ANSI/SLAS 1-2004 and 4-2004 for SBS); `labware.wells`, `labware.import_opentrons` and `labware.export_opentrons` (in the `custom_beta` namespace); the seed loader. Drafting, editing and confirming use `records.*`. Liquid height is computed for flat-bottomed wells only; round and V bottoms are refused until their profiles are modelled. **007b in progress:** Library pages, editing in place and to-scale drawings are merged. **Still to come:** per-instrument dead volumes (they link to instrument kinds from 008), and merging echo650-twin's catalog through the same importer.
 
 - One kind with a family: plate, reservoir, tube, rack, tip rack, lid (flask and dish added for cell culture).
 - Identity: plain name, manufacturer (a shared vendor record), catalog numbers per pack size and supplier, material, colour, treatment, sterile.
 - Geometry in mm: footprint and height, SBS class, wells, stacking offset, grip height. Wells come from a parametric grid, or an explicit list for irregular labware. Names are canonical `A1` (not `A01`) up to `AF48`.
 - Volumes: nominal, max working, and dead volume as a default plus per-instrument-kind values (an Echo 384PP well and a hand-pipetted well differ), each with a source. A volume-to-height model per well shape.
 - Platform names: Opentrons load name, Hamilton labware file name, Echo plate type. Opentrons JSON can be imported and exported; Hamilton files are never generated.
-- Seed: Opentrons shared-data and echo650-twin's reviewed catalog (about 40 definitions with field provenance), plus 33 types in `seed/labware.yaml`.
+- Seed: the 33 types in `seed/labware.yaml`, loaded as drafts by `pnpm --filter @ailab/api seed`; Opentrons definitions import one at a time. echo650-twin's reviewed catalog (about 40 definitions with field provenance) can be merged later through the same importer.
 - Split: 007a model, geometry and import; 007b library and type pages with the draft view.
 
 ## Instruments (plan 008)

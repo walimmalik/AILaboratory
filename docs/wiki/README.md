@@ -2,7 +2,7 @@
 
 The short version of everything decided so far: the rules, the decisions, the data model and what each module will do. It is a map, not the source of truth. Each page links to the plan, ADR or architecture doc that holds the full reasoning, and where the two disagree, those win.
 
-Last brought up to date: 2026-09-29, after the workflow creator plan (018) was locked.
+Last brought up to date: 2026-09-29, after labware types (007a) landed, the lab calculators rule (ADR 0024) and the workflow creator plan (018) were locked.
 
 ## Pages
 
@@ -29,6 +29,7 @@ Last brought up to date: 2026-09-29, after the workflow creator plan (018) was l
 | Decisions (ADRs) | [docs/decisions](../decisions) |
 | Living docs per built module | [docs/architecture](../architecture) |
 | Seed lab data | [seed/](../../seed) |
+| Mock worklists and instrument reports (golden files for 016) | [seed/worklists](../../seed/worklists) |
 | SOP and literature test set | [docs/sop-library](../sop-library) |
 | UI screenshots | [docs/screens](../screens) |
 

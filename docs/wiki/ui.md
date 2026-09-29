@@ -34,6 +34,14 @@ Instead: **one outline per top-level block**, and state said in words, lamps or 
 - Record status in words: "draft · needs your review", "active", "active · change waiting".
 - Where a value came from, in words: "assumed by deepseek-chat", "you told Claude", "from a datasheet", "entered by you".
 
+## Pages so far
+
+- **Nav:** Lab (Activity, Review) and Library (one page per registry, each with its draft count), with All records at the foot.
+- **Library pages:** Labware (family filter; type, manufacturer, catalog number, maximum volume) and Vendors. More registries get a page as they land.
+- **Review:** everything waiting for you, grouped by kind.
+- **Record review:** a readiness block with failing checks first, each with its source, its fix and a "Fix in …" link; passing checks fold under "N checks pass". Then one block per section with each value and where it came from, and Edit to change values in place.
+- **Labware drawings:** a labware type drawn to scale from above with named wells, and one well cut through its centre filled to the maximum volume. Values the record doesn't give are drawn dashed and listed, so a draft has a picture without the picture claiming values nobody entered.
+
 ## Interaction
 
 - No 100-option forms or wizards. The agent fills the options; the page shows the result; a person adjusts. Small fixes by hand (select wells and pick a role), bigger ones by asking.

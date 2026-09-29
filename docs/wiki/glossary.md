@@ -12,6 +12,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Assumed** | An agent set this value without naming a source. Stays marked until confirmed |
 | **Assay template** | A ready-made experiment design for one assay (ELISA, dose-response…), plan 017 |
 | **Campaign** | A lab project with a goal and aims; holds experiments |
+| **Calculator** | A read operation that does exact lab math (dilutions, volumes, feasibility, totals) for agents and people; values from one are marked calculated (ADR 0024) |
 | **Capability** | A contract for something an instrument or a person can do (transfer, seal, read luminescence), with limits per kind. Defined in code |
 | **Confirm** | A person agreeing to agent work: a section of a draft, or a proposed change |
 | **Configuration** | What is physically installed on an instrument now, as an equipment graph on mounts |
@@ -28,6 +29,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **Kind** | A record type (`labware_type`), and in the data model the reusable definition layer (the Corning 3570) |
 | **Kind, Instance, State** | The rule that definitions, real things and their changing state stay separate |
 | **Lab memory** | Conventions, preferences, quirks and lessons agents read and propose; people confirm (plan 005) |
+| **Library page** | The app's page for one registry (Labware, Vendors…), under Library in the nav |
 | **Layout template** | A reusable plate pattern: roles by region, replicates, controls, fill order (plan 014) |
 | **Liquid class** | Per-device pipetting settings for one tip or source plate, dispense mode and volume range (`384PP_DMSO2` on the Echo) |
 | **Liquid type** | Platform-neutral behaviour of a liquid: aqueous, DMSO, 50% glycerol, serum… |

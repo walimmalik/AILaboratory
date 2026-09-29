@@ -26,7 +26,9 @@ An AI-driven lab management system for wet and dry labs: registries (labware, in
 - **Schemas first**, in `packages/schema` (Zod 4). JSON Schema and migrations are generated with `pnpm generate`; CI fails on stale files.
 - **Operations** are the only way to change data: contract in `packages/schema/src/operations`, implementation in `apps/api/src/operations`. Every operation has tests for valid input, invalid input and permission.
 - **Records go through the record service**, never raw inserts. It enforces versions, history, links and names.
+- **A registry is a record kind first** ([ADR 0023](../decisions/0023-labware-types.md)). Drafting, editing, finding and confirming go through `records.*` with the kind's sections and checks; a module adds operations only for what records can't express (imports, exports, computed views). One attribute per source, so evidence stays accurate.
 - **Pure domain logic** (units, volume math, plate geometry, expressions, liquid-class resolution, mixing) lives in `packages/domain` with unit tests and no I/O.
+- **Agents take numbers from calculators** ([ADR 0024](../decisions/0024-lab-calculators.md)). Volumes, concentrations, dilutions, droplet counts, feasibility and totals come from calculator operations backed by `packages/domain`, never from the model's own arithmetic. Where no calculator exists yet, the agent marks its figure assumed and the gap becomes a calculator in the next plan step.
 - **Each module owns its tables.** Other modules go through operations.
 - **Every record carries `org_id` and `lab_id`.**
 - **Tests use PGlite**, so `pnpm test` needs no Docker.
