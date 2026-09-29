@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "fromId": {
+      "type": "string",
+      "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "toId": {
+      "type": "string",
+      "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "relation": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    }
+  },
+  "required": [
+    "fromId",
+    "toId",
+    "relation"
+  ],
+  "additionalProperties": false
+}

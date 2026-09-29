@@ -25,7 +25,9 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 
 ## Engineering rules
 
-- Schemas change first (in `packages/schema`, from plan 002); code is generated from them, and CI fails on stale generated code.
+- Schemas change first (in `packages/schema`); JSON Schema and migrations are generated from them with `pnpm generate`, and CI fails on stale generated files.
+- Records go through the record service (`apps/api/src/records`), never raw inserts: it enforces versions, history, links and names. See `docs/architecture/core-records.md`.
+- Tests use PGlite (in-memory Postgres), so `pnpm test` needs no Docker.
 - Pure domain logic (units, volume math, plate geometry, variable evaluation) lives in `packages/domain` with unit tests, no I/O.
 - Each module owns its tables. Other modules go through operations.
 - Every operation has tests for valid input, invalid input and permission.
@@ -52,6 +54,9 @@ Run from the repo root unless noted.
 | --- | --- |
 | Install | `pnpm install` and `cd apps/science && uv sync` |
 | Database only | `docker compose up db` |
+| Apply migrations | `pnpm --filter @ailab/api db:migrate` (needs `DATABASE_URL`; the API also migrates on start) |
+| First-run setup (org, lab, user, token) | `pnpm --filter @ailab/api bootstrap` |
+| Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |
 | Science service (:8001) | `cd apps/science && uv run uvicorn science.main:app --reload --port 8001` |
 | Full stack in containers (web on :8080) | `docker compose up --build` |

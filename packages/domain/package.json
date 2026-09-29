@@ -1,0 +1,25 @@
+{
+  "name": "@ailab/domain",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ailab/schema": "workspace:*",
+    "decimal.js": "10.6.0",
+    "ulid": "3.0.2"
+  }
+}
