@@ -93,6 +93,15 @@ const definitions: UnitDefinition[] = [
     ['K', 'K', '1'],
     ['degC', '°C', '1', '273.15'],
   ]),
+  ...family('length', [
+    ['m', 'm', '1'],
+    ['cm', 'cm', '0.01'],
+    ['mm', 'mm', '0.001'],
+    ['um', 'µm', '0.000001'],
+    ['nm', 'nm', '0.000000001'],
+  ]),
+  ...family('rotational_speed', [['rpm', 'rpm', '1']]),
+  ...family('relative_centrifugal_force', [['xg', '× g', '1']]),
   ...family('cell_count', [['cells', 'cells', '1']]),
   ...family('cell_density', [
     ['cells/mL', 'cells/mL', '1'],

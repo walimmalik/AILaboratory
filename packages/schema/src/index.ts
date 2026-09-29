@@ -4,6 +4,7 @@ export * from './design.ts';
 export * from './ids.ts';
 export * from './json-schema.ts';
 export * from './kind.ts';
+export * from './labware.ts';
 export * from './operation.ts';
 export * from './operations/index.ts';
 export * from './quantity.ts';

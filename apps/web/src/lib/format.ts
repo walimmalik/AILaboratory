@@ -105,8 +105,27 @@ export function formatValue(value: unknown): string {
   if (isQuantity(value))
     return isUnit(value.unit) ? formatQuantity(value) : `${value.value} ${value.unit}`;
   if (Array.isArray(value)) return value.map(formatValue).join(', ');
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'object') {
+    // Nested attributes (a footprint, a well layout) read as "name value · name value".
+    return Object.entries(value)
+      .map(([key, inner]) => {
+        const text = formatValue(inner);
+        return typeof inner === 'object' &&
+          inner !== null &&
+          !isQuantity(inner) &&
+          !Array.isArray(inner)
+          ? `${fieldWords(key)} (${text})`
+          : `${fieldWords(key)} ${text}`;
+      })
+      .join(' · ');
+  }
   return String(value);
+}
+
+/** An attribute name in words: "maxVolume" → "max volume", "a1" stays "a1". */
+function fieldWords(key: string): string {
+  return key.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 }
 
 /** "18:42:07" today, "Sep 28 18:42" otherwise, in the reader's time zone. */
