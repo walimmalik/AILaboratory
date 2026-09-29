@@ -30,7 +30,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/schema
       '@anthropic-ai/sdk':
-        specifier: ^0.129.0
+        specifier: 0.129.0
         version: 0.129.0(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.3
