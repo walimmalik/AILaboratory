@@ -136,6 +136,55 @@ describe('writes', () => {
   });
 });
 
+describe('finding records', () => {
+  it('lists drafts and active records newest first, searches, and hides archived unless asked', async () => {
+    const tipBox = await create(person);
+    const rack = await create(person, { label: 'Tube rack', status: 'active' });
+    await run(person, 'records.archive', { id: rack.id, expectedVersion: 1 });
+    const pipette = await create(person, { label: 'Pipette 100%_off' });
+
+    const list = async (input: Record<string, unknown>) =>
+      (await run<{ records: RecordEnvelope[] }>(person, 'records.list', input)).records.map(
+        (r) => r.name,
+      );
+    expect(await list({})).toEqual([pipette.name, tipBox.name]);
+    expect(await list({ status: 'archived' })).toEqual([rack.name]);
+    expect(await list({ search: 'wdg-0001' })).toEqual([tipBox.name]);
+    // Search text is literal: % and _ are not wildcards.
+    expect(await list({ search: '%_' })).toEqual([pipette.name]);
+    expect(await list({ kind: 'plasmid' })).toEqual([]);
+    expect((await refused(registry.execute(person, 'records.list', { limit: 0 }))).code).toBe(
+      'invalid_input',
+    );
+  });
+
+  it('names the records each ledger entry touched', async () => {
+    const record = await create(person);
+    const [entry] = (
+      await run<{ entries: { recordNames: Record<string, string> }[] }>(person, 'activity.list', {})
+    ).entries;
+    expect(entry?.recordNames).toEqual({ [record.id]: 'WDG-0001' });
+  });
+
+  it('names a record an agent proposed to create, before it exists', async () => {
+    await registry.execute(agent, 'records.create', {
+      kind: 'widget',
+      label: 'New',
+      attributes,
+      status: 'active',
+    });
+    const [entry] = (
+      await run<{ entries: { outcome: string; recordNames: Record<string, string> }[] }>(
+        person,
+        'activity.list',
+        {},
+      )
+    ).entries;
+    expect(entry?.outcome).toBe('proposed');
+    expect(Object.values(entry?.recordNames ?? {})).toEqual(['WDG-0001']);
+  });
+});
+
 describe('agents', () => {
   it('edit drafts directly', async () => {
     const draft = await create(agent);

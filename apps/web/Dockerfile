@@ -4,6 +4,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/schema/package.json packages/schema/
 COPY packages/client/package.json packages/client/
+COPY packages/domain/package.json packages/domain/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --filter @ailab/web...
 COPY packages packages

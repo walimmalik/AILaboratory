@@ -45,11 +45,11 @@ Approving (`proposals.approve`, people only) runs the stored input as the propos
 | --- | --- |
 | REST | `GET /v1/operations` (contracts with JSON Schemas), `POST /v1/ops/{id}` with a JSON body and optional `?preview=true`, `GET /v1/openapi.json` |
 | Errors | HTTP 400/401/403/404/409/500 with `{code, message, details?}` |
-| Live ledger | `GET /v1/activity/stream`: server-sent events `ready`, `activity` (one ledger entry) and `ping` every 25 s, for the caller's lab |
+| Live ledger | `GET /v1/activity/stream`: server-sent events `ready`, `activity` (one ledger entry) and `ping` every 25 s, for the caller's lab. Each entry carries `recordNames` (readable names at the time of the change) so a ledger line can say "archived WDG-0001" even after a draft is deleted. |
 | MCP | `POST /mcp` (Streamable HTTP, stateless, JSON responses). Two tools: `describe_operations` (optionally by namespace or IDs) and `run_operation` (`operation`, `input`, `preview`). Refusals come back as tool errors with `{code, message}`. |
 | Web app | `@ailab/client`: `call(contract, input, {preview})` returns the typed result; `run` returns the output or throws. `apps/web/src` may not use `fetch` (lint rule). |
 
-All doors need `Authorization: Bearer <token>`. Agent tokens act on behalf of a person: `pnpm --filter @ailab/api token --agent "Claude Code"`.
+All doors need `Authorization: Bearer <token>`, or the web app's session cookie (ADR 0019; cookie-authenticated writes must be JSON). Agent tokens act on behalf of a person: `pnpm --filter @ailab/api token --agent "Claude Code"`.
 
 ## Connecting an agent
 

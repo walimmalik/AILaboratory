@@ -80,6 +80,15 @@
         "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
       }
     },
+    "recordNames": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
     "proposalId": {
       "type": "string"
     },
@@ -128,6 +137,7 @@
     "operationId",
     "outcome",
     "recordIds",
+    "recordNames",
     "input",
     "durationMs"
   ],

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
-import { RecordEnvelope, RecordLink, RecordVersion } from '../record.ts';
+import { RecordEnvelope, RecordLink, RecordStatus, RecordVersion } from '../record.ts';
 
 const Reason = z.string().min(1).optional().describe('Why the change was made; kept in history');
 const ExpectedVersion = z
@@ -31,6 +31,27 @@ export const recordsGet = defineContract({
   effect: 'read',
   input: z.object({ id: RecordId }),
   output: RecordEnvelope,
+});
+
+export const recordsList = defineContract({
+  id: 'records.list',
+  summary:
+    'Find records, most recently changed first; archived records only when status is "archived"',
+  effect: 'read',
+  input: z.object({
+    kind: z.string().min(1).optional(),
+    status: RecordStatus.optional(),
+    search: z
+      .string()
+      .optional()
+      .describe('Matches label or readable name, e.g. "PLT-0003" or "tip box"'),
+    limit: z.number().int().min(1).max(200).optional(),
+    before: z.iso
+      .datetime()
+      .optional()
+      .describe('Only records changed before this time, for paging'),
+  }),
+  output: z.object({ records: z.array(RecordEnvelope) }),
 });
 
 export const recordsUpdate = defineContract({

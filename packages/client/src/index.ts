@@ -1,4 +1,6 @@
 import {
+  ActivityEntry,
+  Me,
   type OperationContract,
   OperationErrorBody,
   type OperationResult,
@@ -74,6 +76,55 @@ export function createClient(options: ClientOptions) {
     return result.output;
   }
 
+  async function json<T>(
+    path: string,
+    parse: (body: unknown) => T,
+    init: RequestInit = {},
+  ): Promise<T> {
+    const response = await request(`${baseUrl}${path}`, {
+      ...init,
+      headers: { ...headers(), ...(init.body ? { 'content-type': 'application/json' } : {}) },
+    });
+    const body: unknown = await response.json().catch(() => undefined);
+    if (!response.ok) throw toApiError(response.status, body);
+    return parse(body);
+  }
+
+  /** Who is signed in. Throws an ApiError with code "unauthorized" when nobody is. */
+  function me(): Promise<Me> {
+    return json('/me', (body) => Me.parse(body));
+  }
+
+  /** Signs in with a password; the session lives in an HttpOnly cookie. */
+  async function signIn(email: string, password: string): Promise<void> {
+    await json('/auth/login', () => undefined, {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async function signOut(): Promise<void> {
+    await json('/auth/logout', () => undefined, { method: 'POST', body: '{}' });
+  }
+
+  /**
+   * Streams new activity-ledger entries for the caller's lab (server-sent events, cookie auth).
+   * Returns a function that closes the stream.
+   */
+  function subscribeActivity(handlers: {
+    onEntry: (entry: ActivityEntry) => void;
+    onConnection?: (connected: boolean) => void;
+  }): () => void {
+    const source = new EventSource(`${baseUrl}/v1/activity/stream`);
+    source.addEventListener('ready', () => handlers.onConnection?.(true));
+    source.addEventListener('activity', (event) => {
+      const parsed = ActivityEntry.safeParse(JSON.parse((event as MessageEvent<string>).data));
+      if (parsed.success) handlers.onEntry(parsed.data);
+    });
+    source.addEventListener('error', () => handlers.onConnection?.(false));
+    return () => source.close();
+  }
+
   async function health(): Promise<boolean> {
     try {
       return (await request(`${baseUrl}/health`)).ok;
@@ -82,7 +133,7 @@ export function createClient(options: ClientOptions) {
     }
   }
 
-  return { call, run, health };
+  return { call, run, me, signIn, signOut, subscribeActivity, health };
 }
 
 export type Client = ReturnType<typeof createClient>;

@@ -98,6 +98,8 @@ export const ActivityEntry = z.object({
   operationId: z.string(),
   outcome: ActivityOutcome,
   recordIds: z.array(RecordId),
+  /** Readable names of the touched records when the entry was written, e.g. { "wdg_…": "WDG-0001" }. */
+  recordNames: z.record(z.string(), z.string()),
   proposalId: z.string().optional(),
   input: z.unknown(),
   error: OperationErrorBody.optional(),

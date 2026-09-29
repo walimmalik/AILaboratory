@@ -1,9 +1,9 @@
 import { EventEmitter } from 'node:events';
 import { newId } from '@ailab/domain';
 import type { ActivityEntry } from '@ailab/schema';
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { activity } from '../db/schema.ts';
+import { activity, records } from '../db/schema.ts';
 import type { RecordContext } from '../records/service.ts';
 
 /** In-process fan-out of new ledger entries, for the live activity stream. */
@@ -24,11 +24,23 @@ export async function recordActivity(
   db: Db,
   bus: ActivityBus,
   ctx: RecordContext,
-  entry: Omit<ActivityEntry, 'id' | 'at' | 'actor'> & { actor?: ActivityEntry['actor'] },
+  entry: Omit<ActivityEntry, 'id' | 'at' | 'actor' | 'recordNames'> & {
+    actor?: ActivityEntry['actor'];
+    /** Names already known, e.g. from a preview of a record that doesn't exist yet. */
+    nameHints?: Record<string, string>;
+  },
 ): Promise<ActivityEntry> {
   const at = new Date();
+  const { nameHints, ...rest } = entry;
+  const found = rest.recordIds.length
+    ? await db
+        .select({ id: records.id, name: records.name })
+        .from(records)
+        .where(inArray(records.id, rest.recordIds))
+    : [];
   const full: ActivityEntry = {
-    ...entry,
+    ...rest,
+    recordNames: { ...nameHints, ...Object.fromEntries(found.map((r) => [r.id, r.name])) },
     id: newId('act'),
     at: at.toISOString(),
     actor: entry.actor ?? ctx.actor,
@@ -42,6 +54,7 @@ export async function recordActivity(
     operationId: full.operationId,
     outcome: full.outcome,
     recordIds: full.recordIds,
+    recordNames: full.recordNames,
     proposalId: full.proposalId ?? null,
     input: full.input ?? null,
     error: full.error ?? null,
@@ -74,6 +87,7 @@ export async function listActivity(
     operationId: row.operationId,
     outcome: row.outcome,
     recordIds: row.recordIds,
+    recordNames: row.recordNames,
     ...(row.proposalId ? { proposalId: row.proposalId } : {}),
     input: row.input,
     ...(row.error ? { error: row.error } : {}),

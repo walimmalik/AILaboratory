@@ -26,6 +26,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 ## Engineering rules
 
 - Schemas change first (in `packages/schema`); JSON Schema and migrations are generated from them with `pnpm generate`, and CI fails on stale generated files.
+- The web app follows `docs/architecture/web-app.md`: bench console tokens only, one outline per block, no side stripes or nested boxes, agent work in agent ink, plain lab language.
 - Capabilities are operations (`packages/schema/src/operations` plus `apps/api/src/operations`); see `docs/architecture/operations.md`. The web app calls the API only through `@ailab/client`.
 - Records go through the record service (`apps/api/src/records`), never raw inserts: it enforces versions, history, links and names. See `docs/architecture/core-records.md`.
 - Tests use PGlite (in-memory Postgres), so `pnpm test` needs no Docker.
@@ -58,12 +59,14 @@ Run from the repo root unless noted.
 | Database only | `docker compose up db` |
 | Apply migrations | `pnpm --filter @ailab/api db:migrate` (needs `DATABASE_URL`; the API also migrates on start) |
 | First-run setup (org, lab, user, token) | `pnpm --filter @ailab/api bootstrap` |
+| Set or reset your web sign-in | `pnpm --filter @ailab/api password --email you@example.org` |
 | Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
 | Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |
 | Science service (:8001) | `cd apps/science && uv run uvicorn science.main:app --reload --port 8001` |
 | Full stack in containers (web on :8080) | `docker compose up --build` |
 | All TypeScript checks | `pnpm check` (lint, typecheck, test) |
+| End-to-end tests (needs a bootstrapped database; see `apps/web/playwright.config.ts`) | `pnpm --filter @ailab/web e2e` |
 | Format | `pnpm format` |
 | Python checks | `cd apps/science && uv run ruff check . && uv run ruff format --check . && uv run pytest` |
 
