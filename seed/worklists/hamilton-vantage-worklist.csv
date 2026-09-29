@@ -1,0 +1,5 @@
+SourceRack,SourceBarcode,SourceWell,DestRack,DestBarcode,DestWell,Volume_uL,LiquidClass
+Reservoir_300mL,RES-000004,1,Plate_Corning_3570,PLT-000201,A1,20,StandardVolume_Water_DispenseJet_Empty
+Reservoir_300mL,RES-000004,1,Plate_Corning_3570,PLT-000201,B1,20,StandardVolume_Water_DispenseJet_Empty
+Reservoir_300mL,RES-000004,1,Plate_Corning_3570,PLT-000201,C1,20,StandardVolume_Water_DispenseJet_Empty
+Reservoir_300mL,RES-000004,1,Plate_Corning_3570,PLT-000201,D1,20,StandardVolume_Water_DispenseJet_Empty

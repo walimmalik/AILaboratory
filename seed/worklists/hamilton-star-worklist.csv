@@ -1,0 +1,9 @@
+Step,SourceLabware,SourceBarcode,SourcePosition,TargetLabware,TargetBarcode,TargetPosition,Volume,LiquidClass,TipType,NewTip
+1,Rack_Tubes_1.5mL,BOX-000012,1,Plate_Thermo_442404,PLT-000301,A3,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,1
+2,Rack_Tubes_1.5mL,BOX-000012,1,Plate_Thermo_442404,PLT-000301,A4,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,0
+3,Rack_Tubes_1.5mL,BOX-000012,2,Plate_Thermo_442404,PLT-000301,B3,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,1
+4,Rack_Tubes_1.5mL,BOX-000012,2,Plate_Thermo_442404,PLT-000301,B4,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,0
+5,Rack_Tubes_1.5mL,BOX-000012,3,Plate_Thermo_442404,PLT-000301,C3,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,1
+6,Rack_Tubes_1.5mL,BOX-000012,3,Plate_Thermo_442404,PLT-000301,C4,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,0
+7,Rack_Tubes_1.5mL,BOX-000012,4,Plate_Thermo_442404,PLT-000301,D3,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,1
+8,Rack_Tubes_1.5mL,BOX-000012,4,Plate_Thermo_442404,PLT-000301,D4,100,HighVolume_Water_DispenseJet_Empty,1000uL_Filter,0
