@@ -1,0 +1,85 @@
+# Assay templates for the demo lab (plans 012 onward). Each one ties SOPs, labware, reagents and
+# instruments together and sketches the plate layout. The layouts and replicate counts are
+# lab conventions, drafted by an agent, for a person to confirm.
+
+templates:
+  - key: assay-elisa-il6
+    name: IL-6 sandwich ELISA
+    sops: [sop-elisa-il6]
+    plate: thermo-442404
+    readout: { mode: absorbance, wavelength: { value: "450", unit: nm }, correction: { value: "570", unit: nm } }
+    instruments: [bluecatbio-bluewasher, tecan-spark-cyto]
+    layout:
+      standards: "columns 1-2, rows A-G, 7-point 2-fold from 600 pg/mL, duplicate"
+      blanks: "H1:H2"
+      samples: "columns 3-12, duplicate (40 samples)"
+    analysis: 4PL fit of standards, interpolate samples
+    source: lab_convention
+
+  - key: assay-compound-single-point
+    name: Compound single-point viability screen
+    sops: [sop-compound-screen, sop-cell-seeding-384, sop-celltiter-glo]
+    plate: corning-3570
+    source_plate: beckman-001-14555
+    readout: { mode: luminescence }
+    instruments: [echo-650, formulatrix-mantis, thermo-cytomat-10, tecan-spark-cyto]
+    layout:
+      neutral_controls: "columns 1-2 (DMSO)"
+      positive_controls: "columns 23-24 (staurosporine 1 uM)"
+      compounds: "columns 3-22, one compound per well at 10 uM"
+    quality: "Z' >= 0.5 per plate"
+    hit_rule: "viability below 3 SD of the neutral controls"
+    next: assay-compound-dose-response
+    source: lab_convention
+
+  - key: assay-compound-dose-response
+    name: Compound dose-response follow-up (CellTiter-Glo or HiBiT)
+    sops: [sop-compound-screen, sop-cell-seeding-384, sop-celltiter-glo, sop-hibit-lytic]
+    readout_options:
+      - { key: celltiter-glo, sop: sop-celltiter-glo, measures: cell viability (ATP) }
+      - { key: hibit, sop: sop-hibit-lytic, measures: level of a HiBiT-tagged protein, cells: "HEK293 expressing demo-hibit-brd4" }
+    plate: corning-3570
+    source_plate: beckman-001-12782
+    readout: { mode: luminescence }
+    instruments: [echo-650, formulatrix-mantis, thermo-cytomat-10, tecan-spark-cyto]
+    layout:
+      neutral_controls: "columns 1-2"
+      positive_controls: "columns 23-24"
+      compounds: "10-point 3-fold from 10 uM, duplicate; 16 compounds per plate"
+    analysis: 4PL fit, IC50 (or DC50 for HiBiT) with confidence interval
+    source: lab_convention
+
+  - key: assay-enzyme-kinetic
+    name: Alkaline phosphatase kinetic screen (pNPP)
+    sops: [sop-pnpp-kinetic]
+    plate: greiner-655101
+    readout: { mode: absorbance_kinetic, wavelength: { value: "405", unit: nm }, interval: { value: "30", unit: s }, duration: { value: "20", unit: min } }
+    instruments: [echo-650, hamilton-star, tecan-spark-cyto]
+    layout:
+      no_enzyme: "column 1"
+      full_activity: "column 2 (DMSO)"
+      compounds: "columns 3-12"
+    analysis: initial rate (mOD/min) per well, percent activity
+    source: lab_convention
+
+  - key: assay-dual-glo
+    name: Dual-Glo reporter gene expression
+    sops: [sop-hek293-passaging, sop-dual-glo-reporter]
+    plate: corning-3570
+    readout: { mode: luminescence, sequence: [firefly, renilla] }
+    constructs: [demo-pil6p-luc2, promega-pgl4-75]
+    instruments: [formulatrix-mantis, thermo-cytomat-10, tecan-spark-cyto]
+    layout:
+      untreated: "columns 1-2"
+      empty_vector: "columns 23-24"
+      treatments: "columns 3-22, quadruplicate"
+    analysis: firefly/Renilla ratio, fold change over untreated
+    source: lab_convention
+
+  - key: workflow-plasmid-assembly
+    name: Plasmid assembly and purification (Gibson or Golden Gate)
+    sops: [sop-gibson-assembly, sop-golden-gate-assembly, sop-transformation-miniprep]
+    method_options: [gibson, golden-gate]
+    instruments: [biorad-ptc-tempo, opentrons-flex]
+    outputs: sequence-verified plasmid in a barcoded tube, registered as a plasmid entity
+    source: lab_convention

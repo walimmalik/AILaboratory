@@ -1,0 +1,145 @@
+# Biological and chemical entities (plan 010): cell lines, plasmids, compounds.
+# Cell lines: real ATCC items, researched 2026-09-29 (ATCC, Cellosaurus). Plasmids and compounds:
+# real catalog items where one exists; demo constructs are fictional and say so.
+# Fields not in `status` are verified. Handling rules carry source: vendor | lab_convention.
+
+cell_lines:
+  - key: atcc-crl-1573
+    vendor: ATCC
+    catalog_number: CRL-1573
+    name: "293 [HEK-293]"
+    organism: Homo sapiens
+    tissue: embryonic kidney
+    morphology: epithelial
+    notes_biology: Transformed with adenovirus 5 DNA (Cellosaurus CVCL_0045).
+    biosafety_level: BSL-2
+    base_medium: {vendor: ATCC, catalog_number: 30-2003, name: Eagle's Minimum Essential Medium (EMEM)}
+    complete_medium: EMEM + 10% FBS
+    lab_medium_substitute: {text: "Many labs grow HEK293 in DMEM high glucose + 10% FBS (e.g. Gibco 11965092)", status: estimated}
+    culture_conditions: {temperature: {value: "37", unit: degC}, co2: {value: "5", unit: "%v/v"}, atmosphere: "95% air, 5% CO2"}
+    subculture_ratio: "1:6 to 1:10 weekly"
+    medium_renewal: every 2 to 3 days
+    doubling_time: {low: {value: "24", unit: h}, high: {value: "30", unit: h}, source: "DSMZ ACC-305 via Cellosaurus (CLS: ~30 h)"}
+    cryopreservation: "Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen"
+    handling_rules:
+      - {rule: time_out_of_incubator, text: "Keep plates out of the incubator <= 30 min per handling step (pH drifts without CO2)", duration: {value: "30", unit: min}, source: lab_convention, status: estimated}
+      - {rule: loosely_adherent, text: "HEK293 detach easily; dispense gently in plate-based assays", source: lab_convention, status: estimated}
+    source_urls:
+      - https://www.atcc.org/products/crl-1573
+      - https://www.cellosaurus.org/CVCL_0045
+    status: {catalog_number: verified, biosafety_level: verified, base_medium: verified, culture_conditions: verified, subculture_ratio: verified, doubling_time: verified, time_out_of_incubator: estimated}
+
+  - key: atcc-ccl-2
+    vendor: ATCC
+    catalog_number: CCL-2
+    name: HeLa
+    organism: Homo sapiens
+    tissue: cervix (adenocarcinoma)
+    morphology: epithelial
+    biosafety_level: BSL-2
+    base_medium: {vendor: ATCC, catalog_number: 30-2003, name: Eagle's Minimum Essential Medium (EMEM)}
+    complete_medium: EMEM + 10% FBS
+    culture_conditions: {temperature: {value: "37", unit: degC}, co2: {value: "5", unit: "%v/v"}, atmosphere: "95% air, 5% CO2"}
+    subculture_ratio: "1:2 to 1:6"
+    medium_renewal: 2 to 3 times per week
+    doubling_time: {low: {value: "30", unit: h}, high: {value: "48", unit: h}, source: "Cellosaurus CVCL_0030: 1.3 d (PubMed 29156801), ~48 h (DSMZ ACC-57), 30-48 h (Hysigen)"}
+    cryopreservation: "Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen"
+    handling_rules:
+      - {rule: time_out_of_incubator, duration: {value: "30", unit: min}, source: lab_convention, status: estimated}
+    source_urls:
+      - https://www.atcc.org/products/ccl-2
+      - https://www.cellosaurus.org/CVCL_0030
+    status: {catalog_number: verified, biosafety_level: verified, base_medium: verified, culture_conditions: verified, subculture_ratio: verified, doubling_time: verified, time_out_of_incubator: estimated}
+
+  - key: atcc-ccl-185
+    vendor: ATCC
+    catalog_number: CCL-185
+    name: A549
+    organism: Homo sapiens
+    tissue: lung (carcinoma)
+    morphology: epithelial-like
+    biosafety_level: BSL-1
+    base_medium: {vendor: ATCC, catalog_number: 30-2004, name: F-12K Medium}
+    complete_medium: F-12K + 10% FBS
+    culture_conditions: {temperature: {value: "37", unit: degC}, co2: {value: "5", unit: "%v/v"}, atmosphere: "95% air, 5% CO2"}
+    subculture_ratio: "1:3 to 1:8"
+    medium_renewal: 2 to 3 times per week
+    doubling_time: {value: "22", unit: h, qualifier: approximately, source: ATCC}
+    cryopreservation: "Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen"
+    handling_rules:
+      - {rule: time_out_of_incubator, duration: {value: "30", unit: min}, source: lab_convention, status: estimated}
+    source_urls:
+      - https://www.atcc.org/products/ccl-185
+    status: {catalog_number: verified, biosafety_level: verified, base_medium: verified, culture_conditions: verified, subculture_ratio: verified, doubling_time: verified, time_out_of_incubator: estimated}
+
+plasmids:
+  - key: promega-pgl4-10
+    vendor: Promega
+    catalog_number: E6651
+    name: pGL4.10[luc2]
+    description: Promoterless firefly luciferase (luc2) reporter vector; clone a promoter upstream for Dual-Glo gene expression assays.
+    resistance: ampicillin
+    source_urls: [https://www.promega.com/products/luciferase-assays/reporter-vectors/pgl4-luciferase-reporter-vectors/]
+    status: { catalog_number: estimated, resistance: estimated }
+    notes: Catalog number from memory of Promega's pGL4 range, not re-read this session.
+  - key: promega-pgl4-75
+    vendor: Promega
+    catalog_number: E6931
+    name: pGL4.75[hRluc/CMV]
+    description: Constitutive Renilla luciferase control vector for Dual-Glo normalisation.
+    resistance: ampicillin
+    source_urls: [https://www.promega.com/products/luciferase-assays/reporter-vectors/pgl4-luciferase-reporter-vectors/]
+    status: { catalog_number: estimated, resistance: estimated }
+    notes: Catalog number from memory of Promega's pGL4 range, not re-read this session.
+  - key: neb-puc19
+    vendor: New England Biolabs
+    catalog_number: N3041
+    name: pUC19 Vector
+    description: Cloning vector, 2686 bp; used as the transformation control.
+    length_bp: 2686
+    resistance: ampicillin
+    source_urls: [https://www.neb.com/en-us/products/n3041-puc19-vector]
+    status: { catalog_number: estimated }
+  - key: demo-pil6p-luc2
+    name: pGL4.10-IL6p-luc2 (demo)
+    description: Fictional demo construct, IL-6 promoter cloned into pGL4.10 by Gibson assembly. Used by the Dual-Glo gene expression template.
+    parent: promega-pgl4-10
+    resistance: ampicillin
+    fictional: true
+  - key: demo-hibit-brd4
+    name: pHiBiT-BRD4 (demo)
+    description: Fictional demo construct expressing BRD4 with a C-terminal HiBiT tag, assembled by Golden Gate. Used by the HiBiT follow-up template.
+    resistance: ampicillin
+    fictional: true
+
+compounds:
+  - key: cmpd-staurosporine
+    name: Staurosporine
+    product: cayman-81590
+    role: positive control (kills cells)
+    stock: { value: "1", unit: mM }
+    solvent: DMSO
+    notes: Cayman gives DMSO solubility of about 0.5 mg/mL (about 1 mM), so the lab keeps a 1 mM stock, not 10 mM.
+    handling_rules:
+      - { rule: light_sensitive, text: "Protect from light", source: lab_convention, status: estimated }
+  - key: cmpd-library-fda
+    name: FDA-approved drug library
+    product: selleck-l1300
+    role: screening library
+    stock: { value: "10", unit: mM }
+    solvent: DMSO
+    status: { stock: estimated }
+    notes: Selleck supplies most members at 10 mM in DMSO; check the plate map that ships with the library.
+  - key: cmpd-dmso
+    name: DMSO (vehicle)
+    product: sigma-d2650
+    role: neutral control and back-fill
+
+enzymes:
+  - key: enz-rsap
+    vendor: New England Biolabs
+    catalog_number: M0371
+    name: Shrimp Alkaline Phosphatase (rSAP)
+    role: enzyme under test in the kinetic screen template (pNPP substrate)
+    status: { catalog_number: estimated }
+    notes: Chosen as a well-behaved phosphatase for the pNPP demo. Catalog number from memory, not re-read this session.

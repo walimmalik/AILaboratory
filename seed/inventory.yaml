@@ -1,0 +1,99 @@
+# The demo lab's stock (plan 010): lots of real products, and containers with what is in them and
+# where they are. Lot numbers, expiry dates, barcodes and contents are all fictional.
+# Barcode format here is a placeholder ("DL" + 6 digits); plan 010 decides the real format.
+
+lots:
+  - { key: lot-dy206-a, product: rnd-dy206, lot_number: DEMO-P123456, expiry: 2027-03-31, received: 2026-08-12, location: fridge-01,
+      coa: { capture_ab_working_conc: { value: "2", unit: "ug/mL" }, detection_ab_working_conc: { value: "50", unit: "ng/mL" }, standard_top_conc: { value: "600", unit: "pg/mL" } },
+      status: { coa: estimated }, notes: "CoA values are typical DuoSet numbers standing in for a real certificate." }
+  - { key: lot-dy008b-a, product: rnd-dy008b, lot_number: DEMO-A77120, expiry: 2027-01-31, received: 2026-08-12, location: fridge-01 }
+  - { key: lot-dy999b-a, product: rnd-dy999b, lot_number: DEMO-T40211, expiry: 2027-02-28, received: 2026-08-12, location: fridge-01 }
+  - { key: lot-dy994-a, product: rnd-dy994, lot_number: DEMO-S10876, expiry: 2027-06-30, received: 2026-08-12, opened: 2026-09-15, location: shelf-rt-01 }
+  - { key: lot-g9242-a, product: promega-g9242, lot_number: DEMO-0000512345, expiry: 2027-05-31, received: 2026-07-02, location: freezer-20-01 }
+  - { key: lot-n3040-a, product: promega-n3040, lot_number: DEMO-0000498812, expiry: 2027-04-30, received: 2026-07-02, location: freezer-20-01 }
+  - { key: lot-e2920-a, product: promega-e2920, lot_number: DEMO-0000502277, expiry: 2027-02-28, received: 2026-06-20, location: freezer-80-01 }
+  - { key: lot-37620-a, product: thermo-37620, lot_number: DEMO-XK345678, expiry: 2027-08-31, received: 2026-09-01, location: fridge-01 }
+  - { key: lot-11965092-a, product: gibco-11965092, lot_number: DEMO-2876543, expiry: 2027-01-31, received: 2026-09-10, location: fridge-01 }
+  - { key: lot-a5256701-a, product: gibco-a5256701, lot_number: DEMO-2911002, expiry: 2029-06-30, received: 2026-05-02, location: freezer-20-01 }
+  - { key: lot-15140122-a, product: gibco-15140122, lot_number: DEMO-2850119, expiry: 2027-07-31, received: 2026-05-02, location: freezer-20-01 }
+  - { key: lot-12604013-a, product: gibco-12604013, lot_number: DEMO-2899321, expiry: 2027-03-31, received: 2026-09-10, location: shelf-rt-01 }
+  - { key: lot-14190144-a, product: gibco-14190144, lot_number: DEMO-2877710, expiry: 2028-09-30, received: 2026-09-10, location: shelf-rt-01 }
+  - { key: lot-81590-a, product: cayman-81590, lot_number: DEMO-0612345, expiry: 2028-12-31, received: 2026-04-11, location: freezer-20-01 }
+  - { key: lot-d2650-a, product: sigma-d2650, lot_number: DEMO-SHBN1234, expiry: 2028-10-31, received: 2026-04-11, location: shelf-rt-01 }
+  - { key: lot-l1300-a, product: selleck-l1300, lot_number: DEMO-L1300-26A, expiry: 2027-10-31, received: 2026-03-20, location: freezer-80-01 }
+  - { key: lot-m0492-a, product: neb-m0492, lot_number: DEMO-10245678, expiry: 2027-09-30, received: 2026-08-01, location: freezer-20-01 }
+  - { key: lot-e2621-a, product: neb-e2621, lot_number: DEMO-10233456, expiry: 2027-06-30, received: 2026-08-01, location: freezer-20-01 }
+  - { key: lot-e1601-a, product: neb-e1601, lot_number: DEMO-10239901, expiry: 2027-05-31, received: 2026-08-01, location: freezer-20-01 }
+  - { key: lot-c2987-a, product: neb-c2987, lot_number: DEMO-10251122, expiry: 2027-03-31, received: 2026-08-01, location: freezer-80-01 }
+  - { key: lot-27104-a, product: qiagen-27104, lot_number: DEMO-176012345, expiry: 2027-12-31, received: 2026-08-01, location: shelf-rt-01 }
+  - { key: lot-q32851-a, product: thermo-q32851, lot_number: DEMO-2911876, expiry: 2027-04-30, received: 2026-08-01, location: fridge-01 }
+
+containers:
+  # Cells
+  - key: flask-hek293-01
+    barcode: DL000101
+    labware: null
+    container_type: T75 flask (catalog item not in the labware seed yet)
+    location: tc-incubator-01
+    contents:
+      - { entity: atcc-crl-1573, passage: 12, confluence: "70%", seeded: 2026-09-27 }
+      - { product: gibco-11965092, volume: { value: "15", unit: mL }, note: "complete medium: +10% FBS, +1% Pen-Strep" }
+  # Compound stocks and plates
+  - key: tube-stauro-1mm
+    barcode: DL000201
+    labware: eppendorf-0030120086
+    location: freezer-20-01
+    contents:
+      - { entity: cmpd-staurosporine, lot: lot-81590-a, concentration: { value: "1", unit: mM }, volume: { value: "200", unit: "uL" }, solvent: DMSO }
+    freeze_thaw_count: 2
+  - key: echo-src-lib-01
+    barcode: DL000301
+    labware: beckman-001-14555
+    location: freezer-80-01
+    sealed: true
+    description: First 320 compounds of the FDA library, 10 mM in DMSO, wells A3 to P22 (columns 1-2 and 23-24 left for controls).
+    contents:
+      - { entity: cmpd-library-fda, lot: lot-l1300-a, wells: "A3:P22", concentration: { value: "10", unit: mM }, volume_per_well: { value: "40", unit: "uL" } }
+      - { entity: cmpd-dmso, wells: "A1:P2", volume_per_well: { value: "40", unit: "uL" } }
+      - { entity: cmpd-staurosporine, wells: "A23:P24", concentration: { value: "1", unit: mM }, volume_per_well: { value: "40", unit: "uL" } }
+  - key: arp-cells-01
+    barcode: DL000302
+    labware: corning-3570
+    location: freezer-20-01
+    sealed: true
+    description: Assay-ready plate stamped from echo-src-lib-01, 25 nL per well, ready for HEK293 seeding.
+    derived_from: echo-src-lib-01
+  # ELISA
+  - key: elisa-plate-coated-01
+    barcode: DL000401
+    labware: thermo-442404
+    location: fridge-01
+    sealed: true
+    description: Coated with IL-6 capture antibody (lot-dy206-a) at 2 ug/mL, 100 uL per well, blocked, dried and sealed on 2026-09-28.
+  # Cloning
+  - key: tube-pgl4-10-stock
+    barcode: DL000501
+    labware: eppendorf-0030120086
+    location: freezer-20-01
+    contents:
+      - { entity: promega-pgl4-10, concentration: { value: "100", unit: "ng/uL" }, volume: { value: "20", unit: "uL" } }
+  - key: tube-pil6p-luc2-mp1
+    barcode: DL000502
+    labware: eppendorf-0030120086
+    location: freezer-20-01
+    contents:
+      - { entity: demo-pil6p-luc2, concentration: { value: "185", unit: "ng/uL" }, volume: { value: "48", unit: "uL" }, note: "miniprep of colony 1, sequence-verified" }
+  - key: tube-hibit-brd4-mp2
+    barcode: DL000503
+    labware: eppendorf-0030120086
+    location: freezer-20-01
+    contents:
+      - { entity: demo-hibit-brd4, concentration: { value: "142", unit: "ng/uL" }, volume: { value: "50", unit: "uL" }, note: "miniprep of colony 2, sequencing pending" }
+  # Enzyme
+  - key: tube-rsap
+    barcode: DL000601
+    labware: eppendorf-0030120086
+    location: freezer-20-01
+    contents:
+      - { entity: enz-rsap, activity_concentration: { value: "1", unit: U/uL }, volume: { value: "500", unit: "uL" } }
+    status: { contents: estimated }

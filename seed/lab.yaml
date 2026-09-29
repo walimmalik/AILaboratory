@@ -1,0 +1,76 @@
+# The demo lab. Everything in this file is fictional.
+org:
+  key: demo-institute
+  name: Demo Institute of Biology
+
+lab:
+  key: demo-lab
+  name: Demo Lab
+  description: A small academic lab running ELISA, compound screening, reporter and enzyme assays, and plasmid cloning, with a mix of manual benches and automated liquid handling.
+
+rooms:
+  - key: rm-automation
+    name: Automation room (B2.14)
+    purpose: Liquid handlers, readers and the FlexPod work cell
+  - key: rm-tissue-culture
+    name: Tissue culture room (B2.16)
+    purpose: BSL-2 cell culture
+    biosafety_level: 2
+  - key: rm-molbio
+    name: Molecular biology bench (B2.12)
+    purpose: PCR, cloning, gel electrophoresis, minipreps
+  - key: rm-cold
+    name: Cold room and freezer alcove (B2.10)
+    purpose: 4 °C room, -20 °C and -80 °C freezers
+
+storage_locations:
+  - key: fridge-01
+    name: Fridge 1
+    kind: fridge
+    room: rm-cold
+    setpoint: { value: "4", unit: degC }
+  - key: freezer-20-01
+    name: Freezer -20 1
+    kind: freezer
+    room: rm-cold
+    setpoint: { value: "-20", unit: degC }
+  - key: freezer-80-01
+    name: Freezer -80 1
+    kind: freezer
+    room: rm-cold
+    setpoint: { value: "-80", unit: degC }
+  - key: ln2-dewar-01
+    name: Liquid nitrogen dewar 1
+    kind: cryostore
+    room: rm-cold
+    setpoint: { value: "-150", unit: degC }
+    status: { setpoint: estimated }
+    notes: Vapour-phase storage; the temperature is typical for vapour phase, not measured.
+  - key: tc-incubator-01
+    name: TC incubator 1
+    kind: incubator
+    room: rm-tissue-culture
+    setpoint: { value: "37", unit: degC }
+    co2: { value: "5", unit: "%v/v" }
+  - key: shelf-rt-01
+    name: Room temperature shelf, automation room
+    kind: shelf
+    room: rm-automation
+  - key: flammables-cabinet-01
+    name: Flammables cabinet
+    kind: cabinet
+    room: rm-molbio
+
+people:
+  - key: pi
+    name: Dr. Morgan Reyes
+    role: Principal investigator
+  - key: postdoc
+    name: Dr. Sam Okafor
+    role: Postdoc, screening and assay development
+  - key: grad-student
+    name: Jordan Lee
+    role: Graduate student, cloning and protein work
+  - key: automation-engineer
+    name: Priya Nair
+    role: Automation engineer
