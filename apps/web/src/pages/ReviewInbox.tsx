@@ -18,6 +18,7 @@ import {
   operationIntent,
   operationVerb,
 } from '../lib/format.ts';
+import { kindPage } from '../lib/kinds.ts';
 import { decidedProposalsQuery, recordQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
@@ -29,7 +30,18 @@ export function ReviewPage() {
   const waiting = useQuery(reviewQuery);
   const decided = useQuery(decidedProposalsQuery);
   const me = useMe();
-  const items = waiting.data ?? [];
+  const all = waiting.data ?? [];
+  const [show, setShow] = useState('all');
+  // One chip per kind of draft waiting, plus changes to active records.
+  const groups = new Map<string, { label: string; count: number }>();
+  for (const item of all) {
+    const key = groupOf(item);
+    const label =
+      item.type === 'change' ? 'Changes' : (kindPage(item.record.kind)?.title ?? item.record.kind);
+    groups.set(key, { label, count: (groups.get(key)?.count ?? 0) + 1 });
+  }
+  const shown = show === 'all' || !groups.has(show) ? 'all' : show;
+  const items = shown === 'all' ? all : all.filter((i) => groupOf(i) === shown);
 
   return (
     <>
@@ -49,11 +61,29 @@ export function ReviewPage() {
       <section className="block">
         <header>
           <h2>Waiting for you</h2>
-          <span className={`state ${items.length ? 'agent-ink' : 'muted'}`}>
-            {items.length} waiting
+          <span className={`state ${all.length ? 'agent-ink' : 'muted'}`}>
+            {all.length} waiting
           </span>
         </header>
         <div className="body">
+          {groups.size > 1 && (
+            <fieldset className="segmented">
+              <legend className="sr-only">Show</legend>
+              <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
+                All {all.length}
+              </button>
+              {[...groups].map(([key, group]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={shown === key}
+                  onClick={() => setShow(key)}
+                >
+                  {group.label} {group.count}
+                </button>
+              ))}
+            </fieldset>
+          )}
           {waiting.error && <p className="error-text">{waiting.error.message}</p>}
           {waiting.data?.length === 0 && (
             <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
@@ -109,6 +139,11 @@ export function ReviewPage() {
       </section>
     </>
   );
+}
+
+/** Drafts group by their kind; proposed changes form one group. */
+function groupOf(item: ReviewItem): string {
+  return item.type === 'change' ? 'changes' : item.record.kind;
 }
 
 const decisionWords: Record<Proposal['status'], string> = {

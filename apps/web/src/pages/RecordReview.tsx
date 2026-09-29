@@ -10,11 +10,12 @@ import {
   recordsConfirmSection,
 } from '@ailab/schema';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
 import { formatWhen, isAgent } from '../lib/format.ts';
 import { useMe } from '../session.ts';
+import { SectionEditor } from './SectionEditor.tsx';
 
 /**
  * Draft and confirm (plan 004c): the record as a person reviews it. One block per section with what
@@ -24,18 +25,36 @@ export function ReviewBlocks({
   record,
   readiness,
   renderValue,
+  aside,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
   renderValue: (value: unknown) => ReactNode;
+  /** Shown between the readiness block and the sections, e.g. a labware drawing. */
+  aside?: ReactNode;
 }) {
   const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
   const blocked = readiness.checks.some((c) => !c.passed && c.severity === 'blocker');
   // Confirming the last section of a draft that nothing blocks also activates it (plan 004d, R6).
   const activates = record.status === 'draft' && toReview.length === 1 && !blocked;
+  const [editing, setEditing] = useState<string>();
+  const [scrollTo, setScrollTo] = useState<string>();
+  useEffect(() => {
+    if (!scrollTo) return;
+    const block = document.getElementById(`section-${scrollTo}`);
+    block?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    block?.querySelector<HTMLElement>('input, select, textarea')?.focus({ preventScroll: true });
+    setScrollTo(undefined);
+  }, [scrollTo]);
+  const fix = (section: string) => {
+    setEditing(section);
+    setScrollTo(section);
+  };
+  const titles = Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]));
   return (
     <>
-      <ReadinessBlock record={record} readiness={readiness} />
+      <ReadinessBlock record={record} readiness={readiness} titles={titles} onFix={fix} />
+      {aside}
       {readiness.sections.map((section) => (
         <SectionBlock
           key={section.id}
@@ -44,6 +63,8 @@ export function ReviewBlocks({
           section={section}
           activates={activates && section.state === 'needs_review'}
           renderValue={renderValue}
+          editing={editing === section.id}
+          onEdit={(on) => setEditing(on ? section.id : undefined)}
         />
       ))}
     </>
@@ -59,7 +80,18 @@ function useInvalidate(id: string) {
     ]);
 }
 
-function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readiness: Readiness }) {
+function ReadinessBlock({
+  record,
+  readiness,
+  titles,
+  onFix,
+}: {
+  record: RecordEnvelope;
+  readiness: Readiness;
+  /** Section titles by ID, for the "Fix in …" links. */
+  titles: Record<string, string>;
+  onFix: (section: string) => void;
+}) {
   const invalidate = useInvalidate(record.id);
   const confirm = useMutation({
     mutationFn: () =>
@@ -86,11 +118,13 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
         <span className={`state ${state.tone}`}>{state.text}</span>
       </header>
       <div className="body">
-        {readiness.missing.length > 0 && (
+        {readiness.missing.some((m) => !readiness.checks.some((c) => c.message === m)) && (
           <ul className="todo">
-            {readiness.missing.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
+            {readiness.missing
+              .filter((m) => !readiness.checks.some((c) => c.message === m))
+              .map((m) => (
+                <li key={m}>{m}</li>
+              ))}
           </ul>
         )}
         {readiness.assumed.length > 0 && (
@@ -102,7 +136,9 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
             {readiness.assumed.length === 1 ? 'it' : 'them'} before you confirm.
           </p>
         )}
-        {readiness.checks.length > 0 && <Checks checks={readiness.checks} />}
+        {readiness.checks.length > 0 && (
+          <Checks checks={readiness.checks} titles={titles} onFix={onFix} />
+        )}
         {draft &&
           (sectioned && !readiness.ready ? (
             <p className="muted">
@@ -137,42 +173,83 @@ function ReadinessBlock({ record, readiness }: { record: RecordEnvelope; readine
   );
 }
 
-function Checks({ checks }: { checks: CheckResult[] }) {
-  return (
+const rank = (c: CheckResult) => (c.passed ? 2 : c.severity === 'blocker' ? 0 : 1);
+
+/** Failing checks first, each with a link to the section that fixes it; passing ones folded away. */
+function Checks({
+  checks,
+  titles,
+  onFix,
+}: {
+  checks: CheckResult[];
+  titles: Record<string, string>;
+  onFix: (section: string) => void;
+}) {
+  const failing = [...checks].filter((c) => !c.passed).sort((a, b) => rank(a) - rank(b));
+  const passing = checks.filter((c) => c.passed);
+  const table = (rows: CheckResult[]) => (
     <div className="table-wrap">
       <table className="checks">
         <tbody>
-          {checks.map((check) => {
-            const mark = check.passed ? '✓' : check.severity === 'blocker' ? '✗' : '!';
-            const tone = check.passed
-              ? 'ok-ink'
-              : check.severity === 'blocker'
-                ? 'crit-ink'
-                : 'warn-ink';
-            return (
-              <tr key={check.id}>
-                <td
-                  className={`mark ${tone}`}
-                  aria-label={
-                    check.passed ? 'passes' : check.severity === 'blocker' ? 'blocks' : 'warning'
-                  }
-                >
-                  {mark}
-                </td>
-                <td>
-                  {check.label}
-                  {!check.passed && check.message && (
-                    <span className={tone}> · {check.message}</span>
-                  )}
-                  {!check.passed && check.fix && <div className="muted">{check.fix}</div>}
-                </td>
-                <td className="muted source">{check.source}</td>
-              </tr>
-            );
-          })}
+          {rows.map((check) => (
+            <CheckRow key={check.id} check={check} titles={titles} onFix={onFix} />
+          ))}
         </tbody>
       </table>
     </div>
+  );
+  return (
+    <>
+      {failing.length > 0 && table(failing)}
+      {passing.length > 0 && (
+        <details className="passing">
+          <summary className="ok-ink">
+            ✓ {passing.length === 1 ? '1 check passes' : `${passing.length} checks pass`}
+          </summary>
+          {table(passing)}
+        </details>
+      )}
+    </>
+  );
+}
+
+function CheckRow({
+  check,
+  titles,
+  onFix,
+}: {
+  check: CheckResult;
+  titles: Record<string, string>;
+  onFix: (section: string) => void;
+}) {
+  const mark = check.passed ? '✓' : check.severity === 'blocker' ? '✗' : '!';
+  const tone = check.passed ? 'ok-ink' : check.severity === 'blocker' ? 'crit-ink' : 'warn-ink';
+  const section = check.section && titles[check.section] ? check.section : undefined;
+  return (
+    <tr>
+      <td
+        className={`mark ${tone}`}
+        aria-label={check.passed ? 'passes' : check.severity === 'blocker' ? 'blocks' : 'warning'}
+      >
+        {mark}
+      </td>
+      <td>
+        {check.label}
+        {!check.passed && check.message && <span className={tone}> · {check.message}</span>}
+        {!check.passed && (check.fix || section) && (
+          <div className="muted">
+            {check.fix}
+            {check.fix && section && ' · '}
+            {section && (
+              <button type="button" className="link-btn" onClick={() => onFix(section)}>
+                Fix in {titles[section]?.toLowerCase()}
+              </button>
+            )}
+          </div>
+        )}
+      </td>
+      <td className="muted source">{check.source}</td>
+    </tr>
   );
 }
 
@@ -182,6 +259,8 @@ function SectionBlock({
   section,
   activates,
   renderValue,
+  editing,
+  onEdit,
 }: {
   record: RecordEnvelope;
   /** The version the readiness report describes: what the person is looking at and confirming. */
@@ -190,6 +269,8 @@ function SectionBlock({
   /** Whether confirming this section also makes the draft active. */
   activates: boolean;
   renderValue: (value: unknown) => ReactNode;
+  editing: boolean;
+  onEdit: (on: boolean) => void;
 }) {
   const me = useMe();
   const invalidate = useInvalidate(record.id);
@@ -206,7 +287,7 @@ function SectionBlock({
   const changed = section.fields.some((f) => f.state === 'changed');
 
   return (
-    <section className="block" aria-label={section.title}>
+    <section className="block" aria-label={section.title} id={`section-${section.id}`}>
       <header>
         <h2>{section.title}</h2>
         {confirmed && section.review ? (
@@ -221,57 +302,86 @@ function SectionBlock({
         )}
       </header>
       <div className="body">
-        <div className="table-wrap">
-          <table className="review-fields">
-            <tbody>
-              {section.fields.map((f) => (
-                <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
-                  <td className="name">{fieldLabel(f.field)}</td>
-                  <td>
-                    {f.state === 'changed' && (
-                      <>
-                        <span className="was">{renderValue(f.confirmedValue)}</span>{' '}
-                      </>
-                    )}
-                    <span className={f.state === 'changed' ? 'now' : undefined}>
-                      {renderValue(f.value)}
-                    </span>
-                  </td>
-                  <td className="source">
-                    {f.assumed ? (
-                      <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
-                    ) : (
-                      <Evidence evidence={f.evidence} me={me} />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!confirmed && record.status !== 'archived' && (
+        {editing ? (
+          <SectionEditor
+            record={record}
+            fields={section.fields.map((f) => f.field)}
+            onDone={() => onEdit(false)}
+          />
+        ) : (
+          <SectionValues section={section} me={me} renderValue={renderValue} />
+        )}
+        {!editing && record.status !== 'archived' && (
           <div className="actions">
-            <button
-              type="button"
-              className={activates ? 'btn primary' : 'btn'}
-              disabled={confirm.isPending}
-              onClick={() => confirm.mutate()}
-            >
-              Confirm {section.title.toLowerCase()}
-              {activates && ' and activate'}
+            {!confirmed && (
+              <button
+                type="button"
+                className={activates ? 'btn primary' : 'btn'}
+                disabled={confirm.isPending}
+                onClick={() => confirm.mutate()}
+              >
+                Confirm {section.title.toLowerCase()}
+                {activates && ' and activate'}
+              </button>
+            )}
+            <button type="button" className="btn" onClick={() => onEdit(true)}>
+              Edit {section.title.toLowerCase()}
             </button>
-            <span className="muted">
-              {changed
-                ? 'Highlighted values changed since this was last confirmed.'
-                : 'Check these values, correct any that are wrong, then confirm.'}
-              {activates &&
-                ` This is the last section, so ${record.name} becomes active for the lab.`}
-            </span>
+            {!confirmed && (
+              <span className="muted">
+                {changed
+                  ? 'Highlighted values changed since this was last confirmed.'
+                  : 'Check these values, correct any that are wrong, then confirm.'}
+                {activates &&
+                  ` This is the last section, so ${record.name} becomes active for the lab.`}
+              </span>
+            )}
           </div>
         )}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
       </div>
     </section>
+  );
+}
+
+function SectionValues({
+  section,
+  me,
+  renderValue,
+}: {
+  section: ReadinessSection;
+  me: Me | undefined;
+  renderValue: (value: unknown) => ReactNode;
+}) {
+  return (
+    <div className="table-wrap">
+      <table className="review-fields">
+        <tbody>
+          {section.fields.map((f) => (
+            <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
+              <td className="name">{fieldLabel(f.field)}</td>
+              <td>
+                {f.state === 'changed' && (
+                  <>
+                    <span className="was">{renderValue(f.confirmedValue)}</span>{' '}
+                  </>
+                )}
+                <span className={f.state === 'changed' ? 'now' : undefined}>
+                  {renderValue(f.value)}
+                </span>
+              </td>
+              <td className="source">
+                {f.assumed ? (
+                  <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
+                ) : (
+                  <Evidence evidence={f.evidence} me={me} />
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

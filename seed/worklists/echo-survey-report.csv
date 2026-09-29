@@ -1,0 +1,10 @@
+Source Plate Name,Source Plate Barcode,Source Plate Type,Source Well,Survey Fluid Volume,Current Fluid Volume,Fluid Composition,Fluid Units,Fluid Type,Survey Status
+Compound source 1,PLT-000101,384PP_DMSO2,A3,21.4,21.4,99.1,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,B3,20.8,20.8,98.7,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,C3,14.1,14.1,97.9,%,DMSO,Below minimum working volume
+Compound source 1,PLT-000101,384PP_DMSO2,D3,22.3,22.3,99.0,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,E3,19.7,19.7,91.2,%,DMSO,Fluid composition out of range
+Compound source 1,PLT-000101,384PP_DMSO2,P1,38.2,38.2,100,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,P2,37.9,37.9,100,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,P23,36.5,36.5,99.5,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,P24,36.8,36.8,99.5,%,DMSO,
