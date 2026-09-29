@@ -1,6 +1,6 @@
 # 019: Scheduler and orchestrator
 
-- Status: in planning. Round 1 (S1 to S6) accepted by Wali 2026-09-29, all A, with the notes below. Round 2 (S7 to S12) accepted 2026-09-29: A for S7 to S11, B for S12, with the notes below. Round 3 (S13 to S18) asked 2026-09-29.
+- Status: accepted. Round 1 (S1 to S6) all A, round 2 (S7 to S12) A with S12 B, round 3 (S13 to S18) all A, chosen by Wali 2026-09-29 with the notes under each round's answers. Ready to build after 018a (the schedule request); 019b's calendar can start after 008b.
 - Depends on: 008 (instruments, capabilities, manual stations, workcells and which instruments are standalone, I8 and I9), 010 (effective handling rules, locations, time out of controlled storage), 013 (runs, stages), 015 (twins, for simulated durations and 3D), 016 (transfer plans: instrument time, tips, deck layouts, loading instructions), 018 (the schedule request, W6)
 - Feeds: 013 (runs are scheduled; the run checklist follows the schedule's order, 018 W11), 021 (notebook timeline), 022 (the device gateway and the Cellario hand-off execute scheduled segments)
 
@@ -37,14 +37,52 @@ So 019 ports the kernel, the exposure kernel and the pending re-planner for the 
 - **People:** a PI, a postdoc (screening), a graduate student (cloning), an automation engineer.
 - The compound screen crosses both levels: assay-ready plates on the Echo (workcell), cells seeded with the Mantis in tissue culture (standalone, a person carries the plates), 48 h in the Cytomat (workcell), CellTiter-Glo added and read on the Spark (workcell).
 
+## Model (from the answers)
+
+| Layer | Record | Holds |
+| --- | --- | --- |
+| Design | **Schedule** (`sch_`, `SCH-0001`) | The schedule requests it plans (018 W6), every step of every unit placed on an instrument, a person or both, with start and end, derived carries and workcell segments, the margin on every window and handling rule in the plan and in each stress case, loosened rules with reasons, the objective tiers it was ranked by, readiness; drafted by the engine, confirmed by a person (S8); a re-plan is a new version |
+| Part | **Workcell segment** | Consecutive steps of a unit inside the active workcell, planned in detail by the workcell scheduler (robot moves, sites, lids), with entry and exit times; exported for Cellario (S1, S2) |
+| Part | **Carry** | A derived move of labware between places by a person: from, to, travel time and its source, the person, time out of controlled conditions (S3, S12) |
+| State | **Booking** (`bkg_`, `BKG-0001`) | An instrument, station or person held for a time: from a confirmed schedule (tentative while the schedule is a draft), made directly on the calendar page (S7), maintenance, or an absence. One booking operation for all of them |
+| Instance | **Person profile** (on the lab member) | Working hours, absences (as bookings), training per instrument kind or station, which the scheduler uses to pick who (S4) |
+| Instance | **Travel table** (`trt_`, one per lab) | Travel times between places (010 locations, instrument load points, the workcell's hotels), estimated until run records replace them (S3) |
+| Part | **Step time split** | Per step, person time (set up, load, unload, check) and walk-away time, from the instrument kind or method, with source (S5) |
+
+Durations keep 018's sources (measured, simulated, transfer plan, SOP) and add **stated by a person** (S13 note), each with its spread.
+
+Pure logic in `packages/scheduler` (TypeScript, no I/O): the ported event-driven kernel and exposure kernel, minimum and maximum waits, people and calendars as resources, the two levels, stress cases, the objective order, options, the pending re-planner, and replay for the Gantt and simulation. All unit tested against the seed lab's ELISA and compound screen.
+
+## Operations (first cut)
+
+| Operation | Agents |
+| --- | --- |
+| `schedules.draft` (from one or more schedule requests, around existing bookings) | direct on drafts |
+| `schedules.options` (a few ranked schedules with their numbers and a one-line trade-off each), `schedules.what_if` (same with changed inputs), `schedules.explain` (why a step is where it is), `schedules.check` (margins, stress cases, conflicts) | read, calculators (ADR 0024) |
+| `schedules.set_inputs` (not before, deadline, priority, pin instrument or person, stated duration) | direct on drafts |
+| `schedules.loosen_rule` (one rule, one schedule, with a reason) | people; agents propose |
+| `schedules.confirm`, `schedules.replan` (pending part only) | people, or proposed; small own-work re-plans apply automatically (S14) |
+| `bookings.book`, `bookings.cancel`, `bookings.calendar` (per instrument, person or lab; iCal feed) | proposed for agents, direct for people |
+| `people.set_hours`, `people.set_training`, `travel.set_time` | proposed |
+| `schedules.prep_list`, `schedules.loading_card`, `schedules.cellario_export` | read |
+| `runs.record_actual` feeds live following (013); `schedules.forecast` | read |
+
+## Defaults I'm assuming (say if any is wrong)
+
+- The iCal feed is read-only and per person, per instrument and per lab; it carries plain step names and links back to the app.
+- Nothing is booked outside a person's working hours unless that person confirms the schedule that does it.
+- Cellario export before 022 is a file describing each workcell segment (plates, order, timing constraints) that a person loads into Cellario; its format is drafted from a real Cellario example when we build 019c.
+- The travel table starts with room-to-room defaults for the seed lab (marked estimated).
+- Recurring routines (018 W10) create bookings one horizon ahead (default four weeks) and roll forward.
+
+---
+
 ## Round 1 answers
 
 Wali chose A for S1 to S6 on 2026-09-29, with these notes.
 
 - **S3, transport is not only people.** A carry can be done by a person, an autonomous mobile robot (AMR), and later a track or conveyor system. So moving labware between places is a capability like any other, provided by **transporters**; S12 in round 2 asks how they are modelled.
 - **S6, port but don't be bound by it.** Port echo650's dispatch, exposure kernel and pending re-planner, but improve or overhaul any part that doesn't fit the lab level (people, calendars, several experiments, minimum waits). The contract that stays fixed is the schedule request coming in (018 W6), the schedule going out, and one engine for planning and simulating.
-
----
 
 ## Round 1 questions: inside a workcell versus across the lab
 
@@ -79,6 +117,16 @@ Recommended option starred. Asked 2026-09-29.
 | S11 | Can a constraint be overridden, and by whom? | A) The engine never breaks a hard constraint (a confirmed handling rule, a hard timing window). A person can loosen one for one schedule with a reason ("HEK293 up to 40 min today, cells are robust at this passage"); the loosening is recorded, shown on the Gantt, carried into the run and the notebook, and never changes the rule itself. Agents may propose a loosening, never apply it. Unconfirmed (assumed) rules and soft windows are advice: the schedule shows the margin or the breach as a warning and ranks options by it · B) No overrides; change the rule itself · C) Agents may loosen with a reason too | ★ **A.** Scientists do make informed exceptions, and 000 idea 1.7 promised overrides with a reason; keeping them per schedule stops one bad day from weakening the rule for everyone. |
 | S12 | How are transporters modelled (Wali's S3 note)? | A) "Move labware between places" is a capability with providers: a person, an AMR, a track or conveyor, and a workcell's own robot (inside the workcell only). Each transporter is registered like an instrument (008, an AMR is an instrument kind with docking points) and declares where it can go: a map of places (rooms, benches, instrument load points, workcell hotels, AMR docks) with travel times, how many plates it carries, and which labware and conditions it can handle (a person with an ice box, an AMR without temperature control). The orchestrator picks a transporter per carry like it picks an instrument, and multi-leg routes (AMR to the tissue-culture door, person inside) are allowed. People are the only transporter in the seed lab · B) People only now; AMRs added later as a special case · C) One generic "transport" resource with a fixed time | ★ **A.** One model now costs little because people already need the map and travel times (S3), and an AMR then arrives as data, not new code. Conditions on the transporter matter for exposure: cells in a heated carrier aren't "out of the incubator" the same way. |
 
+## Round 3 answers
+
+Wali chose A for S13 to S18 on 2026-09-29, with these notes.
+
+- **S13, people can enter an expected duration.** A duration can be stated by a person ("the Spark read takes about 12 min on our setup"), a new source alongside measured, simulated, transfer plan and SOP. It ranks just below measured, is labelled with who stated it, and carries a default spread (±10%) until runs measure it; runs that disagree raise a readiness note, not a silent change.
+- **S17, how does a person pick without thinking about tiers?** Nobody sets the order; it is fixed. What a person sees is:
+  - **Three or four option cards**, not a score: "Fastest: done Thursday 16:10, 8 min margin on HEK293, 1 h evening work", "Most margin: done Friday 11:00, 25 min margin, no evening work", "Keep evenings free". Each card has its numbers and one plain sentence on what it gives up, and the Gantt previews on hover.
+  - **One question per request, in lab words:** "what matters most here?" with *balanced* (the default order), *finish soonest*, *safest for the cells*, *keep evenings and weekends free*. It moves one tier up and never above the hard rules. A deadline or priority is the other input.
+  - **The agent helps** by reading the options and recommending one with a reason tied to the request ("you said results by Friday, and the fastest option keeps only 3 min margin on the cells, so I'd take option 2"), by setting that one question from plain language ("I need this before the group meeting" becomes a deadline), and by running what-ifs ("what if Jordan does the seeding?"). It uses lab memory for standing preferences ("the lab avoids weekend reads"), proposed and confirmed like any memory.
+
 ## Round 3 questions: uncertainty, live runs, views, setup, objective, split
 
 Recommended option starred. Asked 2026-09-29.
@@ -92,3 +140,10 @@ Recommended option starred. Asked 2026-09-29.
 | S17 | What does the engine aim for, in order? | A) Fixed order: every hard rule and window held; then the largest worst-case margin on science rules (S13); then priorities and deadlines (S9); then earliest finish; then least person time outside working hours; then fewest configuration changes and carries. `schedules.options` returns a few schedules that trade these off (fastest, most margin, no evening work), each with its numbers · B) One weighted score · C) Earliest finish only | ★ **A.** An order you can read explains itself ("chose this because it keeps 12 min margin on HEK293"); weights hide the trade and need tuning. echo650's docs chose the same order (validity, biological margin, makespan, travel). |
 | S18 | How do we split the build? | A) Five steps: **019a** the engine in `packages/scheduler` (port of echo650's kernel, exposure kernel and pending re-planner, adapted), the schedule document and `schedules.draft`, `options`, `explain`, with the ELISA and compound screen as test cases; **019b** people, working hours, training, bookings, the calendar page and iCal feed; **019c** the two levels: workcell segments, carries with the map of places, Cellario export; **019d** the schedule page (Gantt lanes, simulation playback, confirm) and prep lists and loading cards; **019e** live following and re-planning. Each is one PR · B) Three larger steps (engine, calendar, views and live) · C) One step | ★ **A.** Matches the small-PR rule; 019a can be built and tested on schedule requests from 018a before any screen exists. |
 
+## Split
+
+- **019a:** `packages/scheduler` (ported kernel, exposure kernel and pending re-planner, adapted per S6), the schedule document, `schedules.draft`, `options`, `what_if`, `explain`, `check`, stress cases and the objective order, tested on schedule requests from 018a for the ELISA and the compound screen.
+- **019b:** people (hours, absences, training), bookings, the calendar page where people book instruments and actions, the iCal feed.
+- **019c:** the two levels: workcell segments with the workcell scheduler, carries with the travel table, the Cellario export.
+- **019d:** the schedule page (Gantt lanes by instrument, person and plate, option cards, simulation playback on the 2D decks, confirm), prep lists and loading cards; 3D playback when 015 lands.
+- **019e:** live following from checklist ticks and instrument logs, forecasts, re-planning the pending part.
