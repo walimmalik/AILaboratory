@@ -45,7 +45,7 @@ Errors are `RecordError` with a `code` (`not_found`, `unknown_kind`, `invalid_at
 
 Agents draft, people confirm (ADR 0021). Every record carries:
 
-- `evidence`: where each attribute's current value came from (`assumed`, `person`, `datasheet`, `imported`, `measured`, `calculated`), who set it and when, with an optional note and reference. When a value changes, the service replaces its evidence: what the caller named, else `assumed` for an agent and `person` for a person. Nobody can name `person`.
+- `evidence`: where each attribute's current value came from (`assumed`, `stated`, `person`, `datasheet`, `imported`, `measured`, `calculated`; `stated` is a value the person told the agent, and only agents can name it), who set it and when, with an optional note and reference. When a value changes, the service replaces its evidence: what the caller named, else `assumed` for an agent and `person` for a person. Nobody can name `person`.
 - `reviews`: for kinds with `sections`, which person confirmed each section, when, at which version, and the values they saw.
 
 ```ts
@@ -59,7 +59,7 @@ checks: [
 ],
 ```
 
-Nothing about confirmation is stored beyond the review: `readiness()` in `@ailab/domain` compares each field with its section's confirmed values. Equal is confirmed, different is changed (the confirmed value is reported beside the new one), no review is unconfirmed. A value is assumed while its evidence says so and it is not confirmed. `records.readiness` returns sections, fields, check results, `missing` (in plain words) and `ready`. `records.confirm_section` is for people only. For kinds with sections, `records.activate` is the final confirm and is refused with `not_ready` until every section is confirmed and no blocker fails. A person may create such a record active, which confirms every section as written; an agent may not.
+Nothing about confirmation is stored beyond the review: `readiness()` in `@ailab/domain` compares each field with its section's confirmed values. Equal is confirmed, different is changed (the confirmed value is reported beside the new one), no review is unconfirmed. A value is assumed while its evidence says so and it is not confirmed. `records.readiness` returns sections, fields, check results, `missing` (in plain words) and `ready`. `records.confirm_section` is for people only. For kinds with sections, `records.activate` is the final confirm and is refused with `not_ready` until every section is confirmed and no blocker fails. A person may create such a record active, which confirms every section as written; an agent may not. Approving an agent's proposal confirms the sections the change touches, as the approver (the record context carries `approvedBy`).
 
 ## Units
 

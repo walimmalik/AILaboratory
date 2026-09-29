@@ -10,6 +10,7 @@ const verbs: Record<string, [string, string]> = {
   'records.unarchive': ['unarchived', 'unarchive'],
   'records.restore': ['restored an earlier version of', 'restore an earlier version of'],
   'records.delete_draft': ['deleted the draft', 'delete the draft'],
+  'records.confirm_section': ['confirmed a section of', 'confirm a section of'],
   'proposals.approve': ['approved a proposed change', 'approve a proposed change'],
   'proposals.reject': ['rejected a proposed change', 'reject a proposed change'],
   'assistant.ask': ['asked the assistant', 'ask the assistant'],
@@ -19,6 +20,7 @@ const verbs: Record<string, [string, string]> = {
   'records.kinds': ['checked which record kinds exist', 'check which record kinds exist'],
   'records.history': ['read the history of', 'read the history of'],
   'records.links': ['looked at the links of', 'look at the links of'],
+  'records.readiness': ['checked what still needs review on', 'check what still needs review on'],
   'proposals.list': ['looked at the proposals', 'look at the proposals'],
   'activity.list': ['read the activity ledger', 'read the activity ledger'],
 };
@@ -29,6 +31,7 @@ const reads = new Set([
   'records.kinds',
   'records.history',
   'records.links',
+  'records.readiness',
   'proposals.list',
   'activity.list',
 ]);

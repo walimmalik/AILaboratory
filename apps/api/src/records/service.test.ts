@@ -365,6 +365,27 @@ describe('draft and confirm', () => {
     expect((await service.readiness(ctx, record.id)).assumed).toEqual([]);
   });
 
+  it('records values the person told the agent as stated, not assumed; people cannot name it', async () => {
+    const record = await service.create(agentCtx, {
+      kind: 'widget',
+      label: 'Told',
+      attributes: attrs('clear'),
+      evidence: { color: { source: 'stated' } },
+    });
+    expect(record.evidence.color).toMatchObject({ source: 'stated', by: agentCtx.actor });
+    const state = await service.readiness(ctx, record.id);
+    expect(state.assumed).toEqual(['volume']);
+    expect(state.sections[0]?.fields[0]).toMatchObject({ state: 'unconfirmed', assumed: false });
+    await expectError(
+      service.update(ctx, record.id, {
+        expectedVersion: 1,
+        attributes: attrs('red'),
+        evidence: { color: { source: 'stated' } },
+      }),
+      'invalid_input',
+    );
+  });
+
   it('refuses evidence for an attribute that has no value', async () => {
     const error = await expectError(
       service.create(agentCtx, {

@@ -386,6 +386,24 @@ describe('draft and confirm', () => {
     expect((await refused(create(agent, { status: 'active' }))).code).toBe('invalid_state');
   });
 
+  it("approving an agent's change to an active record confirms the sections it changed", async () => {
+    const record = await create(person, { status: 'active' });
+    const proposed = await registry.execute(agent, 'records.update', {
+      id: record.id,
+      expectedVersion: 1,
+      attributes: { ...attributes, volume: { value: '80', unit: 'uL' } },
+    });
+    expect(proposed.status).toBe('proposed');
+    const proposalId = (proposed as { proposal: { id: string } }).proposal.id;
+    await run(person, 'proposals.approve', { id: proposalId });
+
+    const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+    expect(state).toMatchObject({ ready: true, assumed: [] });
+    const volume = state.sections.find((s) => s.id === 'volume');
+    expect(volume?.review).toMatchObject({ confirmedBy: person.actor, version: 2 });
+    expect(volume?.fields[0]?.evidence).toMatchObject({ source: 'assumed', by: agent.actor });
+  });
+
   it('lists each kind with its sections and checks', async () => {
     const { kinds } = await run<{
       kinds: { kind: string; sections: { id: string }[]; checks: { id: string }[] }[];

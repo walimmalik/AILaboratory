@@ -15,7 +15,7 @@ const Evidence = z
   .record(z.string(), EvidenceInput)
   .optional()
   .describe(
-    'Where values came from, by attribute name, e.g. {"volume": {"source": "datasheet", "reference": "https://…"}}. Values an agent sets without naming a source are marked assumed until a person confirms them.',
+    'Where values came from, by attribute name, e.g. {"volume": {"source": "datasheet", "reference": "https://…"}}. Use "stated" for values the person you work for told you. Values an agent sets without naming a source are marked assumed until a person confirms them.',
   );
 
 export const recordsCreate = defineContract({
@@ -70,7 +70,12 @@ export const recordsUpdate = defineContract({
   input: z.object({
     ...Target,
     label: z.string().optional(),
-    attributes: z.record(z.string(), z.unknown()).optional(),
+    attributes: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe(
+        'The complete new attributes, not just the ones that change: read the record, change what you need and send all of them back',
+      ),
     evidence: Evidence,
   }),
   output: RecordEnvelope,

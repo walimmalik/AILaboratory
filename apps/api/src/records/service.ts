@@ -24,6 +24,11 @@ export interface RecordContext {
   actor: Actor;
   orgId: string;
   labId: string;
+  /**
+   * The person who approved this agent's proposal, when it runs on approval. They reviewed the
+   * change, so the sections it touches count as confirmed by them (ADR 0021).
+   */
+  approvedBy?: Actor;
 }
 
 type RecordRow = typeof records.$inferSelect;
@@ -189,6 +194,7 @@ export class RecordService {
           record.evidence,
           input.evidence,
         ),
+        reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
       };
     });
   }
@@ -336,7 +342,12 @@ export class RecordService {
             : earlier.snapshot.evidence[field];
           if (kept) evidence[field] = kept;
         }
-        return { label: earlier.snapshot.label, attributes, evidence };
+        return {
+          label: earlier.snapshot.label,
+          attributes,
+          evidence,
+          reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
+        };
       },
     );
   }
@@ -449,6 +460,34 @@ export class RecordService {
 }
 
 /**
+ * Section reviews after a change. When the change runs because a person approved an agent's
+ * proposal, each section it changed counts as confirmed by that person, as they saw it in the
+ * proposal. Otherwise reviews are unchanged, and changed sections read as needing review.
+ */
+function approvalReviews(
+  ctx: RecordContext,
+  kind: KindDefinition,
+  record: RecordRow,
+  attributes: Record<string, unknown>,
+  at: Date,
+): Record<string, SectionReview> {
+  if (!ctx.approvedBy) return record.reviews;
+  const reviews = { ...record.reviews };
+  for (const section of kind.sections ?? []) {
+    const before = sectionValues(section, record.attributes);
+    const after = sectionValues(section, attributes);
+    if (sameValue(before, after)) continue;
+    reviews[section.id] = {
+      confirmedBy: ctx.approvedBy,
+      confirmedAt: at.toISOString(),
+      version: record.version + 1,
+      values: after,
+    };
+  }
+  return reviews;
+}
+
+/**
  * Evidence after a change (ADR 0021). Each attribute whose value changed gets new evidence from the
  * actor: what they named, or "assumed" for an agent and "person" for a person. Evidence named for an
  * unchanged attribute replaces what it had, so an agent can cite a source for an earlier estimate.
@@ -468,6 +507,12 @@ function nextEvidence(
         `Evidence names "${field}", which is not an attribute with a value`,
       );
     }
+  }
+  if (actor.type !== 'agent' && Object.values(named ?? {}).some((e) => e.source === 'stated')) {
+    throw new RecordError(
+      'invalid_input',
+      'Only an agent can record a value as stated by the person it works for; values you enter are yours',
+    );
   }
   const evidence: Record<string, FieldEvidence> = {};
   for (const [field, value] of Object.entries(after)) {
