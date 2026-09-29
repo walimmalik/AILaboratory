@@ -1,6 +1,6 @@
 # 018: Workflow creator
 
-- Status: in planning. Round 1 (W1 to W6) asked 2026-09-29. Don't build from this yet.
+- Status: in planning. Round 1: W1 to W5 accepted by Wali 2026-09-29 (all A, with notes); W6 still open. Don't build from this yet.
 - Depends on: 008 (capabilities, instruments, manual stations, workcells, `instruments.find_capable`), 009 (handling rules on products), 010 (effective handling rules from well contents, storage locations), 012 (digital SOPs: typed steps, per-step inputs and outputs, timing windows), 013 (experiments, runs, sets), 014 (plate maps: plate count and planned contents), 016 (transfer plans: instrument steps, deck layouts, time estimates), 017 (the designer drafts the whole design)
 - Feeds: 019 (the scheduler schedules a confirmed workflow), 013 (a run follows a workflow), 015 (twins simulate workflow steps), 021 (notebook timeline), 022 (the gateway and Cellario hand-off run the same steps)
 
@@ -52,6 +52,7 @@ Pure logic in `packages/domain/workflows`: graph checks (acyclic, every input co
 | --- | --- |
 | `workflows.draft` (from an experiment's confirmed design, a template, or a description) | direct |
 | `workflows.add_step`, `workflows.connect`, `workflows.set_window`, `workflows.set_end`, `workflows.bind_step` | direct on drafts |
+| `workflows.join_options` (ranked ways to connect one SOP's outputs to the next one's inputs, with reasons) | read |
 | `workflows.check` (every layer of validation, plain messages) | read |
 | `workflows.timeline` (unlimited-resource timeline and critical path), `workflows.candidates` (instruments per step), `workflows.constraints` (every timing window and handling rule with its source) | read |
 | `workflows.confirm` | people, or proposed |
@@ -66,6 +67,17 @@ Pure logic in `packages/domain/workflows`: graph checks (acyclic, every input co
 - **End-state list:** each plate and tube with where it ends and in what condition.
 
 ---
+
+## Round 1 answers
+
+Wali chose A for W1 to W5 on 2026-09-29, with these notes. W6 is still open.
+
+- **W1.** A workflow can come from one SOP holding every action or from several SOPs chained; both are the same graph.
+- **W2, deterministic versus agent.** Code does everything that is already settled in confirmed documents; the agent only makes the judgement calls, and every call goes through the same operations and checks as a person's edit.
+  - *Code (`packages/domain/workflows`, exposed as read operations):* steps from pinned SOP versions; labware and unit count from plate maps; instrument sessions from transfer plans, including intermediate dilution plates from 016's dilution optimizer, wired in before the step that draws from them; unit expansion and shared plates; candidate instruments per step; collecting timing windows and handling rules with their sources; every validation layer; the unlimited-resource timeline and critical path; building and checking the schedule request. Where SOPs meet, code lists the possible joins, ranked, with reasons (`workflows.join_options`: "the plate out of compound transfer is a 384-well assay plate; seeding step 2 takes a 384-well assay plate, match").
+  - *Agent (through MCP):* picks a join when there is more than one option and says why; adds holds between SOPs (where the plate waits, in what condition); fills what an SOP leaves open, marked assumed; carries out a person's asks ("move the read to day 3"); explains readiness issues. It never writes durations, windows or candidates by hand; those come from code or from records.
+- **W3, SOPs as group nodes.** On the graph each SOP is one node you can open to see its steps; the steps stay the underlying unit, so timing windows and labware paths still attach to single steps. Transfer plan sessions and holds sit between the SOP nodes.
+- **W5, workcells and standalone instruments in one workflow.** One workflow can have a workcell doing part of an SOP while a standalone liquid handler does another part. The workflow doesn't split by instrument: each step lists its candidates, whether they are in the active workcell or standalone (008 I9), and the schedule request carries that. Orchestration across both, including a person carrying a plate from the workcell to a standalone instrument (a derived move with an operator and a time estimate, like robot moves in W3), is the scheduler's job (019). Wali flagged this for the 019 planning round: scheduling inside a workcell versus orchestrating across instruments and steps.
 
 ## Round 1 questions (as asked): what a workflow is
 
