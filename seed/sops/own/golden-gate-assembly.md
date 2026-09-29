@@ -9,7 +9,7 @@ based_on:
   - https://www.neb.com/en-us/products/e1601-neb-golden-gate-assembly-kit-bsai-hf-v2
 uses:
   reagents: [neb-e1601, neb-c2987]
-  instruments: [biorad-c1000-touch]
+  instruments: [biorad-ptc-tempo]
 variables:
   destination_vector: { value: "75", unit: ng }
   insert_to_vector_ratio: 2

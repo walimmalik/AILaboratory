@@ -9,7 +9,7 @@ based_on:
   - https://www.neb.com/en-us/products/e2621-nebuilder-hifi-dna-assembly-master-mix
 uses:
   reagents: [neb-e2621, neb-m0492, neb-c2987]
-  instruments: [biorad-c1000-touch]
+  instruments: [biorad-ptc-tempo]
 variables:
   total_dna: { value: "0.1", unit: pmol }
   vector_insert_ratio: "1:2"

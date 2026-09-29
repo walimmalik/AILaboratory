@@ -121,7 +121,7 @@ kinds:
       - {name: pipetting_arm_channels, options: ["1 mL channels (up to 16)", "5 mL channels (up to 8)", "Fluid Motion X1 channels (up to 16)", "MagPip channels (up to 8)"], changeable: factory_or_service}
       - {name: multi_probe_head, options: [none, "96 head", "384 head"], changeable: factory_or_service}
       - {name: internal_plate_gripper_ipg, options: [none, IPG], changeable: factory_or_service}
-      - {name: core_gripper, options: [none, CO-RE Gripper], changeable: runtime_tool}
+      - {name: core_gripper, options: [none, CO-RE Gripper, Quad CO-RE Gripper (QCG)], changeable: runtime_tool}
       - {name: track_gripper, options: [none, Track Gripper], changeable: factory_or_service}
       - {name: device_integration, description: "360 degrees (left, right, rear, below)", changeable: site_install}
   control_interfaces:
@@ -567,74 +567,49 @@ kinds:
     - "Which variant the lab owns is an instance fact; the owner's list names 'G, 84, auto'."
 
 # ---------------------------------------------------------------------------------------------
-- key: biorad-c1000-touch
+- key: biorad-ptc-tempo
   manufacturer: Bio-Rad
-  model: C1000 Touch Thermal Cycler
-  model_choice: assumed    # owner said "Bio-Rad thermocyclers"; C1000 Touch chosen as likely model
+  model: PTC Tempo Thermal Cycler
+  variants: [PTC Tempo 96 (12015382), PTC Tempo 384 (12015394), PTC Tempo Deepwell (12015392)]
   category: thermocycler
   capabilities: [thermocycle, heat, cool]
   specs:
-    block_temp_range: {min: {value: "0", unit: "degC"}, max: {value: "100", unit: "degC"}}
-    temp_accuracy: "+/-0.2 degC of target at 90 degC"
-    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}}
-    gradient_span: {min: {value: "1", unit: "degC"}, max: {value: "24", unit: "degC"}}
-    lid_default: "105 degC (96 / dual 48), 95 degC (384)"
-    footprint: {width: {value: "330", unit: "mm"}, depth: {value: "460", unit: "mm"}, height: {value: "200", unit: "mm"}}
-    weight: {value: "10", unit: "kg"}
-  reaction_modules:   # tool-free swappable; each is a kind
-    - {name: 96-Well Fast, capacity: "96 x 0.2 mL tubes or 1 x 96-well plate", volume: {min: {value: "10", unit: "uL"}, max: {value: "50", unit: "uL"}}, max_ramp: {value: "5", unit: "degC/s"}}
-    - {name: 96-Deep Well, capacity: "96 x 0.2 mL, 48 x 0.5 mL tubes or 1 x 96-well plate", volume: {min: {value: "10", unit: "uL"}, max: {value: "125", unit: "uL"}}, max_ramp: {value: "2.5", unit: "degC/s"}}
-    - {name: Dual 48/48 Fast, capacity: "2 x 48 x 0.2 mL tubes or 2 x 48-well plates", volume: {min: {value: "10", unit: "uL"}, max: {value: "50", unit: "uL"}}}
-    - {name: 384-Well, capacity: "1 x 384-well plate", volume: {min: {value: "3", unit: "uL"}, max: {value: "30", unit: "uL"}}, max_ramp: {value: "2.5", unit: "degC/s"}}
-    - {name: "CFX96 / CFX384 optical modules", note: "turn the base into a CFX qPCR; not researched"}
+    temp_range: {min: {value: "4", unit: "degC"}, max: {value: "100", unit: "degC"}}
+    thermal_accuracy: {value: "0.2", unit: "degC", note: "+/- of target at 90 degC"}
+    thermal_uniformity: {value: "0.4", unit: "degC", note: "+/- well to well within 10 s of reaching 90 degC"}
+    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}, span: "1-24 degC"}
+    lid_temp_range: {min: {value: "30", unit: "degC"}, max: {value: "110", unit: "degC"}}
+    lid: motorized (automation-ready)
+    per_variant:
+      "PTC Tempo 96":
+        format: "96 x 0.2 mL tubes or one 96-well plate"
+        sample_volume: {min: {value: "1", unit: "uL"}, max: {value: "50", unit: "uL"}, recommended: "10-50 uL"}
+        max_ramp_rate: {value: "5", unit: "degC/s"}
+        average_ramp_rate: {value: "3.3", unit: "degC/s"}
+        gradient_rows: 8
+      "PTC Tempo 384":
+        format: "one 384-well plate"
+        sample_volume: {min: {value: "1", unit: "uL"}, max: {value: "30", unit: "uL"}, recommended: "3-20 uL"}
+        max_ramp_rate: {value: "2.5", unit: "degC/s"}
+        average_ramp_rate: {value: "2.0", unit: "degC/s"}
+        gradient_rows: 16
+    footprint: {width: {value: "280", unit: "mm"}, depth: {value: "500", unit: "mm"}, height: {value: "260", unit: "mm"}}
+    weight: {value: "15", unit: "kg"}
   configurability:
-    type: modular
+    type: fixed
     slots:
-      - {name: reaction_module, options: reaction modules above, changeable: user}
+      - {name: block, options: ["96", "384", "deepwell"], changeable: false}
   control_interfaces:
-    - Onboard touchscreen (stand-alone)
-    - "CFX Manager 2.1+ (software-controlled mode) via USB-B; Ethernet port"
-    - "Can control up to three S1000 cyclers over USB"
+    - Touch screen, USB, Ethernet, Wi-Fi, BR.io cloud
     - PyLabRobot: not listed
     - Cellario: unknown
   source_urls:
-    - https://www.bio-rad.com/sites/default/files/2021-08/Bulletin_6095.pdf
-    - https://www.bio-rad.com/sites/default/files/webroot/web/pdf/lsr/literature/10021377.pdf
+    - https://www.bio-rad.com/en-us/sku/12015382-ptc-tempo-96-thermal-cycler?ID=12015382
+    - https://www.bio-rad.com/en-us/sku/12015394-ptc-tempo-384-thermal-cycler?ID=12015394
   status:
-    model_choice: estimated
-    specs: verified
-    dual48_ramp: unknown
-    lid_temp_range: unknown   # only defaults published
-    automation_api: unknown
-
-# ---------------------------------------------------------------------------------------------
-- key: biorad-t100
-  manufacturer: Bio-Rad
-  model: T100 Thermal Cycler
-  model_choice: assumed
-  category: thermocycler
-  capabilities: [thermocycle, heat, cool]
-  specs:
-    capacity: "96 x 0.2 mL tubes, 0.2 mL strips, or 1 x 96-well plate"
-    block_temp_range: {min: {value: "4", unit: "degC"}, max: {value: "100", unit: "degC"}}
-    max_ramp: {value: "4", unit: "degC/s"}
-    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}}
-    footprint: {width: {value: "260", unit: "mm"}, depth: {value: "470", unit: "mm"}, height: {value: "230", unit: "mm"}}
-    weight: {value: "9", unit: "kg"}
-  configurability: {type: fixed, slots: []}
-  control_interfaces:
-    - Onboard touchscreen
-    - PyLabRobot: not listed
-    - Cellario: unknown
-  source_urls:
-    - https://www.bio-rad.com/webroot/web/pdf/lsr/literature/Bulletin_6060.pdf
-  status:
-    model_choice: estimated
-    specs: verified
-    reaction_volume: unknown
-    lid_temp: unknown
+    deepwell_specs: unknown
   notes:
-    - "Not designed for robotic loading (no motorized lid); treat as manual-only in the scheduler."
+    - "Specs read from Bio-Rad's product pages on 2026-09-29. Footprint given by Bio-Rad as 28 x 50 x 26 cm (W x D x H assumed)."
 
 # ---------------------------------------------------------------------------------------------
 - key: highres-flexpod
@@ -796,7 +771,7 @@ kinds:
 # - BlueWasher: all numbers from a reseller; manufacturer site unreachable.
 # - CyBio FeliX: head minimum volumes (except SELECT 8/50); weight.
 # - qTOWER3: gradient range for G variants; optics wavelengths; standard-model specs from reseller.
-# - Bio-Rad: model choice (C1000 Touch, T100) is assumed; lid temperature ranges; T100 volume range.
+# - Bio-Rad PTC Tempo: Deepwell variant specs not read.
 # - HighRes LidValet / PlateOrient: no numeric specs published. FlexPod robot arm model unknown.
 # - Cytomat 10: weight; per-cassette capacity breakdown; O2 option.
 # - Cellario: no public per-model driver list; only HighRes' own devices are marked supported.
@@ -813,30 +788,32 @@ instances:
     name: STAR 1
     serial: DEMO-STAR-0001
     room: rm-automation
-    assumed: true
     configuration:
       pipetting_arm_channels: "8 x 1000 uL channels"
       multi_probe_head: CO-RE 96 Probe Head
-      iswap: iSWAP
-      core_gripper: CO-RE Gripper
+      iswap: none
+      core_gripper: CO-RE Gripper (paddles)
       autoload: Autoload with 1D+2D barcode
       deck_carriers:
         - { carrier: TIP_CAR_480, tracks: "1-6" }
         - { carrier: PLT_CAR_L5AC, tracks: "7-12" }
         - { carrier: PLT_CAR_L5AC, tracks: "13-18" }
         - { carrier: RGT_CAR, tracks: "19-24" }
+    status: { autoload: estimated, deck_carriers: estimated }
+    notes: Heads and gripper confirmed by Wali 2026-09-29 ("paddle grippers" read as the CO-RE Gripper); autoload and deck layout are assumed.
   - key: vantage-01
     kind: hamilton-vantage
     name: VANTAGE 1
     serial: DEMO-VAN-0001
     room: rm-automation
-    assumed: true
     configuration:
       variant: VANTAGE 1.3 m
       pipetting_arm_channels: "8 x 1000 uL channels"
       multi_probe_head: "96 head"
-      internal_plate_gripper_ipg: IPG
-      core_gripper: CO-RE Gripper
+      track_gripper: Track Gripper
+      core_gripper: Quad CO-RE Gripper (QCG)
+    status: { variant: estimated }
+    notes: Heads and grippers confirmed by Wali 2026-09-29; deck length assumed.
   - key: flex-01
     kind: opentrons-flex
     name: Flex 1
@@ -890,35 +867,35 @@ instances:
     name: FeliX 1
     serial: DEMO-FLX-0002
     room: rm-automation
-    assumed: true
     configuration:
-      head: "96-channel head (model to confirm)"
+      pipetting_head: Head R 96/250 uL
+      spare_heads: [Head R 96/1000 uL]
+    notes: Wali has the 96/1000 uL and 96/250 uL heads (2026-09-29); either can be mounted.
   - key: qtower-01
     kind: qtower3
     name: qTOWER 1
     serial: DEMO-QTW-0001
     room: rm-molbio
-    assumed: true
     configuration:
-      variant: "qTOWER3 G (to confirm)"
-  - key: c1000-01
-    kind: biorad-c1000-touch
-    name: C1000 Touch 1
-    serial: DEMO-C1K-0001
+      variant: qTOWER3 auto (96-well)
+  - key: ptc-tempo-96-01
+    kind: biorad-ptc-tempo
+    name: PTC Tempo 96 1
+    serial: DEMO-PTC-0001
     room: rm-molbio
-    assumed: true
-  - key: c1000-02
-    kind: biorad-c1000-touch
-    name: C1000 Touch 2
-    serial: DEMO-C1K-0002
+    configuration: { variant: PTC Tempo 96 }
+  - key: ptc-tempo-96-02
+    kind: biorad-ptc-tempo
+    name: PTC Tempo 96 2
+    serial: DEMO-PTC-0002
     room: rm-molbio
-    assumed: true
-  - key: t100-01
-    kind: biorad-t100
-    name: T100 1
-    serial: DEMO-T10-0001
+    configuration: { variant: PTC Tempo 96 }
+  - key: ptc-tempo-384-01
+    kind: biorad-ptc-tempo
+    name: PTC Tempo 384 1
+    serial: DEMO-PTC-0003
     room: rm-molbio
-    assumed: true
+    configuration: { variant: PTC Tempo 384 }
   - key: flexpod-01
     kind: highres-flexpod
     name: FlexPod work cell 1

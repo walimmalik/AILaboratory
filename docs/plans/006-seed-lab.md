@@ -14,7 +14,7 @@ The registries that load this data (plans 007 to 010) don't exist yet. So this p
 
 - `seed/lab.yaml`: the fictional Demo Lab (4 rooms, 7 storage locations, 4 people).
 - `seed/labware.yaml`: 33 labware types.
-- `seed/instruments.yaml`: 17 instrument kinds from Wali's list and 18 registered demo instruments with configurations (marked assumed).
+- `seed/instruments.yaml`: 16 instrument kinds from Wali's list and 18 registered demo instruments; STAR, VANTAGE, FeliX, qTOWER3 and PTC Tempo configurations confirmed by Wali, the rest marked assumed.
 - `seed/reagents.yaml`: 28 products and kits with storage and handling rules.
 - `seed/entities.yaml`: 3 ATCC cell lines, 5 plasmids (2 fictional demo constructs), 3 compounds, 1 enzyme.
 - `seed/inventory.yaml`: 22 lots and 9 containers (cells, compound stocks, an Echo source plate, an assay-ready plate, a coated ELISA plate, minipreps).
@@ -33,7 +33,7 @@ Found so far: the unit registry has no length (mm), wavelength (nm), speed (rpm)
 
 | # | Answer |
 | --- | --- |
-| 1 | Instruments: Opentrons Flex, Echo 650, Hamilton STAR, Hamilton Vantage, Formulatrix Mantis, PreciseDrop II, Tecan Spark Cyto, BlueCatBio BlueWasher, Analytik Jena CyBio FeliX, qTOWER3, Bio-Rad thermocyclers, HighRes FlexPod, MicroSpin, LidValet and PlateOrient, Thermo Cytomat 10 |
+| 1 | Instruments: Opentrons Flex, Echo 650, Hamilton STAR, Hamilton Vantage, Formulatrix Mantis, PreciseDrop II, Tecan Spark Cyto, BlueCatBio BlueWasher, Analytik Jena CyBio FeliX, qTOWER3, Bio-Rad PTC Tempo (2 x 96, 1 x 384), HighRes FlexPod, MicroSpin, LidValet and PlateOrient, Thermo Cytomat 10 |
 | 2 | Assays: sandwich ELISA; single-point compound screen with dose-response follow-up (CellTiter-Glo or HiBiT); enzyme functional kinetic screen (absorbance or fluorescence); Promega Dual-Glo reporter assay (gene expression, confirmed 2026-09-29); plasmid assembly (Gibson, Golden Gate) with purification |
 | 3 | Fictional demo lab |
 | 4 | Asked for a recommendation: YAML in the repo's `seed/`, one file per registry. Vendor PDFs go in the project files (not the repo), linked from the SOP entries |

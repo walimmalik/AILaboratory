@@ -80,6 +80,6 @@ templates:
     name: Plasmid assembly and purification (Gibson or Golden Gate)
     sops: [sop-gibson-assembly, sop-golden-gate-assembly, sop-transformation-miniprep]
     method_options: [gibson, golden-gate]
-    instruments: [biorad-c1000-touch, opentrons-flex]
+    instruments: [biorad-ptc-tempo, opentrons-flex]
     outputs: sequence-verified plasmid in a barcoded tube, registered as a plasmid entity
     source: lab_convention
