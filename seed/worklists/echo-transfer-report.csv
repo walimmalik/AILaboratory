@@ -1,0 +1,10 @@
+Source Plate Name,Source Plate Barcode,Source Plate Type,Source Well,Destination Plate Name,Destination Plate Barcode,Destination Plate Type,Destination Well,Transfer Volume,Actual Volume,Current Fluid Volume,Fluid Composition,Fluid Units,Fluid Type,Transfer Status
+Compound source 1,PLT-000101,384PP_DMSO2,P1,Assay plate 1,PLT-000201,Corning_384_3570,A1,25,25,38.2,100,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,P2,Assay plate 1,PLT-000201,Corning_384_3570,A2,25,25,37.9,100,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,A3,Assay plate 1,PLT-000201,Corning_384_3570,A3,25,25,21.4,99.1,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,B3,Assay plate 1,PLT-000201,Corning_384_3570,B3,25,25,20.8,98.7,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,C3,Assay plate 1,PLT-000201,Corning_384_3570,C3,25,0,14.1,97.9,%,DMSO,Insufficient volume
+Compound source 1,PLT-000101,384PP_DMSO2,D3,Assay plate 1,PLT-000201,Corning_384_3570,D3,25,25,22.3,99.0,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,E3,Assay plate 1,PLT-000201,Corning_384_3570,E3,25,20,19.7,91.2,%,DMSO,Fluid composition out of range
+Compound source 1,PLT-000101,384PP_DMSO2,P23,Assay plate 1,PLT-000201,Corning_384_3570,A23,25,25,36.5,99.5,%,DMSO,
+Compound source 1,PLT-000101,384PP_DMSO2,P24,Assay plate 1,PLT-000201,Corning_384_3570,A24,25,25,36.8,99.5,%,DMSO,
