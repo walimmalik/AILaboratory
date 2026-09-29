@@ -16,6 +16,8 @@ export interface OpenAiCompatibleOptions {
   model: string;
   maxTokens?: number;
   headers?: Record<string, string>;
+  /** Extra fields for every request, e.g. OpenRouter's `provider` routing. */
+  extraBody?: Record<string, unknown>;
   fetch?: typeof fetch;
 }
 
@@ -55,9 +57,10 @@ export class OpenAiCompatibleModel implements ChatModel {
   }
 
   async complete(request: ModelRequest): Promise<ModelTurn> {
-    const { baseUrl, apiKey, headers, maxTokens } = this.#options;
+    const { baseUrl, apiKey, headers, maxTokens, extraBody } = this.#options;
     const request_ = this.#options.fetch ?? globalThis.fetch.bind(globalThis);
     const body = {
+      ...extraBody,
       model: this.model,
       max_tokens: maxTokens ?? 8192,
       messages: [{ role: 'system', content: request.system }, ...request.messages.map(toWire)],

@@ -37,6 +37,13 @@ export function modelFromEnv(env: Env): ModelSetup {
         model: model as string,
         // OpenRouter's optional app attribution.
         headers: { 'X-Title': 'AILaboratory' },
+        ...(providerOrder(env.AGENT_PROVIDER_ORDER)
+          ? {
+              extraBody: {
+                provider: { order: providerOrder(env.AGENT_PROVIDER_ORDER), allow_fallbacks: true },
+              },
+            }
+          : {}),
       });
       return named(chat, shortName(chat.model));
     }
@@ -67,6 +74,15 @@ export function modelFromEnv(env: Env): ModelSetup {
         reason: `AGENT_PROVIDER "${provider}" is not supported. Use openrouter, anthropic or openai-compatible.`,
       };
   }
+}
+
+/** "fireworks, together" → ["fireworks", "together"]: OpenRouter providers to try first, in order. */
+function providerOrder(value: string | undefined): string[] | undefined {
+  const order = value
+    ?.split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return order?.length ? order : undefined;
 }
 
 /** "deepseek/deepseek-chat" → "deepseek-chat". */

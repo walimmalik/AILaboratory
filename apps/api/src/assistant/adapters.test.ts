@@ -249,6 +249,30 @@ describe('modelFromEnv', () => {
     ]);
   });
 
+  it('asks OpenRouter for providers in the order given, falling back to others', async () => {
+    const { fetch, sent } = fakeFetch({
+      choices: [{ finish_reason: 'stop', message: { content: 'ok' } }],
+    });
+    const setup = modelFromEnv({
+      AGENT_PROVIDER: 'openrouter',
+      OPENROUTER_API_KEY: 'sk-or',
+      AGENT_MODEL: 'z-ai/glm-5.3-flash',
+      AGENT_PROVIDER_ORDER: 'fireworks, atlas-cloud/fp8,together',
+    });
+    if (!('model' in setup)) throw new Error(setup.reason);
+    const original = globalThis.fetch;
+    globalThis.fetch = fetch;
+    try {
+      await setup.model.complete(request);
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(sent[0]?.body.provider).toEqual({
+      order: ['fireworks', 'atlas-cloud/fp8', 'together'],
+      allow_fallbacks: true,
+    });
+  });
+
   it('says what is missing', () => {
     expect(modelFromEnv({})).toEqual({ reason: 'AGENT_PROVIDER is not set in .env' });
     expect(modelFromEnv({ AGENT_PROVIDER: 'openrouter', OPENROUTER_API_KEY: ' ' })).toEqual({

@@ -22,7 +22,7 @@ Set in the repo-root `.env`; the API reads it at start.
 | `openai-compatible` | `AGENT_BASE_URL` (e.g. `http://localhost:11434/v1` for Ollama), optional `AGENT_API_KEY` | none; set it | the model's short name |
 | `scripted` | `AILAB_TEST_KINDS=1` (tests only) | | `Test assistant` |
 
-`AGENT_NAME` overrides the name. Without a working setup the app still runs; `assistant.status` and the panel say what is missing. Claude requests use prompt caching and, on models that support it, server-side refusal fallbacks. Model errors are shown to the person; keys never appear in messages or logs.
+`AGENT_NAME` overrides the name. With OpenRouter, `AGENT_PROVIDER_ORDER` (comma-separated provider tags, e.g. `fireworks,together`) sets which providers to try first; OpenRouter falls back to others if they fail. Without a working setup the app still runs; `assistant.status` and the panel say what is missing. Claude requests use prompt caching and, on models that support it, server-side refusal fallbacks. Model errors are shown to the person; keys never appear in messages or logs.
 
 ## Operations and doors
 
