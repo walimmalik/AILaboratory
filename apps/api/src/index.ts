@@ -4,6 +4,7 @@ import { Assistant } from './assistant/assistant.ts';
 import { modelFromEnv } from './assistant/config.ts';
 import { markInterrupted } from './assistant/store.ts';
 import { connect } from './db/client.ts';
+import { instrumentKinds } from './instruments/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { widget } from './records/test-kinds.ts';
@@ -20,7 +21,7 @@ await connection.migrate();
 // Each registry registers its kinds here as its plan lands. The widget kind exists only for
 // end-to-end tests and demos, and only when asked for.
 const kinds = new KindRegistry();
-for (const kind of labwareKinds) kinds.register(kind);
+for (const kind of [...labwareKinds, ...instrumentKinds]) kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);
 
 // The in-app assistant's model comes from .env (AGENT_PROVIDER, its key, AGENT_MODEL).

@@ -20,6 +20,8 @@ The four registries hold what the lab has: labware, instruments, reagents and ph
 
 [Plan 008](../plans/008-instrument-library.md). Kinds are records (data), so an agent can add a new reader from a datasheet; twins and drivers attach by ID.
 
+**Built (008a, ADR 0025):** kinds `instrument_kind` and `equipment_kind` with sections Identity, Mounts and sites, Capabilities; the capability catalog in code (`instruments.capabilities`); `instruments.resolve`, which checks a configuration (unknown slot, overlap, equipment the mount doesn't take, off the rail) and returns its sites, claims and capabilities. See [instruments.md](../architecture/instruments.md). **Still to come:** seeding the lab's instrument kinds, then 008b registered instruments.
+
 - **Instrument kind** and **equipment kind** (pipettes, grippers, modules, carriers, heads, adapters).
 - **Registered instrument** with serial, room, owner, status, service and calibration dates, and its **current configuration**: an equipment graph where parts attach to named mounts (slots, rails, surfaces). Each mount says who can change it and roughly how long it takes.
 - Resolving a configuration gives the sites where labware can sit, the claims, the capabilities with their limits, and validation issues. Capabilities come from the resolved instrument, not the model name.
