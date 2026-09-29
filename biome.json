@@ -52,7 +52,8 @@
                 "deniedGlobals": {
                   "fetch": "The web app talks to the API only through @ailab/client (src/api.ts), so people and agents share one path.",
                   "XMLHttpRequest": "The web app talks to the API only through @ailab/client (src/api.ts).",
-                  "WebSocket": "The web app talks to the API only through @ailab/client (src/api.ts)."
+                  "WebSocket": "The web app talks to the API only through @ailab/client (src/api.ts).",
+                  "EventSource": "The web app talks to the API only through @ailab/client (src/api.ts)."
                 }
               }
             }

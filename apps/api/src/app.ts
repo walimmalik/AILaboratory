@@ -131,6 +131,9 @@ export function createApp({
   /** The live ledger: every new activity entry in the caller's lab, as server-sent events. */
   app.get('/v1/activity/stream', (c) => {
     const { labId } = c.get('ctx');
+    // Tell proxies (nginx, the Vite dev proxy) not to buffer or transform the stream.
+    c.header('Cache-Control', 'no-cache, no-transform');
+    c.header('X-Accel-Buffering', 'no');
     return streamSSE(c, async (stream) => {
       const unsubscribe = bus.subscribe(labId, (entry) => {
         void stream.writeSSE({ event: 'activity', id: entry.id, data: JSON.stringify(entry) });

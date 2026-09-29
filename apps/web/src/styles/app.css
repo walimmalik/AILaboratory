@@ -90,6 +90,9 @@ a {
   flex: 1;
 }
 .segmented {
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
   display: flex;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -398,7 +401,7 @@ td {
   border-bottom: 1px solid var(--rule);
   vertical-align: top;
 }
-tbody tr:last-child td {
+:where(tbody tr:last-child) td {
   border-bottom: 0;
 }
 td.q,
@@ -413,9 +416,6 @@ td.when {
 }
 tr.clickable {
   cursor: pointer;
-}
-tr.clickable:hover td {
-  background: var(--accent-soft);
 }
 tr.fresh td {
   animation: fresh 2.4s ease-out;
@@ -433,8 +433,11 @@ tr.fresh td {
     animation: none;
   }
 }
-.details td {
+tr.details td {
   background: var(--field);
+}
+tr.clickable:hover td {
+  background: var(--accent-soft);
 }
 dl.kv {
   display: grid;
@@ -471,17 +474,8 @@ details.tech[open] summary {
 
 /* Changes (before and after) */
 .diff {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) minmax(0, 1fr);
-  gap: 4px 14px;
-  font-size: 13px;
-  align-items: baseline;
-}
-.diff .h {
-  font: 600 11px / 1.2 var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+  width: auto;
+  min-width: min(100%, 520px);
 }
 .diff .field-name {
   font-family: var(--font-mono);
@@ -585,10 +579,13 @@ details.tech[open] summary {
   .page {
     padding: 16px;
   }
-  .diff {
-    grid-template-columns: max-content minmax(0, 1fr);
-  }
-  .diff .h:first-child {
-    display: none;
-  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

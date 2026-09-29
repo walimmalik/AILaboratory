@@ -1,0 +1,181 @@
+import type { RecordLink } from '@ailab/schema';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useParams } from '@tanstack/react-router';
+import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
+import { historyQuery, linksQuery, pendingProposalsQuery, recordQuery } from '../queries.ts';
+import { useMe } from '../session.ts';
+
+const operationWords: Record<string, string> = {
+  create: 'created',
+  update: 'edited',
+  activate: 'activated',
+  archive: 'archived',
+  unarchive: 'unarchived',
+  restore: 'restored an earlier version',
+};
+
+/** One record: its fields, full history (who changed what and why) and where it is used. */
+export function RecordPage() {
+  const { id } = useParams({ from: '/app/records/$id' });
+  const record = useQuery(recordQuery(id));
+  const history = useQuery(historyQuery(id));
+  const pending = (useQuery(pendingProposalsQuery).data ?? []).filter(
+    (p) => (p.input as { id?: unknown } | undefined)?.id === id,
+  );
+  const me = useMe();
+
+  if (record.error) {
+    return <p className="error-text">{record.error.message}</p>;
+  }
+  const r = record.data;
+  if (!r) return <p className="empty">Loading…</p>;
+  const versions = [...(history.data ?? [])].sort((a, b) => b.version - a.version);
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="crumbs">
+            lab / <Link to="/records">records</Link> / <b>{r.name}</b>
+          </div>
+          <h1>
+            <span className="mono">{r.name}</span> {r.label}
+          </h1>
+          <p className="lede">
+            {r.kind} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
+            <span className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>
+              {actorLabel(r.updatedBy, me)}
+            </span>
+          </p>
+        </div>
+        <span className={`chip ${r.status}`}>{r.status}</span>
+      </div>
+
+      {pending.length > 0 && (
+        <p className="agent-ink">
+          {pending.length === 1
+            ? 'An agent has proposed a change'
+            : `Agents have proposed ${pending.length} changes`}{' '}
+          to this record. <Link to="/proposals">Review</Link>
+        </p>
+      )}
+
+      <section className="block">
+        <header>
+          <h2>Fields</h2>
+        </header>
+        <div className="body">
+          {Object.keys(r.attributes).length === 0 ? (
+            <p className="empty">No fields.</p>
+          ) : (
+            <dl className="kv">
+              {Object.entries(r.attributes).map(([key, value]) => (
+                <Field key={key} name={key} value={value} />
+              ))}
+            </dl>
+          )}
+          <details className="tech">
+            <summary>technical details</summary>
+            <pre className="json">{JSON.stringify(r, null, 2)}</pre>
+          </details>
+        </div>
+      </section>
+
+      <section className="block">
+        <header>
+          <h2>History</h2>
+          <span className="state muted num">{versions.length} versions</span>
+        </header>
+        <div className="body">
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Version</th>
+                  <th>When</th>
+                  <th>Who</th>
+                  <th>What changed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versions.map((v) => {
+                  const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
+                  const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
+                  return (
+                    <tr key={v.version}>
+                      <td className="q">v{v.version}</td>
+                      <td className="when">{formatWhen(v.at)}</td>
+                      <td className={isAgent(v.actor) ? 'agent-ink' : undefined}>
+                        {actorLabel(v.actor, me)}
+                      </td>
+                      <td>
+                        {operationWords[v.operation] ?? v.operation}
+                        {v.operation !== 'create' && changed.length > 0 && (
+                          <span className="muted"> ({changed.join(', ')})</span>
+                        )}
+                        {v.reason && <span className="muted"> · “{v.reason}”</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <Links id={id} />
+    </>
+  );
+}
+
+function Field({ name, value }: { name: string; value: unknown }) {
+  const isRef = typeof value === 'string' && /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
+  return (
+    <>
+      <dt>{name}</dt>
+      <dd className="mono">{isRef ? <LinkedName id={value as string} /> : formatValue(value)}</dd>
+    </>
+  );
+}
+
+function Links({ id }: { id: string }) {
+  const from = useQuery(linksQuery(id, 'from')).data ?? [];
+  const to = useQuery(linksQuery(id, 'to')).data ?? [];
+  if (from.length === 0 && to.length === 0) return null;
+  const row = (link: RecordLink, other: string, direction: string) => (
+    <tr key={`${direction}-${link.fromId}-${link.toId}-${link.relation}`}>
+      <td className="muted">{direction}</td>
+      <td className="mono">{link.relation.replaceAll('_', ' ')}</td>
+      <td>
+        <LinkedName id={other} />
+      </td>
+    </tr>
+  );
+  return (
+    <section className="block">
+      <header>
+        <h2>Links</h2>
+      </header>
+      <div className="body">
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              {from.map((l) => row(l, l.toId, 'points to'))}
+              {to.map((l) => row(l, l.fromId, 'used by'))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LinkedName({ id }: { id: string }) {
+  const { data } = useQuery(recordQuery(id));
+  return (
+    <Link to="/records/$id" params={{ id }} className="mono">
+      {data ? `${data.name} ${data.label}` : id}
+    </Link>
+  );
+}
