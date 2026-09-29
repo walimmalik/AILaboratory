@@ -20,7 +20,13 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { widget } from '../records/test-kinds.ts';
-import { Assistant, MAX_STEPS, toModelMessages, toolsFor } from './assistant.ts';
+import {
+  Assistant,
+  describeAttachment,
+  MAX_STEPS,
+  toModelMessages,
+  toolsFor,
+} from './assistant.ts';
 import { type ChatModel, ModelError, type ModelRequest, type ModelTurn } from './model.ts';
 import { ScriptedModel } from './scripted.ts';
 import { messageRows } from './store.ts';
@@ -254,6 +260,54 @@ describe('assistant.ask', () => {
     expect(error.code).toBe('invalid_state');
     release({ text: 'Done.', toolCalls: [], stop: 'end' });
     await assistant.wait(id);
+  });
+
+  it('passes an attached file to a tool by reference, never through the reply', async () => {
+    const { assistant, registry } = setup();
+    const file = {
+      name: 'widget.json',
+      mediaType: 'application/json',
+      text: JSON.stringify({ color: 'amber', volume: { value: '75', unit: 'uL' } }),
+    };
+    const conversation = await ask(
+      registry,
+      assistant,
+      '/op records.create {"kind": "widget", "label": "From a file", "attributes": {"$file": "$attached"}}',
+      { attachments: [file] },
+    );
+    const [asked] = conversation.messages;
+    expect(asked).toMatchObject({
+      role: 'user',
+      attachments: [{ ...file, id: expect.stringMatching(/^file_/) }],
+    });
+    const done = conversation.messages.find((m) => m.role === 'tool');
+    expect(done).toMatchObject({
+      outcome: 'done',
+      result: { output: { attributes: { color: 'amber', volume: { value: '75' } } } },
+    });
+
+    const { entries } = (await output(registry.execute(person, 'activity.list', { limit: 5 }))) as {
+      entries: { operationId: string; input: unknown }[];
+    };
+    expect(entries.find((e) => e.operationId === 'assistant.ask')?.input).toMatchObject({
+      attachments: [{ name: 'widget.json', characters: file.text.length }],
+    });
+
+    const empty = await refused(
+      registry.execute(person, 'assistant.ask', { message: '', attachments: [] }),
+    );
+    expect(empty).toMatchObject({ code: 'invalid_input' });
+  });
+
+  it('shows the model an attached file by reference and preview', () => {
+    const text = describeAttachment({
+      id: 'file_abc',
+      name: 'big.csv',
+      mediaType: 'text/csv',
+      text: 'x'.repeat(5000),
+    });
+    expect(text).toContain('{"$file": "file_abc"}');
+    expect(text).toContain('[1000 more characters]');
   });
 
   it('rejects invalid input', async () => {

@@ -3,6 +3,7 @@ import type {
   Actor,
   AssistantMessage,
   AssistantSetup,
+  Attachment,
   ConversationSummary,
   OperationErrorBody,
   PageContext,
@@ -156,11 +157,17 @@ export class Assistant {
         this.publish(conversationId, { type: 'message', message });
         if (!turn.toolCalls.length) return await finish('idle');
 
+        const files = attachmentsOf(await messageRows(db, conversationId));
         for (const call of turn.toolCalls) {
           const operationId = tools.operationOf.get(call.name);
-          const outcome = await runTool(registry, agentCtx, operationId ?? call.name, call.input, {
-            known: operationId !== undefined,
-          });
+          const outcome = await runTool(
+            registry,
+            agentCtx,
+            operationId ?? call.name,
+            call.input,
+            files,
+            { known: operationId !== undefined },
+          );
           const result = await appendMessage(db, conversationId, {
             role: 'tool',
             toolCallId: call.id,
@@ -198,6 +205,7 @@ async function runTool(
   ctx: RecordContext,
   operationId: string,
   input: Record<string, unknown> | undefined,
+  files: Map<string, Attachment>,
   { known }: { known: boolean },
 ): Promise<ToolOutcome> {
   const refuse = (error: OperationErrorBody): ToolOutcome => ({
@@ -215,11 +223,58 @@ async function runTool(
     });
   }
   try {
-    const result = await registry.execute(ctx, operationId, input);
+    const result = await registry.execute(ctx, operationId, withFiles(input, files));
     return { outcome: result.status, result };
   } catch (error) {
     return refuse(toErrorBody(error));
   }
+}
+
+/** Longest part of an attached file the model sees; the whole file goes to tools by reference. */
+const ATTACHMENT_PREVIEW_CHARS = 4_000;
+
+/** How the model sees an attached file: its reference, size and the start of its text. */
+export function describeAttachment(file: Attachment): string {
+  const preview =
+    file.text.length > ATTACHMENT_PREVIEW_CHARS
+      ? `${file.text.slice(0, ATTACHMENT_PREVIEW_CHARS)}\n… [${file.text.length - ATTACHMENT_PREVIEW_CHARS} more characters]`
+      : file.text;
+  return `[Attached file ${file.id}: ${file.name} (${file.mediaType || 'text'}, ${file.text.length} characters). Pass it to a tool as {"$file": "${file.id}"}.]\n${preview}`;
+}
+
+/** Every file attached so far in the conversation, by ID. */
+function attachmentsOf(rows: MessageRow[]): Map<string, Attachment> {
+  return new Map(
+    rows.flatMap((row) =>
+      row.body.role === 'user' ? (row.body.attachments ?? []).map((f) => [f.id, f] as const) : [],
+    ),
+  );
+}
+
+/**
+ * Replaces each `{"$file": id}` in a tool's input with that file: parsed JSON for a JSON file, the
+ * text otherwise. An unknown ID is left in place, so the operation refuses it with its own message.
+ */
+export function withFiles(input: unknown, files: Map<string, Attachment>): Record<string, unknown> {
+  const swap = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(swap);
+    if (!value || typeof value !== 'object') return value;
+    const entries = Object.entries(value);
+    const ref = entries.length === 1 && entries[0]?.[0] === '$file' ? entries[0][1] : undefined;
+    const file = typeof ref === 'string' ? files.get(ref) : undefined;
+    if (file) {
+      if (/json/i.test(file.mediaType) || file.name.toLowerCase().endsWith('.json')) {
+        try {
+          return JSON.parse(file.text);
+        } catch {
+          return file.text;
+        }
+      }
+      return file.text;
+    }
+    return Object.fromEntries(entries.map(([k, v]) => [k, swap(v)]));
+  };
+  return swap(input) as Record<string, unknown>;
 }
 
 /** Every operation an agent may call, as a tool. People-only operations and the assistant's own are left out. */
@@ -264,7 +319,11 @@ export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMess
   );
   for (const { body, provider, model: rowModel, providerRaw } of rows) {
     if (body.role === 'user') {
-      messages.push({ role: 'user', text: withPage(body.text, body.page) });
+      const files = (body.attachments ?? []).map(describeAttachment);
+      messages.push({
+        role: 'user',
+        text: withPage([body.text, ...files].filter(Boolean).join('\n\n'), body.page),
+      });
     } else if (body.role === 'assistant') {
       const same = provider === model.provider && rowModel === model.model && providerRaw;
       messages.push({
@@ -328,6 +387,7 @@ You act only through the lab's operations, which are your tools. Everything you 
 - A person confirms each section of a draft on its page; confirming the last one makes it active. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
 - The app adds a linked "Waiting for you" line under your reply listing the drafts and proposed changes you left, so don't write one yourself; just say briefly what you did and anything you assumed.
 - To edit a record, read it first (records_get) for its current version and attributes, then send records_update the complete attributes with your change, and that version as expectedVersion.
+- The person may attach files; each shows as [Attached file file_…] with the start of its text. To give a whole file to a tool, put {"$file": "file_…"} where the value goes (e.g. labware_import_opentrons with {"definition": {"$file": "file_…"}}); never retype a file's contents.
 - Some tools return a file (an Opentrons definition, a worklist; their description says so). The app shows it under your reply with Download and Copy buttons, so don't copy its contents into your reply: say what it is and answer questions about it briefly.
 - Every quantity has a unit, e.g. {"value": "50", "unit": "uL"}.
 - If a tool refuses, read its message, fix the input and try again, or tell the person what you need.

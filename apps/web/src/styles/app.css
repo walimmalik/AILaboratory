@@ -339,6 +339,17 @@ a {
   display: flex;
   gap: 6px;
 }
+.composer.dropping {
+  outline: 1px dashed var(--accent);
+}
+.attached {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
 .import {
   display: flex;
   flex-direction: column;

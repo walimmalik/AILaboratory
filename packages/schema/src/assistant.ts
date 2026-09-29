@@ -38,9 +38,38 @@ export type ToolCall = z.infer<typeof ToolCall>;
 
 const base = { id: z.string(), at: z.iso.datetime() };
 
+/** Largest file a person may attach to a message, in characters of text. */
+export const MAX_ATTACHMENT_CHARS = 2_000_000;
+
+/** A text file a person sends with a message (JSON, CSV, text). */
+export const AttachmentInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  mediaType: z.string().max(100),
+  text: z
+    .string()
+    .max(
+      MAX_ATTACHMENT_CHARS,
+      `A file can be at most ${MAX_ATTACHMENT_CHARS / 1e6} million characters`,
+    ),
+});
+export type AttachmentInput = z.infer<typeof AttachmentInput>;
+
+/**
+ * An attached file as the conversation keeps it. The assistant sees its name and a preview, and passes
+ * the whole file to a tool as `{"$file": "<id>"}` instead of retyping it.
+ */
+export const Attachment = AttachmentInput.extend({ id: z.string().regex(/^file_[a-z0-9]+$/) });
+export type Attachment = z.infer<typeof Attachment>;
+
 /** A message in a conversation. Tool messages are the results of the operations the assistant ran. */
 export const AssistantMessage = z.discriminatedUnion('role', [
-  z.object({ ...base, role: z.literal('user'), text: z.string(), page: PageContext.optional() }),
+  z.object({
+    ...base,
+    role: z.literal('user'),
+    text: z.string(),
+    page: PageContext.optional(),
+    attachments: z.array(Attachment).optional(),
+  }),
   z.object({
     ...base,
     role: z.literal('assistant'),

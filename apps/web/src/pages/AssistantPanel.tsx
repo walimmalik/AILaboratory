@@ -1,4 +1,9 @@
-import type { AssistantMessage, Conversation } from '@ailab/schema';
+import {
+  type AssistantMessage,
+  type AttachmentInput,
+  type Conversation,
+  MAX_ATTACHMENT_CHARS,
+} from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
@@ -201,7 +206,12 @@ function Message({
     return (
       <li className="msg">
         <div className="who mono muted">you</div>
-        <p className="text">{message.text}</p>
+        {message.text && <p className="text">{message.text}</p>}
+        {message.attachments?.map((file) => (
+          <p key={file.id} className="attachment muted">
+            attached <span className="mono">{file.name}</span>
+          </p>
+        ))}
       </li>
     );
   }
@@ -268,16 +278,49 @@ function Step({
   );
 }
 
+/** Text files the assistant can take: definitions, tables, notes. */
+const ATTACHABLE = /\.(json|csv|tsv|txt|md|xml|yaml|yml)$/i;
+
 function Composer() {
   const assistant = useAssistant();
   const [text, setText] = useState('');
+  const [files, setFiles] = useState<AttachmentInput[]>([]);
+  const [fileError, setFileError] = useState<string>();
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const busy = assistant.sending || assistant.running;
+
+  const attach = async (list: FileList | null) => {
+    setFileError(undefined);
+    const added: AttachmentInput[] = [];
+    for (const file of Array.from(list ?? [])) {
+      if (!ATTACHABLE.test(file.name)) {
+        setFileError(
+          `${file.name}: attach text files (JSON, CSV, TXT); PDFs and spreadsheets come later`,
+        );
+        continue;
+      }
+      const content = await file.text();
+      if (content.length > MAX_ATTACHMENT_CHARS) {
+        setFileError(`${file.name} is too large to attach`);
+        continue;
+      }
+      added.push({ name: file.name, mediaType: file.type || 'text/plain', text: content });
+    }
+    // A file attached again under the same name replaces the earlier one.
+    setFiles((current) =>
+      [...current.filter((f) => !added.some((a) => a.name === f.name)), ...added].slice(0, 5),
+    );
+  };
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     const message = text.trim();
-    if (!message || busy) return;
-    if (await assistant.send(message)) setText('');
+    if ((!message && files.length === 0) || busy) return;
+    if (await assistant.send(message, { attachments: files })) {
+      setText('');
+      setFiles([]);
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -288,8 +331,22 @@ function Composer() {
   };
 
   return (
-    <form className="composer" onSubmit={submit}>
+    <form
+      className={dragging ? 'composer dropping' : 'composer'}
+      onSubmit={submit}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        void attach(e.dataTransfer.files);
+      }}
+    >
       {assistant.sendError && <p className="error-text">{assistant.sendError}</p>}
+      {fileError && <p className="error-text">{fileError}</p>}
       <label className="sr-only" htmlFor="assistant-input">
         Message the assistant
       </label>
@@ -304,11 +361,52 @@ function Composer() {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
       />
+      {files.length > 0 && (
+        <ul className="attached">
+          {files.map((file) => (
+            <li key={file.name}>
+              <span className="mono">{file.name}</span>{' '}
+              <button
+                type="button"
+                className="link-btn"
+                aria-label={`Remove ${file.name}`}
+                onClick={() => setFiles((current) => current.filter((f) => f.name !== file.name))}
+              >
+                remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="row">
+        <button
+          type="button"
+          className="btn small"
+          disabled={busy}
+          onClick={() => picker.current?.click()}
+        >
+          Attach file
+        </button>
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          accept=".json,.csv,.tsv,.txt,.md,.xml,.yaml,.yml"
+          className="sr-only"
+          aria-label="Attach a file to your message"
+          onChange={(e) => {
+            void attach(e.target.files);
+            e.target.value = '';
+          }}
+        />
         <span className="muted hint">
           {busy ? 'Working; you can reply when it finishes.' : 'Changes land in the ledger.'}
         </span>
-        <button type="submit" className="btn primary small" disabled={busy || !text.trim()}>
+        <button
+          type="submit"
+          className="btn primary small"
+          disabled={busy || (!text.trim() && files.length === 0)}
+        >
           Send
         </button>
       </div>
