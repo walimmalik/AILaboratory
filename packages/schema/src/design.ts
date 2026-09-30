@@ -145,3 +145,15 @@ export const Readiness = z.object({
   notApplicable: z.array(z.string()),
 });
 export type Readiness = z.infer<typeof Readiness>;
+
+/**
+ * A design's input pinned to the version it was built on (ADR 0039): a confirmed SOP, labware type,
+ * product or lot at that version. A newer confirmed version is adopted explicitly, never followed
+ * silently. Physical state (volumes, instrument availability) is not pinned; it is checked live.
+ */
+export function pinOf<I extends z.ZodType<string>>(id: I) {
+  return z.strictObject({
+    id,
+    version: z.number().int().positive().describe('The confirmed version the design uses'),
+  });
+}

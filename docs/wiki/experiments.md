@@ -1,10 +1,10 @@
 # Experiments and designers
 
-The scientific frame (013), the designers that fill it (014, 016, 017) the workflows that put a design in order (018) and the scheduler that fits them into the lab's week (019). All six are locked, not yet built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
+The scientific frame (013), the designers that fill it (014, 016, 017) the workflows that put a design in order (018) and the scheduler that fits them into the lab's week (019). All six are locked; 013a is built. The goal: "run an IL-6 ELISA on these 40 supernatants" becomes a complete, checked design in one ask, which a person reviews and confirms.
 
 ## Campaigns, experiments and runs (plan 013)
 
-[Plan 013](../plans/013-campaigns-and-experiments.md). Locked; builds after 012 (013a can start after 010a).
+[Plan 013](../plans/013-campaigns-and-experiments.md). 013a built: the three records, stages, and SOP versions pinned by version ([ADR 0039](../decisions/0039-designs-pin-inputs.md)); see [campaigns.md](../architecture/campaigns.md). Binding, run recording and screens are next.
 
 | Level | What it is | Stages |
 | --- | --- | --- |

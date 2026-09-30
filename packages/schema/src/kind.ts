@@ -48,6 +48,8 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
 export interface RelatedContext {
   /** A record in this lab by ID, or undefined. */
   get: (id: string) => Promise<RecordEnvelope | undefined>;
+  /** A record in this lab as it was at a version (ADR 0039), or undefined. */
+  getVersion: (id: string, version: number) => Promise<RecordEnvelope | undefined>;
   /** Every non-archived record of a kind in this lab. */
   list: (kind: string) => Promise<RecordEnvelope[]>;
   /** The record being written, when it exists already. */

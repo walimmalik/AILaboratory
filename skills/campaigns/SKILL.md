@@ -1,0 +1,28 @@
+---
+name: ailab-campaigns
+description: Work with campaigns, experiments and runs in AILaboratory through its MCP tools: draft a campaign with aims, draft an experiment that pins the confirmed SOP versions it follows, move stages, adopt newer SOP versions, and find every experiment or run that used a record.
+---
+
+# Campaigns, experiments and runs in AILaboratory
+
+A **campaign** is a lab project with a goal and aims. An **experiment** is one question in a campaign, with the confirmed SOP versions it follows. A **run** is one execution of an experiment's confirmed design on a day. Plan 013; see docs/architecture/campaigns.md.
+
+## Drafting
+
+- `campaigns.draft` with `label`, `goal`, `aims: [{id: "aim_1", text, success}]`, and optionally `background`, `owner`, `about` (entity ids) and `references` (document ids). It starts as proposed.
+- `experiments.draft` with `label`, `campaign`, `aim` (an aim id of that campaign), `question`, `hypotheses: [{id, statement, prediction?: {readout, measure, comparison, threshold}}]`, `subjects: [{record}]`, `protocol`, `conditions`, `controls: [{id, label, role}]`, `readouts: [{id, label}]` and `successCriteria`. A prediction's `readout` must be one of the readout ids.
+- `protocol: [{id: "coating", sop: {id: "sop_…", version: 4}}]` pins an SOP version. Pin the version a person confirmed (the SOP's current version when its status is active). A draft SOP's version can be pinned while designing, but it blocks planning. A document that isn't digitized goes in `documents: [{document, use: "follows"}]`, and nothing computes from it.
+- Mark your own estimates assumed in `evidence`, and check `records.readiness`.
+
+## Stages
+
+- `campaigns.set_stage` and `experiments.set_stage` take `{id, expectedVersion, stage}`. From an agent they are proposals a person confirms.
+- An experiment is planned only once a person has confirmed its design and readiness is ready.
+
+## Newer SOP versions
+
+When an SOP an experiment follows has a newer confirmed version, readiness says so (`protocol_current`). Tell the person what changed (`records.history` of the SOP), then `experiments.adopt_versions` `{id, expectedVersion}` moves every pin to the latest confirmed version. Never re-pin silently.
+
+## Where a record was used
+
+`experiments.where_used` `{record, version?}` lists the campaigns, experiments and runs that use a record: "which runs followed SOP-0004 v3", "which experiments tested ENT-0012".

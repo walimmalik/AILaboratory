@@ -22,6 +22,7 @@ import { reviewOperations } from './review-operations.ts';
 
 export { ActivityBus } from './activity.ts';
 
+import { campaignOperations } from '../campaigns/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { OperationError } from './errors.ts';
 
@@ -61,6 +62,7 @@ export function createRegistry(
     ...libraryOperations,
     ...mentionOperations,
     ...sopOperations,
+    ...campaignOperations,
     ...assistantOperations,
   );
 }

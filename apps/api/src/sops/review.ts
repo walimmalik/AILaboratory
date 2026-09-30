@@ -300,7 +300,12 @@ export async function reviewSop(
       const parsed = SopAttributes.safeParse(next);
       if (!parsed.success)
         throw new Error(`That would make the SOP invalid: ${issues(parsed.error)}`);
-      const related = await sopKind.related?.(parsed.data, { get, list, reservedPrefixes: [] });
+      const related = await sopKind.related?.(parsed.data, {
+        get,
+        getVersion: async () => undefined,
+        list,
+        reservedPrefixes: [],
+      });
       if (related?.invalid?.length) throw new Error(related.invalid.join('; '));
       working = parsed.data;
     };
