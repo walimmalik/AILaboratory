@@ -60,6 +60,8 @@ async function watch(everyMs) {
       run('gh', [
         'pr',
         'list',
+        '--limit',
+        '1000',
         '--state',
         'open',
         '--json',
@@ -69,13 +71,14 @@ async function watch(everyMs) {
     for (const pr of open) {
       if (pr.isCrossRepository || pr.labels.some((l) => l.name === 'skip-codex')) continue;
       if (done[pr.number] === pr.headRefOid) continue;
+      // Only a finished run counts, so a failed one is tried again on the next poll.
       try {
         await runPr(pr.number);
+        done[pr.number] = pr.headRefOid;
+        writeFileSync(statePath, JSON.stringify(done, null, 2));
       } catch (error) {
         console.error(`PR #${pr.number}: ${error.message}`);
       }
-      done[pr.number] = pr.headRefOid;
-      writeFileSync(statePath, JSON.stringify(done, null, 2));
     }
     await new Promise((r) => setTimeout(r, everyMs));
   }
@@ -265,8 +268,15 @@ async function post(number, key, heading, report, footer) {
 /** CODEX_BIN, else `codex` on PATH, else the CLI inside the Windows Codex app (its path changes on update). */
 function findCodex() {
   if (process.env.CODEX_BIN) return process.env.CODEX_BIN;
-  if (spawnSync('codex', ['--version'], { shell: isWindows }).status === 0) return 'codex';
-  if (isWindows) {
+  if (!isWindows) {
+    if (spawnSync('codex', ['--version']).status === 0) return 'codex';
+  } else {
+    // A native codex.exe on PATH; npm's codex.cmd shim can't be spawned without a shell, which
+    // would mangle the quoted -c arguments.
+    const onPath = spawnSync('where', ['codex.exe'], { encoding: 'utf8' }).stdout?.split(
+      /\r?\n/,
+    )[0];
+    if (onPath && existsSync(onPath)) return onPath;
     const where = spawnSync(
       'powershell',
       ['-NoProfile', '-Command', '(Get-AppxPackage OpenAI.Codex).InstallLocation'],
