@@ -76,6 +76,7 @@ const definitions: UnitDefinition[] = [
     ['ng/uL', 'ng/µL', '0.001'],
     ['ng/mL', 'ng/mL', '0.000001'],
     ['pg/mL', 'pg/mL', '0.000000001'],
+    ['g/mL', 'g/mL', '1000'],
   ]),
   ...family('molar_mass', [
     ['g/mol', 'g/mol', '1'],
@@ -99,6 +100,10 @@ const definitions: UnitDefinition[] = [
     ['mm', 'mm', '0.001'],
     ['um', 'µm', '0.000001'],
     ['nm', 'nm', '0.000000001'],
+  ]),
+  ...family('dynamic_viscosity', [
+    ['Pa.s', 'Pa·s', '1'],
+    ['mPa.s', 'mPa·s', '0.001'],
   ]),
   ...family('rotational_speed', [['rpm', 'rpm', '1']]),
   ...family('relative_centrifugal_force', [['xg', '× g', '1']]),

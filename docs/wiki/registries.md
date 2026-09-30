@@ -47,6 +47,8 @@ The four registries hold what the lab has: labware, instruments, reagents and ph
 - Seed classes: Opentrons shared-data (Apache-2.0), PyLabRobot's Hamilton defaults (454 STAR, 428 Vantage; MIT). Wali's real Venus and Echo lists come from the laptop when 009b starts.
 - Out of scope: prices, ordering, reorder points.
 
+**Built (009a, ADR 0027):** kinds `product` (bought, kit or lab-made, with sections Identity, Contents, Storage and handling), `lot` and `liquid_type`; the typed handling rules; `reagents.draft_product` (a kit drafts its new components), `reagents.scale_recipe`, `reagents.receive_lot` (checks certificate values against the product's lot fields), `reagents.set_lot_status`. See [reagents.md](../architecture/reagents.md). **Still to come:** loading the seed's products and lots, 009b liquid classes, 009c screens.
+
 ## Inventory (plan 010)
 
 [Plan 010](../plans/010-inventory.md). The lab's physical stock, like Benchling's registry or FreezerPro.

@@ -8,6 +8,7 @@ import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts'
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
+import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
 
 /**
@@ -62,7 +63,7 @@ if (!ctx) {
 }
 
 const kinds = new KindRegistry();
-for (const kind of [...labwareKinds, ...instrumentKinds]) kinds.register(kind);
+for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds]) kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus());
 
 const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');
