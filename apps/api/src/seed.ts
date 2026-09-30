@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { contextFor } from './auth.ts';
@@ -24,11 +24,12 @@ import { loadSeedLiquidClasses, readSeedLiquidClasses } from './reagents/liquid-
 import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { sopKinds } from './sops/kinds.ts';
+import { loadSeedSops, readSeedSops } from './sops/seed.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
  * types, instrument and equipment kinds and instruments, reagents (lots as proposals), liquid
- * classes, entity kinds and entities, library documents (seed/sops/own and docs/sop-library), then locations, containers, samples and what the containers
+ * classes, entity kinds and entities, library documents (seed/sops/own and docs/sop-library), the lab's own SOPs as digital SOPs, then locations, containers, samples and what the containers
  * hold (proposals; each waits for what it needs to be approved, so run it again after approving). Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
@@ -252,5 +253,27 @@ console.log(
   `Library text: ${library.parsed.length} documents parsed for search, ${library.unparsed.length} not readable yet, ${library.mentions} mentions of registry records proposed for review.`,
 );
 for (const skip of library.unparsed) console.log(`  not parsed ${skip.key}: ${skip.reason}`);
+const sopFolder = new URL('../../../seed/sops/own/', import.meta.url);
+const sopFiles = await Promise.all(
+  (await readdir(sopFolder))
+    .filter((name) => name.endsWith('.md'))
+    .sort()
+    .map(async (name) => ({ name, text: await readFile(new URL(name, sopFolder), 'utf8') })),
+);
+const sops = await loadSeedSops(
+  registry,
+  ctx,
+  readSeedSops(sopFiles, {
+    labware: await seedFile('labware.yaml'),
+    reagentLibrary: await seedFile('reagent-library.yaml'),
+    entityLibrary: await seedFile('entity-library.yaml'),
+    instrumentLibrary: await seedFile('instrument-library.yaml'),
+  }),
+  'Seed lab (plan 006), loaded by plan 012a',
+);
+console.log(
+  `Digital SOPs: ${sops.created.length} drafted, ${sops.existing.length} already there, ${sops.unbound.length} materials without their record in the lab yet (bind them when the record is there).`,
+);
+for (const line of sops.created) console.log(`  + ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
