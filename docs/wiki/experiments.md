@@ -47,6 +47,8 @@ Building: 014a placement rules, layout templates and plate maps are built ([plat
 
 ### Transfers (plan 016)
 
+Building: 016a-1 transfer math and the dilution optimizer are built ([transfers.md](../architecture/transfers.md)); the calculator operations are next.
+
 - Code in `packages/domain/transfers` solves targets and sources into exact transfers; the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates) and explains it.
 - **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations. They are lab calculators (ADR 0024).
 - **Dilution optimizer.** `transfers.optimize_dilution` decides per compound and point whether the source plate works or an intermediate dilution is needed, and packs every compound into the fewest intermediate plates and wells within the DMSO limit and the plate's dead and maximum volume, optimizing accuracy first, then plates, then wells. Its result is drafted as intermediate plate maps and transfer plans, which become workflow steps on their own (018).
