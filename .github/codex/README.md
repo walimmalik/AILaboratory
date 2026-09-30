@@ -7,6 +7,10 @@ Two Codex runs on each pull request, using the owner's own Codex CLI and ChatGPT
 | Code review | `review.md` | Reads the diff and the code around it against `AGENTS.md`, the plans and the ADRs, and reports blocking and non-blocking issues with file and line. Read-only sandbox, high effort. |
 | UI QA | `ui-qa.md` | Starts the PR's app as its own Docker Compose project on ports 15432, 13001, 18001 and 18080 (`compose.qa.yaml`), so it runs beside the lab's own app; creates a lab and loads the seed; then drives it in headless Chrome through Playwright's MCP server: the PR's screens end to end, a smoke pass over the rest, console and network errors, both themes, a narrower window, and information overload. Only for PRs that touch `apps/`, `packages/`, `seed/`, `compose.yaml` or the lockfile. Screenshots and the stack log stay on the machine that ran it, under the PR's worktree in `qa-shots/`. The stack is removed afterwards. |
 
+## Who starts it
+
+The agent that opens or pushes to a PR starts both runs on the owner's laptop through Remote Control (the `codex-pr` skill in `.claude/skills`), so the owner doesn't have to be there. `watch` is there for PRs no agent starts.
+
 ## Running it
 
 From any checkout of the repo, on a machine with the Codex CLI signed in, `gh` signed in, Docker and pnpm:
