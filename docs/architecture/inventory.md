@@ -73,6 +73,10 @@ Every change to a well is an event in `inventory_events` (fill, transfer, stamp,
 - Warned: a well left below the labware type's dead volume.
 - Agents' events are proposals (V7). Recording directly from an instrument run log comes with 022.
 
+Stamping maps each source well onto a destination well: one to one (same grid), a quadrant (a plate into every other well of one with twice the rows and columns: 96 into 384, 384 into 1536; 1 starts at A1, 2 at A2, 3 at B1, 4 at B2) or an offset. The mapping is a calculator (`inventory.map_plates`, `mapPlates` in `@ailab/domain`), and the stamp is one event of paired out and in lines. Only wells holding something are stamped unless the wells are listed.
+
+Lineage follows a well's `in` lines back: fills carry what went in (`added`), transfers and stamps name the source well, which is followed from the moment the liquid left it.
+
 ## Operations
 
 | Operation | Does | Agents |
@@ -89,6 +93,9 @@ Every change to a well is an event in `inventory_events` (fill, transfer, stamp,
 | `inventory.correct` | Replace wells' contents with what was measured, with a reason | proposed |
 | `inventory.discard` | Empties the wells in the ledger and marks the container discarded; a box must be emptied first | proposed |
 | `samples.register` | A batch the lab made of an entity, with its QC | proposed |
+| `inventory.map_plates` | Calculator: which source well lands on which destination well for a stamp | read |
+| `inventory.stamp` | Plate to plate, the same volume per well, by a mapping | proposed |
+| `inventory.lineage` | Where a well's liquid came from, back through fills, transfers and stamps | read |
 | `inventory.wells` | What a container's wells hold | read |
 | `inventory.history` | A container's or well's ledger, newest first | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |
@@ -105,4 +112,4 @@ The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, stamping plate to plate, lineage and the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).

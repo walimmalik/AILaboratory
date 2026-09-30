@@ -5,12 +5,16 @@ import {
   EMPTY_WELL_STATE,
   expandWells,
   formatQuantity,
+  type Grid,
   LabwareError,
+  mapPlates,
   mix,
   newId,
+  type PlateMapping,
   take,
 } from '@ailab/domain';
 import {
+  type Component,
   type ContainerAttributes,
   type InventoryEvent,
   type InventoryEventType,
@@ -19,6 +23,9 @@ import {
   inventoryDiscard,
   inventoryFill,
   inventoryHistory,
+  inventoryLineage,
+  inventoryMapPlates,
+  inventoryStamp,
   inventoryTransfer,
   inventoryWells,
   type LabwareTypeAttributes,
@@ -28,7 +35,7 @@ import {
   samplesRegister,
   type WellState,
 } from '@ailab/schema';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { inventoryEvents, inventoryLines, wellContents } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -40,6 +47,7 @@ import { type RecordContext, RecordService } from '../records/service.ts';
 interface Vessel {
   record: RecordEnvelope;
   positions: string[];
+  grid?: Grid;
   deadVolume?: Quantity;
   maxVolume?: Quantity;
 }
@@ -70,6 +78,9 @@ async function vessel(service: RecordService, ctx: RecordContext, id: string): P
   return {
     record,
     positions: attributes.wells ? computeWells(attributes.wells).map((w) => w.name) : ['A1'],
+    ...(attributes.wells?.layout === 'grid'
+      ? { grid: { rows: attributes.wells.rows, columns: attributes.wells.columns } }
+      : {}),
     ...(attributes.deadVolume ? { deadVolume: attributes.deadVolume } : {}),
     ...(attributes.maxVolume ? { maxVolume: attributes.maxVolume } : {}),
   };
@@ -206,6 +217,7 @@ class Ledger {
         volume: l.volume ?? null,
         from: l.from ?? null,
         to: l.to ?? null,
+        added: l.added ?? null,
         after: l.after,
       })),
     );
@@ -255,6 +267,27 @@ function contentsProblem(name: string, error: unknown): never {
 }
 
 const touchesContainer = (input: { container: string }) => [input.container];
+
+function gridOf(v: Vessel): Grid {
+  if (!v.grid)
+    throw new OperationError('invalid_input', `${v.record.name} has no grid of wells to map`);
+  return v.grid;
+}
+
+function mapped(from: Grid, to: Grid, mapping: PlateMapping, wells?: string[]) {
+  try {
+    return mapPlates(from, to, mapping, wells);
+  } catch (error) {
+    contentsProblem('Mapping', error);
+  }
+}
+
+const mappingWords = (m: PlateMapping) =>
+  m.type === 'one_to_one'
+    ? 'one to one'
+    : m.type === 'quadrant'
+      ? `into quadrant ${m.quadrant}`
+      : `shifted ${m.rows} rows and ${m.columns} columns`;
 
 export const contentsOperations = [
   implement(samplesRegister, {
@@ -350,7 +383,7 @@ export const contentsOperations = [
             components: fill.components,
             ...(fill.assumed ? { assumed: true } : {}),
           });
-          ledger.set(v, well, after, { change: 'in', volume: fill.volume });
+          ledger.set(v, well, after, { change: 'in', volume: fill.volume, added: fill.components });
         }
       }
       return ledger.commit();
@@ -450,6 +483,151 @@ export const contentsOperations = [
       return ledger.commit();
     },
   }),
+  implement(inventoryMapPlates, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const side = async (x: string | Grid) => {
+        if (typeof x !== 'string')
+          return { grid: x, positions: undefined, name: `${x.rows} × ${x.columns}` };
+        const v = await vessel(service, ctx, x);
+        return { grid: gridOf(v), positions: v.positions, name: v.record.name };
+      };
+      const from = await side(input.from);
+      const to = await side(input.to);
+      let wells: string[] | undefined;
+      if (input.wells) {
+        const positions =
+          from.positions ??
+          computeWells({ layout: 'grid', rows: from.grid.rows, columns: from.grid.columns }).map(
+            (w) => w.name,
+          );
+        try {
+          wells = expandWells(input.wells, positions);
+        } catch (error) {
+          if (error instanceof LabwareError)
+            throw new OperationError('invalid_input', error.message);
+          throw error;
+        }
+      }
+      const pairs = mapped(from.grid, to.grid, input.mapping, wells);
+      return {
+        pairs,
+        explanation: `${pairs.length} wells of ${from.name} land on ${to.name} ${mappingWords(input.mapping)}${pairs[0] ? `: ${pairs[0].from} goes to ${pairs[0].to}` : ''}.`,
+      };
+    },
+  }),
+  implement(inventoryStamp, {
+    agentPolicy: 'propose',
+    touches: (input) => [input.from, input.to],
+    run: async (ctx, input, deps) => {
+      const ledger = new Ledger(
+        deps.db,
+        ctx,
+        'stamp',
+        inventoryStamp.id,
+        input.reason,
+        new RecordService(deps.db, deps.kinds),
+      );
+      const from = await ledger.vessel(input.from);
+      const to = await ledger.vessel(input.to);
+      if (from.record.id === to.record.id) {
+        throw new OperationError(
+          'invalid_input',
+          'A plate can’t be stamped onto itself; use inventory.transfer',
+        );
+      }
+      let wells = input.wells ? wellsOf(from, input.wells) : undefined;
+      if (!wells) {
+        const rows = await deps.db
+          .select({ well: wellContents.well })
+          .from(wellContents)
+          .where(eq(wellContents.containerId, from.record.id));
+        const filled = new Set(rows.map((r) => r.well));
+        wells = from.positions.filter((p) => filled.has(p));
+        if (wells.length === 0)
+          throw new OperationError('invalid_input', `${from.record.name} is empty`);
+      }
+      for (const pair of mapped(gridOf(from), gridOf(to), input.mapping, wells)) {
+        const source = await ledger.state(from, pair.from);
+        let taken: ReturnType<typeof take>;
+        try {
+          taken = take(source, input.volume);
+        } catch (error) {
+          contentsProblem(`${from.record.name} ${pair.from}`, error);
+        }
+        ledger.set(from, pair.from, taken.left, {
+          change: 'out',
+          volume: input.volume,
+          to: { container: to.record.id, well: pair.to },
+        });
+        ledger.set(to, pair.to, mix(await ledger.state(to, pair.to), taken.portion), {
+          change: 'in',
+          volume: input.volume,
+          from: { container: from.record.id, well: pair.from },
+        });
+      }
+      return ledger.commit();
+    },
+  }),
+  implement(inventoryLineage, {
+    run: async (ctx, input, deps) => {
+      const v = await vessel(new RecordService(deps.db, deps.kinds), ctx, input.container);
+      const [well] = wellsOf(v, [input.well]) as [string];
+      const maxDepth = input.depth ?? 5;
+      const steps: {
+        to: { container: string; well: string };
+        from?: { container: string; well: string };
+        volume?: Quantity;
+        components?: Component[];
+        eventId: string;
+        type: string;
+        at: string;
+        depth: number;
+      }[] = [];
+      // Each well is followed back from the time liquid left it for the well asked about.
+      let frontier: { container: string; well: string; before?: Date }[] = [
+        { container: v.record.id, well },
+      ];
+      const seen = new Set<string>();
+      for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
+        const next: typeof frontier = [];
+        for (const at of frontier) {
+          const key = `${at.container}|${at.well}|${at.before?.toISOString() ?? ''}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const rows = await deps.db
+            .select({ line: inventoryLines, event: inventoryEvents })
+            .from(inventoryLines)
+            .innerJoin(inventoryEvents, eq(inventoryLines.eventId, inventoryEvents.id))
+            .where(
+              and(
+                eq(inventoryEvents.labId, ctx.labId),
+                eq(inventoryLines.containerId, at.container),
+                eq(inventoryLines.well, at.well),
+                eq(inventoryLines.change, 'in'),
+                ...(at.before ? [lte(inventoryEvents.at, at.before)] : []),
+              ),
+            )
+            .orderBy(desc(inventoryEvents.at), desc(inventoryLines.seq));
+          for (const { line, event } of rows) {
+            steps.push({
+              to: { container: line.containerId, well: line.well },
+              ...(line.from ? { from: line.from } : {}),
+              ...(line.volume ? { volume: line.volume } : {}),
+              ...(line.added ? { components: line.added } : {}),
+              eventId: event.id,
+              type: event.type,
+              at: event.at.toISOString(),
+              depth,
+            });
+            if (line.from) next.push({ ...line.from, before: event.at });
+          }
+        }
+        frontier = next;
+      }
+      return { steps };
+    },
+  }),
   implement(inventoryWells, {
     run: async (ctx, input, deps) => {
       const v = await vessel(new RecordService(deps.db, deps.kinds), ctx, input.container);
@@ -508,6 +686,7 @@ export const contentsOperations = [
               ...(l.volume ? { volume: l.volume } : {}),
               ...(l.from ? { from: l.from } : {}),
               ...(l.to ? { to: l.to } : {}),
+              ...(l.added ? { added: l.added } : {}),
               after: l.after,
             })) as LedgerLine[],
         })),

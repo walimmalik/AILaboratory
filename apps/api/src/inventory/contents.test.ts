@@ -405,3 +405,89 @@ describe('samples and discarding', () => {
     void compound;
   });
 });
+
+describe('stamping and lineage', () => {
+  it('maps plates, stamps a 96 into a 384 quadrant, and traces a well back to its lot', async () => {
+    const { assay, compound, dmso } = await lab();
+    const p96 = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: '96 PP',
+      attributes: { family: 'plate', wells: { layout: 'grid', rows: 8, columns: 12 } },
+    });
+    const [mother] = (
+      await run<{ containers: RecordEnvelope[] }>(person, 'inventory.register_containers', {
+        labwareType: p96.id,
+        containers: [{}],
+      })
+    ).containers as [RecordEnvelope];
+
+    const byGrid = await run<{ pairs: { from: string; to: string }[]; explanation: string }>(
+      agent,
+      'inventory.map_plates',
+      {
+        from: { rows: 8, columns: 12 },
+        to: { rows: 16, columns: 24 },
+        mapping: { type: 'quadrant', quadrant: 4 },
+        wells: ['A1'],
+      },
+    );
+    expect(byGrid.pairs).toEqual([{ from: 'A1', to: 'B2' }]);
+    const byPlate = await run<{ pairs: unknown[]; explanation: string }>(
+      person,
+      'inventory.map_plates',
+      { from: mother.id, to: assay.id, mapping: { type: 'quadrant', quadrant: 1 } },
+    );
+    expect(byPlate.pairs).toHaveLength(96);
+    expect(byPlate.explanation).toContain(
+      '96 wells of PLT-000003 land on PLT-000002 into quadrant 1',
+    );
+    const wrong = await refused(
+      run(person, 'inventory.map_plates', {
+        from: mother.id,
+        to: assay.id,
+        mapping: { type: 'one_to_one' },
+      }),
+    );
+    expect(wrong.message).toContain('same grid');
+
+    await run(person, 'inventory.fill', {
+      container: mother.id,
+      fills: [
+        {
+          wells: ['A1:A2'],
+          volume: { value: '50', unit: 'uL' },
+          components: stock(compound, dmso),
+        },
+      ],
+    });
+    const stamped = await run<Changed>(person, 'inventory.stamp', {
+      from: mother.id,
+      to: assay.id,
+      mapping: { type: 'quadrant', quadrant: 2 },
+      volume: { value: '5', unit: 'uL' },
+    });
+    expect(stamped.event.type).toBe('stamp');
+    expect(stamped.event.lines.filter((l) => l.change === 'in').map((l) => l.well)).toEqual([
+      'A2',
+      'A4',
+    ]);
+    const self = await refused(
+      run(person, 'inventory.stamp', {
+        from: mother.id,
+        to: mother.id,
+        mapping: { type: 'one_to_one' },
+        volume: { value: '1', unit: 'uL' },
+      }),
+    );
+    expect(self.message).toContain('onto itself');
+
+    const lineage = await run<{
+      steps: { type: string; depth: number; from?: { well: string }; components?: unknown[] }[];
+    }>(person, 'inventory.lineage', { container: assay.id, well: 'A4' });
+    expect(lineage.steps.map((s) => [s.type, s.depth, s.from?.well])).toEqual([
+      ['stamp', 1, 'A2'],
+      ['fill', 2, undefined],
+    ]);
+    expect(lineage.steps[1]?.components).toEqual(stock(compound, dmso));
+  });
+});

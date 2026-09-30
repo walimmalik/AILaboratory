@@ -29,6 +29,8 @@ What a well holds is a `WellState` (see `skills/calculators`). To know what a tr
 
 - `inventory.wells` with `{container}` lists what each well holds; `inventory.history` with `{container, well?}` gives its ledger.
 - Recording what happened at the bench (all proposals from an agent): `inventory.fill` with `{container, fills: [{wells: ["A3:P22"], volume, components, assumed?}]}` for liquid from outside the inventory (components are lots or samples with their concentration); `inventory.transfer` with `{transfers: [{from: {container, well}, to: {container, well}, volume}]}`; `inventory.consume` with `{container, wells, volume}`; `inventory.correct` with `{container, wells, state, reason}` for a measurement.
+- Plate onto plate: `inventory.map_plates` shows which well lands where (`{from, to, mapping: {type: "one_to_one"} | {type: "quadrant", quadrant: 1-4} | {type: "offset", rows, columns}, wells?}`); `inventory.stamp` with `{from, to, mapping, volume, wells?}` records it.
+- `inventory.lineage` with `{container, well, depth?}` traces where a well's liquid came from.
 - `inventory.discard` with `{container, expectedVersion, reason?}` when something is thrown away; empty a box first.
 - A tube or trough is well `A1`. Mark estimates `assumed: true`. Read `warnings` in the result (a well below its dead volume) and tell the person.
 
