@@ -6,6 +6,7 @@ import { markInterrupted } from './assistant/store.ts';
 import { connect } from './db/client.ts';
 import { entityKinds } from './entities/kinds.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
+import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
@@ -23,7 +24,13 @@ await connection.migrate();
 // Each registry registers its kinds here as its plan lands. The widget kind exists only for
 // end-to-end tests and demos, and only when asked for.
 const kinds = new KindRegistry();
-for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...entityKinds])
+for (const kind of [
+  ...labwareKinds,
+  ...instrumentKinds,
+  ...reagentKinds,
+  ...entityKinds,
+  ...inventoryKinds,
+])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);
 

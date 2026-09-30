@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
 import { RecordError } from './errors.ts';
-import type { KindRegistry } from './kinds.ts';
+import { type KindRegistry, namePrefixesOf } from './kinds.ts';
 
 /** Who is acting, and in which lab. Every record operation runs in one. */
 export interface RecordContext {
@@ -478,7 +478,7 @@ export class RecordService {
         return rows.map(toEnvelope);
       },
       current: current ? toEnvelope(current) : undefined,
-      reservedPrefixes: this.kinds.list().map((k) => k.namePrefix),
+      reservedPrefixes: this.kinds.list().flatMap(namePrefixesOf),
     });
     if (refuse && result.invalid?.length) {
       throw new RecordError(
@@ -488,8 +488,8 @@ export class RecordService {
     }
     if (
       result.namePrefix &&
-      result.namePrefix !== kind.namePrefix &&
-      this.kinds.list().some((k) => k.namePrefix === result.namePrefix)
+      !namePrefixesOf(kind).includes(result.namePrefix) &&
+      this.kinds.list().some((k) => namePrefixesOf(k).includes(result.namePrefix as string))
     ) {
       throw new RecordError(
         'invalid_attributes',

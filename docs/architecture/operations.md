@@ -46,6 +46,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `reagents.receive_lot`, `reagents.set_lot_status` | proposed |
 | `liquids.record_verification` | proposed |
 | `entities.draft_kind`, `entities.draft` | direct (create drafts) |
+| `locations.create`, `inventory.register_containers`, `inventory.move` | proposed |
 | `records.confirm_section` | people only |
 | `assistant.ask` | people only |
 

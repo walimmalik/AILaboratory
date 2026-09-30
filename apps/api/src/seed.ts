@@ -7,6 +7,7 @@ import { entityKinds } from './entities/kinds.ts';
 import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
+import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -68,7 +69,13 @@ if (!ctx) {
 }
 
 const kinds = new KindRegistry();
-for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...entityKinds])
+for (const kind of [
+  ...labwareKinds,
+  ...instrumentKinds,
+  ...reagentKinds,
+  ...entityKinds,
+  ...inventoryKinds,
+])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus());
 
