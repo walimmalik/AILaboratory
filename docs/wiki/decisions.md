@@ -73,6 +73,14 @@ Agents act directly on drafts and propose the rest (0016); two MCP tools, `descr
 
 [Plan 004](../plans/004-agent-shell.md)
 
+## 005 Lab memory (M1 to M22, all as recommended)
+
+- **Round 1 (005-M1 to M6):** memory holds only what has no typed home, and a memory that implies a typed value proposes it on the record with source `lab_memory` (measured durations stay 019's statistics); memories link to records with typed conditions; five kinds (convention, preference, quirk, lesson, fact); three strengths (rule, default, note); lab and personal memories, all visible; a memory never silently overrides a confirmed record, the more specific wins, and each kind has a check-again date.
+- **Round 2 (005-M7 to M11):** a code-picked context bundle of about 15 lines per page; design tools apply memory themselves through `memory.for`; weights from evidence counts for and against, which order memories and suggest promotions but never change strength; library search reused; `memory` evidence and a "used in" list. One "from lab memory" tag per page.
+- **Round 3 (005-M12 to M18):** people add memories directly and they're active at once; each module ships detectors feeding `memory.observe` (a new AGENTS.md rule), with 013 deviations and repeated overrides backfilled; candidates are proposed only past a bar; agents ask once in chat on general statements and corrections, prompted by code; a Lab memory section in Review grouped by source; contradictions and decay by quiet opportunities make a memory "due for a check", never auto-retired; 25 seed memories, none derived.
+- **Round 4 (005-M19 to M22):** a Lab memory page grouped by what memories are about; a folded "Lab notes" line on record pages; "Using N lab notes" in the assistant; split 005a to 005d. [Plan 005](../plans/005-lab-memory.md)
+- **After the adversarial review (7 changes, 2026-09-30):** an optional typed effect (`prefer`, `avoid`, `set`) that code applies, statements only read by agents; code blocks only conflicting effects, with a total specificity order; an agent's memory is a draft until a person confirms it; a closed condition object each consumer evaluates; 005c split into 005c-1 (intake, candidates, Review section, override and structured-deviation detectors) and 005c-2 (weights, decay only for detectors that report negatives), dead-volume detector moved to 016 or 022; a memory and its typed change are one change set; acceptance scenarios.
+
 ## 006 Seed lab (round 6)
 
 Wali's real instrument list; assays are sandwich ELISA, single-point compound screen with dose-response follow-up (CellTiter-Glo or HiBiT), enzyme kinetic screen, Dual-Glo reporter, plasmid assembly (Gibson, Golden Gate) with purification; a fictional Demo Lab; YAML in `seed/`, vendor PDFs linked not committed; own SOPs plus openly licensed ones; kinds plus a small stocked lab. Every value is marked verified, estimated or unknown; no invented catalog numbers. [Plan 006](../plans/006-seed-lab.md)

@@ -16,7 +16,7 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [002 Core records](../plans/002-core-records.md) | Record envelope, IDs and names, units, history, links, actors | Built (PR #2) |
 | [003 Operation registry](../plans/003-operation-registry.md) | Operations, REST, MCP, proposals, activity ledger, typed client | Built (PR #3) |
 | [004 Agent shell](../plans/004-agent-shell.md) | 004a web shell, sign-in, ledger, records (PR #4); 004b assistant panel and model adapters (PR #5); 004c draft and confirm (PR #7, refined in PR #9); 004d one Review page (PRs #10, #11) | Built |
-| 005 Lab memory | Conventions, quirks, lessons; scoped, linked, agent-proposed and person-confirmed; search and page context | Not started |
+| [005 Lab memory](../plans/005-lab-memory.md) | Conventions, preferences, quirks, lessons and facts linked to records with conditions and strength; page context and `memory.for` for design tools; people add, agents ask or propose; detectors, weights and decay | Locked 2026-09-30 (M1 to M22 all as recommended, plus 7 changes from the adversarial review); before 017 (005a, 005b); 005c-1 once designs exist, 005c-2 once a detector reports negatives; built as 005a to 005d |
 | [006 Seed lab](../plans/006-seed-lab.md) | The Demo Lab as YAML in `seed/`: 33 labware types, 16 instrument kinds and 18 instruments, 28 products, entities, lots and containers, 11 SOPs, 6 assay templates | Built (PR #6); each registry adds its loader |
 
 ## Registries
