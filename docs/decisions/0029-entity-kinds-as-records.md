@@ -26,4 +26,4 @@ Option 1. `KindDefinition.related(attributes, context)` returns problems that re
 
 - Any kind can later check itself against other records the same way (a container against its labware type, 010b).
 - Readiness reads cost a few queries more for kinds with `related`; the list reads are per lab and fine at lab scale.
-- Deferred to later 010 steps: GenBank and FASTA import and export, molecular weight and InChIKey from SMILES (science service, V9), sequence maps; flagging entities that no longer fit after their kind's fields change; `entities.where_used` (once containers and samples exist); the seed kinds and `seed/entities.yaml` (next PR).
+- Deferred to later 010 steps: GenBank and FASTA import and export, molecular weight and InChIKey from SMILES (science service, V9), sequence maps; flagging entities that no longer fit after their kind's fields change; `entities.where_used` (once containers and samples exist).

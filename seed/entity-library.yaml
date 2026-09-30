@@ -1,0 +1,267 @@
+# Entity kinds and entities in the library's shape (plan 010a, ADR 0029), made from the research in
+# seed/entities.yaml. Loaded by `pnpm --filter @ailab/api seed` as drafts for a person to confirm.
+#
+# kinds: the seed entity kinds (plan 010, V1). Each has a base class, a readable prefix and typed
+#   fields; defaults for handling rules sit on the kind (cell lines: time out of the incubator).
+# entities: `kind` names a kind by key. `vendor` is matched by name or created and fills the vendor
+#   field; `product` names a product in reagent-library.yaml and fills the product field; `parent`
+#   names another entity here. `sources[0]` is the evidence; `estimated` lists fields the research
+#   marked as estimates, and makes the fields load as assumed with that note.
+#
+# Left out: the FDA-approved drug library (plan 010, V10: one entity per compound, imported from the
+# vendor's plate map file, which the seed doesn't have yet).
+
+kinds:
+- key: plasmid
+  label: Plasmid
+  attributes:
+    base: dna
+    prefix: PLS
+    description: A circular DNA vector the lab propagates in bacteria.
+    fields:
+    - {key: resistance, label: Resistance marker, type: {type: text}, required: true}
+    - {key: length, label: Length, type: {type: number, unit: bp}}
+    - {key: parent, label: Parent plasmid, type: {type: link, kind: entity}, description: The plasmid it was built from}
+    - {key: vendor, label: Vendor, type: {type: link, kind: vendor}}
+    - {key: catalogNumber, label: Catalog number, type: {type: text}}
+    - {key: fictional, label: Demo construct, type: {type: yes_no}, description: 'Made up for the demo lab; no real sequence'}
+- key: dna-fragment
+  label: DNA fragment
+  attributes:
+    base: dna
+    prefix: FRG
+    description: A linear piece of DNA from PCR, synthesis or a digest, e.g. an insert for Gibson assembly.
+    fields:
+    - {key: length, label: Length, type: {type: number, unit: bp}}
+    - {key: origin, label: Made by, type: {type: choice, options: [PCR, synthesis, digest, other]}}
+    - {key: template, label: Template, type: {type: link, kind: entity}}
+- key: oligo
+  label: Oligonucleotide
+  attributes:
+    base: dna
+    prefix: OLI
+    description: A short synthetic DNA strand, e.g. a primer or probe.
+    fields:
+    - {key: purpose, label: Used as, type: {type: choice, options: [primer, probe, adapter, other]}}
+    - {key: modifications, label: Modifications, type: {type: text}, description: "e.g. 5' FAM, 3' BHQ1"}
+    - {key: vendor, label: Vendor, type: {type: link, kind: vendor}}
+- key: rna
+  label: RNA
+  attributes:
+    base: rna
+    prefix: RNA
+    fields:
+    - {key: type, label: Type, type: {type: choice, options: [mRNA, gRNA, siRNA, other]}}
+    - {key: length, label: Length, type: {type: number, unit: nt}}
+- key: protein
+  label: Protein
+  attributes:
+    base: protein
+    prefix: PRT
+    description: A purified or recombinant protein.
+    fields:
+    - {key: organism, label: Organism, type: {type: text}}
+    - {key: tag, label: Tag, type: {type: text}, description: 'e.g. His6, HiBiT'}
+    - {key: molecularWeight, label: Molecular weight, type: {type: number, unit: kDa}}
+- key: antibody
+  label: Antibody
+  attributes:
+    base: protein
+    prefix: AB
+    fields:
+    - {key: target, label: Target, type: {type: text}, required: true}
+    - {key: host, label: Host species, type: {type: text}}
+    - {key: clonality, label: Clonality, type: {type: choice, options: [monoclonal, polyclonal, recombinant]}}
+    - {key: conjugate, label: Conjugate, type: {type: text}, description: 'e.g. biotin, HRP'}
+    - {key: product, label: Product, type: {type: link, kind: product}}
+- key: enzyme
+  label: Enzyme
+  attributes:
+    base: protein
+    prefix: ENZ
+    fields:
+    - {key: activity, label: Activity, type: {type: text}, description: "What it does, e.g. dephosphorylates 5' ends"}
+    - {key: vendor, label: Vendor, type: {type: link, kind: vendor}}
+    - {key: catalogNumber, label: Catalog number, type: {type: text}}
+    - {key: product, label: Product, type: {type: link, kind: product}}
+- key: compound
+  label: Compound
+  attributes:
+    base: chemical
+    prefix: CMP
+    description: A small molecule, one per compound, including each member of a screening library.
+    fields:
+    - {key: cas, label: CAS number, type: {type: text}}
+    - {key: product, label: Product, type: {type: link, kind: product}}
+    - {key: role, label: Role in the lab, type: {type: text}, description: 'e.g. positive control, vehicle'}
+- key: cell-line
+  label: Cell line
+  attributes:
+    base: cells
+    prefix: CEL
+    fields:
+    - {key: organism, label: Organism, type: {type: text}, required: true}
+    - {key: tissue, label: Tissue, type: {type: text}}
+    - {key: morphology, label: Morphology, type: {type: text}}
+    - {key: biosafetyLevel, label: Biosafety level, type: {type: choice, options: [BSL-1, BSL-2, BSL-3]}, required: true}
+    - {key: vendor, label: Vendor, type: {type: link, kind: vendor}}
+    - {key: catalogNumber, label: Catalog number, type: {type: text}}
+    - {key: cellosaurus, label: Cellosaurus ID, type: {type: text}, description: e.g. CVCL_0045}
+    - {key: medium, label: Growth medium, type: {type: text}}
+    - {key: temperature, label: Culture temperature, type: {type: number, unit: degC}}
+    - {key: co2, label: CO2, type: {type: number, unit: '%v/v'}}
+    - {key: subculture, label: Subculture ratio, type: {type: text}}
+    - {key: doublingTime, label: Doubling time, type: {type: number, unit: h}}
+    - {key: cryopreservation, label: Freezing medium, type: {type: text}}
+    handlingRules:
+    - rule: max_time_out_of_storage
+      text: Keep live cells out of the incubator at most 30 min per handling step (pH drifts without CO2)
+      source: {from: lab_convention}
+      enforced: true
+      period: {value: '30', unit: min}
+- key: bacterial-strain
+  label: Bacterial strain
+  attributes:
+    base: organism
+    prefix: STR
+    fields:
+    - {key: species, label: Species, type: {type: text}, required: true}
+    - {key: genotype, label: Genotype, type: {type: text}}
+    - {key: resistance, label: Resistance, type: {type: text}}
+    - {key: biosafetyLevel, label: Biosafety level, type: {type: choice, options: [BSL-1, BSL-2]}}
+    - {key: vendor, label: Vendor, type: {type: link, kind: vendor}}
+    - {key: catalogNumber, label: Catalog number, type: {type: text}}
+
+entities:
+- key: atcc-crl-1573
+  kind: cell-line
+  label: 293 [HEK-293]
+  synonyms: [HEK293, HEK-293]
+  vendor: ATCC
+  fields:
+    organism: Homo sapiens
+    tissue: embryonic kidney
+    morphology: epithelial
+    biosafetyLevel: BSL-2
+    catalogNumber: CRL-1573
+    cellosaurus: CVCL_0045
+    medium: EMEM + 10% FBS (ATCC 30-2003); many labs use DMEM high glucose + 10% FBS
+    temperature: {value: '37', unit: degC}
+    co2: {value: '5', unit: '%v/v'}
+    subculture: 1:6 to 1:10 weekly
+    doublingTime: {value: '30', unit: h}
+    cryopreservation: Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen
+  handlingRules:
+  - rule: advice
+    text: HEK293 detach easily; dispense gently in plate-based assays
+    source: {from: lab_convention}
+    enforced: false
+  notes: Transformed with adenovirus 5 DNA (Cellosaurus CVCL_0045). Doubling time 24 to 30 h (DSMZ ACC-305 via Cellosaurus).
+  sources: ['https://www.atcc.org/products/crl-1573', 'https://www.cellosaurus.org/CVCL_0045']
+- key: atcc-ccl-2
+  kind: cell-line
+  label: HeLa
+  vendor: ATCC
+  fields:
+    organism: Homo sapiens
+    tissue: cervix (adenocarcinoma)
+    morphology: epithelial
+    biosafetyLevel: BSL-2
+    catalogNumber: CCL-2
+    cellosaurus: CVCL_0030
+    medium: EMEM + 10% FBS (ATCC 30-2003)
+    temperature: {value: '37', unit: degC}
+    co2: {value: '5', unit: '%v/v'}
+    subculture: 1:2 to 1:6
+    doublingTime: {value: '30', unit: h}
+    cryopreservation: Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen
+  notes: Doubling time 30 to 48 h across sources (Cellosaurus CVCL_0030, DSMZ ACC-57).
+  sources: ['https://www.atcc.org/products/ccl-2', 'https://www.cellosaurus.org/CVCL_0030']
+- key: atcc-ccl-185
+  kind: cell-line
+  label: A549
+  vendor: ATCC
+  fields:
+    organism: Homo sapiens
+    tissue: lung (carcinoma)
+    morphology: epithelial-like
+    biosafetyLevel: BSL-1
+    catalogNumber: CCL-185
+    medium: F-12K + 10% FBS (ATCC 30-2004)
+    temperature: {value: '37', unit: degC}
+    co2: {value: '5', unit: '%v/v'}
+    subculture: 1:3 to 1:8
+    doublingTime: {value: '22', unit: h}
+    cryopreservation: Complete growth medium + 5% v/v DMSO; vapor phase of liquid nitrogen
+  sources: ['https://www.atcc.org/products/ccl-185']
+- key: promega-pgl4-10
+  kind: plasmid
+  label: pGL4.10[luc2]
+  vendor: Promega
+  fields:
+    resistance: ampicillin
+    catalogNumber: E6651
+  estimated: [catalogNumber, resistance]
+  notes: Promoterless firefly luciferase (luc2) reporter vector; clone a promoter upstream for Dual-Glo gene expression assays. Catalog number from memory of Promega's pGL4 range.
+  sources: ['https://www.promega.com/products/luciferase-assays/reporter-vectors/pgl4-luciferase-reporter-vectors/']
+- key: promega-pgl4-75
+  kind: plasmid
+  label: pGL4.75[hRluc/CMV]
+  vendor: Promega
+  fields:
+    resistance: ampicillin
+    catalogNumber: E6931
+  estimated: [catalogNumber, resistance]
+  notes: Constitutive Renilla luciferase control vector for Dual-Glo normalisation. Catalog number from memory of Promega's pGL4 range.
+  sources: ['https://www.promega.com/products/luciferase-assays/reporter-vectors/pgl4-luciferase-reporter-vectors/']
+- key: neb-puc19
+  kind: plasmid
+  label: pUC19 Vector
+  synonyms: [pUC19]
+  vendor: New England Biolabs
+  fields:
+    resistance: ampicillin
+    length: {value: '2686', unit: bp}
+    catalogNumber: N3041
+  estimated: [catalogNumber]
+  notes: Cloning vector; used as the transformation control.
+  sources: ['https://www.neb.com/en-us/products/n3041-puc19-vector']
+- key: demo-pil6p-luc2
+  kind: plasmid
+  label: pGL4.10-IL6p-luc2 (demo)
+  parent: promega-pgl4-10
+  fields:
+    resistance: ampicillin
+    fictional: true
+  notes: Fictional demo construct, IL-6 promoter cloned into pGL4.10 by Gibson assembly. Used by the Dual-Glo gene expression template.
+- key: demo-hibit-brd4
+  kind: plasmid
+  label: pHiBiT-BRD4 (demo)
+  fields:
+    resistance: ampicillin
+    fictional: true
+  notes: Fictional demo construct expressing BRD4 with a C-terminal HiBiT tag, assembled by Golden Gate. Used by the HiBiT follow-up template.
+- key: cmpd-staurosporine
+  kind: compound
+  label: Staurosporine
+  product: cayman-81590
+  fields:
+    role: positive control (kills cells)
+  notes: The lab keeps a 1 mM stock in DMSO; Cayman gives DMSO solubility of about 0.5 mg/mL (about 1 mM), so not 10 mM.
+- key: cmpd-dmso
+  kind: compound
+  label: DMSO (vehicle)
+  synonyms: [dimethyl sulfoxide]
+  product: sigma-d2650
+  fields:
+    role: neutral control and back-fill
+- key: enz-rsap
+  kind: enzyme
+  label: Shrimp Alkaline Phosphatase (rSAP)
+  synonyms: [rSAP]
+  vendor: New England Biolabs
+  fields:
+    activity: Removes 5' phosphates; hydrolyses pNPP in the kinetic screen template
+    catalogNumber: M0371
+  estimated: [catalogNumber]
+  notes: Chosen as a well-behaved phosphatase for the pNPP demo. Catalog number from memory.

@@ -50,6 +50,10 @@ Links: `is_a` to the kind, `refers_to` for each link field.
 
 Editing and confirming use `records.update` and review, which run the same checks.
 
+## Seed
+
+`seed/entity-library.yaml` holds the ten seed kinds (plasmid `PLS`, DNA fragment `FRG`, oligo `OLI`, RNA `RNA`, protein `PRT`, antibody `AB`, enzyme `ENZ`, compound `CMP`, cell line `CEL`, bacterial strain `STR`) and the demo lab's entities from `seed/entities.yaml`: three ATCC cell lines, five plasmids (two fictional), staurosporine and DMSO linked to their products, and rSAP. Cell lines carry the lab's 30 min out-of-incubator rule on their kind. Loaded by `pnpm --filter @ailab/api seed` as drafts; the first source of each entity is the evidence for its fields, except those the research marked as estimates, which load as assumed. The FDA library waits for its plate map file (V10: one entity per compound).
+
 ## Not yet
 
-Seed kinds and `seed/entities.yaml` (next), GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, containers, locations and barcodes (010b), contents and the ledger (010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, containers, locations and barcodes (010b), contents and the ledger (010c), handling-rule inheritance (010d), screens (010e).
