@@ -223,6 +223,8 @@ export interface PlatePlan {
 
 export interface PlateMapResult {
   plates: PlatePlan[];
+  /** Subjects that fit on one plate. */
+  perPlate: number;
   /** Overrides that no longer land on a plate of the map (P4). */
   staleOverrides: WellOverride[];
 }
@@ -362,18 +364,25 @@ export function generatePlateMap(
     );
   }
 
-  const units = unitsOf(subjects);
+  // A subject's series stays on one plate: plates take whole subjects.
+  const groups = subjects.map((subject) => unitsOf([subject]));
+  const size = Math.max(1, ...groups.map((g) => g.length));
+  const perPlate = Math.floor(cells.length / size);
+  if (subjects.length > 0 && perPlate === 0) {
+    throw new PlateMapError(
+      `A series of ${size} points${replicates > 1 ? ` × ${replicates} replicates` : ''} doesn't fit the ${layout.subjectRole} wells of one plate`,
+    );
+  }
   const copies = arrangement === 'another_plate' ? replicates : 1;
-  const perPlate = cells.length;
-  const platesPerCopy = Math.max(1, Math.ceil(units.length / Math.max(perPlate, 1)));
+  const platesPerCopy = Math.max(1, Math.ceil(groups.length / Math.max(perPlate, 1)));
   const random = options.seed === undefined ? undefined : seededRandom(options.seed);
 
-  // Which units go on which plate of a copy.
+  // Which subjects go on which plate of a copy.
   const pages: Unit[][] = Array.from({ length: platesPerCopy }, () => []);
-  units.forEach((unit, i) => {
+  groups.forEach((group, i) => {
     const page =
       strategy === 'balanced_across_plates' ? i % platesPerCopy : Math.floor(i / perPlate);
-    pages[page]?.push(unit);
+    pages[page]?.push(...group);
   });
 
   const plates: PlatePlan[] = [];
@@ -459,5 +468,5 @@ export function generatePlateMap(
       override: true,
     };
   }
-  return { plates, staleOverrides };
+  return { plates, perPlate, staleOverrides };
 }

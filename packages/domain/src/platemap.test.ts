@@ -243,6 +243,25 @@ describe('plate maps', () => {
     ).toThrow('No room for sample wells');
   });
 
+  it('keeps each series on one plate: 16 compounds of 10 points in duplicate per 384 plate', () => {
+    const doseResponse: LayoutSpec = { ...screen, fillOrder: 'row', replicates: 2 };
+    const series = { top: { value: '10', unit: 'uM' }, factor: '3', points: 10 };
+    const map = generatePlateMap(
+      doseResponse,
+      compounds(20).map((c) => ({ ...c, series })),
+    );
+    expect(map.perPlate).toBe(16);
+    expect(map.plates).toHaveLength(2);
+    const row = map.plates[0]?.wells.filter((w) => w.well.match(/^A\d/) && w.role === 'compound');
+    expect(new Set(row?.map((w) => w.subject))).toEqual(new Set(['cmp_1']));
+    expect(row?.find((w) => w.well === 'A22')).toMatchObject({ point: 10, replicate: 2 });
+    expect(() =>
+      generatePlateMap({ format: p96, subjectRole: 'compound', subjectRegion: ['column 1'] }, [
+        { subject: 'x', series: { ...series, points: 12 } },
+      ]),
+    ).toThrow("A series of 12 points doesn't fit");
+  });
+
   it('draws the same numbers from the same seed', () => {
     const a = seededRandom(3);
     const b = seededRandom(3);
