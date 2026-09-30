@@ -1,0 +1,68 @@
+import { z } from 'zod';
+import { recordIdOf } from '../ids.ts';
+import { LiquidVolume } from '../labware.ts';
+import {
+  ClassChoice,
+  DispenseMode,
+  LiquidClassId,
+  MixturePart,
+  VerificationAttributes,
+  VerificationResult,
+} from '../liquids.ts';
+import { defineContract } from '../operation.ts';
+import { Quantity } from '../quantity.ts';
+import { LiquidTypeId, ProductId } from '../reagents.ts';
+import { RecordEnvelope } from '../record.ts';
+
+export const liquidsResolveClass = defineContract({
+  id: 'liquids.resolve_class',
+  summary:
+    "Pick the liquid class for a transfer and say why: a class chosen on the step, then the product's own class for that device, then the lab's default for the liquid's type on that device and tip. Only confirmed classes are used; when nothing fits it says what is missing and lists the classes that would do",
+  effect: 'read',
+  input: z.strictObject({
+    liquid: z
+      .union([z.strictObject({ product: ProductId }), z.strictObject({ liquidType: LiquidTypeId })])
+      .describe(
+        'What is pipetted: a product, or a liquid type (for a mixture, see liquids.mixture_type)',
+      ),
+    instrumentKind: recordIdOf('ink'),
+    device: recordIdOf('eqk').optional().describe('The pipette, head, channel type or chip'),
+    tip: recordIdOf('lwt').optional().describe('The tip rack type'),
+    sourceLabware: recordIdOf('lwt').optional().describe('Echo: the source plate type'),
+    mode: DispenseMode.optional(),
+    volume: LiquidVolume,
+    liquidClass: LiquidClassId.optional().describe('A class chosen on the step, checked to fit'),
+  }),
+  output: ClassChoice,
+});
+
+export const liquidsMixtureType = defineContract({
+  id: 'liquids.mixture_type',
+  summary:
+    "Work out a mixture's liquid type from its parts (R8): the largest part decides, unless DMSO (at least 70%), glycerol (over 20%), ethanol or a volatile solvent (at least 50%) passes its threshold. The result is an assumption until a person or the SOP step sets it",
+  effect: 'read',
+  input: z.strictObject({
+    parts: z
+      .array(z.strictObject({ liquidType: LiquidTypeId, volume: Quantity }))
+      .min(1)
+      .describe('Each part and how much of it'),
+  }),
+  output: z.object({
+    liquidType: LiquidTypeId,
+    label: z.string(),
+    shares: z.array(z.object({ base: MixturePart.shape.base, percent: z.string() })),
+    why: z.string(),
+  }),
+});
+
+export const liquidsRecordVerification = defineContract({
+  id: 'liquids.record_verification',
+  summary:
+    "Record a check of a liquid class (gravimetric, dye or photometric: target, replicates, mean, CV and the limits it must meet). A passing run that isn't marked demo makes the class verified in this lab",
+  effect: 'write',
+  input: z.strictObject({
+    ...VerificationAttributes.shape,
+    reason: z.string().min(1).optional().describe('Why; kept in history'),
+  }),
+  output: z.object({ record: RecordEnvelope, result: VerificationResult }),
+});

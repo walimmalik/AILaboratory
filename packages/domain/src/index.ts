@@ -2,6 +2,7 @@ export * from './decimal.ts';
 export * from './ids.ts';
 export * from './instruments.ts';
 export * from './labware.ts';
+export * from './liquids.ts';
 export * from './opentrons.ts';
 export * from './readiness.ts';
 export * from './reagents.ts';

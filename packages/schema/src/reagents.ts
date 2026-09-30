@@ -193,6 +193,12 @@ export const ProductAttributes = z.strictObject({
     .regex(/^\d{2,7}-\d{2}-\d$/, 'must be a CAS number like 67-68-5')
     .optional(),
   liquidType: LiquidTypeId.optional().describe('How it behaves when pipetted (R4)'),
+  liquidClasses: z
+    .array(recordIdOf('lqc'))
+    .optional()
+    .describe(
+      "Liquid classes to use for this product instead of the lab default for its liquid type, on each class's device (009b)",
+    ),
   storage: TemperatureRange.optional().describe('Storage temperature'),
   shelfLife: Period.optional().describe('Unopened, from receipt'),
   handlingRules: z.array(HandlingRule).optional(),
