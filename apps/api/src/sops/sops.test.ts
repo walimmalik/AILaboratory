@@ -1,4 +1,10 @@
-import type { Actor, Converted, Readiness, RecordEnvelope } from '@ailab/schema';
+import {
+  type Actor,
+  type Converted,
+  type Readiness,
+  type RecordEnvelope,
+  SopExpectation,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Assistant } from '../assistant/assistant.ts';
 import type { ChatModel, ModelRequest, ModelTurn } from '../assistant/model.ts';
@@ -14,6 +20,7 @@ import { ActivityBus, createRegistry, type OperationRegistry } from '../operatio
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { benchmarkTable, runBenchmark } from './benchmark.ts';
 import { sopKinds } from './kinds.ts';
 
 let db: Db;
@@ -816,5 +823,98 @@ describe('sops.review', () => {
       problem: expect.stringContaining('timed out'),
       rounds: [],
     });
+  });
+});
+
+describe('the digitizing benchmark (sops.score)', () => {
+  const expected = {
+    key: 'elisa',
+    document: 'Vendor ELISA sheet',
+    basis: 'hand-checked',
+    checked: true,
+    materials: [
+      { label: 'Capture antibody' },
+      { label: 'Wash buffer', aliases: ['PBST'] },
+      { label: 'Detection antibody' },
+    ],
+    steps: [
+      { action: 'add', quantities: [q('100', 'uL')], words: ['capture'] },
+      { action: 'wash', quantities: [q('400', 'uL')] },
+      { action: 'read', quantities: [q('450', 'nm')] },
+      { action: 'incubate', words: ['substrate'] },
+    ],
+    values: [{ quantity: q('5', 'mL'), about: 'dead volume' }, { quantity: q('30', 'min') }],
+    questions: [{ about: 'coating temperature', words: ['4 °C'] }],
+  };
+
+  it('scores an SOP section by section, for a person and an agent, and says what is missing', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    for (const ctx of [person, agent]) {
+      const score = await run<{
+        materials: { recall: number; missing: string[] };
+        steps: { recall: number; order: number; missing: string[] };
+        values: { recall: number; missing: string[] };
+        questions: { recall: number };
+        overall: number;
+      }>(ctx, 'sops.score', { sop: sop.id, expected });
+      expect(score.materials).toMatchObject({ recall: 2 / 3, missing: ['Detection antibody'] });
+      expect(score.steps).toMatchObject({ recall: 3 / 4, order: 1 });
+      expect(score.steps.missing).toEqual(['incubate substrate']);
+      // The 30 min window is on the timing rule, not a step or variable, so it is not found.
+      expect(score.values).toMatchObject({ recall: 0.5, missing: ['30 min'] });
+      expect(score.questions.recall).toBe(1);
+      expect(score.overall).toBeCloseTo((2 / 3 + 3 / 4 + 0.5 + 1) / 4);
+    }
+  });
+
+  it('refuses an expectation that is not one, a record that is not an SOP, and another lab', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    await expect(
+      registry.execute(person, 'sops.score', {
+        sop: sop.id,
+        expected: { ...expected, steps: [{ action: 'dance' }] },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      registry.execute(otherLab, 'sops.score', { sop: sop.id, expected }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('finds the SOPs drafted from each benchmark document and scores them before and after review', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'elisa.md',
+      mediaType: 'text/markdown',
+      text: '# Coating\nCoat the plate overnight.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Vendor ELISA sheet',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      source: { document: doc.id },
+      questions: [],
+    });
+    await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const reviewer = withReviewer(
+      new PlaybackModel([
+        call('sop_ask', {
+          question: 'Overnight at 4 °C or at room temperature?',
+          suggestion: 'At room temperature',
+        }),
+        call('sop_finish', { summary: 'One question' }),
+        call('sop_finish', { summary: 'Nothing more' }),
+      ]),
+    );
+    await reviewer.execute(person, 'sops.review', { sop: sop.id, expectedVersion: 1 });
+
+    const rows = await runBenchmark(registry, person, [SopExpectation.parse(expected)]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ key: 'elisa', sop: sop.name, draftedBy: 'Claude' });
+    expect(rows[0]?.beforeReview?.questions?.recall).toBe(0);
+    expect(rows[0]?.score.questions?.recall).toBe(1);
+    expect(benchmarkTable(rows)).toContain(`| elisa | ${sop.name} IL-6 ELISA | Claude |`);
   });
 });

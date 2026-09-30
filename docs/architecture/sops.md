@@ -59,6 +59,12 @@ An open question (G6) blocks confirming until a person settles it with `sops.ans
 
 `sops.review` has the assistant's model review a draft in rounds (default 2). The reviewer sees the SOP, the failing readiness checks, the citation problems and the source's passages. It changes the draft only through tools: `sop_fix` (a JSON pointer, a value or `remove`, a reason, a passage), `sop_ask` (an open question with a suggestion) and `sop_finish`. A change is kept only if the SOP stays valid and its references hold; refused changes go back to the model and are kept with the round. Each round's changes land as one record update by "<agent> (reviewer)", with evidence `stated` for cited fixes and `assumed` otherwise. The round (model, versions, findings with before and after, refused changes, summary) is stored in `sop_reviews` and listed by `sops.reviews`. A round with no findings ends the cycle. Code: `apps/api/src/sops/review.ts`, with the citation helpers in `citations.ts`.
 
+## The digitizing benchmark (012c)
+
+`seed/sop-benchmark/` holds one expectation per test document (`SopExpectation`): the materials, steps (by action, with the values they must state and words they must contain), values and unclear spots a correct digitization has, with where the expectation came from (`basis`, e.g. the LabOP model) and whether a person has checked it. `sops.score` (a calculator, `scoreSop` in `packages/domain/src/sop-benchmark.ts`) scores one SOP against one expectation: per section the share found (recall), for materials and steps the share of the draft that matches (precision), for steps how much of the order is kept, and what is missing; overall is the mean recall. Quantities match by value in any unit of the same dimension, from parameters, resolved variables or the step's words.
+
+`pnpm --filter @ailab/api sop:benchmark` finds every SOP drafted from a benchmark document (by the document's title), scores its current version and, when it was reviewed, the version before the first review round, and prints a Markdown table (drafter, review rounds, overall, before review, each section) for a PR description, with what each SOP misses. Digitizing stays the agent's job (the sops skill), so the benchmark runs with whichever model digitized. Code: `apps/api/src/sops/benchmark.ts` and `src/sop-benchmark.ts`.
+
 ## The lab's own SOPs (012a)
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
@@ -74,4 +80,4 @@ The sections below stay the design mode: edit and confirm as for any record.
 
 ## Not yet
 
-Dead volume per pipetting instrument kind (007 L4) as a field to read; the benchmark (rest of 012c); a separate reviewer model setting; keeping or reverting single reviewer fixes on the page.
+Dead volume per pipetting instrument kind (007 L4) as a field to read; expectations for the lab's own and the OpenWetWare SOPs (only InterLab so far, and not yet hand-checked); a separate reviewer model setting; keeping or reverting single reviewer fixes on the page.

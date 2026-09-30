@@ -1,6 +1,7 @@
 import {
   evaluateVariables,
   isUnit,
+  scoreSop,
   type VariableDefinition,
   type VariableOutcome,
 } from '@ailab/domain';
@@ -15,6 +16,7 @@ import {
   sopsEvaluate,
   sopsReview,
   sopsReviews,
+  sopsScore,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
@@ -222,6 +224,15 @@ export const sopOperations = [
         throw new OperationError('invalid_input', `${record.name} is not an SOP`);
       }
       return { rounds: await roundsOf(deps, ctx, record.id) };
+    },
+  }),
+  implement(sopsScore, {
+    run: async (ctx, input, deps) => {
+      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
+      if (record.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      }
+      return scoreSop(record.attributes as SopAttributes, input.expected);
     },
   }),
 ];
