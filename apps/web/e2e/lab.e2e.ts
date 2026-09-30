@@ -596,7 +596,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: 'SOPs' })
     .click();
-  await page.getByRole('link', { name: new RegExp(`Plate coating ${stamp}`) }).click();
+  await page.getByRole('row', { name: new RegExp(`Plate coating ${stamp}`) }).click();
   await expect(page).toHaveURL(new RegExp(`/records/${drafted.output.id}`));
   const procedure = page.getByRole('region', { name: 'At the bench' });
   await expect(procedure).toContainText('Coat.');
