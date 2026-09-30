@@ -557,6 +557,15 @@ export function evaluateVariables(
     } catch (error) {
       return done({ name, ok: false, error: (error as Error).message });
     }
+    // A name that isn't a variable at all is a mistake in the formula, not an input still to come.
+    const unknown = variablesOf(tree).filter((dependency) => !byName.has(dependency));
+    if (unknown.length > 0) {
+      return done({
+        name,
+        ok: false,
+        error: `Uses ${unknown.join(', ')}, which ${unknown.length === 1 ? "isn't a declared variable" : "aren't declared variables"}`,
+      });
+    }
     visiting.add(name);
     const waitsOn: string[] = [];
     for (const dependency of variablesOf(tree)) {

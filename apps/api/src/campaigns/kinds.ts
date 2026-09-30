@@ -12,6 +12,7 @@ import {
   type SopAttributes,
 } from '@ailab/schema';
 import { checkPin } from '../records/pins.ts';
+import { inputProblem } from '../sops/inputs.ts';
 import { KINDS_FOR } from '../sops/resolve.ts';
 
 /** Kinds that are definitions, so bindings pin their version (ADR 0039). */
@@ -256,6 +257,10 @@ export const experiment = defineKind({
         if (!variable) invalid.push(`${where} has no variable ${i.name}`);
         else if (variable.kind === 'computed')
           invalid.push(`${where}: ${i.name} is worked out by a formula; give the values it uses`);
+        else {
+          const problem = inputProblem(variable, i.value);
+          if (problem) invalid.push(`${where}: ${problem}`);
+        }
       }
     }
     if (invalid.length) return { invalid };

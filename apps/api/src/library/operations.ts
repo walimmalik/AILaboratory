@@ -143,6 +143,15 @@ export const libraryOperations = [
         eq(libraryPassages.documentId, document.id),
         eq(libraryPassages.fileId, fileId),
       );
+      // A passage whose text is unchanged keeps its ID, so citations of it still resolve.
+      const earlier = new Map<string, string[]>();
+      for (const p of await deps.db
+        .select({ id: libraryPassages.id, text: libraryPassages.text })
+        .from(libraryPassages)
+        .where(where)
+        .orderBy(libraryPassages.section, libraryPassages.seq)) {
+        earlier.set(p.text, [...(earlier.get(p.text) ?? []), p.id]);
+      }
       await deps.db.delete(libraryPassages).where(where);
       // Proposals point at passages that are about to go; confirmed mentions keep their words.
       await deps.db
@@ -156,7 +165,7 @@ export const libraryOperations = [
         );
       const rows = converted.sections.flatMap((section, index) =>
         section.passages.map((passage, seq) => ({
-          id: newId('pas'),
+          id: earlier.get(passage.text)?.shift() ?? newId('pas'),
           orgId: ctx.orgId,
           labId: ctx.labId,
           documentId: document.id,

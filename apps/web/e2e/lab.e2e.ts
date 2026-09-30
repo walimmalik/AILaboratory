@@ -303,7 +303,11 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await page.goto(`/records/${id}`);
   const volumes = page.getByRole('region', { name: 'Volumes' });
   await volumes.getByRole('button', { name: 'Edit volumes' }).click();
-  await volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first().fill('20');
+  const dead = volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first();
+  await dead.fill('twenty');
+  await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await expect(volumes.getByText('Fix the field marked in red before saving.')).toBeVisible();
+  await dead.fill('20');
   await volumes.getByRole('combobox', { name: 'dead volume unit' }).first().selectOption('uL');
 
   // While the form is open, the agent raises the maximum volume.
@@ -320,11 +324,30 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
   await volumes.getByRole('button', { name: 'Load the new values' }).click();
   await volumes.getByRole('button', { name: 'Save' }).click();
+  // The editor closes once the save is written.
+  await expect(volumes.getByRole('button', { name: 'Edit volumes' })).toBeVisible();
 
   const saved = await asAgent(request, 'records.get', { id });
   expect(saved.output.version).toBe(3);
   expect(saved.output.attributes.maxVolume).toEqual({ value: '300', unit: 'uL' });
   expect(saved.output.attributes.deadVolume).toEqual({ value: '20', unit: 'uL' });
+});
+
+test('a draft of a kind without sections is confirmed on its own page', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'vendor',
+    label: `Plates Inc ${Date.now()}`,
+    attributes: { website: 'https://example.org' },
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
+  await expect(page.getByText('active', { exact: true })).toBeVisible();
+  await expect(readiness).toHaveCount(0);
 });
 
 test('the wiki is readable in the app, with links between its pages', async ({ page }) => {

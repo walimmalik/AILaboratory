@@ -149,6 +149,15 @@ describe('sops.evaluate', () => {
   });
 });
 
+/** The error a call is refused with. */
+const refused = (call: Promise<unknown>) =>
+  call.then(
+    () => {
+      throw new Error('Expected a refusal');
+    },
+    (error: Error) => error,
+  );
+
 async function run<T>(ctx: RecordContext, id: string, input: unknown) {
   const result = await registry.execute(ctx, id, input);
   if (result.status !== 'done') throw new Error(`${id} was ${result.status}`);
@@ -289,6 +298,27 @@ describe('sops.draft', () => {
     expect(byId.get('questions_answered')?.passed).toBe(true);
   });
 
+  it('flags a formula that uses a name no variable has', async () => {
+    const sop = await run<RecordEnvelope>(person, 'sops.draft', {
+      ...elisa,
+      variables: [
+        ...elisa.variables.slice(0, -1),
+        {
+          name: 'diluent',
+          label: 'Coating solution',
+          kind: 'computed',
+          expression: 'missing_typo * 100 uL',
+        },
+      ],
+      questions: [],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'formulas_work')).toMatchObject({
+      passed: false,
+      message: "diluent: Uses missing_typo, which isn't a declared variable",
+    });
+  });
+
   it('refuses unknown roles, variables, steps and units, and a record variable with no source', async () => {
     const refused = (input: unknown) => registry.execute(agent, 'sops.draft', input);
     await expect(
@@ -352,6 +382,36 @@ describe('sops.calculate', () => {
       code: 'invalid_input',
     });
     await expect(calc(otherLab, [])).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('holds inputs to their limits, units and one value each', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const calc = (inputs: unknown[]) =>
+      registry.execute(agent, 'sops.calculate', { sop: sop.id, inputs });
+    await expect(calc([{ name: 'n_samples', value: '41' }])).rejects.toMatchObject({
+      message: 'n_samples: 41 is above the most allowed, 40',
+    });
+    await expect(calc([{ name: 'n_samples', value: '0' }])).rejects.toMatchObject({
+      message: 'n_samples: 0 is below the least allowed, 1',
+    });
+    await expect(
+      calc([
+        { name: 'n_samples', value: '10' },
+        { name: 'n_samples', value: '20' },
+      ]),
+    ).rejects.toMatchObject({ message: 'n_samples is given twice' });
+    await expect(calc([{ name: 'well_volume', value: '50' }])).rejects.toMatchObject({
+      message: 'well_volume needs a unit, like µL',
+    });
+    await expect(calc([{ name: 'well_volume', value: q('1', 'h') }])).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    await expect(calc([{ name: 'well_volume', value: q('1', 'furlong') }])).rejects.toMatchObject({
+      message: 'well_volume: unknown unit "furlong"',
+    });
+    await expect(calc([{ name: 'n_samples', value: q('1', 'uL') }])).rejects.toMatchObject({
+      message: 'n_samples is a plain number, without a unit',
+    });
   });
 });
 
@@ -653,6 +713,75 @@ describe('sops.check_citations', () => {
     );
     expect(checked.citations[1]?.foundIn).toBeDefined();
     expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
+
+    // A reparse keeps the passage IDs of text that didn't change, so citations still resolve.
+    await run(person, 'library.parse', { document: doc.id });
+    const again = await run<{ citations: { result: string }[] }>(agent, 'sops.check_citations', {
+      sop: sop.id,
+    });
+    expect(again.citations[0]?.result).toBe('matches');
+
+    // The SOP links the documents it cites; a citation must name a library document.
+    const links = await run<{ links: { toId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      { id: sop.id, direction: 'from' },
+    );
+    expect(links.links).toContainEqual(
+      expect.objectContaining({ toId: doc.id, relation: 'digitized_from' }),
+    );
+    const notADocument = await refused(
+      run(agent, 'sops.draft', {
+        ...elisa,
+        steps: elisa.steps.map((s) => ({
+          ...s,
+          cite: [{ document: sop.id.replace('sop_', 'doc_'), quote: 'x' }],
+        })),
+      }),
+    );
+    expect(notADocument.message).toContain('is cited but is not a library document');
+  });
+});
+
+describe('SOP solutions', () => {
+  it('links a solution to its recipe, so the recipe draft stays while the SOP uses it', async () => {
+    const recipe = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'product',
+      label: 'Wash buffer',
+      attributes: { category: 'buffer', origin: 'made' },
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      solutions: [
+        { role: 'wash_buffer', label: 'Wash buffer', text: 'See recipe', recipe: recipe.id },
+      ],
+    });
+    const links = await run<{ links: { fromId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      { id: recipe.id, direction: 'to' },
+    );
+    expect(links.links).toContainEqual(
+      expect.objectContaining({ fromId: sop.id, relation: 'made_with' }),
+    );
+    const kept = await refused(
+      run(person, 'records.delete_draft', { id: recipe.id, expectedVersion: recipe.version }),
+    );
+    expect(kept.message).toContain('linked from other records');
+    const wrong = await refused(
+      run(agent, 'sops.draft', {
+        ...elisa,
+        solutions: [
+          {
+            role: 'wash_buffer',
+            label: 'Wash buffer',
+            text: 'See recipe',
+            recipe: sop.id.replace('sop_', 'prd_'),
+          },
+        ],
+      }),
+    );
+    expect(wrong.message).toContain('is not a product in this lab');
   });
 });
 

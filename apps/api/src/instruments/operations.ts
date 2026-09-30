@@ -1,21 +1,15 @@
-import { type ItemInfo, type KindInfo, resolveConfiguration } from '@ailab/domain';
 import {
   type CapabilityId,
   type Configuration,
   type ConfigurationChange,
   capabilityCatalog,
-  EquipmentItemAttributes,
-  type EquipmentKindAttributes,
-  EquipmentKindAttributes as EquipmentKindSchema,
   InstrumentAttributes,
-  InstrumentKindAttributes,
   instrumentsCapabilities,
   instrumentsChangeConfiguration,
   instrumentsLogService,
   instrumentsRegister,
   instrumentsResolve,
   instrumentsSetStatus,
-  type RecordEnvelope,
   ROOT_NODE,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
@@ -23,22 +17,21 @@ import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { type Lookup, resolveWith } from './resolve.ts';
 
-const infoOf = <A>(record: RecordEnvelope, attributes: A): KindInfo<A> => ({
-  label: record.label,
-  attributes,
-  confirmed: record.status === 'active',
-});
-
-/** A record of this kind, or undefined when it isn't in the lab (another lab's, or no such ID). */
-async function find(service: RecordService, ctx: RecordContext, id: string, kind: string) {
-  try {
-    const found = await service.get(ctx, id);
-    return found.kind === kind && found.status !== 'archived' ? found : undefined;
-  } catch (error) {
-    if (error instanceof RecordError && error.code === 'not_found') return undefined;
-    throw error;
-  }
+/** The record service as a lookup for the resolver: missing and other labs' records read as undefined. */
+function lookupOf(service: RecordService, ctx: RecordContext): Lookup {
+  return {
+    get: async (id) => {
+      try {
+        return await service.get(ctx, id);
+      } catch (error) {
+        if (error instanceof RecordError && error.code === 'not_found') return undefined;
+        throw error;
+      }
+    },
+    list: (kind) => service.list(ctx, { kind, limit: 500 }),
+  };
 }
 
 async function instrumentKindOf(service: RecordService, ctx: RecordContext, id: string) {
@@ -49,7 +42,7 @@ async function instrumentKindOf(service: RecordService, ctx: RecordContext, id: 
       `${record.name} is ${record.status === 'archived' ? 'archived' : 'not an instrument kind'}`,
     );
   }
-  return infoOf(record, InstrumentKindAttributes.parse(record.attributes));
+  return record;
 }
 
 async function instrumentOf(service: RecordService, ctx: RecordContext, id: string) {
@@ -60,10 +53,7 @@ async function instrumentOf(service: RecordService, ctx: RecordContext, id: stri
   return { record, attributes: InstrumentAttributes.parse(record.attributes) };
 }
 
-/**
- * Resolves a configuration of an instrument kind with what the lab has: the equipment kinds and
- * items it names, and where else those items are installed (`self` is the instrument being changed).
- */
+/** Resolves a configuration of an instrument kind with what the lab has (see resolveWith). */
 async function resolveIn(
   service: RecordService,
   ctx: RecordContext,
@@ -71,36 +61,8 @@ async function resolveIn(
   configuration: Configuration,
   self?: string,
 ) {
-  const instrument = await instrumentKindOf(service, ctx, kindId);
-  const equipment = new Map<string, KindInfo<EquipmentKindAttributes>>();
-  for (const id of new Set(configuration.equipment.map((n) => n.kind))) {
-    const found = await find(service, ctx, id, 'equipment_kind');
-    if (found) equipment.set(id, infoOf(found, EquipmentKindSchema.parse(found.attributes)));
-  }
-  const items = new Map<string, ItemInfo>();
-  const wanted = new Set(configuration.equipment.flatMap((n) => (n.item ? [n.item] : [])));
-  if (wanted.size > 0) {
-    const others = (await service.list(ctx, { kind: 'instrument', limit: 500 })).filter(
-      (r) => r.id !== self,
-    );
-    const installedIn = new Map<string, string>();
-    for (const other of others) {
-      for (const node of InstrumentAttributes.parse(other.attributes).configuration.equipment) {
-        if (node.item) installedIn.set(node.item, `${other.label} (${other.name})`);
-      }
-    }
-    for (const id of wanted) {
-      const found = await find(service, ctx, id, 'equipment_item');
-      if (!found) continue;
-      const where = installedIn.get(id);
-      items.set(id, {
-        label: `${found.label} (${found.name})`,
-        kind: EquipmentItemAttributes.parse(found.attributes).kind,
-        ...(where ? { installedIn: where } : {}),
-      });
-    }
-  }
-  return resolveConfiguration({ instrument, equipment, configuration, items });
+  const kind = await instrumentKindOf(service, ctx, kindId);
+  return resolveWith(lookupOf(service, ctx), kind, configuration, self);
 }
 
 /** Refuses a configuration with errors, naming every one. */

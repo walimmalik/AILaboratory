@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amountIn,
   ContentsError,
+  componentProblems,
   concentrationOf,
   mapPlates,
   mix,
@@ -200,5 +201,31 @@ describe('mapPlates', () => {
     expect(() => mapPlates(p96, p96, { type: 'offset', rows: 0, columns: 2 }, ['A11'])).toThrow(
       'A11 would land off the destination plate',
     );
+  });
+});
+
+describe('componentProblems', () => {
+  const lot = 'lot_01J0000000000000000000000A' as const;
+  it('accepts concentrations per volume and amounts', () => {
+    expect(
+      componentProblems([
+        { source: lot, concentration: { value: '10', unit: 'mM' } },
+        { source: lot, amount: { value: '5', unit: 'ug' } },
+        { source: lot },
+      ]),
+    ).toEqual([]);
+  });
+  it('names a wrong dimension, an unknown unit and a negative value', () => {
+    expect(
+      componentProblems([
+        { source: lot, concentration: { value: '10', unit: 'uL' } },
+        { source: lot, amount: { value: '-1', unit: 'mol' } },
+        { source: lot, concentration: { value: '1', unit: 'furlong' } },
+      ]),
+    ).toEqual([
+      `${lot}: µL is not a concentration (give it per volume, or as a percent)`,
+      `${lot}: an amount can't be negative`,
+      `${lot}: unknown unit "furlong"`,
+    ]);
   });
 });

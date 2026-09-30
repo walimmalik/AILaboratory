@@ -1,6 +1,7 @@
 import {
   ContentsError,
   compare,
+  componentProblems,
   computeWells,
   EMPTY_WELL_STATE,
   expandWells,
@@ -46,7 +47,7 @@ import {
   samplesRegister,
   type WellState,
 } from '@ailab/schema';
-import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { inventoryEvents, inventoryLines, wellContents } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -163,8 +164,13 @@ class Ledger {
     return v;
   }
 
-  /** Refuses components whose source isn't a lot or sample in this lab. */
-  async checkSources(components: { source: string }[]) {
+  /**
+   * Refuses components whose source isn't a lot or sample in this lab, or whose concentration or
+   * amount is negative or not a concentration or amount (ADR 0041: every well write checks them).
+   */
+  async checkComponents(components: Component[]) {
+    const problems = componentProblems(components);
+    if (problems.length > 0) throw new OperationError('invalid_input', problems.join('; '));
     for (const { source } of components) {
       if (this.#sources.has(source)) continue;
       const record = await this.service.get(this.ctx, source).catch((error: unknown) => {
@@ -198,6 +204,9 @@ class Ledger {
   ) {
     const name = `${v.record.name} ${well}`;
     if (after.volume !== 'unknown') {
+      if (Number(after.volume.value) < 0) {
+        throw new OperationError('invalid_input', `${name} can't hold a negative volume`);
+      }
       if (line.change !== 'out' && v.maxVolume && compare(after.volume, v.maxVolume) > 0) {
         throw new OperationError(
           'invalid_input',
@@ -421,7 +430,7 @@ export const contentsOperations = [
       );
       const v = await ledger.vessel(input.container);
       for (const fill of input.fills) {
-        await ledger.checkSources(fill.components);
+        await ledger.checkComponents(fill.components);
         for (const well of wellsOf(v, fill.wells)) {
           const before = await ledger.state(v, well);
           const after = mix(before, {
@@ -522,7 +531,7 @@ export const contentsOperations = [
         new RecordService(deps.db, deps.kinds),
       );
       const v = await ledger.vessel(input.container);
-      await ledger.checkSources(input.state.components);
+      await ledger.checkComponents(input.state.components);
       for (const well of wellsOf(v, input.wells)) {
         ledger.set(v, well, input.state, { change: 'set' });
       }
@@ -630,15 +639,18 @@ export const contentsOperations = [
         at: string;
         depth: number;
       }[] = [];
-      // Each well is followed back from the time liquid left it for the well asked about.
-      let frontier: { container: string; well: string; before?: Date }[] = [
-        { container: v.record.id, well },
-      ];
+      // Each well is followed back from the moment liquid left it for the well asked about: earlier
+      // events, and earlier lines of the same event (a stamp can empty a well and refill it).
+      let frontier: {
+        container: string;
+        well: string;
+        before?: { at: Date; eventId: string; seq: number };
+      }[] = [{ container: v.record.id, well }];
       const seen = new Set<string>();
       for (let depth = 1; depth <= maxDepth && frontier.length > 0; depth++) {
         const next: typeof frontier = [];
         for (const at of frontier) {
-          const key = `${at.container}|${at.well}|${at.before?.toISOString() ?? ''}`;
+          const key = `${at.container}|${at.well}|${at.before?.eventId ?? ''}|${at.before?.seq ?? ''}`;
           if (seen.has(key)) continue;
           seen.add(key);
           const rows = await deps.db
@@ -651,7 +663,20 @@ export const contentsOperations = [
                 eq(inventoryLines.containerId, at.container),
                 eq(inventoryLines.well, at.well),
                 eq(inventoryLines.change, 'in'),
-                ...(at.before ? [lte(inventoryEvents.at, at.before)] : []),
+                ...(at.before
+                  ? [
+                      or(
+                        and(
+                          lte(inventoryEvents.at, at.before.at),
+                          ne(inventoryEvents.id, at.before.eventId),
+                        ),
+                        and(
+                          eq(inventoryEvents.id, at.before.eventId),
+                          lt(inventoryLines.seq, at.before.seq),
+                        ),
+                      ),
+                    ]
+                  : []),
               ),
             )
             .orderBy(desc(inventoryEvents.at), desc(inventoryLines.seq));
@@ -666,7 +691,11 @@ export const contentsOperations = [
               at: event.at.toISOString(),
               depth,
             });
-            if (line.from) next.push({ ...line.from, before: event.at });
+            if (line.from)
+              next.push({
+                ...line.from,
+                before: { at: event.at, eventId: event.id, seq: line.seq },
+              });
           }
         }
         frontier = next;

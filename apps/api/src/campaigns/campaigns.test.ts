@@ -555,6 +555,9 @@ describe('binding the protocol (013b)', () => {
     await expect(bind({ inputs: [{ name: 'plates', value: '3' }] })).rejects.toMatchObject({
       message: expect.stringContaining('has no variable plates'),
     });
+    await expect(bind({ inputs: [{ name: 'well_volume', value: '50' }] })).rejects.toMatchObject({
+      message: expect.stringContaining('well_volume needs a unit'),
+    });
 
     // A draft labware type: a misfit for the reagent role, and an unconfirmed pin.
     const misfit = await bind({

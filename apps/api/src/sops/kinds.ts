@@ -1,5 +1,6 @@
 import { evaluateVariables, getUnit, isUnit, type VariableDefinition } from '@ailab/domain';
 import { type CheckResult, defineKind, type Quantity, SopAttributes } from '@ailab/schema';
+import { citationsOf } from './citations.ts';
 import { bindRoles, readField } from './resolve.ts';
 
 const PLAN = 'Digital SOPs (plan 012)';
@@ -76,6 +77,16 @@ export const sop = defineKind({
     ...[...new Set(a.steps.flatMap((s) => (s.prerequisite ? [s.prerequisite] : [])))].map(
       (toId) => ({ toId, relation: 'requires' }),
     ),
+    ...[...new Set((a.solutions ?? []).flatMap((s) => (s.recipe ? [s.recipe] : [])))].map(
+      (toId) => ({ toId, relation: 'made_with' }),
+    ),
+    ...[
+      ...new Set(
+        citationsOf(a)
+          .map((c) => c.cite.document)
+          .filter((d) => d !== a.source?.document),
+      ),
+    ].map((toId) => ({ toId, relation: 'cites' })),
   ],
   sections: [
     {
@@ -156,9 +167,15 @@ export const sop = defineKind({
     for (const id of new Set([
       ...a.materials.flatMap((m) => (m.default ? [m.default] : [])),
       ...a.steps.flatMap((s) => (s.prerequisite ? [s.prerequisite] : [])),
-      ...(a.solutions ?? []).flatMap((s) => (s.recipe ? [s.recipe] : [])),
     ])) {
       if (!(await get(id))) invalid.push(`${id} is not a record in this lab`);
+    }
+    for (const id of new Set((a.solutions ?? []).flatMap((s) => (s.recipe ? [s.recipe] : [])))) {
+      if ((await get(id))?.kind !== 'product') invalid.push(`${id} is not a product in this lab`);
+    }
+    for (const id of new Set(citationsOf(a).map((c) => c.cite.document))) {
+      if ((await get(id))?.kind !== 'document')
+        invalid.push(`${id} is cited but is not a library document in this lab`);
     }
     if (invalid.length > 0) return { invalid };
 

@@ -82,7 +82,7 @@ function useInvalidate(id: string) {
     ]);
 }
 
-function ReadinessBlock({
+export function ReadinessBlock({
   record,
   readiness,
   titles,
