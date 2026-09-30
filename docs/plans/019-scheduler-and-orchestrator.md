@@ -9,7 +9,7 @@
 "Who does what, on which instrument, when", for one or several confirmed workflows at once:
 
 - **Scheduling:** turning schedule requests (018 W6) into a schedule: every step of every unit on an instrument, a person or both, with start and end times, the moves between them, and the margin left on every timing window and handling rule.
-- **Inside a workcell and across the lab:** a workcell (the FlexPod with the Echo, PreciseDrop, Spark, Cytomat and MicroSpin) runs part of a workflow while standalone instruments (the Mantis in tissue culture, the STAR, the BlueWasher) and people at the bench do other parts. The first topic of this plan is how those two levels fit together.
+- **Inside a workcell and across the lab:** a workcell (the FlexPod with the Echo, PreciseDrop, Mantis, A4S, XPeel and MicroSpin) runs part of a workflow while standalone instruments (the Spark, the Cytomat, the STAR, the BlueWasher) and people at the bench do other parts. The first topic of this plan is how those two levels fit together.
 - **Science-aware constraints** (000 idea 1.7): handling rules from what is in each plate (HEK293 cells: 30 min out of the incubator) and SOP timing windows bind the schedule; every rejection and every margin names its source.
 - **Simulation and the Gantt:** the same engine that plans also simulates, so the Gantt (by instrument, by person, by plate) is a replay of the plan, not a drawing; digital twins (015) supply durations and 3D playback.
 - **Booking:** instruments and people on a calendar, working hours, absences, maintenance.
@@ -32,10 +32,10 @@ So 019 ports the kernel, the exposure kernel and the pending re-planner for the 
 
 ## The seed lab's shape
 
-- **Workcell:** FlexPod 1 (automation room) holds the Echo, PreciseDrop, Spark Cyto, Cytomat, MicroSpin, LidValet and PlateOrient; the seed notes say Cellario runs it today.
-- **Standalone:** STAR, Vantage, FeliX, BlueWasher (automation room); Mantis (tissue culture); Flex, qTOWER, three PTC Tempo cyclers (molecular biology); benches and the biosafety cabinet as manual stations (008 I6).
+- **Workcell:** FlexPod 1 (automation room) with its PlateOrient and two 12-position stackers holds the Echo, PreciseDrop, LidValet, Mantis, A4S sealer, XPeel and MicroSpin (008 I10); Cellario runs it today. Its physical layout, robots and move times come from the digital twin (008 round 2).
+- **Standalone:** STAR, Vantage, FeliX, BlueWasher, Spark Cyto, Cytomat (automation room); Flex, qTOWER, three PTC Tempo cyclers (molecular biology); benches and the biosafety cabinet as manual stations (008 I6).
 - **People:** a PI, a postdoc (screening), a graduate student (cloning), an automation engineer.
-- The compound screen crosses both levels: assay-ready plates on the Echo (workcell), cells seeded with the Mantis in tissue culture (standalone, a person carries the plates), 48 h in the Cytomat (workcell), CellTiter-Glo added and read on the Spark (workcell).
+- The compound screen crosses both levels: assay-ready plates on the Echo and cells seeded with the Mantis (workcell), 48 h in the Cytomat and the read on the Spark (standalone, a person carries the plates), CellTiter-Glo added in the workcell or at the bench.
 
 ## Model (from the answers)
 
