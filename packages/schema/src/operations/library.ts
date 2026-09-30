@@ -96,7 +96,7 @@ export const librarySearch = defineContract({
 export const libraryRead = defineContract({
   id: 'library.read',
   summary:
-    "Read a parsed document: without `section`, its outline (headings, pages, passage counts); with `section`, that section's passages in order; with `pages`, the passages on those pages",
+    "Read a parsed document: without `section`, its outline (headings, pages, passage counts); with `section`, that section's passages in order; with `pages`, the passages on those pages; with `passages`, those passages by id",
   effect: 'read',
   input: z.strictObject({
     document: DocumentId,
@@ -104,6 +104,12 @@ export const libraryRead = defineContract({
     pages: z
       .strictObject({ from: z.number().int().positive(), to: z.number().int().positive() })
       .optional(),
+    passages: z
+      .array(z.string().min(1))
+      .min(1)
+      .max(100)
+      .optional()
+      .describe('Passage ids, e.g. from a citation; ids from an earlier parse are not found'),
   }),
   output: z.object({
     document: RecordEnvelope,

@@ -1,6 +1,6 @@
 ---
 name: ailab-sops
-description: Work with digital SOPs in AILaboratory through its MCP tools; so far, working out SOP formulas (volumes, totals, dilutions) with units and exact decimals.
+description: Work with digital SOPs in AILaboratory through its MCP tools: digitize a library document into a draft SOP with cited passages and open questions, check its citations, and work out its formulas (volumes, totals, dilutions) with units and exact decimals.
 ---
 
 # Digital SOPs in AILaboratory
@@ -14,7 +14,18 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 - Variables: `input` for what each run chooses (samples, replicates), `default` for usual values, `record` for values read from a bound material (`readFrom: {role, field}`, with the typical value as `value`), `computed` with an `expression`.
 - Cite the passage for every step and value (`cite: [{document, passage, page, quote}]`), and put anything the source leaves unclear in `questions` with your suggestion rather than guessing. Mark your own estimates assumed in `evidence`.
 - Check `records.readiness`: open questions, broken formulas and timing that isn't a time block confirming.
-- `sops.calculate` with `{sop, inputs: [{name: "n_samples", value: "24"}]}` gives every variable for a run and where it came from.
+- `sops.calculate` with `{sop, bindings: [{role: "capture_ab", record: "lot_…"}], inputs: [{name: "n_samples", value: "24"}]}` gives every variable for a run and where it came from: a picked lot's certificate value, a plate type's `deadVolume`, a product's typical value until a lot is picked. Roles without a binding use their default. Tell the person which values are still typical.
+
+## Digitizing a library document
+
+1. `library.read` the document's outline, then each section (`section`), or `library.search` for what you need. Note each passage's `id`.
+2. Draft with `sops.draft` and `source: {document}`. Cite every step and value with the passage `id` and the exact words (`quote`), copied, not paraphrased.
+3. Where the source is unclear (it contradicts itself, says "about", leaves a speed or time out), add an open question with the `passages` involved and your `suggestion`. Don't pick silently.
+4. Run `sops.check_citations`. Fix every `not_found` quote (copy the source's words) and every `found_elsewhere` one (cite the passage it names in `foundIn`), then check again.
+5. Run `sops.review` (`{sop, expectedVersion}`) to have the reviewer check the draft against the source, then read what it changed with `sops.reviews` and tell the person.
+6. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms sections.
+
+`library.read` with `passages: [id, …]` reads cited passages back by id.
 
 ## Formulas
 

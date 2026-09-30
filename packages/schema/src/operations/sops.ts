@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { EvidenceInput } from '../design.ts';
+import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
-import { SopAttributes, SopId, SopName } from '../sops.ts';
+import { SopAttributes, SopId, SopName, SopReviewRound } from '../sops.ts';
 
 /** A variable name in a digital SOP formula: letters, digits and _, dotted for values read from records. */
 export const VariableName = z
@@ -87,10 +88,14 @@ export const sopsCalculate = defineContract({
   id: 'sops.calculate',
   calculator: true,
   summary:
-    "Work out an SOP's variables for a run: its defaults and typical values, with the run's inputs given here (number of samples, replicates) taking their place. Returns every variable, computed ones included, and what each still waits for",
+    "Work out an SOP's variables for a run: bind its material roles to records (each role's default unless one is given here), read record variables from them (a lot's certificate value, a plate type's dead volume), take the run's inputs (number of samples, replicates), and compute the formulas. Says where every value came from and what is still missing",
   effect: 'read',
   input: z.strictObject({
     sop: SopId,
+    bindings: z
+      .array(z.strictObject({ role: SopName, record: RecordId }))
+      .optional()
+      .describe('Records for material roles, e.g. the lot picked for capture_ab'),
     inputs: z
       .array(
         z.strictObject({
@@ -101,12 +106,112 @@ export const sopsCalculate = defineContract({
       .optional(),
   }),
   output: z.object({
+    bindings: z.array(
+      z.object({
+        role: z.string(),
+        record: z.string().optional(),
+        name: z.string().optional(),
+        label: z.string().optional(),
+        by: z.enum(['given', 'default']).optional(),
+        problem: z.string().optional().describe('Why the record does not fit the role'),
+      }),
+    ),
     variables: z.array(
       EvaluatedVariable.extend({
         from: z
-          .enum(['input', 'default', 'typical', 'computed', 'missing'])
-          .describe("input: given here; default or typical: the SOP's value; computed: a formula"),
+          .enum(['input', 'record', 'default', 'typical', 'computed', 'missing'])
+          .describe(
+            "input: given here; record: read from a bound record; default or typical: the SOP's value; computed: a formula",
+          ),
+        source: z
+          .object({ record: z.string(), name: z.string(), field: z.string() })
+          .optional()
+          .describe('The record and field a value was read from'),
+        problem: z.string().optional().describe('Why a record value could not be read'),
       }),
     ),
   }),
+});
+
+export const sopsAnswerQuestion = defineContract({
+  id: 'sops.answer_question',
+  summary:
+    "Answer an SOP's open question, or accept the answer it suggests. People only: an open question blocks confirming until a person settles it",
+  effect: 'write',
+  input: z
+    .strictObject({
+      sop: SopId,
+      expectedVersion: z.number().int().positive(),
+      question: z.string().min(1).describe('The question id'),
+      answer: z.string().min(1).optional(),
+      acceptSuggestion: z.literal(true).optional(),
+      reason: Reason,
+    })
+    .refine((i) => (i.answer === undefined) !== (i.acceptSuggestion === undefined), {
+      message: 'Give an answer or accept the suggestion, not both',
+    }),
+  output: RecordEnvelope,
+});
+
+export const CitationCheck = z.object({
+  where: z.string().describe('What cites it, e.g. "step coat" or "variable well_volume"'),
+  document: z.string(),
+  passage: z.string().optional(),
+  quote: z.string(),
+  result: z
+    .enum(['matches', 'found_elsewhere', 'not_found', 'unparsed'])
+    .describe(
+      'matches: the quote is in the cited passage; found_elsewhere: in another passage of the document (see foundIn); not_found: nowhere in its text; unparsed: the document has no text yet',
+    ),
+  foundIn: z.string().optional().describe('The passage that has it, when found elsewhere'),
+});
+
+export const sopsCheckCitations = defineContract({
+  id: 'sops.check_citations',
+  summary:
+    "Check that every quote an SOP cites is really in its library document: in the cited passage, elsewhere in the document, or nowhere. Spacing and case don't matter; any other difference does",
+  effect: 'read',
+  input: z.strictObject({ sop: SopId }),
+  output: z.object({
+    citations: z.array(CitationCheck),
+    matches: z.number().int(),
+    problems: z.number().int().describe('Citations not found or pointing at the wrong passage'),
+  }),
+});
+
+export const sopsReview = defineContract({
+  id: 'sops.review',
+  summary:
+    'Run the AI review cycle on a draft SOP: a reviewer model checks every step and value against its cited passages and readiness checks, fixes what the source settles (each fix a tracked change with its reason and passage) and asks an open question where the source is unclear. Stops when a round finds nothing or after `rounds`. Never confirms anything; a person still does',
+  effect: 'write',
+  input: z.strictObject({
+    sop: SopId,
+    expectedVersion: z.number().int().positive(),
+    rounds: z
+      .number()
+      .int()
+      .min(1)
+      .max(3)
+      .optional()
+      .describe('At most this many rounds; default 2'),
+    reason: Reason,
+  }),
+  output: z.object({
+    sop: RecordEnvelope,
+    rounds: z.array(SopReviewRound),
+    stopped: z
+      .enum(['clean', 'rounds', 'failed'])
+      .describe(
+        'clean: the last round found nothing; rounds: the limit was reached; failed: the model call failed',
+      ),
+    problem: z.string().optional().describe('Why it failed, in words'),
+  }),
+});
+
+export const sopsReviews = defineContract({
+  id: 'sops.reviews',
+  summary: "The AI review rounds kept with an SOP: each round's fixes and questions, oldest first",
+  effect: 'read',
+  input: z.strictObject({ sop: SopId }),
+  output: z.object({ rounds: z.array(SopReviewRound) }),
 });

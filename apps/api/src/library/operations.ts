@@ -13,7 +13,7 @@ import {
   type PassageText,
   type RecordEnvelope,
 } from '@ailab/schema';
-import { and, asc, desc, eq, gte, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { libraryMentions, libraryParses, libraryPassages, records } from '../db/schema.ts';
 import { readBytes } from '../files/operations.ts';
@@ -264,6 +264,14 @@ export const libraryOperations = [
         eq(libraryPassages.fileId, fileId),
       );
       const order = [asc(libraryPassages.section), asc(libraryPassages.seq)];
+      if (input.passages) {
+        const rows = await deps.db
+          .select()
+          .from(libraryPassages)
+          .where(and(base, inArray(libraryPassages.id, input.passages)))
+          .orderBy(...order);
+        return { document, parse, passages: rows.map(passageText) };
+      }
       if (input.section !== undefined || input.pages) {
         const rows = await deps.db
           .select()

@@ -1,11 +1,17 @@
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import type { Actor, Converted, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Assistant } from '../assistant/assistant.ts';
+import type { ChatModel, ModelRequest, ModelTurn } from '../assistant/model.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { fileKinds } from '../files/kinds.ts';
+import { MemoryFileStore } from '../files/store.ts';
+import { labwareKinds } from '../labware/kinds.ts';
+import type { Converter } from '../library/convert.ts';
 import { libraryKinds } from '../library/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
+import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from './kinds.ts';
@@ -16,6 +22,26 @@ let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
 let otherLab: RecordContext;
+let kinds: KindRegistry;
+
+/** One section per "# " heading, one passage per paragraph. */
+const converter: Converter = {
+  convert: async ({ bytes }) => {
+    const sections: Converted['sections'] = [];
+    for (const part of new TextDecoder().decode(bytes).split(/^# /m).filter(Boolean)) {
+      const [heading, ...rest] = part.split('\n');
+      sections.push({
+        heading: [heading as string],
+        passages: rest
+          .join('\n')
+          .split(/\n\n+/)
+          .filter((t) => t.trim())
+          .map((text) => ({ text: text.trim(), page: 1 })),
+      });
+    }
+    return { converter: 'test', sections, warnings: [] };
+  },
+};
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -29,9 +55,13 @@ beforeEach(async () => {
     orgId: other.orgId,
     labId: other.labId,
   };
-  const kinds = new KindRegistry();
-  for (const kind of [...fileKinds, ...libraryKinds, ...sopKinds]) kinds.register(kind);
-  registry = createRegistry(db, kinds, new ActivityBus());
+  kinds = new KindRegistry();
+  for (const kind of [...labwareKinds, ...reagentKinds, ...fileKinds, ...libraryKinds, ...sopKinds])
+    kinds.register(kind);
+  registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
+    files: new MemoryFileStore(),
+    converter,
+  });
 });
 afterEach(() => close());
 
@@ -315,5 +345,476 @@ describe('sops.calculate', () => {
       code: 'invalid_input',
     });
     await expect(calc(otherLab, [])).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('binding roles (012b)', () => {
+  async function lab() {
+    const product = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'product',
+      label: 'IL-6 capture antibody',
+      attributes: {
+        category: 'antibody',
+        origin: 'bought',
+        lotFields: [
+          {
+            key: 'workingConcentration',
+            label: 'Working concentration',
+            unit: 'ug/mL',
+            typical: q('2', 'ug/mL'),
+          },
+        ],
+      },
+    });
+    const lot = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'lot',
+      label: 'Lot 1234',
+      attributes: {
+        product: product.id,
+        lotNumber: '1234',
+        status: 'unopened',
+        values: [{ field: 'workingConcentration', value: q('4', 'ug/mL') }],
+      },
+    });
+    const plate = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'High-bind 96',
+      attributes: { family: 'plate', deadVolume: q('10', 'uL') },
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      label: 'Coating',
+      materials: [
+        { role: 'capture_ab', label: 'Capture antibody', type: 'reagent', default: product.id },
+        { role: 'plate', label: 'Plate', type: 'labware', default: plate.id },
+      ],
+      variables: [
+        { name: 'wells', label: 'Wells', kind: 'input', value: '96' },
+        { name: 'well_volume', label: 'Well volume', kind: 'default', value: q('100', 'uL') },
+        {
+          name: 'capture_conc',
+          label: 'Capture antibody working concentration',
+          kind: 'record',
+          value: q('1', 'ug/mL'),
+          readFrom: { role: 'capture_ab', field: 'workingConcentration' },
+        },
+        {
+          name: 'dead',
+          label: 'Dead volume',
+          kind: 'record',
+          readFrom: { role: 'plate', field: 'deadVolume' },
+        },
+        {
+          name: 'coating',
+          label: 'Coating solution',
+          kind: 'computed',
+          expression: 'wells * (well_volume + dead)',
+          unit: 'mL',
+        },
+      ],
+      steps: [{ id: 'coat', action: 'add', text: 'Coat.', uses: ['plate', 'capture_ab'] }],
+    });
+    return { product, lot, plate, sop };
+  }
+  type Calculated = {
+    bindings: Record<string, unknown>[];
+    variables: Record<string, unknown>[];
+  };
+  const byName = (c: Calculated) => new Map(c.variables.map((v) => [v.name, v]));
+
+  it('reads typical values from defaults and certificate values from a picked lot', async () => {
+    const { sop, lot, product, plate } = await lab();
+    const planned = await run<Calculated>(agent, 'sops.calculate', { sop: sop.id });
+    expect(planned.bindings).toEqual([
+      expect.objectContaining({ role: 'capture_ab', record: product.id, by: 'default' }),
+      expect.objectContaining({ role: 'plate', record: plate.id, by: 'default' }),
+    ]);
+    expect(byName(planned).get('capture_conc')).toMatchObject({
+      quantity: q('2', 'ug/mL'),
+      from: 'typical',
+      source: { record: product.id, field: 'workingConcentration' },
+    });
+    expect(byName(planned).get('dead')).toMatchObject({ quantity: q('10', 'uL'), from: 'record' });
+    expect(byName(planned).get('coating')).toMatchObject({ quantity: q('10.56', 'mL') });
+
+    const onTheDay = await run<Calculated>(person, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'capture_ab', record: lot.id }],
+      inputs: [{ name: 'wells', value: '48' }],
+    });
+    expect(byName(onTheDay).get('capture_conc')).toMatchObject({
+      quantity: q('4', 'ug/mL'),
+      from: 'record',
+      source: { record: lot.id, name: lot.name },
+    });
+    expect(byName(onTheDay).get('coating')).toMatchObject({ quantity: q('5.28', 'mL') });
+  });
+
+  it('says when a record does not fit its role or lacks the field', async () => {
+    const { sop, plate } = await lab();
+    const wrong = await run<Calculated>(agent, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'capture_ab', record: plate.id }],
+    });
+    expect(wrong.bindings[0]?.problem).toMatch(
+      /is a labware type; Capture antibody needs a product or lot/,
+    );
+    expect(byName(wrong).get('capture_conc')).toMatchObject({
+      quantity: q('1', 'ug/mL'),
+      from: 'typical',
+    });
+    await expect(
+      registry.execute(agent, 'sops.calculate', {
+        sop: sop.id,
+        bindings: [{ role: 'reader', record: plate.id }],
+      }),
+    ).rejects.toMatchObject({ message: 'SOP-0001 has no material reader' });
+
+    const bare = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'No dead volume',
+      attributes: { family: 'plate' },
+    });
+    const noDead = await run<Calculated>(agent, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'plate', record: bare.id }],
+    });
+    expect(byName(noDead).get('dead')).toMatchObject({
+      ok: false,
+      from: 'missing',
+      problem: `${bare.name} has no deadVolume`,
+    });
+    expect(byName(noDead).get('coating')).toMatchObject({ ok: false, waitsOn: ['dead'] });
+  });
+
+  it('checks defaults in readiness', async () => {
+    const { sop, plate } = await lab();
+    const a = sop.attributes as { materials: { role: string }[] };
+    const updated = await run<RecordEnvelope>(person, 'records.update', {
+      id: sop.id,
+      expectedVersion: sop.version,
+      attributes: {
+        ...(sop.attributes as object),
+        materials: a.materials.map((m) =>
+          m.role === 'capture_ab' ? { ...m, default: plate.id } : m,
+        ),
+      },
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: updated.id });
+    expect(ready.checks.find((c) => c.id === 'materials_fit')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+    });
+  });
+});
+
+describe('sops.answer_question', () => {
+  it('lets a person answer or accept the suggestion, which clears the blocker; an agent cannot', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      questions: [
+        ...elisa.questions,
+        { id: 'q2', question: 'Which plate sealer?', status: 'open' },
+      ],
+    });
+    await expect(
+      registry.execute(agent, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q1',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q2',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('no suggestion'),
+    });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q9',
+        answer: 'Yes',
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('no question q9'),
+    });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q1',
+        answer: 'Yes',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+
+    const first = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: sop.id,
+      expectedVersion: sop.version,
+      question: 'q1',
+      acceptSuggestion: true,
+    });
+    const second = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: sop.id,
+      expectedVersion: first.version,
+      question: 'q2',
+      answer: 'Adhesive film',
+    });
+    expect((second.attributes as { questions: unknown[] }).questions).toEqual([
+      expect.objectContaining({
+        id: 'q1',
+        status: 'accepted_suggestion',
+        answer: 'Room temperature, as the vendor sheet says',
+      }),
+      expect.objectContaining({ id: 'q2', status: 'answered', answer: 'Adhesive film' }),
+    ]);
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(true);
+  });
+});
+
+describe('sops.check_citations', () => {
+  it('finds each quote in its passage, elsewhere in the document, or nowhere', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'elisa.md',
+      mediaType: 'text/markdown',
+      text: '# Coating\nCoat the plate overnight at room temperature.\n\n# Reading\nRead within 30 minutes.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Vendor ELISA sheet',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    const cite = (passage: string | undefined, quote: string) => ({
+      document: doc.id,
+      ...(passage ? { passage } : {}),
+      quote,
+    });
+    const draft = async (passages: { id: string }[]) =>
+      run<RecordEnvelope>(agent, 'sops.draft', {
+        ...elisa,
+        source: { document: doc.id },
+        steps: elisa.steps.map((s, i) =>
+          i === 0
+            ? { ...s, cite: [cite(passages[0]?.id, 'coat the plate  OVERNIGHT')] }
+            : i === 1
+              ? { ...s, cite: [cite(passages[0]?.id, 'Read within 30 minutes')] }
+              : { ...s, cite: [cite(undefined, 'Shake at 500 rpm')] },
+        ),
+      });
+    const unparsed = await draft([]);
+    const before = await run<{ citations: { result: string }[] }>(person, 'sops.check_citations', {
+      sop: unparsed.id,
+    });
+    expect(before.citations.every((c) => c.result === 'unparsed')).toBe(true);
+
+    await run(person, 'library.parse', { document: doc.id });
+    const outline = await run<{ outline: { index: number }[] }>(person, 'library.read', {
+      document: doc.id,
+    });
+    const coating = await run<{ passages: { id: string }[] }>(person, 'library.read', {
+      document: doc.id,
+      section: outline.outline[0]?.index,
+    });
+    const byId = await run<{ passages: { id: string; text: string }[] }>(person, 'library.read', {
+      document: doc.id,
+      passages: coating.passages.map((p) => p.id),
+    });
+    expect(byId.passages[0]?.text).toContain('overnight');
+
+    const sop = await draft(coating.passages);
+    const checked = await run<{
+      citations: { where: string; result: string; foundIn?: string }[];
+      matches: number;
+      problems: number;
+    }>(agent, 'sops.check_citations', { sop: sop.id });
+    const steps = elisa.steps.map((s) => s.id);
+    expect(checked.citations.map((c) => [c.where, c.result])).toEqual(
+      steps.map((id, i) => [
+        `step ${id}`,
+        i === 0 ? 'matches' : i === 1 ? 'found_elsewhere' : 'not_found',
+      ]),
+    );
+    expect(checked.citations[1]?.foundIn).toBeDefined();
+    expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
+  });
+});
+
+/** A reviewer that plays back one turn per call, and keeps what it was sent. */
+class PlaybackModel implements ChatModel {
+  readonly provider = 'test';
+  readonly model = 'reviewer';
+  readonly requests: ModelRequest[] = [];
+  constructor(readonly turns: (ModelTurn | Error)[]) {}
+  async complete(request: ModelRequest): Promise<ModelTurn> {
+    this.requests.push(structuredClone(request));
+    const turn = this.turns.shift() ?? { text: 'Nothing more.', toolCalls: [], stop: 'end' };
+    if (turn instanceof Error) throw turn;
+    return turn;
+  }
+}
+
+const call = (name: string, input: Record<string, unknown>, id = name): ModelTurn => ({
+  text: '',
+  toolCalls: [{ id, name, input }],
+  stop: 'tool_use',
+});
+
+function withReviewer(model: ChatModel | undefined) {
+  return createRegistry(
+    db,
+    kinds,
+    new ActivityBus(),
+    new Assistant(model ? { model, agentName: 'Test' } : { reason: 'No model' }),
+    { files: new MemoryFileStore(), converter },
+  );
+}
+
+describe('sops.review', () => {
+  it('fixes what the source settles, asks where it is unclear, keeps each round, and stops when clean', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'elisa.md',
+      mediaType: 'text/markdown',
+      text: '# Washing\nWash 3 times with 300 uL wash buffer per well.\n\n# Reading\nRead at 450 nm within 30 minutes.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Vendor ELISA sheet',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    await run(person, 'library.parse', { document: doc.id });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      source: { document: doc.id },
+    });
+    const model = new PlaybackModel([
+      {
+        text: 'Checking the wash.',
+        toolCalls: [
+          {
+            id: 'a',
+            name: 'sop_fix',
+            input: {
+              path: '/steps/1/parameters/0/quantity',
+              value: q('300', 'uL'),
+              reason: 'The source says 300 uL per wash',
+              cite: { document: doc.id, quote: 'Wash 3 times with 300 uL wash buffer per well.' },
+            },
+          },
+          {
+            id: 'b',
+            name: 'sop_fix',
+            input: { path: '/questions/0/status', value: 'answered', reason: 'Settled' },
+          },
+          {
+            id: 'c',
+            name: 'sop_fix',
+            input: { path: '/steps/1/uses/0', value: 'nothing', reason: 'Try a bad role' },
+          },
+        ],
+        stop: 'tool_use',
+      },
+      call('sop_ask', {
+        question: 'Read within 30 minutes of the stop solution or of the last wash?',
+        suggestion: 'Of the stop solution',
+        about: { step: 'read' },
+      }),
+      call('sop_finish', { summary: 'Fixed the wash volume; asked about the read window.' }),
+      // Round 2: nothing more to change.
+      { text: 'All good.', toolCalls: [], stop: 'end' },
+    ]);
+    const reviewing = withReviewer(model);
+    const result = await reviewing.execute(agent, 'sops.review', {
+      sop: sop.id,
+      expectedVersion: sop.version,
+    });
+    expect(result.status).toBe('done');
+    const out = (result as { output: unknown }).output as {
+      sop: RecordEnvelope;
+      rounds: {
+        round: number;
+        findings: { type: string; path: string; before?: unknown }[];
+        refused: { problem: string }[];
+        toVersion?: number;
+        summary?: string;
+      }[];
+      stopped: string;
+    };
+    expect(out.stopped).toBe('clean');
+    expect(out.rounds).toHaveLength(2);
+    const [first, second] = out.rounds;
+    expect(first?.findings.map((f) => [f.type, f.path])).toEqual([
+      ['fix', '/steps/1/parameters/0/quantity'],
+      ['question', '/questions/1'],
+    ]);
+    expect(first?.findings[0]?.before).toEqual(q('400', 'uL'));
+    expect(first?.refused.map((r) => r.problem)).toEqual([
+      expect.stringContaining('sop_ask'),
+      expect.stringContaining('uses nothing'),
+    ]);
+    expect(first?.summary).toContain('wash volume');
+    expect(second?.findings).toEqual([]);
+    expect(second?.toVersion).toBeUndefined();
+    expect(model.requests[0]?.messages[0]).toMatchObject({
+      role: 'user',
+      text: expect.stringContaining('Wash 3 times with 300 uL'),
+    });
+
+    const a = out.sop.attributes as typeof elisa;
+    expect(a.steps[1]?.parameters[0]).toEqual({ name: 'volume', quantity: q('300', 'uL') });
+    expect(out.sop.version).toBe(sop.version + 1);
+    expect(out.sop.evidence?.steps).toMatchObject({
+      source: 'stated',
+      by: { type: 'agent', agentName: 'Test (reviewer)' },
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.message).toContain(
+      'stop solution',
+    );
+    const kept = await run<{ rounds: unknown[] }>(person, 'sops.reviews', { sop: sop.id });
+    expect(kept.rounds).toEqual(out.rounds);
+    await expect(run(otherLab, 'sops.reviews', { sop: sop.id })).rejects.toMatchObject({
+      code: 'not_found',
+    });
+  });
+
+  it('refuses without a model or on a stale version, and reports a failed model call', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    await expect(
+      withReviewer(undefined).execute(person, 'sops.review', { sop: sop.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    await expect(
+      withReviewer(new PlaybackModel([])).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: 7,
+      }),
+    ).rejects.toMatchObject({ code: 'version_conflict' });
+    await expect(
+      withReviewer(new PlaybackModel([])).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: 1,
+        rounds: 9,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    const failed = await withReviewer(new PlaybackModel([new Error('timed out')])).execute(
+      person,
+      'sops.review',
+      { sop: sop.id, expectedVersion: 1 },
+    );
+    expect((failed as { output: unknown }).output).toMatchObject({
+      stopped: 'failed',
+      problem: expect.stringContaining('timed out'),
+      rounds: [],
+    });
   });
 });

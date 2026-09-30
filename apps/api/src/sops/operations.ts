@@ -5,16 +5,24 @@ import {
   type VariableOutcome,
 } from '@ailab/domain';
 import {
+  type OpenQuestion,
   type Quantity,
   type SopAttributes,
+  sopsAnswerQuestion,
   sopsCalculate,
+  sopsCheckCitations,
   sopsDraft,
   sopsEvaluate,
+  sopsReview,
+  sopsReviews,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
+import { checkCitations } from './citations.ts';
 import { sopVariableDefinitions } from './kinds.ts';
+import { bindRoles, type ReadValue, readField } from './resolve.ts';
+import { reviewSop, roundsOf } from './review.ts';
 
 /** Digital SOP operations (plan 012). */
 export const sopOperations = [
@@ -77,26 +85,143 @@ export const sopOperations = [
           );
         }
       }
+      const service = new RecordService(deps.db, deps.kinds);
+      const fetch = (id: string) => service.get(ctx, id).catch(() => undefined);
+      const roles = new Set(a.materials.map((m) => m.role));
+      const bound = new Map<string, string>();
+      for (const b of input.bindings ?? []) {
+        if (!roles.has(b.role)) {
+          throw new OperationError('invalid_input', `${record.name} has no material ${b.role}`);
+        }
+        bound.set(b.role, b.record);
+      }
+      const bindings = await bindRoles(a, bound, fetch);
+      const byRole = new Map(bindings.map((b) => [b.role, b]));
+      const read = new Map<string, ReadValue>();
+      for (const v of a.variables) {
+        if (v.kind !== 'record' || !v.readFrom || given.has(v.name)) continue;
+        const binding = byRole.get(v.readFrom.role);
+        if (!binding?.record || binding.problem) continue;
+        read.set(v.name, await readField(binding.record, v.readFrom.field, fetch));
+      }
       const outcomes = evaluateVariables(
-        sopVariableDefinitions(a).map((d) =>
-          given.has(d.name) ? { ...d, value: given.get(d.name) as NonNullable<typeof d.value> } : d,
-        ),
+        sopVariableDefinitions(a).map((d) => {
+          if (given.has(d.name))
+            return { ...d, value: given.get(d.name) as NonNullable<typeof d.value> };
+          const r = read.get(d.name);
+          return r?.value !== undefined ? { ...d, value: r.value } : d;
+        }),
       );
       return {
+        bindings: bindings.map((b) => ({
+          role: b.role,
+          ...(b.record ? { record: b.record.id, name: b.record.name, label: b.record.label } : {}),
+          ...(b.by ? { by: b.by } : {}),
+          ...(b.problem ? { problem: b.problem } : {}),
+        })),
         variables: a.variables.map((v) => {
           const out = outcomeWords(v.name, outcomes.get(v.name));
+          const r = read.get(v.name);
+          const fromRecord = r?.value !== undefined;
           const from = given.has(v.name)
             ? 'input'
             : v.kind === 'computed'
               ? 'computed'
-              : v.value === undefined
-                ? 'missing'
-                : v.kind === 'record'
+              : fromRecord
+                ? r?.typical
                   ? 'typical'
-                  : 'default';
-          return { ...out, from } as const;
+                  : 'record'
+                : v.value === undefined
+                  ? 'missing'
+                  : v.kind === 'record'
+                    ? 'typical'
+                    : 'default';
+          return {
+            ...out,
+            from,
+            ...(fromRecord && r?.from ? { source: r.from } : {}),
+            ...(r?.problem ? { problem: r.problem } : {}),
+          } as const;
         }),
       };
+    },
+  }),
+  implement(sopsAnswerQuestion, {
+    actors: 'people',
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await service.get(ctx, input.sop);
+      if (record.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      }
+      const a = record.attributes as SopAttributes;
+      const question = (a.questions ?? []).find((q) => q.id === input.question);
+      if (!question) {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} has no question ${input.question}`,
+        );
+      }
+      if (input.acceptSuggestion && !question.suggestion) {
+        throw new OperationError(
+          'invalid_input',
+          `Question ${question.id} has no suggestion to accept; give an answer`,
+        );
+      }
+      const settled: OpenQuestion = input.acceptSuggestion
+        ? { ...question, status: 'accepted_suggestion', answer: question.suggestion as string }
+        : { ...question, status: 'answered', answer: input.answer as string };
+      return service.update(ctx, record.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: {
+          ...a,
+          questions: (a.questions ?? []).map((q) => (q.id === question.id ? settled : q)),
+        },
+        reason:
+          input.reason ??
+          (input.acceptSuggestion
+            ? `Accepted the suggested answer to "${question.question}"`
+            : `Answered "${question.question}"`),
+      });
+    },
+  }),
+  implement(sopsCheckCitations, {
+    run: async (ctx, input, deps) => {
+      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
+      if (record.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      }
+      const { citations } = await checkCitations(deps, ctx, record.attributes as SopAttributes);
+      return {
+        citations,
+        matches: citations.filter((c) => c.result === 'matches').length,
+        problems: citations.filter(
+          (c) => c.result === 'not_found' || c.result === 'found_elsewhere',
+        ).length,
+      };
+    },
+  }),
+  implement(sopsReview, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const model = deps.assistant.model;
+      if (!model) {
+        throw new OperationError(
+          'invalid_state',
+          'No model is set up for the reviewer; set AGENT_PROVIDER and its key in .env',
+        );
+      }
+      return reviewSop(deps, ctx, input, model, `${deps.assistant.agentName} (reviewer)`);
+    },
+  }),
+  implement(sopsReviews, {
+    run: async (ctx, input, deps) => {
+      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
+      if (record.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      }
+      return { rounds: await roundsOf(deps, ctx, record.id) };
     },
   }),
 ];
