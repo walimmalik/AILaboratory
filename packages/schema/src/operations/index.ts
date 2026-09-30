@@ -8,6 +8,7 @@ export * from './inventory.ts';
 export * from './labware.ts';
 export * from './library.ts';
 export * from './liquids.ts';
+export * from './platemaps.ts';
 export * from './proposals.ts';
 export * from './reagents.ts';
 export * from './records.ts';

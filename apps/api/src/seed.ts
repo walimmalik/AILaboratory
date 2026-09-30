@@ -21,6 +21,8 @@ import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
+import { plateMapKinds } from './platemaps/kinds.ts';
+import { loadSeedLayouts, readSeedLayouts } from './platemaps/seed.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { loadSeedLiquidClasses, readSeedLiquidClasses } from './reagents/liquid-seed.ts';
 import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
@@ -92,6 +94,7 @@ for (const kind of [
   ...libraryKinds,
   ...sopKinds,
   ...campaignKinds,
+  ...plateMapKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
@@ -297,5 +300,15 @@ console.log(
 );
 for (const line of campaigns.created) console.log(`  + ${line}`);
 for (const line of campaigns.missing) console.log(`  missing ${line}`);
+const layouts = await loadSeedLayouts(
+  registry,
+  ctx,
+  readSeedLayouts(await seedFile('layouts.yaml')),
+  'Seed lab (plan 006), loaded by plan 014a',
+);
+console.log(
+  `Layout templates: ${layouts.created.length} drafted, ${layouts.existing.length} already there.`,
+);
+for (const line of layouts.created) console.log(`  + ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

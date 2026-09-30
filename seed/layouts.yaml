@@ -1,0 +1,89 @@
+# Layout templates for the demo lab (plan 014a): the plate patterns of the assay templates in
+# assays.yaml, as records a plate map applies to real samples and compounds. Lab conventions,
+# drafted for a person to confirm.
+
+layouts:
+  - key: layout-elisa-il6
+    template: assay-elisa-il6
+    label: IL-6 ELISA, 96 wells
+    wells: 96
+    subjectRole: sample
+    subjectRegion: ["columns 3-12"]
+    replicates: 2
+    fixed:
+      - id: standard
+        role: standard
+        label: IL-6 standard
+        region: ["A1:G2"]
+        series: { top: { value: "600", unit: pg/mL }, factor: "2", points: 7 }
+        replicates: 2
+      - id: blank
+        role: blank
+        label: Blank
+        region: ["H1:H2"]
+    wellVolume: { value: "100", unit: uL }
+    groups:
+      - { id: curve, label: Standard curve, roles: [standard, blank], by: subject_and_point }
+      - { id: per_sample, label: Mean per sample, roles: [sample], by: subject }
+    assays: [ELISA]
+
+  - key: layout-single-point-384
+    template: assay-compound-single-point
+    label: Single-point screen, 384 wells
+    wells: 384
+    subjectRole: compound
+    subjectRegion: ["columns 3-22"]
+    subjectConcentration: { value: "10", unit: uM }
+    fixed:
+      - { id: dmso, role: neutral_control, label: DMSO, region: ["columns 1-2"] }
+      - id: staurosporine
+        role: positive_control
+        label: Staurosporine 1 µM
+        region: ["columns 23-24"]
+        concentration: { value: "1", unit: uM }
+    groups:
+      - { id: zprime, label: "Z' per plate", roles: [neutral_control, positive_control], by: plate }
+    assays: [CellTiter-Glo]
+
+  - key: layout-dose-response-384
+    template: assay-compound-dose-response
+    label: Dose-response, 384 wells
+    wells: 384
+    subjectRole: compound
+    subjectRegion: ["columns 3-22"]
+    subjectSeries: { top: { value: "10", unit: uM }, factor: "3", points: 10 }
+    replicates: 2
+    fixed:
+      - { id: dmso, role: neutral_control, label: DMSO, region: ["columns 1-2"] }
+      - { id: positive, role: positive_control, label: Positive control, region: ["columns 23-24"] }
+    groups:
+      - { id: curve, label: Curve per compound, roles: [compound], by: subject }
+      - { id: zprime, label: "Z' per plate", roles: [neutral_control, positive_control], by: plate }
+    assays: [CellTiter-Glo, HiBiT]
+
+  - key: layout-pnpp-96
+    template: assay-enzyme-kinetic
+    label: pNPP kinetic screen, 96 wells
+    wells: 96
+    subjectRole: compound
+    subjectRegion: ["columns 3-12"]
+    fixed:
+      - { id: no_enzyme, role: negative_control, label: No enzyme, region: ["column 1"] }
+      - { id: full_activity, role: neutral_control, label: DMSO (full activity), region: ["column 2"] }
+    groups:
+      - { id: activity, label: Percent activity per compound, roles: [compound], by: subject }
+    assays: [pNPP kinetic]
+
+  - key: layout-dual-glo-384
+    template: assay-dual-glo
+    label: Dual-Glo reporter, 384 wells
+    wells: 384
+    subjectRole: sample
+    subjectRegion: ["columns 3-22"]
+    replicates: 4
+    fixed:
+      - { id: untreated, role: neutral_control, label: Untreated, region: ["columns 1-2"] }
+      - { id: empty_vector, role: negative_control, label: Empty vector, region: ["columns 23-24"] }
+    groups:
+      - { id: fold, label: Fold change over untreated, roles: [sample], by: subject }
+    assays: [Dual-Glo]

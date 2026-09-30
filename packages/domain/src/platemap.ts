@@ -139,7 +139,7 @@ export interface SeriesSpec {
   factor: string;
   points: number;
   /** down: top first. up: lowest first. */
-  direction?: 'down' | 'up';
+  direction?: 'down' | 'up' | undefined;
 }
 
 /** The concentrations of a series, 6 significant digits: 10 µM 3-fold × 4 → 10, 3.33333, 1.11111, 0.37037. */

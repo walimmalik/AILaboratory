@@ -11,6 +11,7 @@ Volumes, concentrations, dilutions and amounts come from a calculator, never fro
 | --- | --- | --- |
 | `inventory.calculate_transfer` | What two wells hold after moving a volume: volumes left, every component's concentration after mixing, dry amounts dissolving | `{source: WellState, destination?: WellState, volume}` |
 | `inventory.map_plates` | Which source well lands on which destination well when stamping (one to one, quadrant, offset) | `{from, to, mapping, wells?}` |
+| `layouts.preview` | How many subjects fit on a plate with a layout, how many plates they need, and every planned well | `{layout or attributes, subjects, seed?}` |
 | `reagents.scale_recipe` | How much of each component a lab-made product needs for a batch | `{product, target}` |
 | `sops.evaluate` | Formulas over named values with units, as SOP variables use them: totals with dead volume, C1V1, rounding up to a tube size | `{variables: [{name, value} or {name, expression, unit?}]}` |
 | `sops.score` | How well a digitized SOP matches what its source must contain: materials, steps, values and questions found, what is missing | `{sop, expected: SopExpectation}` |

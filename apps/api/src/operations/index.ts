@@ -25,6 +25,7 @@ export { ActivityBus } from './activity.ts';
 import { conclusionOperations } from '../campaigns/conclusions.ts';
 import { campaignOperations } from '../campaigns/operations.ts';
 import { runOperations } from '../campaigns/runs.ts';
+import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { OperationError } from './errors.ts';
 
@@ -67,6 +68,7 @@ export function createRegistry(
     ...campaignOperations,
     ...runOperations,
     ...conclusionOperations,
+    ...plateMapOperations,
     ...assistantOperations,
   );
 }
