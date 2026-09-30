@@ -47,6 +47,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0039](../decisions/0039-designs-pin-inputs.md) | Designs pin their inputs by `{id, version}` of a confirmed version; a newer confirmed version is shown and adopted on request, never followed silently; physical state is checked live |
 | [0041](../decisions/0041-invariants-on-the-kind.md) | A record's rules live on its kind (`related`, `checks`, `createdBy`), so generic writes can't skip them; instrument rules stay data with one generic resolver |
 | [0042](../decisions/0042-inventory-write-lock.md) | Inventory writes in a lab run one at a time (a per-lab transaction lock), so simultaneous changes can't lose volume |
+| [0043](../decisions/0043-seed-loads-without-approvals.md) | The seed loads in one run with no approvals: it confirms what it wrote as the person running it, and only records with a failing blocker are left for Review |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

@@ -45,7 +45,7 @@ Adding a capability: a contract, an implementation registered in `createRegistry
 | In-app assistant | [assistant.md](../architecture/assistant.md) |
 | Labware types and vendors, Opentrons import and export, seed loader | [labware.md](../architecture/labware.md) |
 
-`pnpm --filter @ailab/api seed` loads the seed lab through the operations as the agent "Seed loader", as drafts to review (labware so far). Verified values carry datasheet evidence with the source URL, estimated values are assumed, and unknown values are left out so readiness lists them. It is safe to run again.
+`pnpm --filter @ailab/api seed` loads the seed lab through the operations as the agent "Seed loader", then confirms what it wrote as the person running it, in one run ([ADR 0043](../decisions/0043-seed-loads-without-approvals.md)); only records with a failing blocker are left for Review. Verified values carry datasheet evidence with the source URL, estimated values are assumed, and unknown values are left out so readiness lists them. It is safe to run again.
 
 ## The in-app assistant
 
