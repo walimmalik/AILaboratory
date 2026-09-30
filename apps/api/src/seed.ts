@@ -5,6 +5,8 @@ import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { entityKinds } from './entities/kinds.ts';
 import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
+import { fileKinds } from './files/kinds.ts';
+import { fileStoreFromEnv } from './files/store.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
 import { loadSeedContents, readSeedContents } from './inventory/contents-seed.ts';
@@ -78,9 +80,16 @@ for (const kind of [
   ...reagentKinds,
   ...entityKinds,
   ...inventoryKinds,
+  ...fileKinds,
 ])
   kinds.register(kind);
-const registry = createRegistry(connection.db, kinds, new ActivityBus());
+const registry = createRegistry(
+  connection.db,
+  kinds,
+  new ActivityBus(),
+  undefined,
+  fileStoreFromEnv(process.env),
+);
 
 const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');
 const definitions = await readDefinitions(new URL('../../../seed/opentrons/', import.meta.url));

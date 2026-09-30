@@ -17,6 +17,8 @@ COPY --from=build /out/package.json ./
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/dist ./dist
 COPY --from=build /out/drizzle ./drizzle
+# The file store (plan 011a); compose mounts a volume here.
+RUN mkdir -p /data/files && chown node:node /data/files
 USER node
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
