@@ -1,10 +1,12 @@
-import type { Actor, PlacePath, RecordEnvelope } from '@ailab/schema';
+import { readFile } from 'node:fs/promises';
+import type { Actor, PlacePath, Proposal, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import { loadSeedLabware } from '../labware/seed.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -14,6 +16,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { inventoryKinds } from './kinds.ts';
+import { loadSeedInventory, readSeedInventory } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -284,5 +287,68 @@ describe('containers', () => {
     expect(readiness.checks).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'type_confirmed', passed: false })]),
     );
+  });
+});
+
+describe('seed inventory', () => {
+  it('proposes rooms, then storage, then containers, as each is approved', async () => {
+    const seedFile = (name: string) =>
+      readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const labware = await seedFile('labware.yaml');
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    await loadSeedLabware(registry, seeder, labware);
+    const seed = readSeedInventory({
+      lab: await seedFile('lab.yaml'),
+      inventory: await seedFile('inventory.yaml'),
+      labware,
+    });
+    const approveAll = async () => {
+      const { proposals } = await run<{ proposals: Proposal[] }>(person, 'proposals.list', {
+        status: 'pending',
+      });
+      for (const p of proposals) await run(person, 'proposals.approve', { id: p.id });
+      return proposals.length;
+    };
+
+    const first = await loadSeedInventory(registry, seeder, seed);
+    expect(first.locations.proposed).toHaveLength(4);
+    expect(first.locations.waiting).toHaveLength(7);
+    expect(first.containers.waiting).toHaveLength(8);
+    expect(first.skipped.map((s) => s.key)).toEqual(['flask-hek293-01']);
+    const again = await loadSeedInventory(registry, seeder, seed);
+    expect(again.locations.proposed).toHaveLength(0);
+    expect(await approveAll()).toBe(4);
+
+    expect((await loadSeedInventory(registry, seeder, seed)).locations.proposed).toHaveLength(7);
+    expect(await approveAll()).toBe(7);
+    expect((await loadSeedInventory(registry, seeder, seed)).containers.proposed).toHaveLength(8);
+    expect(await approveAll()).toBe(8);
+    const last = await loadSeedInventory(registry, seeder, seed);
+    expect(last.containers.existing).toHaveLength(8);
+    expect(last.locations.existing).toHaveLength(11);
+
+    const tubes = await run<{ record: RecordEnvelope; path: PlacePath }>(person, 'inventory.scan', {
+      code: 'TUB-000001',
+    });
+    expect(tubes.path.map((p) => p.label).slice(0, 2)).toEqual([
+      'Cold room and freezer alcove (B2.10)',
+      'Freezer -20 1',
+    ]);
+    const plates = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+      kind: 'container',
+      search: 'PLT',
+    });
+    expect(plates.records.map((p) => p.name).sort()).toEqual([
+      'PLT-000001',
+      'PLT-000002',
+      'PLT-000003',
+    ]);
   });
 });

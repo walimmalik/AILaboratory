@@ -73,6 +73,8 @@ Editing and confirming use `records.update` and review, which run the same check
 
 `seed/entity-library.yaml` holds the ten seed kinds (plasmid `PLS`, DNA fragment `FRG`, oligo `OLI`, RNA `RNA`, protein `PRT`, antibody `AB`, enzyme `ENZ`, compound `CMP`, cell line `CEL`, bacterial strain `STR`) and the demo lab's entities from `seed/entities.yaml`: three ATCC cell lines, five plasmids (two fictional), staurosporine and DMSO linked to their products, and rSAP. Cell lines carry the lab's 30 min out-of-incubator rule on their kind. Loaded by `pnpm --filter @ailab/api seed` as drafts; the first source of each entity is the evidence for its fields, except those the research marked as estimates, which load as assumed. The FDA library waits for its plate map file (V10: one entity per compound).
 
+The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations in `seed/lab.yaml` into locations and the containers in `seed/inventory.yaml` into registered containers, matched by label so it can run again. It runs as an agent, so each is a proposal, and something whose place is still waiting on Review waits for the next run: approve the rooms, run it again for the fridges and freezers, approve, run again for the containers. The HEK293 flask is skipped until a flask labware family exists.
+
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, loading the seed lab's locations and containers, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, contents and the ledger (010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, contents and the ledger (010c), handling-rule inheritance (010d), screens (010e).

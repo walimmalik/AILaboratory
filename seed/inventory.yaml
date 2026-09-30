@@ -1,6 +1,7 @@
 # The demo lab's stock (plan 010): lots of real products, and containers with what is in them and
 # where they are. Lot numbers, expiry dates, barcodes and contents are all fictional.
-# Barcode format here is a placeholder ("DL" + 6 digits); plan 010 decides the real format.
+# Containers carry no barcodes of their own: their readable name (PLT-000001) is the lab barcode
+# (plan 010, V5), given when they are registered.
 
 lots:
   - { key: lot-dy206-a, product: rnd-dy206, lot_number: DEMO-P123456, expiry: 2027-03-31, received: 2026-08-12, location: fridge-01,
@@ -31,7 +32,7 @@ lots:
 containers:
   # Cells
   - key: flask-hek293-01
-    barcode: DL000101
+    label: HEK293 flask, passage 12
     labware: null
     container_type: T75 flask (catalog item not in the labware seed yet)
     location: tc-incubator-01
@@ -40,14 +41,14 @@ containers:
       - { product: gibco-11965092, volume: { value: "15", unit: mL }, note: "complete medium: +10% FBS, +1% Pen-Strep" }
   # Compound stocks and plates
   - key: tube-stauro-1mm
-    barcode: DL000201
+    label: Staurosporine 1 mM in DMSO
     labware: eppendorf-0030120086
     location: freezer-20-01
     contents:
       - { entity: cmpd-staurosporine, lot: lot-81590-a, concentration: { value: "1", unit: mM }, volume: { value: "200", unit: "uL" }, solvent: DMSO }
     freeze_thaw_count: 2
   - key: echo-src-lib-01
-    barcode: DL000301
+    label: FDA library source plate 1
     labware: beckman-001-14555
     location: freezer-80-01
     sealed: true
@@ -57,7 +58,7 @@ containers:
       - { entity: cmpd-dmso, wells: "A1:P2", volume_per_well: { value: "40", unit: "uL" } }
       - { entity: cmpd-staurosporine, wells: "A23:P24", concentration: { value: "1", unit: mM }, volume_per_well: { value: "40", unit: "uL" } }
   - key: arp-cells-01
-    barcode: DL000302
+    label: Assay-ready plate for HEK293
     labware: corning-3570
     location: freezer-20-01
     sealed: true
@@ -65,33 +66,33 @@ containers:
     derived_from: echo-src-lib-01
   # ELISA
   - key: elisa-plate-coated-01
-    barcode: DL000401
+    label: IL-6 ELISA plate, coated
     labware: thermo-442404
     location: fridge-01
     sealed: true
     description: Coated with IL-6 capture antibody (lot-dy206-a) at 2 ug/mL, 100 uL per well, blocked, dried and sealed on 2026-09-28.
   # Cloning
   - key: tube-pgl4-10-stock
-    barcode: DL000501
+    label: pGL4.10 stock
     labware: eppendorf-0030120086
     location: freezer-20-01
     contents:
       - { entity: promega-pgl4-10, concentration: { value: "100", unit: "ng/uL" }, volume: { value: "20", unit: "uL" } }
   - key: tube-pil6p-luc2-mp1
-    barcode: DL000502
+    label: pIL6p-luc2 miniprep 1
     labware: eppendorf-0030120086
     location: freezer-20-01
     contents:
       - { entity: demo-pil6p-luc2, concentration: { value: "185", unit: "ng/uL" }, volume: { value: "48", unit: "uL" }, note: "miniprep of colony 1, sequence-verified" }
   - key: tube-hibit-brd4-mp2
-    barcode: DL000503
+    label: HiBiT-BRD4 miniprep 2
     labware: eppendorf-0030120086
     location: freezer-20-01
     contents:
       - { entity: demo-hibit-brd4, concentration: { value: "142", unit: "ng/uL" }, volume: { value: "50", unit: "uL" }, note: "miniprep of colony 2, sequencing pending" }
   # Enzyme
   - key: tube-rsap
-    barcode: DL000601
+    label: rSAP
     labware: eppendorf-0030120086
     location: freezer-20-01
     contents:
