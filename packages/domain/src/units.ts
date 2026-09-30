@@ -127,6 +127,13 @@ const definitions: UnitDefinition[] = [
     ['U/L', 'U/L', '0.001'],
     ['mU/mL', 'mU/mL', '0.001'],
   ]),
+  ...family('base_pairs', [
+    ['bp', 'bp', '1'],
+    ['kb', 'kb', '1000'],
+    ['Mb', 'Mb', '1000000'],
+  ]),
+  ...family('nucleotides', [['nt', 'nt', '1']]),
+  ...family('amino_acids', [['aa', 'aa', '1']]),
   ...family('colony_count', [['CFU', 'CFU', '1']]),
   ...family('colony_density', [
     ['CFU/uL', 'CFU/µL', '1000'],

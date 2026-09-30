@@ -1,4 +1,5 @@
 export * from './assistant.ts';
+export * from './entities.ts';
 export * from './instruments.ts';
 export * from './labware.ts';
 export * from './liquids.ts';

@@ -1,4 +1,5 @@
 export * from './decimal.ts';
+export * from './entities.ts';
 export * from './ids.ts';
 export * from './instruments.ts';
 export * from './labware.ts';

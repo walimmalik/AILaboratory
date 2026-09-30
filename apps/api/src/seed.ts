@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { contextFor } from './auth.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
+import { entityKinds } from './entities/kinds.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
@@ -65,7 +66,8 @@ if (!ctx) {
 }
 
 const kinds = new KindRegistry();
-for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds]) kinds.register(kind);
+for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...entityKinds])
+  kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus());
 
 const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');

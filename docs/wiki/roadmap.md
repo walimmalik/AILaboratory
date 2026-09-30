@@ -26,7 +26,7 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [007 Labware](../plans/007-labware-library.md) | Labware types, geometry, volumes, dead volumes, Opentrons import and export | 007a built (PR #13, ADR 0023); 007b in progress: Library pages, editing in place and to-scale drawings merged (PRs #16, #19) | 007a model and import, 007b screens |
 | [008 Instruments](../plans/008-instrument-library.md) | Instrument and equipment kinds, registered instruments, configurations, capabilities, workcells | 008a built (PRs #31, #32, ADR 0025); 008b registered instruments (PRs #33, #34, ADR 0026); 008c screens | 008a to 008d (008d workcells gets a short question round first) |
 | [009 Reagents and liquids](../plans/009-reagents-and-liquids.md) | Products, kits, recipes, lots, handling rules, liquid types and classes | 009a built (PRs #36, #37, ADR 0027); 009b liquid classes (PRs #38, #39, ADR 0028); 009c search (PR #40) and screens; 009 done | 009a to 009c |
-| [010 Inventory](../plans/010-inventory.md) | Entities, samples, containers, locations, barcodes, volume ledger, inherited handling rules | Locked; after 009a | 010a to 010e |
+| [010 Inventory](../plans/010-inventory.md) | Entities, samples, containers, locations, barcodes, volume ledger, inherited handling rules | 010a entity kinds and entities (ADR 0029); seed next | 010a to 010e |
 
 ## Knowledge and experiments
 

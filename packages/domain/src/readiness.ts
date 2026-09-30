@@ -77,7 +77,15 @@ export interface KindRules {
   notApplicable?: ((attributes: never) => string[]) | undefined;
 }
 
-export function readiness(record: RecordEnvelope, kind: KindRules): Readiness {
+/**
+ * `related` are checks that needed other records (an entity against its kind), worked out by the
+ * record service and merged with the kind's own.
+ */
+export function readiness(
+  record: RecordEnvelope,
+  kind: KindRules,
+  related: CheckResult[] = [],
+): Readiness {
   const attributes = record.attributes;
   const sections = kind.sections ?? [];
   const checks = kind.checks ?? [];
@@ -109,7 +117,7 @@ export function readiness(record: RecordEnvelope, kind: KindRules): Readiness {
     };
   });
 
-  const results = runChecks(checks, attributes);
+  const results = [...runChecks(checks, attributes), ...related];
   const missing = [
     ...sectionStates
       .filter((s) => s.state === 'needs_review')

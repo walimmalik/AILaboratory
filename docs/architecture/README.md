@@ -12,3 +12,5 @@ The system-level architecture is in [plan 000](../plans/000-foundation-architect
 | Lab memory | not yet written | 005 |
 | Labware types, vendors, Opentrons import and export, seed loader | [labware.md](labware.md) | 007 |
 | Instrument and equipment kinds, capability catalog, configuration resolver | [instruments.md](instruments.md) | 008 |
+| Products, kits, lots, liquid types and classes | [reagents.md](reagents.md) | 009 |
+| Entities, samples, containers, locations, ledger | [inventory.md](inventory.md) | 010 |
