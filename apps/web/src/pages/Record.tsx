@@ -23,7 +23,7 @@ import { useMe } from '../session.ts';
 import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
-import { InstrumentBlocks } from './Instruments.tsx';
+import { InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
@@ -119,6 +119,8 @@ export function RecordPage() {
               </>
             ) : r.kind === 'instrument' ? (
               <InstrumentBlocks record={r} />
+            ) : r.kind === 'workcell' ? (
+              <WorkcellBlocks record={r} />
             ) : r.kind === 'product' ? (
               <ProductBlocks record={r} />
             ) : r.kind === 'liquid_class' ? (

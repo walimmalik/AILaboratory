@@ -13,6 +13,7 @@ export interface KindPage {
     | '/instruments'
     | '/instrument-models'
     | '/equipment'
+    | '/workcells'
     | '/reagents'
     | '/lots'
     | '/liquid-classes'
@@ -82,6 +83,13 @@ export const libraryPages: KindPage[] = [
     title: 'Instrument models',
     noun: 'instrument model',
     path: '/instrument-models',
+    group: 'Instruments',
+  },
+  {
+    kind: 'workcell',
+    title: 'Workcells',
+    noun: 'workcell',
+    path: '/workcells',
     group: 'Instruments',
   },
   {

@@ -72,3 +72,5 @@ The file's `workcells` list names member instruments by key, each with its echo6
 ## Screens
 
 The web app (008c) has three library pages: Instruments (the lab's registered instruments with an availability lamp and calibration due), Instrument models and Equipment. An instrument's page shows its deck, one drawing per mount with what is installed on each slot or run of tracks, and what it can do with its limits, both from `instruments.resolve`. Changes go through the same operations an agent uses. See [web-app.md](web-app.md).
+
+Workcells (008d-3) have their own library page. A workcell's page lists its instruments in plain words (what each can do from its model, its availability lamp, and "also by hand" or "workcell only"), says positions and reach come from the twin, and keeps the twin workcell and device IDs under technical details. An instrument's page says which confirmed workcell it is in, or that it stands alone (`workcells.of_instrument`).
