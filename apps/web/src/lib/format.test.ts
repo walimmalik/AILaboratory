@@ -28,8 +28,12 @@ describe('plain language', () => {
       recordNames: { wdg_1: 'WDG-0001' },
     } as unknown as ActivityEntry;
     expect(describeEntry(entry)).toBe('archived WDG-0001');
+    expect(describeEntry({ ...entry, operationId: 'transfers.draft_from_plate_map' })).toBe(
+      'drafted a transfer plan from WDG-0001',
+    );
+    // An ID no contract has never reaches the screen.
     expect(describeEntry({ ...entry, operationId: 'records.frobnicate' })).toBe(
-      'records.frobnicate WDG-0001',
+      'did something WDG-0001',
     );
   });
 

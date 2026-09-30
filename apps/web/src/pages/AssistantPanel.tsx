@@ -9,7 +9,13 @@ import { Link } from '@tanstack/react-router';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
 import { fileOf } from '../lib/files.ts';
-import { describeToolStep, formatWhen, type ToolLine, waitingForYou } from '../lib/format.ts';
+import {
+  describeToolStep,
+  formatWhen,
+  operationIntent,
+  type ToolLine,
+  waitingForYou,
+} from '../lib/format.ts';
 import { RichText } from '../lib/RichText.tsx';
 import {
   assistantSetupQuery,
@@ -240,7 +246,7 @@ function Step({
 }) {
   const line: ToolLine = result
     ? describeToolStep(result)
-    : { text: `${call.operationId}…`, tone: 'muted' };
+    : { text: `${operationIntent(call.operationId)}…`, tone: 'muted' };
   // A done step's result is the operation's {status, output}.
   const file =
     result?.outcome === 'done'

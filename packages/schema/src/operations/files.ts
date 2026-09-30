@@ -5,6 +5,7 @@ import { RecordEnvelope } from '../record.ts';
 
 export const filesUpload = defineContract({
   id: 'files.upload',
+  verbs: { done: 'uploaded a file', intent: 'upload a file' },
   summary:
     'Store a file (a PDF, DOCX, Markdown, code, an image, a CSV) and get its file record (FIL-0001). Send the bytes as base64, or plain text as `text`. Up to 50 MB. The same bytes uploaded again return the existing record',
   effect: 'write',
@@ -28,6 +29,7 @@ export const filesUpload = defineContract({
 
 export const filesGet = defineContract({
   id: 'files.get',
+  verbs: { done: 'opened a file', intent: 'open a file' },
   summary:
     "Read a file's record and its bytes: as text for text files (Markdown, code, CSV, JSON, HTML), as base64 otherwise. People open it in the app at /api/v1/files/<id>",
   effect: 'read',

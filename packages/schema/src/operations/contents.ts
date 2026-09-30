@@ -40,6 +40,7 @@ const Changed = z.object({
 
 export const inventoryFill = defineContract({
   id: 'inventory.fill',
+  verbs: { done: 'filled', intent: 'fill' },
   summary:
     'Record liquid (or a dried amount) put into wells from outside the inventory: a lot or sample at a concentration, e.g. 40 µL of 10 mM compound in DMSO into A3:P22. It mixes with what is there',
   effect: 'write',
@@ -70,6 +71,7 @@ export const inventoryFill = defineContract({
 
 export const inventoryTransfer = defineContract({
   id: 'inventory.transfer',
+  verbs: { done: 'recorded a transfer from', intent: 'record a transfer from' },
   summary:
     'Record liquid moved from wells to wells, in order: each line takes a volume from one well and mixes it into another. Concentrations follow by the mixing math',
   effect: 'write',
@@ -90,6 +92,7 @@ export const inventoryTransfer = defineContract({
 
 export const inventoryConsume = defineContract({
   id: 'inventory.consume',
+  verbs: { done: 'recorded use of', intent: 'record use of' },
   summary:
     'Record liquid used up or thrown away from wells (taken for an assay outside the inventory, a spill, evaporation)',
   effect: 'write',
@@ -104,6 +107,7 @@ export const inventoryConsume = defineContract({
 
 export const inventoryCorrect = defineContract({
   id: 'inventory.correct',
+  verbs: { done: 'corrected the contents of', intent: 'correct the contents of' },
   summary:
     'Replace what wells hold with what was measured or found (a Qubit reading, a volume check, an empty tube). Needs a reason',
   effect: 'write',
@@ -118,6 +122,7 @@ export const inventoryCorrect = defineContract({
 
 export const inventoryWells = defineContract({
   id: 'inventory.wells',
+  verbs: { done: 'looked at the wells of', intent: 'look at the wells of' },
   summary:
     "What a container's wells hold: volume and each sample or lot with its concentration. Empty wells are left out",
   effect: 'read',
@@ -131,6 +136,7 @@ export const inventoryWells = defineContract({
 
 export const inventoryHistory = defineContract({
   id: 'inventory.history',
+  verbs: { done: 'read the contents history of', intent: 'read the contents history of' },
   summary:
     'The ledger of a container, or one of its wells: every fill, transfer, consume and correction, newest first, with who did it and what the wells held after',
   effect: 'read',
@@ -144,6 +150,7 @@ export const inventoryHistory = defineContract({
 
 export const samplesRegister = defineContract({
   id: 'samples.register',
+  verbs: { done: 'registered samples', intent: 'register samples' },
   summary:
     'Register a batch the lab made of an entity: a miniprep, PCR product, purified protein, culture or cell bank, with its QC (concentration, A260/280, sequence verified, passage). Its tubes are containers filled with it',
   effect: 'write',
@@ -157,6 +164,7 @@ export const samplesRegister = defineContract({
 
 export const inventoryDiscard = defineContract({
   id: 'inventory.discard',
+  verbs: { done: 'discarded', intent: 'discard' },
   summary:
     'Record a container thrown away: its wells are emptied in the ledger and it is marked discarded. It stays readable with its history. A rack or box must be emptied first',
   effect: 'write',
@@ -192,6 +200,7 @@ const Grid = z.strictObject({
 
 export const inventoryMapPlates = defineContract({
   id: 'inventory.map_plates',
+  verbs: { done: 'mapped plates', intent: 'map plates' },
   calculator: true,
   summary:
     'Work out which source well lands on which destination well when a plate is stamped onto another: one to one, by quadrant (96 into 384) or by an offset. Give containers or grids. Changes nothing',
@@ -210,6 +219,7 @@ export const inventoryMapPlates = defineContract({
 
 export const inventoryStamp = defineContract({
   id: 'inventory.stamp',
+  verbs: { done: 'stamped', intent: 'stamp' },
   summary:
     'Record a plate stamped onto another: the same volume from each source well into its mapped destination well (one to one, a quadrant, or an offset), e.g. 25 nL from an Echo source plate into an assay-ready plate. Only wells that hold something are stamped unless you list them',
   effect: 'write',
@@ -226,6 +236,10 @@ export const inventoryStamp = defineContract({
 
 export const inventoryLineage = defineContract({
   id: 'inventory.lineage',
+  verbs: {
+    done: 'traced where the liquid came from in',
+    intent: 'trace where the liquid came from in',
+  },
   summary:
     'Where the liquid in a well came from: each fill and each transfer or stamp into it, then back through the source wells, newest first',
   effect: 'read',
@@ -258,6 +272,7 @@ export const inventoryLineage = defineContract({
 
 export const inventoryEffectiveRules = defineContract({
   id: 'inventory.effective_rules',
+  verbs: { done: 'checked the handling rules of', intent: 'check the handling rules of' },
   summary:
     'The handling rules a container inherits from what its wells hold (time out of the incubator, light, temperature, freeze-thaws), the strictest winning, each with every rule it came from and its source; plus the narrowest storage temperature. What the scheduler keeps to',
   effect: 'read',

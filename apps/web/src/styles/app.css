@@ -2149,3 +2149,20 @@ table.review-fields table.items-table td {
   vertical-align: top;
   background: none;
 }
+
+/* A nested value (a footprint, a recipe component): one named value per line, no box of its own. */
+dl.kv.nested {
+  font-size: inherit;
+  gap: 2px 12px;
+}
+dl.kv.nested .kv-row {
+  display: contents;
+}
+ul.equipment-tree {
+  margin: 0;
+  padding-left: 1.2em;
+}
+td > ul.equipment-tree {
+  padding-left: 0;
+  list-style: none;
+}

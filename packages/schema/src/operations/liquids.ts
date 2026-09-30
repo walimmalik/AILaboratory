@@ -16,6 +16,7 @@ import { RecordEnvelope } from '../record.ts';
 
 export const liquidsResolveClass = defineContract({
   id: 'liquids.resolve_class',
+  verbs: { done: 'picked a liquid class for', intent: 'pick a liquid class for' },
   calculator: true,
   summary:
     "Pick the liquid class for a transfer and say why: a class chosen on the step, then the product's own class for that device, then the lab's default for the liquid's type on that device and tip. Only confirmed classes are used; when nothing fits it says what is missing and lists the classes that would do",
@@ -39,6 +40,10 @@ export const liquidsResolveClass = defineContract({
 
 export const liquidsMixtureType = defineContract({
   id: 'liquids.mixture_type',
+  verbs: {
+    done: 'worked out the liquid type of a mixture',
+    intent: 'work out the liquid type of a mixture',
+  },
   summary:
     "Work out a mixture's liquid type from its parts (R8): the largest part decides, unless DMSO (at least 70%), glycerol (over 20%), ethanol or a volatile solvent (at least 50%) passes its threshold. The result is an assumption until a person or the SOP step sets it",
   effect: 'read',
@@ -58,6 +63,7 @@ export const liquidsMixtureType = defineContract({
 
 export const liquidsRecordVerification = defineContract({
   id: 'liquids.record_verification',
+  verbs: { done: 'recorded a gravimetric check of', intent: 'record a gravimetric check of' },
   summary:
     "Record a check of a liquid class (gravimetric, dye or photometric: target, replicates, mean, CV and the limits it must meet). A passing run that isn't marked demo makes the class verified in this lab",
   effect: 'write',
@@ -70,6 +76,7 @@ export const liquidsRecordVerification = defineContract({
 
 export const liquidsSearchClasses = defineContract({
   id: 'liquids.search_classes',
+  verbs: { done: 'searched liquid classes', intent: 'search liquid classes' },
   summary:
     "Find the lab's liquid classes by name or vendor name, instrument model, device, tip, liquid type or platform, with whether each is verified in this lab and its latest check. For picking a class for a transfer use liquids.resolve_class",
   effect: 'read',

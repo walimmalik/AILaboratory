@@ -1,5 +1,6 @@
 export * from './assistant.ts';
 export * from './campaigns.ts';
+export * from './catalog.ts';
 export * from './contents.ts';
 export * from './entities.ts';
 export * from './files.ts';

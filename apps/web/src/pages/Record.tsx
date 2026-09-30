@@ -1,15 +1,8 @@
-import type { RecordLink } from '@ailab/schema';
+import type { Configuration, RecordEnvelope, RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
-import {
-  actorLabel,
-  diffRecords,
-  formatValue,
-  formatWhen,
-  isAgent,
-  isQuantity,
-} from '../lib/format.ts';
+import { actorLabel, diffRecords, formatWhen, isAgent } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -23,7 +16,7 @@ import { useMe } from '../session.ts';
 import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
-import { InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
+import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
@@ -34,6 +27,7 @@ import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
+import { LinkedName, renderValue } from './Value.tsx';
 
 const operationWords: Record<string, string> = {
   create: 'created',
@@ -112,7 +106,10 @@ export function RecordPage() {
         <ReviewBlocks
           record={r}
           readiness={readiness}
-          renderValue={renderValue}
+          renderValue={(value, field) => {
+            const view = field ? fieldViews[`${r.kind}/${field}`] : undefined;
+            return view ? view(value, r) : renderValue(value, field);
+          }}
           aside={
             r.kind === 'labware_type' ? (
               <>
@@ -249,6 +246,16 @@ export function RecordPage() {
   );
 }
 
+/**
+ * Fields a kind shows in its lab form rather than as a table (UI rule 1). Everything else goes
+ * through the shared value renderer, which already names records and lists items as tables.
+ */
+const fieldViews: Record<string, (value: unknown, record: RecordEnvelope) => ReactNode> = {
+  'instrument/configuration': (value) => (
+    <InstalledEquipment configuration={value as Configuration | undefined} />
+  ),
+};
+
 /** The sections a confirmation added or refreshed, by their ID. */
 function confirmedSections(
   before: { reviews?: Record<string, { confirmedAt: string }> } | undefined,
@@ -257,61 +264,6 @@ function confirmedSections(
   return Object.entries(after.reviews ?? {})
     .filter(([id, review]) => before?.reviews?.[id]?.confirmedAt !== review.confirmedAt)
     .map(([id]) => fieldLabel(id));
-}
-
-/**
- * A value as a person reads it: linked records by name, quantities with their unit, and a list of
- * objects (an SOP's variables or steps) as a small table, one row per item.
- */
-function renderValue(value: unknown): ReactNode {
-  const isRef = typeof value === 'string' && isRecordId(value);
-  if (isRef) return <LinkedName id={value as string} />;
-  if (Array.isArray(value) && value.length > 0 && value.every(isPlainObject))
-    return <ItemsTable items={value as Record<string, unknown>[]} />;
-  // A small object holding a reference (a container's place) names the record, not its ID.
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.some(([, v]) => typeof v === 'string' && isRecordId(v)))
-      return entries.map(([k, v], i) => (
-        <span key={k}>
-          {i > 0 && ' · '}
-          {fieldLabel(k)} {renderValue(v)}
-        </span>
-      ));
-  }
-  return formatValue(value);
-}
-
-const isRecordId = (v: string) => /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(v);
-
-const isPlainObject = (v: unknown) =>
-  !!v && typeof v === 'object' && !Array.isArray(v) && !isQuantity(v);
-
-function ItemsTable({ items }: { items: Record<string, unknown>[] }) {
-  // Columns in the order the items use them; source quotes stay on the record's history.
-  const columns = [...new Set(items.flatMap((item) => Object.keys(item)))].filter(
-    (key) => key !== 'cite',
-  );
-  return (
-    <table className="items-table">
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th key={c}>{fieldLabel(c)}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={JSON.stringify(item)}>
-            {columns.map((c) => (
-              <td key={c}>{item[c] === undefined ? '' : renderValue(item[c])}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
 }
 
 function Field({ name, value }: { name: string; value: unknown }) {
@@ -357,14 +309,5 @@ function Links({ id }: { id: string }) {
         </div>
       </div>
     </section>
-  );
-}
-
-function LinkedName({ id }: { id: string }) {
-  const { data } = useQuery(recordQuery(id));
-  return (
-    <Link to="/records/$id" params={{ id }} className="mono">
-      {data ? `${data.name} ${data.label}` : id}
-    </Link>
   );
 }

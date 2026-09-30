@@ -39,6 +39,7 @@ const EvaluatedVariable = z.object({
 
 export const sopsEvaluate = defineContract({
   id: 'sops.evaluate',
+  verbs: { done: "worked out the SOP's formulas", intent: "work out the SOP's formulas" },
   calculator: true,
   summary:
     'Work out formulas over named values with units and exact decimals, as digital SOP variables do: "n_samples * replicates * well_volume + dead_volume", "roundup(total * 1.1, 0.5 mL)", "final_conc * final_volume / stock_conc". Give each variable a value (a number, a quantity or a list) or a formula; formulas may use each other in any order. Functions: ceil, floor, round, roundup(x, step), rounddown(x, step), min, max, sum, count',
@@ -75,6 +76,7 @@ export const sopsEvaluate = defineContract({
 
 export const sopsDraft = defineContract({
   id: 'sops.draft',
+  verbs: { done: 'drafted an SOP', intent: 'draft an SOP' },
   summary:
     'Draft a digital SOP: materials by role (with requirements and a default record), variables (inputs, defaults, values read from records, formulas), typed steps in plain lab language, plate layout needs, timing windows and open questions, each citing the library passage it came from. A person confirms it section by section',
   effect: 'write',
@@ -95,6 +97,7 @@ export const sopsDraft = defineContract({
 
 export const sopsCalculate = defineContract({
   id: 'sops.calculate',
+  verbs: { done: 'calculated the values of', intent: 'calculate the values of' },
   calculator: true,
   summary:
     "Work out an SOP's variables for a run: bind its material roles to records (each role's default unless one is given here), read record variables from them (a lot's certificate value, a plate type's dead volume), take the run's inputs (number of samples, replicates), and compute the formulas. Says where every value came from and what is still missing",
@@ -161,6 +164,7 @@ export const sopsCalculate = defineContract({
 
 export const sopsAnswerQuestion = defineContract({
   id: 'sops.answer_question',
+  verbs: { done: 'answered a question on', intent: 'answer a question on' },
   summary:
     "Answer an SOP's open question, or accept the answer it suggests. People only: an open question blocks confirming until a person settles it",
   effect: 'write',
@@ -194,6 +198,7 @@ export const CitationCheck = z.object({
 
 export const sopsCheckCitations = defineContract({
   id: 'sops.check_citations',
+  verbs: { done: 'checked the citations of', intent: 'check the citations of' },
   summary:
     "Check that every quote an SOP cites is really in its library document: in the cited passage, elsewhere in the document, or nowhere. Spacing and case don't matter; any other difference does",
   effect: 'read',
@@ -207,6 +212,7 @@ export const sopsCheckCitations = defineContract({
 
 export const sopsReview = defineContract({
   id: 'sops.review',
+  verbs: { done: 'reviewed the SOP', intent: 'review the SOP' },
   summary:
     'Run the AI review cycle on a draft SOP: a reviewer model checks every step and value against its cited passages and readiness checks, fixes what the source settles (each fix a tracked change with its reason and passage) and asks an open question where the source is unclear. Stops when a round finds nothing or after `rounds`. Never confirms anything; a person still does',
   effect: 'write',
@@ -236,6 +242,7 @@ export const sopsReview = defineContract({
 
 export const sopsSuggest = defineContract({
   id: 'sops.suggest',
+  verbs: { done: 'asked for a suggestion on', intent: 'ask for a suggestion on' },
   summary:
     "Ask the assistant to fill in part of an SOP while it is edited: one value (a formula over the SOP's values, a number, or a material's field), one step's settings and what it uses, a new step from a sentence, or every step drafted from the source document. Give exactly one of value, step, newStep or steps. The answer is checked (formulas with the calculator, steps against the SOP's materials and values) and returned as a suggestion marked as assumed; it changes nothing",
   effect: 'read',
@@ -268,6 +275,7 @@ export const sopsSuggest = defineContract({
 
 export const sopsReviews = defineContract({
   id: 'sops.reviews',
+  verbs: { done: 'read the review rounds of', intent: 'read the review rounds of' },
   summary: "The AI review rounds kept with an SOP: each round's fixes and questions, oldest first",
   effect: 'read',
   input: z.strictObject({ sop: SopId }),
@@ -276,6 +284,7 @@ export const sopsReviews = defineContract({
 
 export const sopsScore = defineContract({
   id: 'sops.score',
+  verbs: { done: 'scored the SOP', intent: 'score the SOP' },
   calculator: true,
   summary:
     'Score a digitized SOP against what its source must contain (the digitizing benchmark): the share of expected materials, steps (by action and stated values), values and unclear spots raised as questions the draft has, what is missing, and whether the steps keep their order',

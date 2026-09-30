@@ -67,6 +67,7 @@ const DeviceUsed = z.object({
 
 export const transfersDilutionOptions = defineContract({
   id: 'transfers.dilution_options',
+  verbs: { done: 'worked out dilution options', intent: 'work out dilution options' },
   calculator: true,
   summary:
     'Can each target concentration be reached from a stock with this device: straight from the stock (the volume, droplets, the concentration the well really gets and its error, the solvent it brings) or through an intermediate diluted 10, 100 or 1000 fold. Use it before planning any dilution',
@@ -97,6 +98,10 @@ export const transfersDilutionOptions = defineContract({
 
 export const transfersOptimizeDilution = defineContract({
   id: 'transfers.optimize_dilution',
+  verbs: {
+    done: 'planned an intermediate dilution plate',
+    intent: 'plan an intermediate dilution plate',
+  },
   calculator: true,
   summary:
     "The dilution optimizer: for every compound and curve point, dispense from the source plate when that is within tolerance, else from an intermediate well, using the fewest intermediate wells and plates within the solvent limit and the intermediate plate's dead and maximum volume. Returns per point the source or intermediate well, droplets, achieved concentration and error, and per intermediate well what to put in it. Choose between runs with different settings and explain; never work the volumes out yourself",
@@ -169,6 +174,7 @@ export const transfersOptimizeDilution = defineContract({
 
 export const transfersSourceVolumes = defineContract({
   id: 'transfers.source_volumes',
+  verbs: { done: 'worked out source volumes', intent: 'work out source volumes' },
   calculator: true,
   summary:
     'What each source well must hold for a set of draws: what is drawn, plus the dead volume of its labware type, plus an overage, against what inventory says the well holds now less what confirmed transfer plans have reserved. Says which wells are short',
@@ -205,6 +211,7 @@ export const transfersSourceVolumes = defineContract({
 
 export const transfersOptions = defineContract({
   id: 'transfers.options',
+  verbs: { done: 'compared transfer instruments', intent: 'compare transfer instruments' },
   calculator: true,
   summary:
     'Every instrument in the lab that could move a volume, best first: whether its transfer or dispense limits allow it, the volume it really moves (droplets or steps) and its error, its liquid class for the liquid and whether that class is verified, and how it uses tips (estimated). Instruments without volume limits are listed apart. Pick from these and say why',
@@ -252,6 +259,7 @@ const Instrument = z.strictObject({ instrument: InstrumentId, node: LocalId.opti
 
 export const transfersDraft = defineContract({
   id: 'transfers.draft',
+  verbs: { done: 'drafted a transfer plan', intent: 'draft a transfer plan' },
   summary:
     "Draft a transfer plan: the plates it uses (sources, destinations, intermediates, each with its labware type version and optionally its container or plate map plate) and groups of transfers, each one method on one instrument (or by hand) with why it was chosen and the alternatives. Work volumes out with the transfer calculators first; code copies each instrument's limits into its group and checks every volume in readiness",
   effect: 'write',
@@ -270,6 +278,7 @@ export const transfersDraft = defineContract({
 
 export const transfersSetInstrument = defineContract({
   id: 'transfers.set_instrument',
+  verbs: { done: 'set the instrument of', intent: 'set the instrument of' },
   summary:
     "Switch a group of a transfer plan to another instrument (or to by hand), with why. Code copies the new instrument's limits; readiness then says which volumes it can't move. Direct on drafts; proposed on a confirmed plan",
   effect: 'write',
@@ -287,6 +296,7 @@ export const transfersSetInstrument = defineContract({
 
 export const transfersPickSources = defineContract({
   id: 'transfers.pick_sources',
+  verbs: { done: 'picked sources for', intent: 'pick sources for' },
   summary:
     "Say which container in inventory each source plate is (P5): usually on the day, once you know which tube or plate has enough (check with transfers.source_volumes). The container must be of the plate's labware type. Direct on drafts; proposed on a confirmed plan",
   effect: 'write',
@@ -309,6 +319,7 @@ const Check = z.object({
 
 export const transfersCheck = defineContract({
   id: 'transfers.check',
+  verbs: { done: 'checked', intent: 'check' },
   calculator: true,
   summary:
     "Every rule on a transfer plan, with what is live on the day: each volume against its instrument's limits now, whether each instrument is ready and still has the limits the plan used, what each source well must hold (drawn, dead volume) against what it holds less other plans' reservations, destination wells against their capacity, and whether pinned plate maps and labware are current",
@@ -327,6 +338,7 @@ export const transfersCheck = defineContract({
 
 export const transfersReserved = defineContract({
   id: 'transfers.reserved',
+  verbs: { done: 'looked at what is reserved', intent: 'look at what is reserved' },
   summary:
     'What confirmed transfer plans have reserved from a container, well by well, and by which plan (010 V8). Reservations end when a plan is archived or its run is recorded',
   effect: 'read',
@@ -344,6 +356,7 @@ export const transfersReserved = defineContract({
 
 export const transfersDraftFromPlateMap = defineContract({
   id: 'transfers.draft_from_plate_map',
+  verbs: { done: 'drafted a transfer plan from', intent: 'draft a transfer plan from' },
   summary:
     "Draft a transfer plan that makes a plate map's concentrations: code dispenses each well's compound straight from its source well when that is within tolerance and the solvent limit, else from intermediate wells it plans with the dilution optimizer, then backfills every well to the same solvent volume. Give where each subject's stock is, the solvent well, the dispensing instrument with why, the final volume and the solvent limit. Refused, with the points no route reaches, when the settings can't make every well; try other settings with transfers.optimize_dilution",
   effect: 'write',
@@ -394,6 +407,7 @@ export const transfersDraftFromPlateMap = defineContract({
 
 export const transfersExport = defineContract({
   id: 'transfers.export',
+  verbs: { done: 'exported a worklist from', intent: 'export a worklist from' },
   summary:
     "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo. Each file is stored in the file store with the plan version it came from. Groups done by hand, or on instruments without a writer yet, are listed as skipped with why. Give `group` to write one group's file only",
   effect: 'write',
@@ -421,6 +435,7 @@ const ReportWell = z.object({ plate: z.string(), well: z.string() });
 
 export const transfersImportReport = defineContract({
   id: 'transfers.import_report',
+  verbs: { done: 'read an instrument report for', intent: 'read an instrument report for' },
   summary:
     'Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report says which planned transfers were done, short, failed or not run, and records what really moved in the inventory ledger as from a run log (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export',
   effect: 'write',

@@ -8,6 +8,7 @@ const LabwareTypeId = recordIdOf('lwt');
 
 export const labwareWells = defineContract({
   id: 'labware.wells',
+  verbs: { done: 'listed the wells of', intent: 'list the wells of' },
   summary:
     "List a labware type's wells with their names and positions (mm from the left and back edges)",
   effect: 'read',
@@ -23,6 +24,10 @@ export const labwareWells = defineContract({
 
 export const labwareImportOpentrons = defineContract({
   id: 'labware.import_opentrons',
+  verbs: {
+    done: 'imported an Opentrons labware definition',
+    intent: 'import an Opentrons labware definition',
+  },
   summary:
     'Draft a labware type from an Opentrons labware definition (JSON, schema version 2); every value is marked as imported from it',
   effect: 'write',
@@ -35,6 +40,10 @@ export const labwareImportOpentrons = defineContract({
 
 export const labwareExportOpentrons = defineContract({
   id: 'labware.export_opentrons',
+  verbs: {
+    done: 'exported the Opentrons definition of',
+    intent: 'export the Opentrons definition of',
+  },
   summary:
     "Write a labware type as an Opentrons labware definition (schema version 2), for simulation or loading as custom labware. The app offers the definition to the person as a file to download; don't copy it into your reply",
   effect: 'read',
@@ -49,6 +58,7 @@ export const labwareExportOpentrons = defineContract({
 
 export const labwareUseStandardPositions = defineContract({
   id: 'labware.use_standard_positions',
+  verbs: { done: 'used standard positions for', intent: 'use standard positions for' },
   summary:
     "Set a labware type's well spacing and A1 offset to the ANSI/SLAS 4-2004 standard for its grid (96, 384 or 1536 wells, or a 12- or 24-trough reservoir); refused for other grids, labware that isn't SBS, or a pitch that differs from the standard",
   effect: 'write',

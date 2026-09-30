@@ -1,5 +1,6 @@
 import {
   type Actor,
+  operationContracts,
   type Proposal,
   type Readiness,
   type RecordEnvelope,
@@ -27,6 +28,19 @@ let registry: OperationRegistry;
 let bus: ActivityBus;
 let person: RecordContext;
 let agent: RecordContext;
+
+describe('the operation catalog', () => {
+  it('registers exactly the contracts screens read their plain words from', () => {
+    const registered = registry
+      .list()
+      .map((c) => c.id)
+      .sort();
+    expect(registered).toEqual([...operationContracts.keys()].sort());
+    for (const contract of registry.list()) {
+      expect(contract.verbs.done, contract.id).not.toContain(contract.id);
+    }
+  });
+});
 
 const attributes = { color: 'teal', volume: { value: '50', unit: 'uL' } };
 

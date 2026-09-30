@@ -18,6 +18,11 @@ export interface OperationContract<
   id: string;
   /** One line, written for a person or an agent choosing what to call. */
   summary: string;
+  /**
+   * What it does in plain lab words (UI rule 9), so no screen shows the ID: `done` reads after who
+   * did it ("Claude drafted a plate map"), `intent` after "wants to".
+   */
+  verbs: { done: string; intent: string };
   effect: OperationEffect;
   /**
    * A lab calculator (ADR 0024): a read that computes numbers agents rely on (volumes,
@@ -45,6 +50,11 @@ export function defineContract<I extends z.ZodType, O extends z.ZodType>(
 ): OperationContract<I, O> {
   if (!/^[a-z]+(\.[a-z_]+)+$/.test(contract.id)) {
     throw new Error(`Invalid operation ID "${contract.id}"`);
+  }
+  for (const words of [contract.verbs.done, contract.verbs.intent]) {
+    if (!/^[a-z][^._]*$/.test(words)) {
+      throw new Error(`${contract.id}: verbs must be plain words, not "${words}"`);
+    }
   }
   return contract;
 }
