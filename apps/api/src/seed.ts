@@ -31,6 +31,7 @@ import type { RecordContext } from './records/service.ts';
 import { type SettleReport, settleSeed } from './seed-settle.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { loadSeedSops, readSeedSops } from './sops/seed.ts';
+import { transferKinds } from './transfers/kinds.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) in one run, with no approvals (ADR 0044): labware types,
@@ -101,6 +102,7 @@ for (const kind of [
   ...sopKinds,
   ...campaignKinds,
   ...plateMapKinds,
+  ...transferKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
