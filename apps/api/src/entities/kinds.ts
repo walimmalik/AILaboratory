@@ -164,15 +164,18 @@ export const entity = defineKind({
       invalid,
       namePrefix: kind.prefix,
       checks: [
-        check(
-          'kind_confirmed',
-          'Its kind is confirmed',
-          'blocker',
-          kindRecord.status === 'active'
-            ? undefined
-            : `${kindRecord.label} (${kindRecord.name}) is still a draft`,
-          `Confirm ${kindRecord.name} first`,
-        ),
+        {
+          ...check(
+            'kind_confirmed',
+            'Its kind is confirmed',
+            'blocker',
+            kindRecord.status === 'active'
+              ? undefined
+              : `${kindRecord.label} (${kindRecord.name}) is still a draft`,
+            `Confirm ${kindRecord.name} first`,
+          ),
+          ...(kindRecord.status === 'active' ? {} : { record: kindRecord.id }),
+        },
         check(
           'required_fields',
           'Required fields have values',

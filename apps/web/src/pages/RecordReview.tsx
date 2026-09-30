@@ -11,6 +11,7 @@ import {
   recordsConfirmSection,
 } from '@ailab/schema';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
@@ -52,6 +53,26 @@ export function ReviewBlocks({
     setScrollTo(section);
   };
   const titles = Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]));
+  // A confirmed active record leads with its content (the drawing, the bench view, the deck).
+  // Readiness and the sections fold into one block below it, one line each, opened on demand.
+  const settled =
+    record.status === 'active' &&
+    readiness.ready &&
+    readiness.checks.every((c) => c.passed || c.severity !== 'blocker');
+  if (settled && !editing) {
+    return (
+      <>
+        {aside}
+        <SettledDetails
+          record={record}
+          readiness={readiness}
+          titles={titles}
+          renderValue={renderValue}
+          onEdit={fix}
+        />
+      </>
+    );
+  }
   return (
     <>
       <ReadinessBlock record={record} readiness={readiness} titles={titles} onFix={fix} />
@@ -180,6 +201,129 @@ export function ReadinessBlock({
   );
 }
 
+/**
+ * A settled record's readiness and sections as one block: a line each, saying who confirmed it and
+ * how many of its fields hold a value, opened in place. Editing a section opens the full review.
+ */
+function SettledDetails({
+  record,
+  readiness,
+  titles,
+  renderValue,
+  onEdit,
+}: {
+  record: RecordEnvelope;
+  readiness: Readiness;
+  titles: Record<string, string>;
+  renderValue: (value: unknown) => ReactNode;
+  onEdit: (section: string) => void;
+}) {
+  const me = useMe();
+  const [open, setOpen] = useState<string>();
+  const toggle = (id: string) => setOpen(open === id ? undefined : id);
+  const warnings = readiness.checks.filter((c) => !c.passed).length;
+  const passing = readiness.checks.length - warnings;
+  return (
+    <section className="block" aria-label="Details">
+      <header>
+        <h2>Details</h2>
+        <span className="state ok-ink">✓ confirmed</span>
+      </header>
+      <div className="body">
+        <ul className="settled">
+          {readiness.checks.length > 0 && (
+            <li>
+              <button
+                type="button"
+                className="settled-line"
+                aria-expanded={open === 'readiness'}
+                onClick={() => toggle('readiness')}
+              >
+                <b>Checks</b>
+                <span className="muted">
+                  {passing} {passing === 1 ? 'check passes' : 'checks pass'}
+                  {warnings > 0 && (
+                    <span className="warn-ink">
+                      {' '}
+                      · {warnings} {warnings === 1 ? 'warning' : 'warnings'}
+                    </span>
+                  )}
+                </span>
+              </button>
+              {open === 'readiness' && (
+                <Checks
+                  checks={readiness.checks}
+                  titles={titles}
+                  onFix={onEdit}
+                  target={{ id: record.id, version: readiness.version }}
+                />
+              )}
+            </li>
+          )}
+          {readiness.sections.map((section) => {
+            return (
+              <li key={section.id} id={`section-${section.id}`}>
+                <button
+                  type="button"
+                  className="settled-line"
+                  aria-expanded={open === section.id}
+                  onClick={() => toggle(section.id)}
+                >
+                  <b>{section.title}</b>
+                  <span className="muted">
+                    {filledWords(section)}
+                    {section.review &&
+                      ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`}
+                  </span>
+                </button>
+                {open === section.id && (
+                  <>
+                    <SectionValues
+                      section={section}
+                      me={me}
+                      renderValue={renderValue}
+                      notApplicable={readiness.notApplicable}
+                      hideEmpty
+                    />
+                    {record.status !== 'archived' && (
+                      <div className="actions">
+                        <button type="button" className="btn" onClick={() => onEdit(section.id)}>
+                          Edit {section.title.toLowerCase()}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <details className="tech">
+          <summary>technical details</summary>
+          <pre className="json">{JSON.stringify(record, null, 2)}</pre>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+/** "11 steps", "6 materials · 2 solutions" for sections of lists; "2 of 7 filled" otherwise. */
+function filledWords(section: ReadinessSection): string {
+  const values = section.fields.filter((f) => !isEmpty(f.value));
+  if (values.length === 0) return 'empty';
+  if (values.every((f) => Array.isArray(f.value)))
+    return values
+      .map((f) => `${(f.value as unknown[]).length} ${fieldLabel(f.field).toLowerCase()}`)
+      .join(' · ');
+  return `${values.length} of ${section.fields.length} filled`;
+}
+
+const isEmpty = (value: unknown) =>
+  value === undefined ||
+  value === null ||
+  value === '' ||
+  (Array.isArray(value) && value.length === 0);
+
 const rank = (c: CheckResult) => (c.passed ? 2 : c.severity === 'blocker' ? 0 : 1);
 
 /** Failing checks first, each with a link to the section that fixes it; passing ones folded away. */
@@ -256,20 +400,30 @@ function CheckRow({
       <td>
         {check.label}
         {!check.passed && check.message && <span className={tone}> · {check.message}</span>}
-        {!check.passed && (check.fix || section) && (
+        {!check.passed && (check.fix || section || check.record) && (
           <div className="muted">
             {check.fix}
-            {check.fix && section && ' · '}
-            {section && (
-              <button type="button" className="link-btn" onClick={() => onFix(section)}>
-                Fix in {titles[section]?.toLowerCase()}
-              </button>
+            {check.fix && (section || check.record) && ' · '}
+            {/* A check waiting on another record is fixed there, not in a section of this one. */}
+            {check.record ? (
+              <Link to="/records/$id" params={{ id: check.record }}>
+                Open it
+              </Link>
+            ) : (
+              section && (
+                <button type="button" className="link-btn" onClick={() => onFix(section)}>
+                  Fix in {titles[section]?.toLowerCase()}
+                </button>
+              )
             )}
           </div>
         )}
         {!check.passed && check.quickFix && <QuickFix fix={check.quickFix} target={target} />}
       </td>
-      <td className="muted source">{check.source}</td>
+      {/* The source in lab words; plan and ADR numbers stay on hover. */}
+      <td className="muted source" title={check.source}>
+        {check.source?.replace(/\s*\((?:plan|ADR)[^)]*\)/gi, '')}
+      </td>
     </tr>
   );
 }
@@ -402,18 +556,24 @@ function SectionValues({
   me,
   renderValue,
   notApplicable,
+  hideEmpty = false,
 }: {
   section: ReadinessSection;
   me: Me | undefined;
   renderValue: (value: unknown) => ReactNode;
   notApplicable: string[];
+  /** Leaves out fields with no value, for a confirmed record read rather than reviewed. */
+  hideEmpty?: boolean;
 }) {
+  const [showEmpty, setShowEmpty] = useState(false);
+  const emptyCount = hideEmpty ? section.fields.filter((f) => isEmpty(f.value)).length : 0;
   return (
     <div className="table-wrap">
       <table className="review-fields">
         <tbody>
           {section.fields
             .filter((f) => !(notApplicable.includes(f.field) && f.value === undefined))
+            .filter((f) => !hideEmpty || showEmpty || !isEmpty(f.value))
             .map((f) => (
               <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
                 <td className="name">{fieldLabel(f.field)}</td>
@@ -438,6 +598,11 @@ function SectionValues({
             ))}
         </tbody>
       </table>
+      {emptyCount > 0 && (
+        <button type="button" className="link-btn" onClick={() => setShowEmpty(!showEmpty)}>
+          {showEmpty ? 'hide empty fields' : `show ${emptyCount} empty fields`}
+        </button>
+      )}
     </div>
   );
 }

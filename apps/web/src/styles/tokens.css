@@ -21,6 +21,13 @@
   --grid: rgba(14, 111, 104, 0.05);
   --lamp-off: #c3cbc6;
   --well-empty: #e3e7e2;
+  /* Muted data colors for plate contents, in the order groups are listed. */
+  --data-1: #3f7fa6;
+  --data-2: #b0764a;
+  --data-3: #6a8f4e;
+  --data-4: #9a5d8c;
+  --data-5: #4f9a93;
+  --data-6: #a38a3c;
   --font-display: "Martian Mono Variable", "IBM Plex Mono", Consolas, monospace;
   --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
@@ -49,6 +56,12 @@
     --grid: rgba(92, 194, 179, 0.045);
     --lamp-off: #36423e;
     --well-empty: #232c2a;
+    --data-1: #7fb0d0;
+    --data-2: #d6a27a;
+    --data-3: #9dc27f;
+    --data-4: #c996bb;
+    --data-5: #82c7c0;
+    --data-6: #d2bb72;
     color-scheme: dark;
   }
 }
@@ -73,5 +86,11 @@
   --grid: rgba(92, 194, 179, 0.045);
   --lamp-off: #36423e;
   --well-empty: #232c2a;
+  --data-1: #7fb0d0;
+  --data-2: #d6a27a;
+  --data-3: #9dc27f;
+  --data-4: #c996bb;
+  --data-5: #82c7c0;
+  --data-6: #d2bb72;
   color-scheme: dark;
 }

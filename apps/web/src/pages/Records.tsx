@@ -134,7 +134,6 @@ export function RecordList({
                   ))}
                   <th>Status</th>
                   <th>Changed</th>
-                  <th>By</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,18 +146,24 @@ export function RecordList({
                     onKeyDown={(e) => e.key === 'Enter' && open(r.id)}
                   >
                     <td className="q">{r.name}</td>
-                    <td>{r.label}</td>
+                    <td>
+                      <span className="one-line" title={r.label}>
+                        {r.label}
+                      </span>
+                    </td>
                     {columns.map((c) => (
                       <td key={c.header} className={c.className}>
                         {c.cell(r)}
                       </td>
                     ))}
                     <td>
-                      <StatusChip record={r} />
+                      <StatusChip record={r} quiet />
                     </td>
-                    <td className="when">{formatWhen(r.updatedAt)}</td>
-                    <td className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>
-                      {actorLabel(r.updatedBy, me)}
+                    <td
+                      className={`when${isAgent(r.updatedBy) ? ' agent-ink' : ''}`}
+                      title={`by ${actorLabel(r.updatedBy, me)}`}
+                    >
+                      {formatWhen(r.updatedAt)}
                     </td>
                   </tr>
                 ))}

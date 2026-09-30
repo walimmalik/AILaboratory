@@ -80,7 +80,10 @@ The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from
 - **Questions to settle:** each open question with the agent's suggestion, "Accept the suggestion" or an answer in the person's words (`sops.answer_question`). Settled questions are folded.
 - **Checks against the source:** "Check the quotes" (`sops.check_citations`) and, on drafts, "Have the reviewer check it" (`sops.review`). The reviewer's changes are listed in agent ink as "Step 2 (Wash), volume: 400 µL → 300 µL", with the reason.
 
-The sections below stay the design mode: edit and confirm as for any record.
+The sections below stay the design mode: edit and confirm as for any record. Variables and steps have editors of their own, in lab words (`apps/web/src/pages/SopEditors.tsx`, `apps/web/src/lib/formulas.ts`):
+- **A value** is called something in lab words; a new one's name is made from them (shown under More), and an existing one keeps its name so formulas and steps still find it. "What is this value?" picks its kind: chosen for each run (a starting value, at least, at most), a usual value, read from a material (which material and which of its values, with a typical value until one is picked) or worked out from other values.
+- **A formula** is written with the values' lab names in brackets and × ÷ + −: `[Wells] × [Well volume] × 1.1` is stored as `wells * well_volume * 1.1`, so agents still read and write names. The values are listed with their current values and are added with a click; typing part of a name suggests matches; an unknown name says which value it most likely means, with a fix. Operators, functions and five common formulas (overage total, C1V1 = C2V2 dilution, master mix per reaction, round up to a tube size, plates needed) are one click away; a common formula's blanks are in brackets too. The result is worked out as it is written by `sops.evaluate` with the SOP's values as they are, never in the browser.
+- **A step** is an action, a short name, what to do (values and materials in its words shown as `[Well volume]`, stored as `` `well_volume` ``), settings as rows of a name and a value (`[Well volume]`, `3`, `50 uL` or words), how many times, and the materials it uses as tick boxes. Its id is made for it; what it makes, grouping, a prerequisite SOP, the id and sources are under More.
 
 ## Not yet
 

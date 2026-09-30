@@ -1,5 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { type ComponentType, createContext, type ReactNode, useContext, useState } from 'react';
+import {
+  discriminator,
+  isQuantity,
+  type JsonSchema,
+  parseTyped,
+  resolve,
+  typedByText,
+  valueText,
+} from '../lib/json-schema.ts';
 import { recordsQuery } from '../queries.ts';
 import { fieldLabel } from './RecordReview.tsx';
 
@@ -7,24 +16,11 @@ import { fieldLabel } from './RecordReview.tsx';
  * Editing a record's values by hand. The form is drawn from the kind's JSON Schema (`records.kinds`),
  * so every kind is editable without a form of its own: quantities get a number and a unit, choices a
  * list, references to other records a picker, and shapes with variants (a grid or a list of wells, a
- * round or square opening) a choice of variant first. Anything else is edited as JSON.
+ * round or square opening) a choice of variant first, lists of objects (an SOP's steps) one item
+ * per row that opens in place, and a value that may be a number, a quantity or a name (a variable's
+ * value, a count) one line of text. Anything else is edited as JSON.
  */
-export interface JsonSchema {
-  type?: string | string[];
-  properties?: Record<string, JsonSchema>;
-  required?: string[];
-  enum?: unknown[];
-  const?: unknown;
-  oneOf?: JsonSchema[];
-  anyOf?: JsonSchema[];
-  items?: JsonSchema;
-  description?: string;
-  pattern?: string;
-  minimum?: number;
-  maximum?: number;
-  $ref?: string;
-  $defs?: Record<string, JsonSchema>;
-}
+export type { JsonSchema };
 
 interface EditorContext {
   root: JsonSchema;
@@ -32,6 +28,10 @@ interface EditorContext {
   kindOfPrefix: Record<string, string>;
   /** Dotted paths that don't apply to this record (`Readiness.notApplicable`); left out unless set. */
   hidden: ReadonlySet<string>;
+  /** The record's values as edited so far, for editors that refer to other fields (an SOP's steps). */
+  document?: Record<string, unknown>;
+  /** Editors of their own for the items of some lists, by the list's path (an SOP's variables). */
+  itemEditors?: Record<string, ItemEditor>;
 }
 const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {}, hidden: new Set() });
 
@@ -39,24 +39,28 @@ export function EditorScope({ children, ...value }: EditorContext & { children: 
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 
-function resolve(schema: JsonSchema, root: JsonSchema): JsonSchema {
-  const ref = schema.$ref?.match(/^#\/\$defs\/(.+)$/)?.[1];
-  return ref && root.$defs?.[ref] ? resolve(root.$defs[ref], root) : schema;
+export const useEditorScope = () => useContext(Context);
+
+export interface ItemEditorProps {
+  /** The item's schema, for fields the custom editor leaves to the generic ones. */
+  schema: JsonSchema;
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+  label: string;
+  path: string;
+  /** Its place in the list, from 0. */
+  index: number;
+}
+
+export interface ItemEditor {
+  Edit: ComponentType<ItemEditorProps>;
+  /** A new item, given the list so far (for a fresh id). */
+  create?: (items: unknown[]) => Record<string, unknown>;
+  /** The item's line in the list. */
+  title?: (item: Record<string, unknown>) => string;
 }
 
 const unitWords: Record<string, string> = { uL: 'µL', um: 'µm' };
-
-function isQuantity(s: JsonSchema): boolean {
-  return s.type === 'object' && !!s.properties?.value && !!s.properties.unit && !s.properties.x;
-}
-
-/** The property whose `const` tells the variants apart, e.g. "layout" or "shape". */
-function discriminator(variants: JsonSchema[]): string | undefined {
-  const first = variants[0]?.properties ?? {};
-  return Object.keys(first).find((key) =>
-    variants.every((v) => v.properties?.[key]?.const !== undefined),
-  );
-}
 
 type Change = (next: unknown) => void;
 
@@ -78,6 +82,8 @@ export function ValueEditor({
   const { root } = useContext(Context);
   const s = resolve(schema, root);
   const variants = (s.oneOf ?? s.anyOf)?.map((v) => resolve(v, root));
+  if (variants && !discriminator(variants) && variants.every((v) => typedByText(v, root)))
+    return <TextValueEditor variants={variants} value={value} onChange={onChange} label={label} />;
   if (variants)
     return (
       <VariantEditor
@@ -144,6 +150,17 @@ export function ValueEditor({
   if (s.type === 'array' && resolve(s.items ?? {}, root).type === 'string') {
     return <ListEditor value={value} onChange={onChange} label={label} />;
   }
+  if (s.type === 'array' && s.items && isItem(resolve(s.items, root), root)) {
+    return (
+      <ItemsEditor
+        schema={resolve(s.items, root)}
+        value={value}
+        onChange={onChange}
+        label={label}
+        path={path}
+      />
+    );
+  }
   return <JsonEditor value={value} onChange={onChange} label={label} />;
 }
 
@@ -162,12 +179,24 @@ function StringEditor({
   const prefix = schema.pattern?.match(/^\^([a-z]{2,5})_/)?.[1];
   const kind = prefix ? kindOfPrefix[prefix] : undefined;
   if (kind) return <RecordPicker kind={kind} value={value} onChange={onChange} label={label} />;
+  const text = typeof value === 'string' ? value : '';
+  // Sentences (a step's words, a note) get room to be read whole.
+  if (text.length > 60)
+    return (
+      <textarea
+        className="field grow"
+        aria-label={label}
+        rows={Math.min(6, Math.ceil(text.length / 70))}
+        value={text}
+        onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+      />
+    );
   return (
     <input
       className="field grow"
       type="text"
       aria-label={label}
-      value={typeof value === 'string' ? value : ''}
+      value={text}
       onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
     />
   );
@@ -329,7 +358,11 @@ export function FormRow({
       <span className="name">{label}</span>
       <div className="control">
         {children}
-        {hint && <div className="muted hint">{hint}</div>}
+        {hint && (
+          <div className="muted hint">
+            {hint.replace(/ \((?:ADR \d+|plan \d+\w*|[A-Z]\d{1,2})\)/g, '')}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -388,6 +421,218 @@ function VariantEditor({
         />
       )}
     </div>
+  );
+}
+
+/** Objects, or variants of objects, edited one per row. */
+function isItem(s: JsonSchema, root: JsonSchema): boolean {
+  if (s.type === 'object' && s.properties && !isQuantity(s)) return true;
+  const variants = (s.oneOf ?? s.anyOf)?.map((v) => resolve(v, root));
+  return !!variants && !!discriminator(variants);
+}
+
+/** What an item is called in its row: its title, label or name, whichever it has. */
+function itemTitle(item: unknown): string {
+  const o = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+  const words = [o.title, o.label, o.name, o.role, o.what, o.step, o.about].find(
+    (w) => typeof w === 'string' && w !== '',
+  );
+  const action = typeof o.action === 'string' ? fieldLabel(o.action) : undefined;
+  const text = typeof o.text === 'string' ? o.text : undefined;
+  const title = words ?? text ?? '';
+  return [action, title].filter(Boolean).join(' · ') || 'new, not filled in yet';
+}
+
+const asObject = (item: unknown) =>
+  (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+
+let nextItemKey = 0;
+
+/** What one item of a list is called, where dropping the "s" doesn't say it. */
+const itemNoun: Record<string, string> = {
+  cite: 'source passage',
+  produces: 'product',
+  timing: 'timing rule',
+  layout: 'layout requirement',
+};
+
+/**
+ * A list of objects (an SOP's materials, variables or steps): one line per item naming it, which
+ * opens to its fields. Items can be added, removed and moved; a new one opens.
+ */
+function ItemsEditor({
+  schema,
+  value,
+  onChange,
+  label,
+  path,
+}: {
+  schema: JsonSchema;
+  value: unknown;
+  onChange: Change;
+  label: string;
+  path: string;
+}) {
+  const custom = useContext(Context).itemEditors?.[path];
+  const items = Array.isArray(value) ? value : [];
+  // Keys follow the items as they move, so an open item's fields stay with it.
+  const [keys, setKeys] = useState(() => items.map(() => nextItemKey++));
+  const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
+  while (keys.length < items.length) keys.push(nextItemKey++);
+  const update = (nextItems: unknown[], nextKeys: number[]) => {
+    setKeys(nextKeys);
+    onChange(nextItems.length > 0 ? nextItems : undefined);
+  };
+  const move = (from: number, to: number) => {
+    const nextItems = [...items];
+    const nextKeys = [...keys];
+    nextItems.splice(to, 0, ...nextItems.splice(from, 1));
+    nextKeys.splice(to, 0, ...nextKeys.splice(from, 1));
+    update(nextItems, nextKeys);
+  };
+  const toggle = (key: number, isOpen: boolean) => {
+    const next = new Set(open);
+    if (isOpen) next.add(key);
+    else next.delete(key);
+    setOpen(next);
+  };
+  return (
+    <div className="items grow">
+      {items.length === 0 && <p className="muted">None yet.</p>}
+      <ol className="items-list">
+        {items.map((item, i) => {
+          const key = keys[i] as number;
+          return (
+            <li key={key} className="item-row">
+              <details open={open.has(key)} onToggle={(e) => toggle(key, e.currentTarget.open)}>
+                <summary className="item-head">
+                  <span className="num muted">{i + 1}</span>{' '}
+                  {custom?.title?.(asObject(item)) || itemTitle(item)}
+                </summary>
+                <div className="item-body">
+                  {custom ? (
+                    <custom.Edit
+                      schema={schema}
+                      value={asObject(item)}
+                      label={`${label} ${i + 1}`}
+                      path={path}
+                      index={i}
+                      onChange={(next) => {
+                        const nextItems = [...items];
+                        nextItems[i] = next;
+                        update(nextItems, keys);
+                      }}
+                    />
+                  ) : (
+                    <ValueEditor
+                      schema={schema}
+                      value={item}
+                      label={`${label} ${i + 1}`}
+                      path={path}
+                      onChange={(next) => {
+                        const nextItems = [...items];
+                        nextItems[i] = next ?? {};
+                        update(nextItems, keys);
+                      }}
+                    />
+                  )}
+                  <div className="item-actions">
+                    <button
+                      type="button"
+                      className="btn small"
+                      disabled={i === 0}
+                      onClick={() => move(i, i - 1)}
+                    >
+                      Move up
+                    </button>
+                    <button
+                      type="button"
+                      className="btn small"
+                      disabled={i === items.length - 1}
+                      onClick={() => move(i, i + 1)}
+                    >
+                      Move down
+                    </button>
+                    <button
+                      type="button"
+                      className="btn small danger"
+                      onClick={() =>
+                        update(
+                          items.filter((_, j) => j !== i),
+                          keys.filter((_, j) => j !== i),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ol>
+      <button
+        type="button"
+        className="btn small"
+        onClick={() => {
+          const key = nextItemKey++;
+          setOpen(new Set(open).add(key));
+          update([...items, custom?.create?.(items) ?? {}], [...keys, key]);
+        }}
+      >
+        Add {itemNoun[label.toLowerCase()] ?? label.toLowerCase().replace(/s$/, '')}
+      </button>
+    </div>
+  );
+}
+
+/** A value that may be a number, a quantity, a name or a list of them, as one line of text. */
+function TextValueEditor({
+  variants,
+  value,
+  onChange,
+  label,
+}: {
+  variants: JsonSchema[];
+  value: unknown;
+  onChange: Change;
+  label: string;
+}) {
+  const { root } = useContext(Context);
+  const [text, setText] = useState(valueText(value));
+  const [error, setError] = useState(false);
+  return (
+    <span className="grow">
+      <input
+        className="field grow"
+        type="text"
+        aria-label={label}
+        aria-invalid={error}
+        placeholder="e.g. 3, 50 uL or 1, 2, 4"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (e.target.value.trim() === '') {
+            e.target.setCustomValidity('');
+            setError(false);
+            onChange(undefined);
+            return;
+          }
+          const parsed = parseTyped(e.target.value, variants, root);
+          // Text that can't be a value makes the form invalid, so Save waits for it.
+          e.target.setCustomValidity(parsed.ok ? '' : 'Not a value yet');
+          setError(!parsed.ok);
+          if (parsed.ok) onChange(parsed.value);
+        }}
+      />
+      {error && (
+        <span className="error-text">
+          {' '}
+          Write a number, a number and a unit (50 uL), a name, or a list with commas
+        </span>
+      )}
+    </span>
   );
 }
 

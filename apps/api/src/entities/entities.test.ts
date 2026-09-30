@@ -148,6 +148,8 @@ describe('entities', () => {
     const readiness = await run<Readiness>(person, 'records.readiness', { id: puc.id });
     const failing = readiness.checks.filter((c) => !c.passed).map((c) => c.message);
     expect(failing).toEqual(['Plasmid (ENK-0001) is still a draft', 'Resistance is required']);
+    // The fix is made on the kind, so the check names it.
+    expect(readiness.checks.find((c) => c.id === 'kind_confirmed')?.record).toBe(kind.id);
     const confirmed = await confirmAll(puc, ['identity', 'handling']);
     expect(confirmed.status).toBe('draft');
 

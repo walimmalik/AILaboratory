@@ -81,10 +81,19 @@ export function placeWords(
 const periodWords = (p: { value: string; unit: string }) => formatQuantity(p);
 
 export function storageRangeWords(range: StorageRange): string {
-  if (range.min && range.max) return `${formatQuantity(range.min)} to ${formatQuantity(range.max)}`;
+  if (range.min && range.max)
+    return compare(range.min, range.max) === 0
+      ? `at ${formatQuantity(range.min)}`
+      : `${formatQuantity(range.min)} to ${formatQuantity(range.max)}`;
   if (range.min) return `at least ${formatQuantity(range.min)}`;
   if (range.max) return `at most ${formatQuantity(range.max)}`;
   return 'any temperature';
+}
+
+/** "at 4 °C", "at 2 °C to 8 °C", "at least 15 °C": a range after a verb or a period. */
+export function atWords(range: StorageRange): string {
+  const words = storageRangeWords(range);
+  return words.startsWith('at ') ? words : `at ${words}`;
 }
 
 /** The limit a rule sets, in a few words, e.g. "30 min" or "1 freeze-thaw". */
@@ -95,7 +104,7 @@ export function ruleLimit(rule: HandlingRule): string | undefined {
     case 'stable_after_opening':
       return periodWords(rule.period);
     case 'stable_after_preparation':
-      return `${periodWords(rule.period)}${rule.at ? ` at ${storageRangeWords(rule.at)}` : ''}`;
+      return `${periodWords(rule.period)}${rule.at ? ` ${atWords(rule.at)}` : ''}`;
     case 'equilibrate':
     case 'reconstitute':
       return rule.period ? `rest ${periodWords(rule.period)}` : undefined;
@@ -163,4 +172,127 @@ export function ruleWells(rule: EffectiveRule, filled: number): string | undefin
     }
   }
   return wells.size >= filled ? undefined : blocks.join(', ');
+}
+
+/**
+ * Wells as blocks corner to corner: "A3:P22" for a filled rectangle, "A1:A2, C1" otherwise. Rows
+ * with the same columns are merged into one block when they follow each other.
+ */
+export function wellRanges(wells: readonly string[]): string {
+  const rows = new Map<number, { label: string; columns: number[] }>();
+  for (const name of wells) {
+    const { row, column } = parseWellName(name);
+    const entry = rows.get(row) ?? { label: name.replace(/\d+$/, '').toUpperCase(), columns: [] };
+    entry.columns.push(column + 1);
+    rows.set(row, entry);
+  }
+  const runsOf = (columns: number[]) => {
+    const sorted = [...columns].sort((a, b) => a - b);
+    const runs: [number, number][] = [];
+    for (const c of sorted) {
+      const last = runs.at(-1);
+      if (last && c === last[1] + 1) last[1] = c;
+      else runs.push([c, c]);
+    }
+    return runs;
+  };
+  const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0]);
+  const blocks: string[] = [];
+  let i = 0;
+  while (i < ordered.length) {
+    const [firstRow, first] = ordered[i] as [number, { label: string; columns: number[] }];
+    const key = JSON.stringify(runsOf(first.columns));
+    let j = i;
+    while (
+      j + 1 < ordered.length &&
+      (ordered[j + 1] as [number, unknown])[0] === firstRow + (j + 1 - i) &&
+      JSON.stringify(runsOf((ordered[j + 1] as [number, { columns: number[] }])[1].columns)) === key
+    )
+      j++;
+    const lastLabel = (ordered[j] as [number, { label: string }])[1].label;
+    for (const [a, b] of runsOf(first.columns)) {
+      const from = `${first.label}${a}`;
+      const to = `${lastLabel}${b}`;
+      blocks.push(from === to ? from : `${from}:${to}`);
+    }
+    i = j + 1;
+  }
+  return blocks.join(', ');
+}
+
+/** How many lines the contents key shows before folding the rest. */
+export const KEY_LINES = 8;
+
+/** Wells that hold the same things at the same strengths, largest group first. */
+export interface ContentGroup {
+  key: string;
+  wells: string[];
+  /** What every well in the group holds, at the same strength. */
+  components: WellState['components'];
+  /**
+   * On a library plate: each well also holds its own compound or sample, one not shared with the
+   * rest of the group (1536 compounds are one line, not 1536).
+   */
+  varying?: {
+    /** How many such components each well holds. */
+    each: number;
+    noun: 'sample' | 'reagent';
+    /** Their strength, when they all share one ("10 mM"). */
+    concentration?: Quantity;
+  };
+}
+
+type Component = WellState['components'][number];
+
+const sorted = (components: readonly Component[]) =>
+  [...components].sort((a, b) => a.source.localeCompare(b.source));
+
+/**
+ * Groups wells by what they hold. Each distinct mix is a group, unless that makes more lines than
+ * the key shows: then a component found in only a few wells counts as "a different one in each
+ * well", so a library plate reads as its compounds in DMSO plus its control wells.
+ */
+export function contentGroups(
+  wells: readonly { well: string; state: WellState }[],
+): ContentGroup[] {
+  const exact = groupBy(wells, (state) => ({ shared: sorted(state.components), varying: [] }));
+  if (exact.length <= KEY_LINES) return exact;
+  // Rare: in fewer than 2% of the filled wells, and in no more than a dilution series' worth.
+  const wellsWith = new Map<string, number>();
+  for (const { state } of wells)
+    for (const source of new Set(state.components.map((c) => c.source)))
+      wellsWith.set(source, (wellsWith.get(source) ?? 0) + 1);
+  const rare = (c: Component) => (wellsWith.get(c.source) ?? 0) < Math.max(2, wells.length * 0.02);
+  return groupBy(wells, (state) => ({
+    shared: sorted(state.components.filter((c) => !rare(c))),
+    varying: state.components.filter(rare),
+  }));
+}
+
+function groupBy(
+  wells: readonly { well: string; state: WellState }[],
+  split: (state: WellState) => { shared: Component[]; varying: Component[] },
+): ContentGroup[] {
+  const groups = new Map<string, ContentGroup & { strengths: Set<string> }>();
+  for (const { well, state } of wells) {
+    const { shared, varying } = split(state);
+    const noun = varying.every((c) => c.source.startsWith('smp_')) ? 'sample' : 'reagent';
+    const key = JSON.stringify([shared, varying.length, varying.length ? noun : '']);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, wells: [], components: shared, strengths: new Set() };
+      if (varying.length) group.varying = { each: varying.length, noun };
+      groups.set(key, group);
+    }
+    group.wells.push(well);
+    for (const c of varying) group.strengths.add(JSON.stringify(c.concentration ?? null));
+  }
+  return [...groups.values()]
+    .map(({ strengths, ...group }) => {
+      const [only] = [...strengths];
+      if (group.varying && strengths.size === 1 && only !== 'null')
+        group.varying.concentration = JSON.parse(only as string) as Quantity;
+      return group;
+    })
+    .sort((a, b) => b.wells.length - a.wells.length);
 }

@@ -29,6 +29,25 @@ export function volumeWords(volume: LiquidClassAttributes['volume']): string {
   return '—';
 }
 
+/**
+ * What people call a record in a crowded place like a matrix row: an instrument model by its model
+ * name ("Microlab STAR"), an Echo source plate by its plate code ("384LDV"), anything else by its
+ * label. The full label stays on hover.
+ */
+export function shortLabel(record: Pick<RecordEnvelope, 'kind' | 'label' | 'attributes'>): string {
+  const attributes = (record.attributes ?? {}) as { model?: unknown };
+  if (record.kind === 'instrument_kind' && typeof attributes.model === 'string' && attributes.model)
+    return attributes.model;
+  if (record.kind === 'labware_type') {
+    // The plate code has a digit in it: "(384LDV)", not "(COC)".
+    const code = [...record.label.matchAll(/\(([0-9A-Z]{3,12})\)/g)]
+      .map((m) => m[1] as string)
+      .findLast((c) => /\d/.test(c));
+    if (code) return code;
+  }
+  return record.label;
+}
+
 export interface MatrixClass {
   record: RecordEnvelope;
   attributes: LiquidClassAttributes;
@@ -47,6 +66,8 @@ export interface MatrixCell {
 export interface MatrixRow {
   key: string;
   label: string;
+  /** The full names, for hover. */
+  title: string;
   cells: Map<string, MatrixCell>;
 }
 
@@ -59,6 +80,7 @@ export function classMatrix(
   classes: MatrixClass[],
   liquidTypes: string[],
   label: (id: string) => string,
+  short: (id: string) => string = label,
 ): MatrixRow[] {
   const rows = new Map<string, MatrixRow>();
   for (const c of classes) {
@@ -69,7 +91,8 @@ export function classMatrix(
     if (!row) {
       row = {
         key,
-        label: part ? `${label(a.instrumentKind)} · ${label(part)}` : label(a.instrumentKind),
+        label: part ? `${short(a.instrumentKind)} · ${short(part)}` : short(a.instrumentKind),
+        title: part ? `${label(a.instrumentKind)} · ${label(part)}` : label(a.instrumentKind),
         cells: new Map(),
       };
       rows.set(key, row);

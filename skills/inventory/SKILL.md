@@ -5,7 +5,7 @@ description: Find where plates, tubes and boxes are in AILaboratory, resolve bar
 
 # Inventory in AILaboratory
 
-A **location** (`location`, `LOC-0001`) is a place that doesn't move: a room, fridge, freezer, shelf, incubator or automated store, inside a parent location. A **container** (`container`, `lw_…`) is one physical plate, tube, reservoir, rack or freezer box, tip rack or lid, of a labware type. Its readable name is its lab barcode: `PLT-000001` for plates, `TUB-` tubes, `RES-` reservoirs, `BOX-` racks and boxes, `TIP-` tip racks, `LID-` lids. What a container holds (samples, lots, volumes) comes later; until then its `description` says it in words.
+A **location** (`location`, `LOC-0001`) is a place that doesn't move: a room, fridge, freezer, shelf, incubator or automated store, inside a parent location. A **container** (`container`, `lw_…`) is one physical plate, tube, reservoir, rack or freezer box, tip rack or lid, of a labware type. Its readable name is its lab barcode: `PLT-000001` for plates, `TUB-` tubes, `RES-` reservoirs, `BOX-` racks and boxes, `TIP-` tip racks, `LID-` lids. What a container holds (samples, lots, volumes) is its well contents, below.
 
 ## Finding
 
@@ -28,6 +28,7 @@ Refused, with the reason: a position the box doesn't have, a position already ho
 What a well holds is a `WellState` (see `skills/calculators`). To know what a transfer leaves behind, call `inventory.calculate_transfer`; don't work concentrations out yourself.
 
 - `inventory.wells` with `{container}` lists what each well holds; `inventory.history` with `{container, well?}` gives its ledger.
+- `inventory.where_is` with `{of}` (a lot, sample or product id) answers "where is it and how much is left": every container holding it, with its place path and the wells, volumes and concentrations. A product covers all its lots. Discarded containers are left out.
 - Recording what happened at the bench (all proposals from an agent): `inventory.fill` with `{container, fills: [{wells: ["A3:P22"], volume, components, assumed?}]}` for liquid from outside the inventory (components are lots or samples with their concentration); `inventory.transfer` with `{transfers: [{from: {container, well}, to: {container, well}, volume}]}`; `inventory.consume` with `{container, wells, volume}`; `inventory.correct` with `{container, wells, state, reason}` for a measurement.
 - Plate onto plate: `inventory.map_plates` shows which well lands where (`{from, to, mapping: {type: "one_to_one"} | {type: "quadrant", quadrant: 1-4} | {type: "offset", rows, columns}, wells?}`); `inventory.stamp` with `{from, to, mapping, volume, wells?}` records it.
 - `inventory.lineage` with `{container, well, depth?}` traces where a well's liquid came from.

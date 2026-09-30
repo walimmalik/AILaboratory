@@ -120,6 +120,8 @@ export const CheckResult = z.object({
   passed: z.boolean(),
   message: z.string().optional(),
   fix: z.string().optional(),
+  /** Another record the check waits on (a draft entity kind); the fix is made there, not here. */
+  record: z.string().optional(),
   /** Offered only while the check fails: an operation taking `{id, expectedVersion}` that fixes it. */
   quickFix: z.object({ operation: z.string(), label: z.string() }).optional(),
 });

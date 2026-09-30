@@ -13,7 +13,7 @@ import {
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
@@ -29,7 +29,7 @@ import { RecordList } from './Records.tsx';
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
 
-const actionWords: Record<SopStep['action'], string> = {
+export const actionWords: Record<SopStep['action'], string> = {
   add: 'Add',
   transfer: 'Transfer',
   serial_dilute: 'Serial dilution',
@@ -121,6 +121,26 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
     }
     return `${p.name} ${formatValue(p.quantity ?? p.number ?? p.text)}`;
   };
+  // Step text names values as `name`; at the bench it reads as the value itself.
+  const inline = (text: string): ReactNode[] =>
+    text.split(/`([A-Za-z_][A-Za-z0-9_]*)`/).map((part, i) => {
+      if (i % 2 === 0) return part;
+      const v = values.get(part);
+      const value = runValue(part);
+      if (value !== undefined) {
+        const assumed = v?.from === 'typical' || v?.from === 'missing';
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed string
+          <b key={i} className={assumed ? 'agent-ink' : undefined} title={labels.get(part)}>
+            {value}
+          </b>
+        );
+      }
+      const role = roles.get(part);
+      if (role) return role;
+      // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed string
+      return <code key={i}>{labels.get(part) ?? part}</code>;
+    });
   const shown = a.variables.filter((v) => values.get(v.name));
   const unsure = (calc.data?.variables ?? []).filter(
     (v) => v.from === 'typical' || v.from === 'missing' || !v.ok,
@@ -143,7 +163,11 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
             {a.steps.map((s) => (
               <li key={s.id}>
                 <p className="sop-line">
-                  <b>{s.title ?? actionWords[s.action]}.</b> {s.text}
+                  {/* "By hand" on every manual step says nothing; other actions keep their word. */}
+                  {(s.title ?? (s.action === 'manual' ? undefined : actionWords[s.action])) && (
+                    <b>{s.title ?? actionWords[s.action]}. </b>
+                  )}
+                  {inline(s.text)}
                   {s.repeat && <span className="muted"> Repeat {s.repeat} times.</span>}
                 </p>
                 {(s.parameters?.length || s.uses?.length) && (
@@ -162,7 +186,7 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
           </ol>
         )}
         {shown.length > 0 && (
-          <details>
+          <details open={unsure.length > 0}>
             <summary>Values for a run ({shown.length})</summary>
             <div className="table-wrap">
               <table>

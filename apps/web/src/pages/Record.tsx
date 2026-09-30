@@ -1,8 +1,15 @@
 import type { RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
-import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
+import { type ReactNode, useState } from 'react';
+import {
+  actorLabel,
+  diffRecords,
+  formatValue,
+  formatWhen,
+  isAgent,
+  isQuantity,
+} from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -17,7 +24,7 @@ import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
-import { ContainerBlocks, EntityBlocks } from './Inventory.tsx';
+import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
@@ -93,6 +100,10 @@ export function RecordPage() {
             : `Agents have proposed ${pending.length} changes`}{' '}
           to this record. <Link to="/review">Review it</Link>
         </p>
+      )}
+
+      {(r.kind === 'lot' || r.kind === 'sample' || r.kind === 'product') && (
+        <WhereIsBlock record={r} />
       )}
 
       {readiness && readiness.sections.length > 0 ? (
@@ -246,17 +257,71 @@ function confirmedSections(
     .map(([id]) => fieldLabel(id));
 }
 
-/** A value as a person reads it: linked records by name, quantities with their unit. */
-function renderValue(value: unknown) {
-  const isRef = typeof value === 'string' && /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
-  return isRef ? <LinkedName id={value as string} /> : formatValue(value);
+/**
+ * A value as a person reads it: linked records by name, quantities with their unit, and a list of
+ * objects (an SOP's variables or steps) as a small table, one row per item.
+ */
+function renderValue(value: unknown): ReactNode {
+  const isRef = typeof value === 'string' && isRecordId(value);
+  if (isRef) return <LinkedName id={value as string} />;
+  if (Array.isArray(value) && value.length > 0 && value.every(isPlainObject))
+    return <ItemsTable items={value as Record<string, unknown>[]} />;
+  // A small object holding a reference (a container's place) names the record, not its ID.
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.some(([, v]) => typeof v === 'string' && isRecordId(v)))
+      return entries.map(([k, v], i) => (
+        <span key={k}>
+          {i > 0 && ' · '}
+          {fieldLabel(k)} {renderValue(v)}
+        </span>
+      ));
+  }
+  return formatValue(value);
+}
+
+const isRecordId = (v: string) => /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(v);
+
+const isPlainObject = (v: unknown) =>
+  !!v && typeof v === 'object' && !Array.isArray(v) && !isQuantity(v);
+
+function ItemsTable({ items }: { items: Record<string, unknown>[] }) {
+  // Columns in the order the items use them; source quotes stay on the record's history.
+  const columns = [...new Set(items.flatMap((item) => Object.keys(item)))].filter(
+    (key) => key !== 'cite',
+  );
+  return (
+    <table className="items-table">
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c}>{fieldLabel(c)}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <tr key={JSON.stringify(item)}>
+            {columns.map((c) => (
+              <td key={c}>{item[c] === undefined ? '' : renderValue(item[c])}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 function Field({ name, value }: { name: string; value: unknown }) {
   return (
     <>
       <dt>{fieldLabel(name)}</dt>
-      <dd className="mono">{renderValue(value)}</dd>
+      {/* A choice like in_use reads as words; names and IDs are left as they are. */}
+      <dd className="mono">
+        {typeof value === 'string' && /^[a-z]+(_[a-z]+)+$/.test(value) && name !== 'name'
+          ? value.replaceAll('_', ' ')
+          : renderValue(value)}
+      </dd>
     </>
   );
 }

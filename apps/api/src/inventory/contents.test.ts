@@ -349,6 +349,64 @@ describe('fill, transfer and the ledger', () => {
   });
 });
 
+describe('where a lot is', () => {
+  it('finds every container holding a lot or its product, with where each is, and leaves out the rest', async () => {
+    const { source, tube, compound, dmso, medium } = await lab();
+    await run(person, 'inventory.fill', {
+      container: source.id,
+      fills: [
+        {
+          wells: ['A10', 'A3'],
+          volume: { value: '40', unit: 'uL' },
+          components: stock(compound, dmso),
+        },
+      ],
+    });
+    await run(person, 'inventory.fill', {
+      container: tube.id,
+      fills: [
+        { wells: ['A1'], volume: { value: '200', unit: 'uL' }, components: stock(compound, dmso) },
+      ],
+    });
+    type Where = {
+      containers: {
+        container: RecordEnvelope;
+        path: { name: string }[];
+        wells: { well: string; component: { source: string } }[];
+      }[];
+    };
+    const where = await run<Where>(agent, 'inventory.where_is', { of: compound.id });
+    expect(where.containers.map((c) => c.container.id)).toEqual(
+      [source, tube].sort((a, b) => a.name.localeCompare(b.name)).map((c) => c.id),
+    );
+    const plate = where.containers.find((c) => c.container.id === source.id);
+    expect(plate?.wells.map((w) => w.well)).toEqual(['A3', 'A10']);
+    expect(plate?.wells.every((w) => w.component.source === compound.id)).toBe(true);
+    expect(plate?.path.at(-1)?.name).toBe(source.name);
+
+    const product = (compound.attributes as { product: string }).product;
+    const byProduct = await run<Where>(person, 'inventory.where_is', { of: product });
+    expect(byProduct.containers).toHaveLength(2);
+    expect((await run<Where>(person, 'inventory.where_is', { of: medium.id })).containers).toEqual(
+      [],
+    );
+
+    const current = await run<RecordEnvelope>(person, 'records.get', { id: tube.id });
+    await run(person, 'inventory.discard', {
+      container: tube.id,
+      expectedVersion: current.version,
+    });
+    const after = await run<Where>(person, 'inventory.where_is', { of: compound.id });
+    expect(after.containers.map((c) => c.container.id)).toEqual([source.id]);
+
+    expect(
+      (await run<Where>(otherLab, 'inventory.where_is', { of: compound.id })).containers,
+    ).toEqual([]);
+    const wrong = await refused(run(person, 'inventory.where_is', { of: source.id }));
+    expect(wrong.code).toBe('invalid_input');
+  });
+});
+
 describe('samples and discarding', () => {
   it('registers a miniprep with its QC, fills a tube with it, and discards the tube', async () => {
     const { tube, box, compound } = await lab();

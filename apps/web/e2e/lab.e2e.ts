@@ -190,7 +190,10 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   // The last section's button says it activates the record, and it does.
   await appearance.getByRole('button', { name: 'Confirm appearance and activate' }).click();
   await expect(page.locator('.chip.active')).toBeVisible();
-  await expect(readiness.getByText('✓ confirmed')).toBeVisible();
+  // Once active and confirmed, the sections fold into one Details block.
+  await expect(
+    page.getByRole('region', { name: 'Details' }).getByText('✓ confirmed'),
+  ).toBeVisible();
   await expect(page.getByRole('row', { name: /v5/ })).toContainText(
     'confirmed appearance and activated',
   );
@@ -524,6 +527,9 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await page.getByRole('row', { name: new RegExp(plate.name) }).click();
   const wells = page.getByRole('region', { name: 'Wells' });
   await expect(wells).toContainText('3 of 96 filled');
+  // One kind of contents, so the key has one line and the plate is shaded by volume.
+  await expect(wells.getByRole('button', { name: /^3 wells/ })).toBeVisible();
+  await expect(wells.getByRole('group', { name: 'Plate map, shaded by volume' })).toBeVisible();
   await wells.getByRole('button', { name: /^B1: 25 / }).click();
   await expect(wells).toContainText(`Glo reagent ${stamp}`);
   const handling = page.getByRole('region', { name: 'Handling' });
@@ -671,6 +677,46 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(procedure).toContainText('volume 100 µL (Well volume)');
   await procedure.getByText('Values for a run').click();
   await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(/9\.60* mL/);
+
+  // Variables are edited one per row, a value as a line of text, not as JSON.
+  const variables = page.getByRole('region', { name: 'Variables' });
+  await variables.getByRole('button', { name: 'Edit variables' }).click();
+  await variables.locator('summary').filter({ hasText: 'Well volume' }).click();
+  await variables.getByRole('textbox', { name: 'Value', exact: true }).fill('150 uL');
+  // A formula is written with the values' lab names, picked as they are typed, and worked out live.
+  await variables.locator('summary').filter({ hasText: 'Coating solution' }).click();
+  const formula = variables.getByRole('textbox', { name: 'Formula' });
+  await expect(formula).toHaveValue('[Wells] × [Well volume]');
+  await formula.fill('[Wells] × well vol');
+  await variables
+    .getByRole('list', { name: 'Matching values' })
+    .getByRole('button', { name: 'Well volume' })
+    .click();
+  await expect(formula).toHaveValue('[Wells] × [Well volume]');
+  await formula.press('End');
+  await formula.pressSequentially(' × 1.1');
+  await expect(variables).toContainText(/= 15\.840* mL/);
+  await variables.getByRole('button', { name: 'Save' }).click();
+  await expect(variables.getByRole('button', { name: 'Edit variables' })).toBeVisible();
+  await expect(procedure).toContainText('volume 150 µL (Well volume)');
+  await procedure
+    .locator('details')
+    .filter({ hasText: 'Values for a run' })
+    .evaluate((d) => {
+      (d as HTMLDetailsElement).open = true;
+    });
+  await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(
+    /15\.840* mL/,
+  );
+
+  // A step reads as its action, words and settings, a value named by its lab name.
+  const steps = page.getByRole('region', { name: 'Procedure' });
+  await steps.getByRole('button', { name: 'Edit procedure' }).click();
+  await steps.locator('summary').filter({ hasText: 'Coat' }).click();
+  await expect(steps.getByRole('combobox', { name: 'Action' })).toHaveValue('add');
+  await expect(steps.getByRole('combobox', { name: 'volume value' })).toHaveValue('[Well volume]');
+  await expect(steps.getByRole('checkbox', { name: 'Coating plate' })).toBeChecked();
+  await steps.getByRole('button', { name: 'Cancel' }).click();
 
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');
