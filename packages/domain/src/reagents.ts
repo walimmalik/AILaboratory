@@ -1,4 +1,4 @@
-import type { Quantity, Recipe } from '@ailab/schema';
+import type { LotAttributes, LotSummary, Quantity, Recipe, StorageBand } from '@ailab/schema';
 import { LabDecimal, toDecimalString } from './decimal.ts';
 import { convert, getUnit, multiply, UnitError } from './units.ts';
 
@@ -32,4 +32,48 @@ export function scaleRecipe(recipe: Recipe, target: Quantity) {
       amount: multiply(c.amount, factor),
     })),
   };
+}
+
+/** Storage temperature in words (plan 009c), from the upper end of the range. */
+export function storageBand(range: {
+  min?: Quantity | undefined;
+  max?: Quantity | undefined;
+}): StorageBand {
+  const top = range.max ?? range.min;
+  if (!top) throw new UnitError('invalid_value', 'The storage range has no temperature');
+  const celsius = new LabDecimal(convert(top, 'degC').value);
+  if (celsius.lessThanOrEqualTo(-130)) return 'cryo';
+  if (celsius.lessThanOrEqualTo(-60)) return 'deep_freezer';
+  if (celsius.lessThanOrEqualTo(-10)) return 'freezer';
+  if (celsius.lessThanOrEqualTo(10)) return 'fridge';
+  return 'room';
+}
+
+/** A lot that can be used on `today`: unopened or opened, and not past its expiry. */
+export function lotInDate(lot: Pick<LotAttributes, 'status' | 'expiry'>, today: string): boolean {
+  return (
+    (lot.status === 'unopened' || lot.status === 'opened') &&
+    (lot.expiry === undefined || lot.expiry >= today)
+  );
+}
+
+/** A product's lots at a glance: count, lots in date on `today`, and the soonest expiry among them. */
+export function lotSummary(
+  lots: Pick<LotAttributes, 'status' | 'expiry'>[],
+  today: string,
+): LotSummary {
+  const inDate = lots.filter((l) => lotInDate(l, today));
+  const expiries = inDate.flatMap((l) => (l.expiry ? [l.expiry] : [])).sort();
+  return {
+    count: lots.length,
+    inDate: inDate.length,
+    ...(expiries[0] ? { nextExpiry: expiries[0] } : {}),
+  };
+}
+
+/** The calendar date `days` after `date` (both like 2026-09-30). */
+export function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }

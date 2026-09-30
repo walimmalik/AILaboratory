@@ -1,16 +1,21 @@
 import { z } from 'zod';
 import { EvidenceInput } from '../design.ts';
+import { recordIdOf } from '../ids.ts';
 import { CalendarDate } from '../instruments.ts';
 import { defineContract } from '../operation.ts';
 import { Quantity } from '../quantity.ts';
 import {
   KitComponent,
+  LiquidTypeId,
   LotAttributes,
   LotId,
   LotStatus,
+  LotSummary,
   ProductAttributes,
+  ProductCategory,
   ProductId,
   ScaledRecipe,
+  StorageBand,
 } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
 
@@ -94,4 +99,40 @@ export const reagentsSetLotStatus = defineContract({
     reason: Reason,
   }),
   output: RecordEnvelope,
+});
+
+export const reagentsSearch = defineContract({
+  id: 'reagents.search',
+  summary:
+    "Find the lab's products by name, catalog number or CAS, and by category, vendor, liquid type, storage or origin; or those with a lot in date, or a lot expiring soon. Each result carries its lot count, lots in date and next expiry",
+  effect: 'read',
+  input: z.strictObject({
+    text: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Matches the name, readable name (PRD-0001), a catalog number or the CAS number'),
+    category: ProductCategory.optional(),
+    vendor: recordIdOf('vnd').optional(),
+    liquidType: LiquidTypeId.optional(),
+    storage: StorageBand.optional(),
+    origin: z.enum(['bought', 'made']).optional(),
+    inDate: z.boolean().optional().describe('true: only products with a lot in date'),
+    expiringWithinDays: z
+      .number()
+      .int()
+      .min(0)
+      .max(3650)
+      .optional()
+      .describe('Only products whose next lot in date expires within this many days'),
+    status: z.enum(['draft', 'active']).optional().describe('Leave out for both'),
+    today: CalendarDate.optional().describe("Defaults to the server's date"),
+    limit: z.number().int().min(1).max(500).optional().describe('Default 100'),
+  }),
+  output: z.object({
+    products: z.array(
+      z.object({ product: RecordEnvelope, storage: StorageBand.optional(), lots: LotSummary }),
+    ),
+    total: z.number().int().describe('How many matched before the limit'),
+  }),
 });

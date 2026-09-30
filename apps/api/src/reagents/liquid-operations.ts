@@ -11,6 +11,7 @@ import {
   liquidsMixtureType,
   liquidsRecordVerification,
   liquidsResolveClass,
+  liquidsSearchClasses,
   ProductAttributes,
   VerificationAttributes,
 } from '@ailab/schema';
@@ -41,16 +42,25 @@ async function recordOf(service: RecordService, ctx: RecordContext, id: string, 
   return record;
 }
 
-/** Classes that have a passing verification that isn't demo. */
-async function verifiedClasses(service: RecordService, ctx: RecordContext) {
-  const runs = await service.list(ctx, { kind: 'liquid_class_verification', limit: 500 });
+/** Each class's checks: whether one passing run isn't demo, and the latest run. */
+async function classChecks(service: RecordService, ctx: RecordContext) {
+  const runs = await service.list(ctx, { kind: 'liquid_class_verification', limit: 5000 });
   const verified = new Set<string>();
+  const latest = new Map<string, { date: string; passed: boolean; demo: boolean }>();
   for (const run of runs) {
     const attributes = VerificationAttributes.parse(run.attributes);
-    if (!attributes.demo && verificationResult(attributes).passed)
-      verified.add(attributes.liquidClass);
+    const passed = verificationResult(attributes).passed;
+    if (!attributes.demo && passed) verified.add(attributes.liquidClass);
+    const last = latest.get(attributes.liquidClass);
+    if (!last || attributes.date > last.date) {
+      latest.set(attributes.liquidClass, {
+        date: attributes.date,
+        passed,
+        demo: attributes.demo,
+      });
+    }
   }
-  return verified;
+  return { verified, latest };
 }
 
 export const liquidOperations = [
@@ -70,9 +80,9 @@ export const liquidOperations = [
       const liquidTypeLabel = liquidType
         ? (await recordOf(service, ctx, liquidType, 'liquid_type')).label
         : undefined;
-      const verified = await verifiedClasses(service, ctx);
+      const { verified } = await classChecks(service, ctx);
       const classes: ClassInfo[] = (
-        await service.list(ctx, { kind: 'liquid_class', limit: 1000 })
+        await service.list(ctx, { kind: 'liquid_class', limit: 5000 })
       ).map((r) => ({
         id: r.id,
         label: `${r.label} (${r.name})`,
@@ -151,6 +161,36 @@ export const liquidOperations = [
         reason: reason ?? result.why,
       });
       return { record, result };
+    },
+  }),
+  implement(liquidsSearchClasses, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const { verified, latest } = await classChecks(service, ctx);
+      const status = input.status ? { status: input.status } : {};
+      const text = input.text?.trim().toLowerCase();
+      const matches = (
+        await service.list(ctx, { kind: 'liquid_class', ...status, limit: 5000 })
+      ).flatMap((record) => {
+        const a = LiquidClassAttributes.parse(record.attributes);
+        const isVerified = verified.has(record.id);
+        const found =
+          (!text ||
+            [record.label, record.name, a.platformName].some((v) =>
+              v?.toLowerCase().includes(text),
+            )) &&
+          (!input.instrumentKind || a.instrumentKind === input.instrumentKind) &&
+          (!input.device || a.device === input.device) &&
+          (!input.tip || (a.tips ?? []).includes(input.tip)) &&
+          (!input.liquidType || a.liquidTypes.includes(input.liquidType)) &&
+          (!input.platform || a.settings.platform === input.platform) &&
+          (input.verified === undefined || isVerified === input.verified);
+        const lastCheck = latest.get(record.id);
+        return found
+          ? [{ liquidClass: record, verified: isVerified, ...(lastCheck ? { lastCheck } : {}) }]
+          : [];
+      });
+      return { classes: matches.slice(0, input.limit ?? 200), total: matches.length };
     },
   }),
 ];

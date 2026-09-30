@@ -1,4 +1,12 @@
-import { getUnit, sameDimension, scaleRecipe, UnitError } from '@ailab/domain';
+import {
+  addDays,
+  getUnit,
+  lotSummary,
+  sameDimension,
+  scaleRecipe,
+  storageBand,
+  UnitError,
+} from '@ailab/domain';
 import {
   type KitComponent,
   LotAttributes,
@@ -7,6 +15,7 @@ import {
   reagentsDraftProduct,
   reagentsReceiveLot,
   reagentsScaleRecipe,
+  reagentsSearch,
   reagentsSetLotStatus,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
@@ -187,6 +196,41 @@ export const reagentOperations = [
         attributes: { ...attributes, status: input.status, ...(opened ? { opened } : {}) },
         reason: input.reason ?? `Status set to ${input.status.replaceAll('_', ' ')}`,
       });
+    },
+  }),
+  implement(reagentsSearch, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const on = input.today ?? today();
+      const status = input.status ? { status: input.status } : {};
+      const products = await service.list(ctx, { kind: 'product', ...status, limit: 5000 });
+      const lots = new Map<string, LotAttributes[]>();
+      for (const record of await service.list(ctx, { kind: 'lot', limit: 20000 })) {
+        const lot = LotAttributes.parse(record.attributes);
+        lots.set(lot.product, [...(lots.get(lot.product) ?? []), lot]);
+      }
+      const text = input.text?.trim().toLowerCase();
+      const until =
+        input.expiringWithinDays === undefined ? undefined : addDays(on, input.expiringWithinDays);
+      const matches = products.flatMap((product) => {
+        const a = ProductAttributes.parse(product.attributes);
+        const storage = a.storage ? storageBand(a.storage) : undefined;
+        const summary = lotSummary(lots.get(product.id) ?? [], on);
+        const found =
+          (!text ||
+            [product.label, product.name, a.cas, ...(a.catalog ?? []).map((c) => c.number)].some(
+              (v) => v?.toLowerCase().includes(text),
+            )) &&
+          (!input.category || a.category === input.category) &&
+          (!input.vendor || a.vendor === input.vendor) &&
+          (!input.liquidType || a.liquidType === input.liquidType) &&
+          (!input.storage || storage === input.storage) &&
+          (!input.origin || a.origin === input.origin) &&
+          (!input.inDate || summary.inDate > 0) &&
+          (!until || (summary.nextExpiry !== undefined && summary.nextExpiry <= until));
+        return found ? [{ product, ...(storage ? { storage } : {}), lots: summary }] : [];
+      });
+      return { products: matches.slice(0, input.limit ?? 100), total: matches.length };
     },
   }),
 ];
