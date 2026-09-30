@@ -63,6 +63,15 @@ An open question (G6) blocks confirming until a person settles it with `sops.ans
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
 
+## Screens (012d)
+
+`apps/web/src/pages/Sops.tsx`: the SOPs page (`/sops`, in the Library menu) lists SOPs with their assay, step count and open questions. An SOP's record page shows three blocks between readiness and the editable sections:
+- **At the bench:** the numbered steps in plain words with their parameters, each variable parameter shown with its value from `sops.calculate`. The run values table is folded, and marks typical and missing values in agent ink. Each step's source quote is folded too. Print shows only this block.
+- **Questions to settle:** each open question with the agent's suggestion, "Accept the suggestion" or an answer in the person's words (`sops.answer_question`). Settled questions are folded.
+- **Checks against the source:** "Check the quotes" (`sops.check_citations`) and, on drafts, "Have the reviewer check it" (`sops.review`). The reviewer's changes are listed in agent ink as "Step 2 (Wash), volume: 400 µL → 300 µL", with the reason.
+
+The sections below stay the design mode: edit and confirm as for any record.
+
 ## Not yet
 
-Dead volume per pipetting instrument kind (007 L4) as a field to read; the benchmark (rest of 012c); a separate reviewer model setting; the SOP page (012d).
+Dead volume per pipetting instrument kind (007 L4) as a field to read; the benchmark (rest of 012c); a separate reviewer model setting; keeping or reverting single reviewer fixes on the page.

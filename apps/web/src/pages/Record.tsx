@@ -23,6 +23,7 @@ import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
+import { SopBlocks } from './Sops.tsx';
 import { StatusChip } from './StatusChip.tsx';
 
 const operationWords: Record<string, string> = {
@@ -109,6 +110,8 @@ export function RecordPage() {
               <ProductBlocks record={r} />
             ) : r.kind === 'liquid_class' ? (
               <LiquidClassBlocks record={r} />
+            ) : r.kind === 'sop' ? (
+              <SopBlocks record={r} />
             ) : undefined
           }
         />
