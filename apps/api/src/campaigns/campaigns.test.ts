@@ -620,33 +620,34 @@ describe('binding the protocol (013b)', () => {
   });
 });
 
-describe('recording runs (013c)', () => {
-  async function plannedExperiment() {
-    const campaign = await activeCampaign();
-    const sop = await confirm(
-      await run(agent, 'sops.draft', {
-        ...coating,
-        steps: [
-          { ...coating.steps[0], title: 'Coat' },
-          { id: 'wash', action: 'wash', title: 'Wash', text: 'Wash the plate.', repeat: 3 },
-        ],
-      }),
-    );
-    const experiment = await confirm(
-      await run(agent, 'experiments.draft', {
-        label: 'Stimulus panel',
-        campaign: campaign.id,
-        question: 'Which stimuli raise IL-6?',
-        protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
-      }),
-    );
-    return run(person, 'experiments.set_stage', {
-      id: experiment.id,
-      expectedVersion: experiment.version,
-      stage: 'planned',
-    });
-  }
+async function plannedExperiment() {
+  const campaign = await activeCampaign();
+  const sop = await confirm(
+    await run(agent, 'sops.draft', {
+      ...coating,
+      steps: [
+        { ...coating.steps[0], title: 'Coat' },
+        { id: 'wash', action: 'wash', title: 'Wash', text: 'Wash the plate.', repeat: 3 },
+      ],
+    }),
+  );
+  const experiment = await confirm(
+    await run(agent, 'experiments.draft', {
+      label: 'Stimulus panel',
+      campaign: campaign.id,
+      question: 'Which stimuli raise IL-6?',
+      hypotheses: [{ id: 'lps', statement: 'LPS raises IL-6' }],
+      protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
+    }),
+  );
+  return run(person, 'experiments.set_stage', {
+    id: experiment.id,
+    expectedVersion: experiment.version,
+    stage: 'planned',
+  });
+}
 
+describe('recording runs (013c)', () => {
   it('starts a run as a checklist of planned steps and records ticks, changes, skips, data and the finish', async () => {
     const experiment = await plannedExperiment();
     const started = await run(person, 'runs.start', { experiment: experiment.id });
@@ -831,5 +832,147 @@ describe('recording runs (013c)', () => {
       status: 'done',
     });
     expect(finished.attributes).toMatchObject({ status: 'done' });
+  });
+});
+
+describe('conclusions and sets (013c)', () => {
+  it('concludes from finished runs with a verdict per hypothesis, and hands hits on as a set', async () => {
+    const experiment = await plannedExperiment();
+    await expect(
+      registry.execute(person, 'experiments.conclude', {
+        id: experiment.id,
+        expectedVersion: experiment.version,
+        summary: 'Nothing yet',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const running = await run(person, 'records.get', { id: experiment.id });
+    await expect(
+      registry.execute(person, 'experiments.conclude', {
+        id: running.id,
+        expectedVersion: running.version,
+        summary: 'Too early',
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('still in progress') });
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    await expect(
+      registry.execute(person, 'experiments.set_stage', {
+        id: running.id,
+        expectedVersion: running.version,
+        stage: 'analysing',
+      }),
+    ).resolves.toMatchObject({ status: 'done' });
+    const analysing = await run(person, 'records.get', { id: experiment.id });
+    await expect(
+      registry.execute(person, 'experiments.set_stage', {
+        id: analysing.id,
+        expectedVersion: analysing.version,
+        stage: 'concluded',
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('experiments.conclude') });
+    await expect(
+      registry.execute(person, 'experiments.conclude', {
+        id: analysing.id,
+        expectedVersion: analysing.version,
+        summary: 'LPS raised IL-6 fourfold',
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('Give a verdict for lps') });
+    await expect(
+      registry.execute(person, 'experiments.conclude', {
+        id: analysing.id,
+        expectedVersion: analysing.version,
+        summary: 'LPS raised IL-6 fourfold',
+        verdicts: [
+          { hypothesis: 'lps', verdict: 'supported' },
+          { hypothesis: 'tnf', verdict: 'refuted' },
+        ],
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('There is no hypothesis tnf') });
+
+    const proposal = await registry.execute(agent, 'experiments.conclude', {
+      id: analysing.id,
+      expectedVersion: analysing.version,
+      summary: 'LPS raised IL-6 fourfold',
+      verdicts: [{ hypothesis: 'lps', verdict: 'supported' }],
+    });
+    expect(proposal.status).toBe('proposed');
+    const concluded = await run(person, 'experiments.conclude', {
+      id: analysing.id,
+      expectedVersion: analysing.version,
+      summary: 'LPS raised IL-6 fourfold',
+      verdicts: [
+        {
+          hypothesis: 'lps',
+          verdict: 'supported',
+          evidence: [{ record: started.id, note: 'Fold change 4.1' }],
+        },
+      ],
+    });
+    expect(concluded.attributes).toMatchObject({
+      stage: 'concluded',
+      conclusion: {
+        summary: 'LPS raised IL-6 fourfold',
+        runs: [started.id],
+        by: person.actor,
+        verdicts: [{ hypothesis: 'lps', verdict: 'supported' }],
+      },
+    });
+
+    const kind = await run(agent, 'entities.draft_kind', {
+      label: 'Stimulus',
+      attributes: { base: 'chemical', prefix: 'STM', fields: [] },
+    });
+    const lps = await run(agent, 'entities.draft', { label: 'LPS', entityKind: kind.id });
+    const tnf = await run(agent, 'entities.draft', { label: 'TNF-alpha', entityKind: kind.id });
+    const setInput = {
+      label: 'IL-6 inducers',
+      members: [{ record: lps.id, note: 'Fold change 4.1' }, { record: tnf.id }],
+      criterion: 'Fold change above 2',
+      from: { experiment: concluded.id, run: started.id },
+    };
+    expect((await registry.execute(agent, 'sets.create', setInput)).status).toBe('proposed');
+    await expect(
+      registry.execute(person, 'sets.create', {
+        ...setInput,
+        members: [{ record: lps.id }, { record: lps.id }, { record: concluded.id }],
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/is in the set twice[\s\S]*EXP-0001 is not an entity/),
+    });
+    await expect(
+      registry.execute(person, 'records.create', { kind: 'set', label: 'x', attributes: setInput }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('created with sets.create') });
+    const hits = await run(person, 'sets.create', setInput);
+    expect(hits).toMatchObject({ kind: 'set', name: 'SET-001', status: 'active' });
+
+    const campaign = (concluded.attributes as { campaign: string }).campaign;
+    const followUp = await run(agent, 'experiments.draft', {
+      label: 'Dose-response of the inducers',
+      campaign,
+      question: 'How potent are the inducers?',
+      subjects: [{ record: hits.id }],
+      followsUp: { experiment: concluded.id, relation: 'follows_up' },
+      protocol: [],
+    });
+    const got = await run<{
+      members: { name: string; label: string; note?: string }[];
+      usedBy: { id: string }[];
+    }>(agent, 'sets.get', { id: hits.id });
+    expect(got.members).toEqual([
+      expect.objectContaining({ label: 'LPS', note: 'Fold change 4.1' }),
+      expect.objectContaining({ label: 'TNF-alpha' }),
+    ]);
+    expect(got.usedBy).toEqual([expect.objectContaining({ id: followUp.id })]);
+    await expect(registry.execute(otherLab, 'sets.get', { id: hits.id })).rejects.toMatchObject({
+      code: 'not_found',
+    });
   });
 });
