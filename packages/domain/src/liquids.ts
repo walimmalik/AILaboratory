@@ -202,6 +202,13 @@ export function resolveClass(request: ClassRequest, classes: ClassInfo[]): Class
     return none('The liquid has no liquid type; set one on the product first', alternatives);
   }
   const defaults = usable.filter((c) => c.attributes.labDefault && serves(c) && fits(c));
+  const modes = [...new Set(defaults.map((c) => c.attributes.mode).filter(Boolean))];
+  if (!request.mode && modes.length > 1) {
+    return none(
+      `Several default classes for ${liquid} fit and they dispense differently; say the dispense mode (${modes.join(', ')})`,
+      alternatives,
+    );
+  }
   const best = defaults.find((c) => c.verified) ?? defaults[0];
   if (best) {
     return choice(best, 'lab_default', `The lab's default for ${liquid} on this device and tip`);

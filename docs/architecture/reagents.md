@@ -55,3 +55,9 @@ A product can name `liquidClasses` to use instead of the lab default for its liq
 | `liquids.resolve_class` | Picks the class for a transfer: explicit, then the product's own, then the lab default for its liquid type (verified first); only confirmed classes; says why or what is missing | read |
 | `liquids.mixture_type` | A mixture's liquid type from its parts (largest part, unless DMSO ≥ 70%, glycerol > 20%, ethanol or volatile ≥ 50%) | read |
 | `liquids.record_verification` | Records a check and its result; passing real runs make a class verified in this lab | proposed |
+
+### Seed classes
+
+`seed/liquid-classes.yaml` names what to load; items refer to keys in the instrument library, labware and reagent library. Opentrons classes come from Opentrons' own files (`seed/liquid-classes/opentrons/`, unchanged, Apache-2.0): one class per liquid, per Flex pipette and per filter tip rack the lab has. Hamilton's defaults (`seed/liquid-classes/hamilton-defaults.yaml`) were generated once from PyLabRobot's mappings (MIT) for the lab's CO-RE II 50, 300 and 1000 µL filter tips on the STAR and VANTAGE channels and 96 heads, for water, DMSO, serum, ethanol and 80% glycerol. Their volume range runs over the calibrated points. The four Echo classes are the names Wali confirmed. Every class loads as a vendor default and lab default for its liquid type. The mapping from a vendor class to our liquid types is marked assumed. A class whose instrument, device, tips or liquid type the lab lacks is skipped and counted.
+
+When several default classes fit and differ in dispense mode (Hamilton's jet or surface, empty or part), the resolver asks for the mode rather than picking one.

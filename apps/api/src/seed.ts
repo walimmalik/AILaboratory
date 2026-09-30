@@ -9,6 +9,7 @@ import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { reagentKinds } from './reagents/kinds.ts';
+import { loadSeedLiquidClasses, readSeedLiquidClasses } from './reagents/liquid-seed.ts';
 import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
 import { KindRegistry } from './records/kinds.ts';
 
@@ -112,6 +113,29 @@ console.log(
 for (const line of reagents.products.created) console.log(`  + ${line}`);
 console.log(
   `Lots: ${reagents.lots.proposed.length} proposed for review, ${reagents.lots.existing.length} already recorded or waiting.`,
+);
+
+const classFiles = Object.fromEntries(
+  await Promise.all(
+    ['water.json', 'glycerol_50.json', 'ethanol_80.json'].map(
+      async (name) => [name, await seedFile(`liquid-classes/opentrons/${name}`)] as const,
+    ),
+  ),
+);
+const classes = await loadSeedLiquidClasses(
+  registry,
+  ctx,
+  readSeedLiquidClasses({
+    index: await seedFile('liquid-classes.yaml'),
+    opentrons: classFiles,
+    hamilton: await seedFile('liquid-classes/hamilton-defaults.yaml'),
+    instrumentLibrary: await seedFile('instrument-library.yaml'),
+    labware: await seedFile('labware.yaml'),
+    reagentLibrary: await seedFile('reagent-library.yaml'),
+  }),
+);
+console.log(
+  `Liquid classes: ${classes.created.length} drafted, ${classes.existing.length} already there, ${classes.skipped.length} skipped (the lab lacks their instrument, device, tips or liquid type).`,
 );
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

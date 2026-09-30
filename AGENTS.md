@@ -62,7 +62,7 @@ Run from the repo root unless noted.
 | Apply migrations | `pnpm --filter @ailab/api db:migrate` (needs `DATABASE_URL`; the API also migrates on start) |
 | First-run setup (org, lab, user, token) | `pnpm --filter @ailab/api bootstrap` |
 | Set or reset your web sign-in | `pnpm --filter @ailab/api password --email you@example.org` |
-| Load the seed lab as drafts to review (labware, instrument kinds and the lab's instruments, reagents, with lots as proposals) | `pnpm --filter @ailab/api seed` |
+| Load the seed lab as drafts to review (labware, instrument kinds and the lab's instruments, reagents with lots as proposals, and vendor liquid classes) | `pnpm --filter @ailab/api seed` |
 | Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
 | Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |
