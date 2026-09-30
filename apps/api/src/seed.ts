@@ -11,7 +11,7 @@ import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
 import { fileKinds } from './files/kinds.ts';
 import { fileStoreFromEnv } from './files/store.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
-import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
+import { loadSeedInstruments, loadSeedWorkcells, readSeedInstruments } from './instruments/seed.ts';
 import { loadSeedContents, readSeedContents } from './inventory/contents-seed.ts';
 import { inventoryKinds } from './inventory/kinds.ts';
 import { loadSeedInventory, readSeedInventory } from './inventory/seed.ts';
@@ -144,6 +144,20 @@ async function loadOnce() {
     `Instruments: ${instruments.registered.length} registered, ${instruments.registeredBefore.length} already there.`,
   );
   for (const line of instruments.registered) console.log(`  + ${line}`);
+
+  await settle();
+  const workcells = await loadSeedWorkcells(
+    registry,
+    ctx,
+    readSeedInstruments(
+      await seedFile('instrument-library.yaml'),
+      await seedFile('instruments.yaml'),
+    ),
+  );
+  console.log(
+    `Workcells: ${workcells.created.length} drafted, ${workcells.existing.length} already there${workcells.waiting.length ? `, ${workcells.waiting.length} waiting on instruments` : ''}.`,
+  );
+  for (const line of workcells.created) console.log(`  + ${line}`);
 
   await settle();
   const reagents = await loadSeedReagents(

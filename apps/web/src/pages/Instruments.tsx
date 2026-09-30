@@ -5,6 +5,8 @@ import {
   type InstrumentKindAttributes,
   instrumentsResolve,
   type RecordEnvelope,
+  type WorkcellAttributes,
+  workcellsOfInstrument,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -156,6 +158,141 @@ export function EquipmentPage() {
   );
 }
 
+/** Workcells (plan 008d): instruments that work together, each mapped to the digital twin. */
+export function WorkcellsPage() {
+  const of = (r: RecordEnvelope) => r.attributes as Partial<WorkcellAttributes>;
+  return (
+    <>
+      <Head
+        page={page('workcell')}
+        lede="Instruments that work together, such as the FlexPod and what stands around it. Where things stand and how plates move is in the digital twin."
+      />
+      <RecordList
+        title="Workcells"
+        kind="workcell"
+        placeholder="Find by name, e.g. FlexPod or WCL-0001"
+        empty="No workcells yet. Ask the assistant to draft one from the lab's instruments, or load the seed lab."
+        columns={[
+          {
+            header: 'Instruments',
+            cell: (r) => of(r).members?.length ?? 0,
+            className: 'num',
+          },
+          {
+            header: 'Also used by hand',
+            cell: (r) => of(r).members?.filter((m) => m.byHand).length ?? 0,
+            className: 'num',
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/** Beside a workcell: its instruments in plain words, what each can do and whether it is free. */
+export function WorkcellBlocks({ record }: { record: RecordEnvelope }) {
+  const a = record.attributes as Partial<WorkcellAttributes>;
+  const instruments = new Map(
+    (useQuery(recordsQuery({ kind: 'instrument' })).data ?? []).map((r) => [r.id, r]),
+  );
+  const models = new Map(
+    (useQuery(recordsQuery({ kind: 'instrument_kind' })).data ?? []).map((r) => [r.id, r]),
+  );
+  const members = a.members ?? [];
+  return (
+    <section className="block" aria-label="Instruments in this workcell">
+      <header>
+        <h2>Instruments</h2>
+        <span className="state muted">
+          {members.length} in the workcell · {members.filter((m) => m.byHand).length} also by hand
+        </span>
+      </header>
+      <div className="body">
+        <div className="table-wrap">
+          <table>
+            <tbody>
+              {members.map((m) => {
+                const instrument = instruments.get(m.instrument);
+                const ia = instrument?.attributes as Partial<InstrumentAttributes> | undefined;
+                const model = models.get(ia?.kind ?? '');
+                const status = ia?.status;
+                return (
+                  <tr key={m.instrument}>
+                    <td>
+                      <Link to="/records/$id" params={{ id: m.instrument }}>
+                        {instrument?.label ?? m.instrument}
+                      </Link>
+                    </td>
+                    <td className="muted">
+                      {capabilityList(
+                        (model?.attributes as Partial<InstrumentKindAttributes> | undefined)
+                          ?.capabilities,
+                      )}
+                    </td>
+                    <td className="nowrap">
+                      {status ? (
+                        <>
+                          <span className={`lamp ${statusLamp(status)}`} />
+                          {statusWords[status]}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="muted">{m.byHand ? 'also by hand' : 'workcell only'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted">
+          Positions, the robot's reach and move times come from the digital twin. The 3D view
+          arrives with the twin connection.
+        </p>
+        <details className="tech">
+          <summary>technical details</summary>
+          <p className="mono">twin workcell: {a.twin ?? 'not named'}</p>
+          <ul className="mono">
+            {members.map((m) => (
+              <li key={m.instrument}>
+                {instruments.get(m.instrument)?.name ?? m.instrument} →{' '}
+                {m.twinDevice ?? 'no twin device'}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+/** The workcell an instrument is in, or that it stands alone. */
+function WorkcellLine({ instrument }: { instrument: string }) {
+  const where = useQuery({
+    queryKey: ['record', instrument, 'workcell'],
+    queryFn: () => api.run(workcellsOfInstrument, { instrument }),
+  }).data;
+  if (!where) return null;
+  return (
+    <p className="muted">
+      {where.active ? (
+        <>
+          In{' '}
+          <Link to="/records/$id" params={{ id: where.active.id }}>
+            {where.active.label}
+          </Link>
+          {where.active.member.byHand
+            ? ', and can be used by hand when the workcell is not using it.'
+            : ', used by the workcell only.'}
+        </>
+      ) : (
+        'Stands alone: not in a confirmed workcell.'
+      )}
+    </p>
+  );
+}
+
 /**
  * Beside a registered instrument: its deck from above with what is mounted where, and what it can
  * do now with its limits, both from resolving its current configuration.
@@ -250,6 +387,7 @@ export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
             {result.sites.length} places for labware.{' '}
             <Link to="/instrument-models">Instrument models</Link> say what each one offers.
           </p>
+          <WorkcellLine instrument={record.id} />
         </div>
       </section>
     </>

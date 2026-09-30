@@ -9,7 +9,12 @@ import {
 import { ActivityPage } from './pages/Activity.tsx';
 import { DocumentsPage } from './pages/Documents.tsx';
 import { CampaignsPage, ExperimentsPage, RunsPage, SetsPage } from './pages/Experiments.tsx';
-import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
+import {
+  EquipmentPage,
+  InstrumentModelsPage,
+  InstrumentsPage,
+  WorkcellsPage,
+} from './pages/Instruments.tsx';
 import {
   ContainersPage,
   EntitiesPage,
@@ -91,6 +96,11 @@ const instrumentModels = createRoute({
   getParentRoute: () => app,
   path: '/instrument-models',
   component: InstrumentModelsPage,
+});
+const workcells = createRoute({
+  getParentRoute: () => app,
+  path: '/workcells',
+  component: WorkcellsPage,
 });
 const equipment = createRoute({
   getParentRoute: () => app,
@@ -214,6 +224,7 @@ const routeTree = root.addChildren([
     labware,
     instruments,
     instrumentModels,
+    workcells,
     equipment,
     reagents,
     lots,

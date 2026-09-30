@@ -841,7 +841,8 @@ instances:
     kind: formulatrix-mantis
     name: Mantis 1
     serial: DEMO-MAN-0001
-    room: rm-tissue-culture
+    room: rm-automation
+    workcell: flexpod-01
     assumed: true
     configuration:
       chips: [LV, HV]
@@ -856,7 +857,6 @@ instances:
     name: Spark Cyto 1
     serial: DEMO-SPK-0001
     room: rm-automation
-    workcell: flexpod-01
   - key: bluewasher-01
     kind: bluecatbio-bluewasher
     name: BlueWasher 1
@@ -902,7 +902,10 @@ instances:
     serial: DEMO-FPD-0001
     room: rm-automation
     assumed: true
-    notes: A work cell holding the Echo, PreciseDrop, Spark Cyto, Cytomat, MicroSpin, LidValet and PlateOrient, scheduled by Cellario.
+    configuration:
+      stackers: [12-position stack (left), 12-position stack (right)]
+      mounted: [PlateOrient 1]
+    notes: A work cell holding the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin, with the PlateOrient and two 12-position stackers mounted on the pod, scheduled by Cellario (plan 008 I10, Wali 2026-09-30). The Spark Cyto and Cytomat stand alone.
   - key: microspin-01
     kind: highres-microspin
     name: MicroSpin 1
@@ -926,7 +929,22 @@ instances:
     name: Cytomat 1
     serial: DEMO-CYT-0001
     room: rm-automation
-    workcell: flexpod-01
     setpoints:
       temperature: { value: "37", unit: degC }
       co2: { value: "5", unit: "%v/v" }
+  - key: a4s-01
+    kind: azenta-a4s
+    name: A4S 1
+    serial: DEMO-A4S-0001
+    room: rm-automation
+    workcell: flexpod-01
+    assumed: true
+    notes: Added 2026-09-30 (plan 008 I10). No research entry yet; the kind's specs are not researched.
+  - key: xpeel-01
+    kind: azenta-xpeel
+    name: XPeel 1
+    serial: DEMO-XPL-0001
+    room: rm-automation
+    workcell: flexpod-01
+    assumed: true
+    notes: Added 2026-09-30 (plan 008 I10). No research entry yet; the kind's specs are not researched.

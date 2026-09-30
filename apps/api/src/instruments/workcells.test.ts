@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
@@ -13,6 +14,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { instrumentKinds } from './kinds.ts';
+import { readSeedInstruments } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -237,5 +239,37 @@ describe('workcells', () => {
       }),
     );
     expect(foreign.message).toContain('is not an instrument in this lab');
+  });
+});
+
+describe('seed workcells', () => {
+  it('lists the FlexPod workcell by instrument key, and refuses a member the file lacks', async () => {
+    const file = (name: string) =>
+      readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const library = await file('instrument-library.yaml');
+    const research = await file('instruments.yaml');
+    const { workcells } = readSeedInstruments(library, research);
+    expect(workcells.map((w) => [w.label, w.members.map((m) => m.instrument)])).toEqual([
+      [
+        'FlexPod workcell',
+        [
+          'flexpod-01',
+          'plateorient-01',
+          'lidvalet-01',
+          'echo-01',
+          'precisedrop-01',
+          'mantis-01',
+          'a4s-01',
+          'xpeel-01',
+          'microspin-01',
+        ],
+      ],
+    ]);
+    expect(() =>
+      readSeedInstruments(
+        library.replace('instrument: xpeel-01', 'instrument: spark-02'),
+        research,
+      ),
+    ).toThrow('flexpod-workcell: no instrument "spark-02" in the library');
   });
 });

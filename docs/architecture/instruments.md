@@ -67,6 +67,10 @@ A workcell (`WCL-0001`, ADR 0047) lists the registered instruments that work tog
 
 The file's `instruments` list is the demo lab's registered instruments (from the `instances` in `seed/instruments.yaml`): name, short name, serial, room and variant, with configurations whose nodes name kinds by key. They go in through `instruments.register`, so each configuration is checked on the way in, and load as assumed.
 
+The file's `workcells` list names member instruments by key, each with its echo650-twin device ID (from the twin's catalog: `echo650`, `precisedrop`, `mantis`, `a4s`, `xpeel`, `imported-microspin`, and the FlexPod's `orient` and `lidvalet` sites as `flexpod.orient` and `flexpod.lidvalet`). `loadSeedWorkcells` drafts each through `workcells.draft` once its instruments are registered, with the twin mapping and hand use marked assumed; the seed then confirms it like everything else (ADR 0044). The A4S and XPeel models have no research entry yet, so their values carry no datasheet evidence.
+
 ## Screens
 
 The web app (008c) has three library pages: Instruments (the lab's registered instruments with an availability lamp and calibration due), Instrument models and Equipment. An instrument's page shows its deck, one drawing per mount with what is installed on each slot or run of tracks, and what it can do with its limits, both from `instruments.resolve`. Changes go through the same operations an agent uses. See [web-app.md](web-app.md).
+
+Workcells (008d-3) have their own library page. A workcell's page lists its instruments in plain words (what each can do from its model, its availability lamp, and "also by hand" or "workcell only"), says positions and reach come from the twin, and keeps the twin workcell and device IDs under technical details. An instrument's page says which confirmed workcell it is in, or that it stands alone (`workcells.of_instrument`).
