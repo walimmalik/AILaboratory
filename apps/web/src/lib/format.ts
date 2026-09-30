@@ -198,6 +198,22 @@ function recordOf(value: unknown): { id: string; name: string } | undefined {
   return typeof id === 'string' && typeof name === 'string' ? { id, name } : undefined;
 }
 
+/**
+ * The records an output holds, main one first: the output itself, or records one level in, as
+ * `{product, drafted: [...]}` or `{containers: [...]}` return them.
+ */
+function recordsIn(value: unknown): { record: { id: string; name: string }; envelope: unknown }[] {
+  const own = recordOf(value);
+  if (own) return [{ record: own, envelope: value }];
+  if (typeof value !== 'object' || value === null) return [];
+  return Object.values(value).flatMap((v) =>
+    (Array.isArray(v) ? v : [v]).flatMap((e) => {
+      const record = recordOf(e);
+      return record ? [{ record, envelope: e }] : [];
+    }),
+  );
+}
+
 /** One step the assistant took (an operation it ran), as a line for people. */
 export function describeToolStep(step: {
   operationId: string;
@@ -213,7 +229,7 @@ export function describeToolStep(step: {
     };
   }
   if (step.outcome === 'proposed') {
-    const record = recordOf(result.proposal?.preview);
+    const record = recordsIn(result.proposal?.preview)[0]?.record;
     return {
       text: `proposed to ${operationIntent(step.operationId)}${record ? ` ${record.name}` : ''}; waits for your review`,
       tone: 'agent-ink',
@@ -221,7 +237,7 @@ export function describeToolStep(step: {
       ...(record ? { record } : {}),
     };
   }
-  const record = recordOf(result.output);
+  const record = recordsIn(result.output)[0]?.record;
   const verb = operationVerb(step.operationId);
   return {
     text: step.outcome === 'preview' ? `previewed: ${verb}` : verb,
@@ -255,11 +271,11 @@ export function waitingForYou(
     if (step.outcome === 'proposed' && typeof proposal?.id === 'string') changes.push(proposal.id);
     if (step.outcome !== 'done' || reads.has(step.operationId)) continue;
     const output = (step.result as { output?: unknown } | undefined)?.output;
-    const record = recordOf(output);
-    if (!record) continue;
-    const { status } = output as { status?: unknown };
-    drafts.delete(record.id);
-    drafts.set(record.id, status === 'draft' ? record : undefined);
+    for (const { record, envelope } of recordsIn(output)) {
+      const { status } = envelope as { status?: unknown };
+      drafts.delete(record.id);
+      drafts.set(record.id, status === 'draft' ? record : undefined);
+    }
   }
   return { drafts: [...drafts.values()].filter((d) => d !== undefined), changes };
 }

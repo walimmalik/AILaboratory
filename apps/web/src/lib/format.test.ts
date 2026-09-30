@@ -141,6 +141,30 @@ describe('waitingForYou', () => {
     });
   });
 
+  it('finds drafts an operation returns inside its output', () => {
+    expect(
+      waitingForYou([
+        done('reagents.draft_product', {
+          product: { id: 'prd_1', name: 'PRD-0001', status: 'draft' },
+          drafted: [{ id: 'prd_2', name: 'PRD-0002', status: 'draft' }],
+        }),
+      ]),
+    ).toEqual({
+      drafts: [
+        { id: 'prd_1', name: 'PRD-0001' },
+        { id: 'prd_2', name: 'PRD-0002' },
+      ],
+      changes: [],
+    });
+    expect(
+      describeToolStep({
+        operationId: 'inventory.register_containers',
+        outcome: 'done',
+        result: { output: { containers: [{ id: 'con_1', name: 'CON-0001' }] } },
+      }).record,
+    ).toEqual({ id: 'con_1', name: 'CON-0001' });
+  });
+
   it('leaves nothing when the turn only read or failed', () => {
     expect(
       waitingForYou([
