@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 for 004e-3 so far). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 and 0051 for 004e-3 so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -55,6 +55,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0048](../decisions/0048-plain-words-on-contracts.md) | Every operation contract carries plain words (`verbs.done`, `verbs.intent`) that screens read from one catalog; one value renderer names records at any depth, and kinds give fields a lab form |
 | [0049](../decisions/0049-evidence-by-item-and-checked-calculations.md) | Kinds key lists by item (SOP steps by id), each item with its own evidence and state; `record`, `template` and `memory` sources name where a value was copied from; calculator results carry a handle that `calculated` evidence must name, checked by the record service |
 | [0050](../decisions/0050-review-tiers-batch-confirm-summaries.md) | Review in tiers (needs you, to confirm, for your information) with addressees, only "needs you" in the nav; `records.confirm_many` when nothing is a guess, all or nothing; kinds summarize records, and the summary and readiness summary are stored at every write |
+| [0051](../decisions/0051-change-sets.md) | `changes.apply` runs ordered operations as one change with `$1.id` references, all or nothing; for an agent, any step that needs a person makes the whole set one proposal, confirmed as one on Review |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

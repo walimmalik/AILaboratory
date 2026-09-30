@@ -2,7 +2,7 @@ import type { Configuration, RecordEnvelope, RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
-import { actorLabel, diffRecords, formatWhen, isAgent } from '../lib/format.ts';
+import { actorLabel, diffRecords, formatWhen, isAgent, proposalTouches } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -45,8 +45,8 @@ export function RecordPage() {
   const record = useQuery(recordQuery(id));
   const history = useQuery(historyQuery(id));
   const readiness = useQuery(readinessQuery(id)).data;
-  const pending = (useQuery(pendingProposalsQuery).data ?? []).filter(
-    (p) => (p.input as { id?: unknown } | undefined)?.id === id,
+  const pending = (useQuery(pendingProposalsQuery).data ?? []).filter((p) =>
+    proposalTouches(p, id),
   );
   const me = useMe();
   const kinds = useQuery(kindsQuery).data;

@@ -54,6 +54,8 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 
 Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.
 
+**Change sets** (ADR 0051). `changes.apply {steps: [{operation, input}], reason?}` runs up to 50 operations in order on one transaction, all or nothing. `"$N.path"` string values read step N's output (`"$1.id"`). The registry's `runStep` runs a step inside the set's transaction with no ledger entry of its own, `policyFor` asks a step's policy, and `touchedBy` names what it touched, so the set's single ledger entry lists every record. For an agent, the steps are tried in a rolled-back transaction: if any step would be proposed, the whole set is one proposal, which approval applies as one. Steps' `after` work runs once the set commits (`afterStep`).
+
 ## Doors
 
 | Door | How |

@@ -162,7 +162,12 @@ export function ReviewPage() {
                       <td className="when">{formatWhen(p.proposedAt)}</td>
                       <td className="agent-ink">{actorLabel(p.proposedBy, me)}</td>
                       <td>
-                        {operationVerb(p.operationId)} <TargetName proposal={p} />
+                        {operationVerb(p.operationId)}{' '}
+                        {p.operationId === 'changes.apply' ? (
+                          `(${stepsOf(p).length} changes)`
+                        ) : (
+                          <TargetName step={stepsOf(p)[0] as Step} />
+                        )}
                       </td>
                       <td>
                         <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
@@ -344,22 +349,35 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
   );
 }
 
-function targetId(proposal: Proposal): string | undefined {
-  const id = (proposal.input as { id?: unknown })?.id;
+/** One operation a proposal would run: the whole proposal, or one step of a change set (ADR 0051). */
+interface Step {
+  operation: string;
+  input: unknown;
+  output: unknown;
+}
+
+function stepsOf(proposal: Proposal): Step[] {
+  if (proposal.operationId === 'changes.apply') {
+    const results = (proposal.preview as { results?: Step[] } | undefined)?.results;
+    return Array.isArray(results) ? results : [];
+  }
+  return [{ operation: proposal.operationId, input: proposal.input, output: proposal.preview }];
+}
+
+function targetId(input: unknown): string | undefined {
+  const id = (input as { id?: unknown })?.id;
   return typeof id === 'string' ? id : undefined;
 }
 
-function previewRecord(proposal: Proposal): RecordEnvelope | undefined {
-  const preview = proposal.preview as Partial<RecordEnvelope> | undefined;
-  return preview && typeof preview === 'object' && 'attributes' in preview
-    ? (preview as RecordEnvelope)
+function asRecord(output: unknown): RecordEnvelope | undefined {
+  return output && typeof output === 'object' && 'attributes' in output
+    ? (output as RecordEnvelope)
     : undefined;
 }
 
-function TargetName({ proposal }: { proposal: Proposal }) {
-  const id = targetId(proposal);
-  const preview = previewRecord(proposal);
-  const name = preview?.name;
+function TargetName({ step }: { step: Step }) {
+  const id = targetId(step.input);
+  const name = asRecord(step.output)?.name;
   if (id) {
     return (
       <Link to="/records/$id" params={{ id }} className="mono">
@@ -370,13 +388,45 @@ function TargetName({ proposal }: { proposal: Proposal }) {
   return <span className="mono">{name ?? 'a new record'}</span>;
 }
 
+/** What one step would change, field by field, against the record as it is now. */
+function StepChanges({ step }: { step: Step }) {
+  const id = targetId(step.input);
+  const current = useQuery({ ...recordQuery(id ?? ''), enabled: Boolean(id) });
+  const after = asRecord(step.output);
+  const changes = diffRecords(id ? current.data : undefined, after);
+  return (
+    <>
+      {changes.length > 0 && (
+        <table className="diff">
+          <caption className="sr-only">What would change</caption>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Now</th>
+              <th>After</th>
+            </tr>
+          </thead>
+          <tbody>
+            {changes.map((c) => (
+              <Change key={c.key} field={c.field} before={c.before} after={c.after} isNew={!id} />
+            ))}
+          </tbody>
+        </table>
+      )}
+      {id && current.data && after && current.data.version >= after.version && (
+        <p className="warn-ink">
+          The record has changed since this was proposed; confirming will fail.
+        </p>
+      )}
+    </>
+  );
+}
+
 function PendingProposal({ proposal }: { proposal: Proposal }) {
   const me = useMe();
   const queryClient = useQueryClient();
-  const id = targetId(proposal);
-  const current = useQuery({ ...recordQuery(id ?? ''), enabled: Boolean(id) });
-  const after = previewRecord(proposal);
-  const changes = diffRecords(id ? current.data : undefined, after);
+  const steps = stepsOf(proposal);
+  const isSet = proposal.operationId === 'changes.apply';
   const [note, setNote] = useState('');
 
   const decide = useMutation({
@@ -396,34 +446,31 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
     <article className="proposal" aria-label={`Change: ${operationIntent(proposal.operationId)}`}>
       <div className="line">
         <span className="agent-ink">{actorLabel(proposal.proposedBy, me)}</span>
-        <span>
-          wants to {operationIntent(proposal.operationId)} <TargetName proposal={proposal} />
-        </span>
+        {isSet ? (
+          <span>wants to make {steps.length} changes together, all or none</span>
+        ) : (
+          steps[0] && (
+            <span>
+              wants to {operationIntent(proposal.operationId)} <TargetName step={steps[0]} />
+            </span>
+          )
+        )}
         <span className="muted mono">{formatWhen(proposal.proposedAt)}</span>
       </div>
       {proposal.reason && <p className="reason">“{proposal.reason}”</p>}
 
-      {changes.length > 0 && (
-        <table className="diff">
-          <caption className="sr-only">What would change</caption>
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Now</th>
-              <th>After</th>
-            </tr>
-          </thead>
-          <tbody>
-            {changes.map((c) => (
-              <Change key={c.key} field={c.field} before={c.before} after={c.after} isNew={!id} />
-            ))}
-          </tbody>
-        </table>
-      )}
-      {id && current.data && after && current.data.version + 1 !== after.version && (
-        <p className="warn-ink">
-          The record has changed since this was proposed; confirming will fail.
-        </p>
+      {isSet ? (
+        <ol className="change-steps">
+          {steps.map((step, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: steps are a fixed, ordered list
+            <li key={i}>
+              {operationIntent(step.operation)} <TargetName step={step} />
+              <StepChanges step={step} />
+            </li>
+          ))}
+        </ol>
+      ) : (
+        steps[0] && <StepChanges step={steps[0]} />
       )}
 
       <div className="decide">
@@ -440,7 +487,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
           disabled={decide.isPending}
           onClick={() => decide.mutate(true)}
         >
-          Confirm change
+          {isSet ? `Confirm all ${steps.length}` : 'Confirm change'}
         </button>
         <button
           type="button"

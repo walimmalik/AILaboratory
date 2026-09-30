@@ -665,3 +665,125 @@ describe('review inbox', () => {
     );
   });
 });
+
+describe('change sets (ADR 0051)', () => {
+  it('run in order with references, as one ledger entry', async () => {
+    const result = await run<{ results: { output: RecordEnvelope }[] }>(person, 'changes.apply', {
+      steps: [
+        { operation: 'records.create', input: { kind: 'widget', label: 'Rack', attributes } },
+        {
+          operation: 'records.create',
+          input: { kind: 'widget', label: 'Tip', attributes: { ...attributes, partOf: '$1.id' } },
+        },
+      ],
+    });
+    const [rack, tip] = result.results.map((r) => r.output);
+    expect(tip?.attributes.partOf).toBe(rack?.id);
+    const entries = await ledger();
+    expect(entries.map((e) => e.operationId)).toEqual(['changes.apply']);
+    expect((entries[0] as unknown as { recordIds: string[] }).recordIds.sort()).toEqual(
+      [rack?.id, tip?.id].sort(),
+    );
+  });
+
+  it('change nothing when a step fails, and name the step', async () => {
+    const error = await refused(
+      registry.execute(person, 'changes.apply', {
+        steps: [
+          { operation: 'records.create', input: { kind: 'widget', label: 'Rack', attributes } },
+          { operation: 'records.update', input: { id: '$1.id', expectedVersion: 9, label: 'x' } },
+        ],
+      }),
+    );
+    expect(error.message).toMatch(/^Step 2 \(records.update\).*Nothing in the set was changed/);
+    const listed = await run<{ records: unknown[] }>(person, 'records.list', { kind: 'widget' });
+    expect(listed.records).toHaveLength(0);
+  });
+
+  it('refuse references to later steps and missing outputs', async () => {
+    const forward = await refused(
+      registry.execute(person, 'changes.apply', {
+        steps: [
+          { operation: 'records.get', input: { id: '$2.id' } },
+          { operation: 'records.create', input: { kind: 'widget', label: 'Rack', attributes } },
+        ],
+      }),
+    );
+    expect(forward.message).toMatch(/only use the steps before it/);
+    const missing = await refused(
+      registry.execute(person, 'changes.apply', {
+        steps: [
+          { operation: 'records.create', input: { kind: 'widget', label: 'Rack', attributes } },
+          { operation: 'records.get', input: { id: '$1.nothing' } },
+        ],
+      }),
+    );
+    expect(missing.message).toMatch(/does not have/);
+  });
+
+  it('become one proposal when any step needs a person, applied as one on approval', async () => {
+    const active = await create(person, { status: 'active' });
+    const result = await registry.execute(agent, 'changes.apply', {
+      reason: 'Put the tip in the rack',
+      steps: [
+        { operation: 'records.create', input: { kind: 'widget', label: 'Tip', attributes } },
+        {
+          operation: 'records.update',
+          input: { id: active.id, expectedVersion: 1, label: 'Rack with tip' },
+        },
+      ],
+    });
+    expect(result.status).toBe('proposed');
+    const { proposal } = result as { proposal: Proposal };
+    expect((proposal.preview as { results: unknown[] }).results).toHaveLength(2);
+    expect(
+      (await run<{ records: unknown[] }>(person, 'records.list', { kind: 'widget' })).records,
+    ).toHaveLength(1);
+
+    const approved = await run<Proposal>(person, 'proposals.approve', { id: proposal.id });
+    expect(approved.status).toBe('approved');
+    const after = await run<RecordEnvelope>(person, 'records.get', { id: active.id });
+    expect(after.label).toBe('Rack with tip');
+    expect(after.updatedBy).toEqual(agent.actor);
+    expect(
+      (await run<{ records: unknown[] }>(person, 'records.list', { kind: 'widget' })).records,
+    ).toHaveLength(2);
+  });
+
+  it('run directly for an agent when every step would', async () => {
+    const result = await registry.execute(agent, 'changes.apply', {
+      steps: [
+        { operation: 'records.create', input: { kind: 'widget', label: 'A', attributes } },
+        { operation: 'records.create', input: { kind: 'widget', label: 'B', attributes } },
+      ],
+    });
+    expect(result.status).toBe('done');
+  });
+
+  it('refuse people-only steps from an agent, and nested sets', async () => {
+    const w = await create(agent);
+    expect(
+      (
+        await refused(
+          registry.execute(agent, 'changes.apply', {
+            steps: [
+              {
+                operation: 'records.confirm_many',
+                input: { records: [{ id: w.id, expectedVersion: 1 }] },
+              },
+            ],
+          }),
+        )
+      ).code,
+    ).toBe('forbidden');
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'changes.apply', {
+            steps: [{ operation: 'changes.apply', input: { steps: [] } }],
+          }),
+        )
+      ).message,
+    ).toMatch(/cannot hold another change set/);
+  });
+});
