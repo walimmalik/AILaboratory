@@ -150,6 +150,7 @@ describe('MCP', () => {
       'experiments.calculate',
       'inventory.calculate_transfer',
       'inventory.map_plates',
+      'layouts.preview',
       'liquids.resolve_class',
       'reagents.scale_recipe',
       'sops.calculate',

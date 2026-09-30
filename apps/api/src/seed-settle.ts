@@ -18,7 +18,7 @@ export interface SettleReport {
 }
 
 /**
- * Seeding needs no approvals (ADR 0043): running the seed is the person's decision to take the
+ * Seeding needs no approvals (ADR 0044): running the seed is the person's decision to take the
  * seed lab as it is. After each loading pass this approves the seed loader's proposals and confirms
  * and activates its drafts, as the person who ran the seed, with `reason` in history. A draft with
  * a failing blocker (a labware type without its outer size) is left for Review untouched, so what

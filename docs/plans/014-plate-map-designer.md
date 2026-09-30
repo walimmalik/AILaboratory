@@ -97,5 +97,5 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **014a:** schemas, `packages/domain/platemap` with every placement strategy, operations, seed layouts from `assays.yaml`. Built (014a-1): `packages/domain/src/platemap.ts` with regions, series, replicate cells, paging with per-plate controls, the three strategies with seeds, edges, leftovers and overrides.
+- **014a:** schemas, `packages/domain/platemap` with every placement strategy, operations, seed layouts from `assays.yaml`. Built (014a-1): `packages/domain/src/platemap.ts` with regions, series, replicate cells, paging with per-plate controls, the three strategies with seeds, edges, leftovers and overrides. Built (014a-2): the layout record, `layouts.draft`, the `layouts.preview` calculator and five seed layouts (ADR 0043). Built (014a-3): the plate map record, `platemaps.draft`, `platemaps.wells`, `platemaps.override` and `platemaps.export`; `platemaps.assign`, `set_strategy` and `regenerate` are covered by `records.update`, since the wells are worked out on every read. `layouts.save_from_map` comes with the editor (014b).
 - **014b:** plate map page and editor (select and paint, drag), layout library, agent drafting, readiness checks, skill.

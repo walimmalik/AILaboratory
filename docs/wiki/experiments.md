@@ -35,6 +35,8 @@ Locked 2026-09-29, all four rounds as recommended: [014](../plans/014-plate-map-
 
 ### Plate maps (plan 014)
 
+Building: 014a placement rules, layout templates and plate maps are built ([plate-maps.md](../architecture/plate-maps.md), [ADR 0043](../decisions/0043-layout-templates.md)); the editor (014b) is next.
+
 - Every placement strategy: in order (row-wise or column-wise), randomized within a plate, balanced across plates, and edge wells left out or filled with buffer. Each stores its seed and settings so the map rebuilds exactly.
 - The lab makes its own layout templates, from scratch or by saving a plate map as a template. Seed templates come from `seed/assays.yaml`.
 - A dilution series ("10-point 3-fold from 10 µM in duplicate") is one object the map expands into wells.

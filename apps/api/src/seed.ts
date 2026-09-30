@@ -21,6 +21,8 @@ import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
+import { plateMapKinds } from './platemaps/kinds.ts';
+import { loadSeedLayouts, readSeedLayouts } from './platemaps/seed.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { loadSeedLiquidClasses, readSeedLiquidClasses } from './reagents/liquid-seed.ts';
 import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
@@ -31,7 +33,7 @@ import { sopKinds } from './sops/kinds.ts';
 import { loadSeedSops, readSeedSops } from './sops/seed.ts';
 
 /**
- * Loads the seed lab (seed/, plan 006) in one run, with no approvals (ADR 0043): labware types,
+ * Loads the seed lab (seed/, plan 006) in one run, with no approvals (ADR 0044): labware types,
  * instrument and equipment kinds and instruments, reagents and lots, liquid classes, entity kinds
  * and entities, library documents (seed/sops/own and docs/sop-library), the lab's own SOPs as
  * digital SOPs, locations, containers, samples, what the containers hold, and the demo campaigns.
@@ -98,6 +100,7 @@ for (const kind of [
   ...libraryKinds,
   ...sopKinds,
   ...campaignKinds,
+  ...plateMapKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
@@ -315,6 +318,16 @@ async function loadOnce() {
   );
   for (const line of campaigns.created) console.log(`  + ${line}`);
   for (const line of campaigns.missing) console.log(`  missing ${line}`);
+  const layouts = await loadSeedLayouts(
+    registry,
+    ctx,
+    readSeedLayouts(await seedFile('layouts.yaml')),
+    'Seed lab (plan 006), loaded by plan 014a',
+  );
+  console.log(
+    `Layout templates: ${layouts.created.length} drafted, ${layouts.existing.length} already there.`,
+  );
+  for (const line of layouts.created) console.log(`  + ${line}`);
   await settle();
 }
 
@@ -326,7 +339,7 @@ if (!person) {
 }
 const reason = 'Imported from seed (pnpm seed)';
 // Each pass loads what the seed has, then settles it: the loader's proposals are approved and its
-// drafts confirmed as the person running the seed (ADR 0043). Rooms settle in one pass, the
+// drafts confirmed as the person running the seed (ADR 0044). Rooms settle in one pass, the
 // freezers in them the next, then containers, then contents, until a pass changes nothing.
 const totals = { approved: 0, activated: 0 };
 let left: SettleReport['left'] = [];

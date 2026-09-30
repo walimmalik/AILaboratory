@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a so far). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -47,7 +47,8 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0039](../decisions/0039-designs-pin-inputs.md) | Designs pin their inputs by `{id, version}` of a confirmed version; a newer confirmed version is shown and adopted on request, never followed silently; physical state is checked live |
 | [0041](../decisions/0041-invariants-on-the-kind.md) | A record's rules live on its kind (`related`, `checks`, `createdBy`), so generic writes can't skip them; instrument rules stay data with one generic resolver |
 | [0042](../decisions/0042-inventory-write-lock.md) | Inventory writes in a lab run one at a time (a per-lab transaction lock), so simultaneous changes can't lose volume |
-| [0043](../decisions/0043-seed-loads-without-approvals.md) | The seed loads in one run with no approvals: it confirms what it wrote as the person running it, and only records with a failing blocker are left for Review |
+| [0043](../decisions/0043-layout-templates.md) | A layout template is a record in lab words that the placement rules check on every write; `layouts.preview` is the calculator for plates and wells |
+| [0044](../decisions/0044-seed-loads-without-approvals.md) | The seed loads in one run with no approvals: it confirms what it wrote as the person running it, and only records with a failing blocker are left for Review |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 
