@@ -112,6 +112,41 @@ a {
   font-weight: 600;
 }
 
+/* Filter chips that wrap (the Review page's kinds): each one a clear button, the chosen one filled. */
+.filters {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filters button {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.filters button:hover {
+  border-color: var(--accent);
+}
+.filters button .num {
+  margin-left: 6px;
+  color: var(--ink-2);
+}
+.filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.filters button[aria-pressed="true"] .num {
+  color: var(--accent);
+}
+
 .nav {
   border-right: 1px solid var(--rule);
   background: var(--panel);

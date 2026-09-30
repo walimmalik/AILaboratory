@@ -42,11 +42,11 @@ export function ReviewPage() {
     if (item.type !== 'change') continue;
     const key = groupOf(item);
     const kind = changeKind(item.proposal);
-    const label = kind ? `${kindPage(kind)?.title ?? kind}, proposed` : 'Other changes';
+    const label = kind ? `${kindPage(kind)?.title ?? kindWords(kind)}, proposed` : 'Other changes';
     groups.set(key, { label, count: (groups.get(key)?.count ?? 0) + 1 });
   }
   for (const [kind, count] of Object.entries(counts?.drafts ?? {})) {
-    groups.set(kind, { label: kindPage(kind)?.title ?? kind, count });
+    groups.set(kind, { label: kindPage(kind)?.title ?? kindWords(kind), count });
   }
   const shown = show === 'all' || !groups.has(show) ? 'all' : show;
   // A kind whose drafts didn't all fit in the first page is read on its own.
@@ -87,10 +87,10 @@ export function ReviewPage() {
         </header>
         <div className="body">
           {(groups.size > 1 || total > all.length) && (
-            <fieldset className="segmented">
+            <fieldset className="filters">
               <legend className="sr-only">Show</legend>
               <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
-                All {total}
+                All<span className="num">{total}</span>
               </button>
               {[...groups].map(([key, group]) => (
                 <button
@@ -99,7 +99,8 @@ export function ReviewPage() {
                   aria-pressed={shown === key}
                   onClick={() => setShow(key)}
                 >
-                  {group.label} {group.count}
+                  {group.label}
+                  <span className="num">{group.count}</span>
                 </button>
               ))}
             </fieldset>
@@ -170,6 +171,12 @@ export function ReviewPage() {
 }
 
 /** Drafts group by their kind; proposed changes form one group. */
+/** A kind with no library page, in words: "entity_kind" → "Entity kind". */
+function kindWords(kind: string): string {
+  const words = kind.replaceAll('_', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function groupOf(item: ReviewItem): string {
   return item.type === 'change'
     ? `changes:${changeKind(item.proposal) ?? 'other'}`
