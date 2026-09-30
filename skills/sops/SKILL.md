@@ -5,7 +5,16 @@ description: Work with digital SOPs in AILaboratory through its MCP tools; so fa
 
 # Digital SOPs in AILaboratory
 
-A digital SOP (plan 012) is a lab procedure as a structured document: materials by role, typed steps, and variables. Variables are inputs per run (samples, replicates), defaults (well volume), values read from records (a plate's dead volume) or formulas over the others. The SOP record itself comes next; formulas work now.
+A digital SOP (plan 012) is a lab procedure as a structured document: materials by role, typed steps, and variables. Variables are inputs per run (samples, replicates), defaults (well volume), values read from records (a plate's dead volume) or formulas over the others. 
+
+## Drafting an SOP
+
+- `sops.draft` with `label` and the sections: `materials` (roles like `coating_plate` with `type`, `requirements` and a `default` record id when you know it), `solutions`, `variables`, `steps`, `layout`, `timing`, `questions`, plus `purpose`, `assays` and `source: {document}` when you work from a library document.
+- Steps: `{id: "coat", action: "add", text: "…in plain lab words…", uses: ["coating_plate", "capture_ab"], parameters: [{name: "volume", variable: "well_volume"}], produces: [{role: "coated_plate", label: "Coated plate"}]}`. Use `manual` for anything the other actions don't fit; `repeat: 3` for "wash 3 times".
+- Variables: `input` for what each run chooses (samples, replicates), `default` for usual values, `record` for values read from a bound material (`readFrom: {role, field}`, with the typical value as `value`), `computed` with an `expression`.
+- Cite the passage for every step and value (`cite: [{document, passage, page, quote}]`), and put anything the source leaves unclear in `questions` with your suggestion rather than guessing. Mark your own estimates assumed in `evidence`.
+- Check `records.readiness`: open questions, broken formulas and timing that isn't a time block confirming.
+- `sops.calculate` with `{sop, inputs: [{name: "n_samples", value: "24"}]}` gives every variable for a run and where it came from.
 
 ## Formulas
 

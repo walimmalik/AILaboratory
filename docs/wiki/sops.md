@@ -15,7 +15,7 @@ Two records, two plans: the **library document** is the source as published (011
 
 ## Digital SOPs (plan 012)
 
-[Plan 012](../plans/012-digital-sops.md). An SOP as a structured, versioned design document.
+[Plan 012](../plans/012-digital-sops.md). An SOP as a structured, versioned design document. The record (`SOP-0001`, [ADR 0037](../decisions/0037-sop-record.md)) and formulas are built; see [sops.md](../architecture/sops.md).
 
 - **Sections**: overview, materials, solutions, variables, procedure, layout requirements, analysis, timing rules. Our own schema; LabOP is an import path and a benchmark reference.
 - **Steps** are typed actions from a fixed vocabulary aligned with instrument capabilities (add, transfer, serial dilute, mix, wash, incubate, shake, spin, seal, peel, read, image, wait, make solution) plus "manual". Steps group and repeat, keep the source wording, and state inputs and outputs so workflows (018) can chain SOPs.

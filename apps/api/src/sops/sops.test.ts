@@ -1,17 +1,21 @@
-import type { Actor } from '@ailab/schema';
+import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
+import { fileKinds } from '../files/kinds.ts';
+import { libraryKinds } from '../library/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { sopKinds } from './kinds.ts';
 
 let db: Db;
 let close: () => Promise<void>;
 let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
+let otherLab: RecordContext;
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -19,7 +23,15 @@ beforeEach(async () => {
   const user: Actor = { type: 'user', userId: tenant.userId };
   person = { actor: user, orgId: tenant.orgId, labId: tenant.labId };
   agent = { ...person, actor: { type: 'agent', agentName: 'Claude', onBehalfOf: tenant.userId } };
-  registry = createRegistry(db, new KindRegistry(), new ActivityBus());
+  const other = await createTenant(db, { orgName: 'Other', labName: 'Other lab', userName: 'Sam' });
+  otherLab = {
+    actor: { type: 'user', userId: other.userId },
+    orgId: other.orgId,
+    labId: other.labId,
+  };
+  const kinds = new KindRegistry();
+  for (const kind of [...fileKinds, ...libraryKinds, ...sopKinds]) kinds.register(kind);
+  registry = createRegistry(db, kinds, new ActivityBus());
 });
 afterEach(() => close());
 
@@ -97,5 +109,211 @@ describe('sops.evaluate', () => {
     await expect(run([{ name: '2bad', value: '1' }])).rejects.toMatchObject({
       code: 'invalid_input',
     });
+  });
+});
+
+async function run<T>(ctx: RecordContext, id: string, input: unknown) {
+  const result = await registry.execute(ctx, id, input);
+  if (result.status !== 'done') throw new Error(`${id} was ${result.status}`);
+  return result.output as T;
+}
+
+const q = (value: string, unit: string) => ({ value, unit });
+
+/** A short ELISA: coat, wash, read, with a diluent formula and a lot-specific concentration. */
+const elisa = {
+  label: 'IL-6 ELISA',
+  assays: ['ELISA'],
+  materials: [
+    {
+      role: 'coating_plate',
+      label: 'Coating plate',
+      type: 'labware',
+      requirements: '96-well, high binding',
+    },
+    { role: 'capture_ab', label: 'Capture antibody', type: 'reagent' },
+    {
+      role: 'reader',
+      label: 'Plate reader',
+      type: 'instrument',
+      requirements: 'Absorbance at 450 nm',
+    },
+  ],
+  solutions: [{ role: 'wash_buffer', label: 'Wash buffer', text: '0.05% Tween 20 in PBS' }],
+  variables: [
+    { name: 'n_samples', label: 'Samples', kind: 'input', value: '40', min: '1', max: '40' },
+    { name: 'replicates', label: 'Replicates', kind: 'default', value: '2' },
+    { name: 'well_volume', label: 'Well volume', kind: 'default', value: q('100', 'uL') },
+    { name: 'dead_volume', label: 'Dead volume', kind: 'default', value: q('5', 'mL') },
+    {
+      name: 'capture_conc',
+      label: 'Capture antibody working concentration',
+      kind: 'record',
+      value: q('2', 'ug/mL'),
+      readFrom: { role: 'capture_ab', field: 'workingConcentration' },
+    },
+    {
+      name: 'diluent',
+      label: 'Coating solution',
+      kind: 'computed',
+      expression: 'n_samples * replicates * well_volume + dead_volume',
+      unit: 'mL',
+    },
+  ],
+  steps: [
+    {
+      id: 'coat',
+      action: 'add',
+      title: 'Coat',
+      text: 'Add the capture antibody at its working concentration to every well; seal and leave overnight at room temperature.',
+      uses: ['coating_plate', 'capture_ab'],
+      parameters: [
+        { name: 'volume', variable: 'well_volume' },
+        { name: 'duration', text: 'overnight' },
+      ],
+      produces: [{ role: 'coated_plate', label: 'Coated plate' }],
+    },
+    {
+      id: 'wash',
+      action: 'wash',
+      text: 'Wash with 400 µL wash buffer per well.',
+      uses: ['coated_plate', 'wash_buffer'],
+      repeat: 3,
+      parameters: [{ name: 'volume', quantity: q('400', 'uL') }],
+    },
+    {
+      id: 'read',
+      action: 'read',
+      text: 'Read absorbance at 450 nm.',
+      uses: ['reader'],
+      parameters: [{ name: 'wavelength', quantity: q('450', 'nm') }],
+    },
+  ],
+  layout: [{ what: 'samples', label: 'Samples', count: 'n_samples', replicates: 'replicates' }],
+  timing: [{ step: 'read', after: 'wash', max: q('30', 'min'), source: 'vendor', enforce: true }],
+  questions: [
+    {
+      id: 'q1',
+      about: { step: 'coat' },
+      question: 'Overnight at room temperature or at 4 °C?',
+      suggestion: 'Room temperature, as the vendor sheet says',
+      status: 'open',
+    },
+  ],
+};
+
+describe('sops.draft', () => {
+  it('drafts an SOP whose readiness lists open questions and passes its formulas', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    expect(sop).toMatchObject({ kind: 'sop', name: 'SOP-0001', status: 'draft' });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    const byId = new Map(ready.checks.map((c) => [c.id, c]));
+    expect(byId.get('has_steps')?.passed).toBe(true);
+    expect(byId.get('formulas_work')?.passed).toBe(true);
+    expect(byId.get('timing_is_time')?.passed).toBe(true);
+    expect(byId.get('questions_answered')).toMatchObject({ passed: false, severity: 'blocker' });
+    expect(ready.sections.map((s) => s.id)).toEqual([
+      'overview',
+      'materials',
+      'variables',
+      'procedure',
+      'layout',
+      'analysis',
+      'timing',
+      'questions',
+    ]);
+  });
+
+  it('flags a broken formula and a window that is not a time', async () => {
+    const sop = await run<RecordEnvelope>(person, 'sops.draft', {
+      ...elisa,
+      variables: [
+        ...elisa.variables.slice(0, -1),
+        {
+          name: 'diluent',
+          label: 'Coating solution',
+          kind: 'computed',
+          expression: 'well_volume + 5 min',
+        },
+      ],
+      timing: [{ step: 'read', max: q('30', 'uL'), source: 'vendor', enforce: true }],
+      questions: [],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    const byId = new Map(ready.checks.map((c) => [c.id, c]));
+    expect(byId.get('formulas_work')).toMatchObject({
+      passed: false,
+      message: "diluent: Can't add time to volume",
+    });
+    expect(byId.get('timing_is_time')).toMatchObject({
+      passed: false,
+      message: 'Not a time: step read',
+    });
+    expect(byId.get('questions_answered')?.passed).toBe(true);
+  });
+
+  it('refuses unknown roles, variables, steps and units, and a record variable with no source', async () => {
+    const refused = (input: unknown) => registry.execute(agent, 'sops.draft', input);
+    await expect(
+      refused({ ...elisa, steps: [{ ...elisa.steps[0], uses: ['nothing'] }] }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('uses nothing, which is not a material'),
+    });
+    await expect(
+      refused({
+        ...elisa,
+        timing: [{ step: 'dry', max: q('1', 'h'), source: 'vendor', enforce: false }],
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('step dry, which is not a step') });
+    await expect(
+      refused({
+        ...elisa,
+        variables: [
+          ...elisa.variables,
+          { name: 'x', label: 'X', kind: 'default', value: q('1', 'ul') },
+        ],
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('unknown unit "ul"') });
+    await expect(
+      refused({ ...elisa, variables: [{ name: 'c', label: 'C', kind: 'record', value: '1' }] }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      refused({
+        ...elisa,
+        variables: [...elisa.variables, { name: 'n_samples', label: 'Again', kind: 'input' }],
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('The variable n_samples is named twice'),
+    });
+  });
+});
+
+describe('sops.calculate', () => {
+  it('works out the run from its inputs, saying where each value came from', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const out = await run<{ variables: Record<string, unknown>[] }>(agent, 'sops.calculate', {
+      sop: sop.id,
+      inputs: [{ name: 'n_samples', value: '10' }],
+    });
+    const byName = new Map(out.variables.map((v) => [v.name, v]));
+    expect(byName.get('n_samples')).toMatchObject({ number: '10', from: 'input' });
+    expect(byName.get('capture_conc')).toMatchObject({
+      quantity: q('2', 'ug/mL'),
+      from: 'typical',
+    });
+    expect(byName.get('diluent')).toMatchObject({ quantity: q('7', 'mL'), from: 'computed' });
+  });
+
+  it('refuses a variable it lacks, a formula given as input, and an SOP from another lab', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const calc = (ctx: RecordContext, inputs: unknown[]) =>
+      registry.execute(ctx, 'sops.calculate', { sop: sop.id, inputs });
+    await expect(calc(agent, [{ name: 'plates', value: '2' }])).rejects.toMatchObject({
+      message: 'SOP-0001 has no variable plates',
+    });
+    await expect(calc(agent, [{ name: 'diluent', value: q('1', 'mL') }])).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    await expect(calc(otherLab, [])).rejects.toMatchObject({ code: 'not_found' });
   });
 });
