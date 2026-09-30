@@ -10,6 +10,7 @@ import {
   type RecordOperation,
   type RecordStatus,
   type RecordVersion,
+  type RelatedResult,
   type SectionReview,
 } from '@ailab/schema';
 import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
@@ -83,6 +84,7 @@ export class RecordService {
   async create(ctx: RecordContext, input: CreateRecordInput): Promise<RecordEnvelope> {
     const kind = this.kinds.get(input.kind);
     const attributes = parseAttributes(kind, input.attributes);
+    const related = await this.#related(this.db, ctx, kind, attributes);
     const at = this.now();
     const evidence = nextEvidence(ctx.actor, at, undefined, attributes, {}, input.evidence);
     // A person who creates a record active confirms every section as they wrote it (ADR 0021).
@@ -102,9 +104,10 @@ export class RecordService {
           values: sectionValues(section, attributes),
         };
       }
-      const blockers = runChecks(kind.checks ?? [], attributes).filter(
-        (c) => c.severity === 'blocker' && !c.passed,
-      );
+      const blockers = [
+        ...runChecks(kind.checks ?? [], attributes),
+        ...(related.checks ?? []),
+      ].filter((c) => c.severity === 'blocker' && !c.passed);
       if (blockers.length > 0) {
         throw new RecordError(
           'not_ready',
@@ -114,7 +117,7 @@ export class RecordService {
       }
     }
     return this.db.transaction(async (tx) => {
-      const name = await allocateName(tx, ctx.labId, kind);
+      const name = await allocateName(tx, ctx.labId, kind, related.namePrefix);
       const [row] = await tx
         .insert(records)
         .values({
@@ -172,31 +175,39 @@ export class RecordService {
   }
 
   async update(ctx: RecordContext, id: string, input: UpdateRecordInput): Promise<RecordEnvelope> {
-    return this.#change(ctx, id, input.expectedVersion, 'update', input.reason, (record, kind) => {
-      if (record.status === 'archived') {
-        throw new RecordError(
-          'invalid_state',
-          `${record.name} is archived; unarchive it to edit it`,
-        );
-      }
-      const attributes =
-        input.attributes === undefined
-          ? record.attributes
-          : parseAttributes(kind, input.attributes);
-      return {
-        label: input.label ?? record.label,
-        attributes,
-        evidence: nextEvidence(
-          ctx.actor,
-          this.now(),
-          record.attributes,
+    return this.#change(
+      ctx,
+      id,
+      input.expectedVersion,
+      'update',
+      input.reason,
+      async (record, kind, tx) => {
+        if (record.status === 'archived') {
+          throw new RecordError(
+            'invalid_state',
+            `${record.name} is archived; unarchive it to edit it`,
+          );
+        }
+        const attributes =
+          input.attributes === undefined
+            ? record.attributes
+            : parseAttributes(kind, input.attributes);
+        if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
+        return {
+          label: input.label ?? record.label,
           attributes,
-          record.evidence,
-          input.evidence,
-        ),
-        reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
-      };
-    });
+          evidence: nextEvidence(
+            ctx.actor,
+            this.now(),
+            record.attributes,
+            attributes,
+            record.evidence,
+            input.evidence,
+          ),
+          reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
+        };
+      },
+    );
   }
 
   /**
@@ -215,7 +226,7 @@ export class RecordService {
       input.expectedVersion,
       'confirm_section',
       input.reason,
-      (record, kind) => {
+      async (record, kind, tx) => {
         if (record.status === 'archived') {
           throw new RecordError('invalid_state', `${record.name} is archived`);
         }
@@ -245,7 +256,8 @@ export class RecordService {
         };
         const reviews = { ...record.reviews, [section.id]: review };
         // Confirming the last section of a draft, with nothing blocking, is the final confirm too.
-        const after = readiness({ ...toEnvelope(record), reviews }, kind);
+        const related = await this.#related(tx, ctx, kind, record.attributes, record);
+        const after = readiness({ ...toEnvelope(record), reviews }, kind, related.checks);
         return record.status === 'draft' && after.ready
           ? { reviews, status: 'active' as const }
           : { reviews };
@@ -255,9 +267,10 @@ export class RecordService {
 
   /** What is confirmed, what changed, what was assumed, and which checks pass. */
   async readiness(ctx: RecordContext, id: string): Promise<Readiness> {
-    const record = toEnvelope(await findRecord(this.db, ctx, id));
-    const kind = this.kinds.get(record.kind);
-    return readiness(record, kind);
+    const row = await findRecord(this.db, ctx, id);
+    const kind = this.kinds.get(row.kind);
+    const related = await this.#related(this.db, ctx, kind, row.attributes, row, false);
+    return readiness(toEnvelope(row), kind, related.checks);
   }
 
   /** Draft → active. */
@@ -268,12 +281,13 @@ export class RecordService {
       input.expectedVersion,
       'activate',
       input.reason,
-      (record, kind) => {
+      async (record, kind, tx) => {
         if (record.status !== 'draft') {
           throw new RecordError('invalid_state', `${record.name} is ${record.status}, not a draft`);
         }
-        if (kind.sections?.length) {
-          const state = readiness(toEnvelope(record), kind);
+        if (kind.sections?.length || kind.related) {
+          const related = await this.#related(tx, ctx, kind, record.attributes, record);
+          const state = readiness(toEnvelope(record), kind, related.checks);
           if (!state.ready) {
             throw new RecordError(
               'not_ready',
@@ -340,6 +354,7 @@ export class RecordService {
         }
         const earlier = await findVersion(tx, record.id, input.version);
         const attributes = parseAttributes(kind, earlier.snapshot.attributes);
+        await this.#related(tx, ctx, kind, attributes, record);
         // Restored values keep the evidence they had in that version.
         const evidence: Record<string, FieldEvidence> = {};
         for (const field of Object.keys(attributes)) {
@@ -425,6 +440,63 @@ export class RecordService {
       .from(recordLinks)
       .where(eq(recordLinks.toId, record.id))
       .orderBy(asc(recordLinks.relation), asc(recordLinks.fromId));
+  }
+
+  /**
+   * Runs a kind's `related` rules (ADR 0029) against records in the same lab, inside the caller's
+   * transaction. Invalid attributes are refused unless `refuse` is false (reading readiness).
+   */
+  async #related(
+    db: Db,
+    ctx: RecordContext,
+    kind: KindDefinition,
+    attributes: Record<string, unknown>,
+    current?: RecordRow,
+    refuse = true,
+  ): Promise<RelatedResult> {
+    if (!kind.related) return {};
+    const result = await kind.related(attributes, {
+      get: async (id) => {
+        try {
+          return toEnvelope(await findRecord(db, ctx, id));
+        } catch (error) {
+          if (error instanceof RecordError && error.code === 'not_found') return undefined;
+          throw error;
+        }
+      },
+      list: async (listKind) => {
+        const rows = await db
+          .select()
+          .from(records)
+          .where(
+            and(
+              eq(records.labId, ctx.labId),
+              eq(records.kind, listKind),
+              inArray(records.status, ['draft', 'active']),
+            ),
+          );
+        return rows.map(toEnvelope);
+      },
+      current: current ? toEnvelope(current) : undefined,
+      reservedPrefixes: this.kinds.list().map((k) => k.namePrefix),
+    });
+    if (refuse && result.invalid?.length) {
+      throw new RecordError(
+        'invalid_attributes',
+        `Invalid ${kind.kind} attributes:\n${result.invalid.map((i) => `✖ ${i}`).join('\n')}`,
+      );
+    }
+    if (
+      result.namePrefix &&
+      result.namePrefix !== kind.namePrefix &&
+      this.kinds.list().some((k) => k.namePrefix === result.namePrefix)
+    ) {
+      throw new RecordError(
+        'invalid_attributes',
+        `The name prefix ${result.namePrefix} belongs to another kind of record`,
+      );
+    }
+    return result;
   }
 
   async #change(
@@ -551,16 +623,21 @@ function parseAttributes(kind: KindDefinition, attributes: unknown): Record<stri
   return result.data as Record<string, unknown>;
 }
 
-async function allocateName(tx: Db, labId: string, kind: KindDefinition): Promise<string> {
+async function allocateName(
+  tx: Db,
+  labId: string,
+  kind: KindDefinition,
+  prefix = kind.namePrefix,
+): Promise<string> {
   const [counter] = await tx
     .insert(nameCounters)
-    .values({ labId, prefix: kind.namePrefix, lastValue: 1 })
+    .values({ labId, prefix, lastValue: 1 })
     .onConflictDoUpdate({
       target: [nameCounters.labId, nameCounters.prefix],
       set: { lastValue: sql`${nameCounters.lastValue} + 1` },
     })
     .returning({ lastValue: nameCounters.lastValue });
-  return formatName(kind.namePrefix, required(counter).lastValue, kind.nameWidth);
+  return formatName(prefix, required(counter).lastValue, kind.nameWidth);
 }
 
 async function findRecord(

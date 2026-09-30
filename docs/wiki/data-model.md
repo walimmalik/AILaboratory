@@ -39,6 +39,7 @@ Configurable instruments (Opentrons Flex) and fixed ones (Hamilton STAR) use the
 - **History:** every change stores the full record, actor, operation and reason in `record_versions`. Restore writes a new version; history is never rewritten.
 - **Optimistic concurrency:** every change passes the version it last saw; a stale one is refused with `version_conflict`, so an agent and a person can't overwrite each other.
 - **Links:** each kind declares how to read references out of its attributes, and the service keeps `record_links` in sync. New links must target an existing, non-archived record in the same lab. "Where is this used" is one query.
+- **Related rules:** a kind may check its attributes against other records in the lab on every write and readiness read (ADR 0029), e.g. an entity against its entity kind's fields. They can refuse the write, add readiness checks, and give a new record its readable name prefix (`PLS-0001` for a plasmid).
 - **Errors** carry a `code` (`not_found`, `invalid_attributes`, `version_conflict`, `invalid_link`, `linked`, `not_ready`…) and a message written for a person or an agent to act on.
 
 ## Evidence sources

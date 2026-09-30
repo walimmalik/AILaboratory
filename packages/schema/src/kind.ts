@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import type { KindCheck, KindSection } from './design.ts';
-import type { RecordLink } from './record.ts';
+import type { CheckResult, KindCheck, KindSection } from './design.ts';
+import type { RecordEnvelope, RecordLink } from './record.ts';
 
 /**
  * Declares a record kind. Every registry (labware type, plate, plasmid, SOP…) is one kind.
@@ -27,6 +27,32 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
    * review screen leaves them out of forms, so people are asked only what is relevant.
    */
   notApplicable?: (attributes: z.infer<A>) => string[];
+  /**
+   * Rules that need other records (plan 010a, ADR 0029): an entity checked against its entity kind.
+   * Runs inside every write and readiness read, with the attributes as they will be and as they were.
+   */
+  related?: (attributes: z.infer<A>, context: RelatedContext) => Promise<RelatedResult>;
+}
+
+/** What `related` can read: records in the same lab, and the name prefixes code kinds hold. */
+export interface RelatedContext {
+  /** A record in this lab by ID, or undefined. */
+  get: (id: string) => Promise<RecordEnvelope | undefined>;
+  /** Every non-archived record of a kind in this lab. */
+  list: (kind: string) => Promise<RecordEnvelope[]>;
+  /** The record being written, when it exists already. */
+  current?: RecordEnvelope | undefined;
+  /** Name prefixes registered by kinds in code (PRD, LOT…). */
+  reservedPrefixes: string[];
+}
+
+export interface RelatedResult {
+  /** Refuses the write, each problem in words. */
+  invalid?: string[];
+  /** Readiness checks: a failing blocker stops the final confirm; warnings only show. */
+  checks?: CheckResult[];
+  /** The readable name prefix for a new record, instead of the kind's own. */
+  namePrefix?: string;
 }
 
 export function defineKind<A extends z.ZodType>(definition: KindDefinition<A>): KindDefinition<A> {

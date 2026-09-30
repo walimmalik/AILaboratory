@@ -1,6 +1,7 @@
 export * from './actor.ts';
 export * from './assistant.ts';
 export * from './design.ts';
+export * from './entities.ts';
 export * from './ids.ts';
 export * from './instruments.ts';
 export * from './json-schema.ts';
