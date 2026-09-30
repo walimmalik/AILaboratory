@@ -28,7 +28,9 @@ export interface KindPage {
     | '/campaigns'
     | '/experiments'
     | '/runs'
-    | '/sets';
+    | '/sets'
+    | '/plate-maps'
+    | '/layouts';
   /** The menu group it sits in: one per registry. */
   group: 'Experiments' | 'Library' | 'Instruments' | 'Reagents' | 'Inventory';
 }
@@ -50,6 +52,14 @@ export const libraryPages: KindPage[] = [
   },
   { kind: 'run', title: 'Runs', noun: 'run', path: '/runs', group: 'Experiments' },
   { kind: 'set', title: 'Sets', noun: 'set', path: '/sets', group: 'Experiments' },
+  {
+    kind: 'plate_map',
+    title: 'Plate maps',
+    noun: 'plate map',
+    path: '/plate-maps',
+    group: 'Experiments',
+  },
+  { kind: 'layout', title: 'Layouts', noun: 'layout', path: '/layouts', group: 'Experiments' },
   {
     kind: 'labware_type',
     title: 'Labware',

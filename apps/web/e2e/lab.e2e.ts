@@ -765,3 +765,76 @@ test('a person plans an experiment, runs it as a checklist and finishes the run'
   await checklist.getByRole('button', { name: 'Finish the run' }).click();
   await expect(checklist).toContainText('Done · 2 of 2 steps · 1 went differently');
 });
+
+test('a layout previews its plate, and a plate map shows real samples well by well with its CSV', async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  await signIn(page);
+  const layout = await confirmAll(
+    page,
+    (
+      await asAgent(request, 'layouts.draft', {
+        label: `ELISA 96 ${stamp}`,
+        wells: 96,
+        subjectRole: 'sample',
+        subjectRegion: ['columns 3-12'],
+        replicates: 2,
+        fixed: [
+          {
+            id: 'standard',
+            role: 'standard',
+            label: 'IL-6 standard',
+            region: ['A1:G2'],
+            series: { top: { value: '600', unit: 'pg/mL' }, factor: '2', points: 7 },
+            replicates: 2,
+          },
+          { id: 'blank', role: 'blank', label: 'Blank', region: ['H1:H2'] },
+        ],
+      })
+    ).output,
+  );
+  await page.goto(`/records/${layout.id}`);
+  const plate = page.getByRole('region', { name: 'Plate', exact: true });
+  await expect(plate).toContainText('40 samples per plate');
+  await plate.getByRole('spinbutton', { name: 'Number of samples' }).fill('41');
+  await expect(plate).toContainText('2 plates');
+
+  const kind = (
+    await asAgent(request, 'entities.draft_kind', {
+      label: `Supernatant ${stamp}`,
+      attributes: {
+        base: 'chemical',
+        prefix: `S${String(stamp)
+          .slice(-4)
+          .replace(/\d/g, (d) => 'ABCDEFGHIJ'[Number(d)] ?? 'A')}`,
+        fields: [],
+      },
+    })
+  ).output;
+  const donors = [];
+  for (const n of [1, 2, 3])
+    donors.push(
+      (await asAgent(request, 'entities.draft', { label: `Donor ${n}`, entityKind: kind.id }))
+        .output,
+    );
+  const map = (
+    await asAgent(request, 'platemaps.draft', {
+      label: `IL-6, three donors ${stamp}`,
+      layout: layout.id,
+      subjects: donors.map((d) => ({ record: d.id })),
+    })
+  ).output;
+
+  await page.goto(`/records/${map.id}`);
+  const plates = page.getByRole('region', { name: 'Plates', exact: true });
+  await expect(plates).toContainText('3 placed on 1 plate');
+  await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Standard');
+  await plates.getByRole('button', { name: /^A3: .*Donor 1/ }).click();
+  await expect(plates.getByRole('link', { name: /Donor 1/ })).toBeVisible();
+  await expect(
+    plates.getByRole('button', { name: /^A1: IL-6 standard, standard, point 1 of 7, 600 pg\/mL/ }),
+  ).toBeVisible();
+  await expect(plates.getByText(`${map.name}.csv`)).toBeVisible();
+});
