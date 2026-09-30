@@ -16,7 +16,7 @@ import { useMe } from '../session.ts';
 import { DocumentBlocks } from './Documents.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
-import { ContainerBlocks, EntityBlocks } from './Inventory.tsx';
+import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
@@ -91,6 +91,10 @@ export function RecordPage() {
             : `Agents have proposed ${pending.length} changes`}{' '}
           to this record. <Link to="/review">Review it</Link>
         </p>
+      )}
+
+      {(r.kind === 'lot' || r.kind === 'sample' || r.kind === 'product') && (
+        <WhereIsBlock record={r} />
       )}
 
       {readiness && readiness.sections.length > 0 ? (

@@ -1,4 +1,4 @@
-import { formatQuantity } from '@ailab/domain';
+import { add, compare, convert, formatQuantity } from '@ailab/domain';
 import {
   type ContainerAttributes,
   type EntityAttributes,
@@ -7,7 +7,9 @@ import {
   inventoryHistory,
   inventoryListPlace,
   inventoryWells,
+  inventoryWhereIs,
   type LocationAttributes,
+  type Quantity,
   type RecordEnvelope,
   type SampleAttributes,
   type WellState,
@@ -21,6 +23,7 @@ import {
   fullestWell,
   gridOf,
   heatLevel,
+  pathWords,
   placeWords,
   ruleLimit,
   ruleSources,
@@ -616,4 +619,107 @@ export function EntityBlocks({ record }: { record: RecordEnvelope }) {
       </div>
     </section>
   );
+}
+
+/**
+ * Where a lot, sample or product is (review finding: "find a lot and see where it is"): each
+ * container holding it, where that container is, and how much of it is there.
+ */
+export function WhereIsBlock({ record }: { record: RecordEnvelope }) {
+  const where = useQuery({
+    queryKey: ['inventory', 'where', record.id],
+    queryFn: () => api.run(inventoryWhereIs, { of: record.id }),
+    retry: false,
+  });
+  const containers = where.data?.containers ?? [];
+  // A product that nothing holds yet says nothing; a lot or sample says so.
+  if (record.kind === 'product' && containers.length === 0) return null;
+  return (
+    <section className="block" aria-label="Where it is">
+      <header>
+        <h2>Where it is</h2>
+        <span className="state muted num">
+          {containers.length === 1 ? '1 container' : `${containers.length} containers`}
+        </span>
+      </header>
+      <div className="body">
+        {where.error && <p className="error-text">{where.error.message}</p>}
+        {where.data && containers.length === 0 && (
+          <p className="empty">Not in any container the lab has registered.</p>
+        )}
+        {containers.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Container</th>
+                  <th>Where</th>
+                  <th>How much</th>
+                </tr>
+              </thead>
+              <tbody>
+                {containers.map(({ container, path, wells }) => (
+                  <tr key={container.id}>
+                    <td>
+                      <Link to="/records/$id" params={{ id: container.id }} className="mono">
+                        {container.name}
+                      </Link>{' '}
+                      {container.label}
+                    </td>
+                    <td>{pathWords(path.slice(0, -1)) || 'Place not known'}</td>
+                    <td className="num">{amountWords(wells)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** A volume in the largest unit that keeps it at 1 or more: 15350.4 µL reads as 15.3504 mL. */
+function readableVolume(q: Quantity): Quantity {
+  for (const unit of ['L', 'mL', 'uL', 'nL']) {
+    const v = convert(q, unit);
+    if (Number(v.value) >= 1) return v;
+  }
+  return q;
+}
+
+type WhereWell = {
+  well: string;
+  volume: WellState['volume'];
+  component: WellState['components'][number];
+};
+
+/** "200 µL at 1 mM" for a tube; "384 wells, 25 nL to 40 µL, 15.4 mL in all, at 100 % v/v" for a plate. */
+function amountWords(wells: readonly WhereWell[]): string {
+  const strengths = [
+    ...new Set(
+      wells.map((w) => {
+        const q = w.component.concentration ?? w.component.amount;
+        return q ? formatQuantity(q) : undefined;
+      }),
+    ),
+  ].filter((q): q is string => q !== undefined);
+  const at = strengths.length === 1 ? ` at ${strengths[0]}` : '';
+  const known = wells.flatMap((w) => (w.volume === 'unknown' ? [] : [w.volume]));
+  if (wells.length === 1) {
+    const [only] = wells as [WhereWell];
+    return `${only.volume === 'unknown' ? 'volume unknown' : formatQuantity(only.volume)}${at}`;
+  }
+  const count = `${wells.length} wells`;
+  if (known.length === 0) return `${count}${at}`;
+  const sorted = [...known].sort(compare);
+  const least = sorted[0] as (typeof sorted)[number];
+  const most = sorted[sorted.length - 1] as (typeof sorted)[number];
+  const range =
+    compare(least, most) === 0
+      ? `${formatQuantity(least)} each`
+      : `${formatQuantity(least)} to ${formatQuantity(most)}`;
+  // Summed in the unit of the fullest well, so a plate reads in µL rather than millions of nL.
+  const total = known.reduce<Quantity>((sum, q) => add(sum, q), { value: '0', unit: most.unit });
+  return `${count}, ${range}, ${formatQuantity(readableVolume(total))} in all${at}`;
 }

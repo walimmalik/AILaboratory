@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WellState } from '../contents.ts';
+import { Component, SampleId, WellState } from '../contents.ts';
 import { recordIdOf } from '../ids.ts';
 import {
   ContainerAttributes,
@@ -11,6 +11,7 @@ import {
 } from '../inventory.ts';
 import { LiquidVolume } from '../labware.ts';
 import { defineContract } from '../operation.ts';
+import { LotId, ProductId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
 
 const Reason = z.string().min(1).optional().describe('Why; kept in history');
@@ -127,5 +128,32 @@ export const inventoryCalculateTransfer = defineContract({
     source: WellState,
     destination: WellState,
     explanation: z.string(),
+  }),
+});
+
+export const inventoryWhereIs = defineContract({
+  id: 'inventory.where_is',
+  summary:
+    'Where a lot, a sample or a product is: every container holding it (a product: any of its lots), where each container is, and the wells with their volume and concentration. Discarded containers are left out',
+  effect: 'read',
+  input: z.strictObject({
+    of: z
+      .union([LotId, SampleId, ProductId])
+      .describe('A lot (lot_), sample (smp_) or product (prd_)'),
+  }),
+  output: z.object({
+    containers: z.array(
+      z.object({
+        container: RecordEnvelope,
+        path: PlacePath.describe('Where the container is, from the room down to the container'),
+        wells: z.array(
+          z.object({
+            well: z.string(),
+            volume: WellState.shape.volume,
+            component: Component.describe('The lot or sample asked about, as it is in this well'),
+          }),
+        ),
+      }),
+    ),
   }),
 });

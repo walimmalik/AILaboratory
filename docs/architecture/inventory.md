@@ -123,6 +123,7 @@ Under **Inventory** in the Library (`apps/web/src/pages/Inventory.tsx`, helpers 
 | `inventory.stamp` | Plate to plate, the same volume per well, by a mapping | proposed |
 | `inventory.lineage` | Where a well's liquid came from, back through fills, transfers and stamps | read |
 | `inventory.wells` | What a container's wells hold | read |
+| `inventory.where_is` | Every container holding a lot, sample or product (any of its lots), with its place path and the wells; shown as "Where it is" on lot, sample and product pages | read |
 | `inventory.effective_rules` | The handling rules and storage temperature a container inherits from its contents, strictest winning, with sources | read |
 | `inventory.history` | A container's or well's ledger, newest first | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |

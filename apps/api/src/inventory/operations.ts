@@ -6,13 +6,16 @@ import {
   inventoryMove,
   inventoryRegisterContainers,
   inventoryScan,
+  inventoryWhereIs,
   type LocationAttributes,
   locationsCreate,
   type PlacePath,
   type RecordEnvelope,
   type WellState,
 } from '@ailab/schema';
+import { and, eq, ne, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
+import { records, wellContents } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
@@ -60,6 +63,14 @@ async function pathOf(
     current = next ? await find(service, ctx, next) : undefined;
   }
   return path;
+}
+
+/** A1, A2 … A10, B1: row letters, then the column as a number. */
+function wellOrder(a: string, b: string): number {
+  const split = (w: string) => /^([A-Za-z]+)(\d+)$/.exec(w) ?? [w, w, '0'];
+  const [, ra = '', ca = '0'] = split(a);
+  const [, rb = '', cb = '0'] = split(b);
+  return ra.length - rb.length || ra.localeCompare(rb) || Number(ca) - Number(cb);
 }
 
 /** "plt000345", "PLT-345" → "PLT-000345" style candidates for a readable name. */
@@ -231,6 +242,70 @@ export const inventoryOperations = [
           }),
         ),
       };
+    },
+  }),
+  implement(inventoryWhereIs, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      // A product is wherever any of its lots is.
+      const sources = input.of.startsWith('prd_')
+        ? (
+            await deps.db
+              .select({ id: records.id })
+              .from(records)
+              .where(
+                and(
+                  eq(records.labId, ctx.labId),
+                  eq(records.kind, 'lot'),
+                  sql`${records.attributes}->>'product' = ${input.of}`,
+                ),
+              )
+          ).map((r) => r.id)
+        : [input.of];
+      if (sources.length === 0) return { containers: [] };
+      const rows = await deps.db
+        .select({
+          containerId: wellContents.containerId,
+          well: wellContents.well,
+          state: wellContents.state,
+        })
+        .from(wellContents)
+        .innerJoin(records, eq(records.id, wellContents.containerId))
+        .where(
+          and(
+            eq(wellContents.labId, ctx.labId),
+            ne(records.status, 'archived'),
+            sql`coalesce(${records.attributes}->>'status', '') <> 'discarded'`,
+            or(
+              ...sources.map(
+                (source) =>
+                  sql`${wellContents.state}->'components' @> ${JSON.stringify([{ source }])}::jsonb`,
+              ),
+            ),
+          ),
+        );
+      const wanted = new Set(sources);
+      const byContainer = new Map<string, typeof rows>();
+      for (const row of rows) {
+        byContainer.set(row.containerId, [...(byContainer.get(row.containerId) ?? []), row]);
+      }
+      const containers = [];
+      for (const [id, wells] of byContainer) {
+        const container = await service.get(ctx, id);
+        containers.push({
+          container,
+          path: await pathOf(service, ctx, container),
+          wells: wells
+            .sort((a, b) => wellOrder(a.well, b.well))
+            .flatMap(({ well, state }) =>
+              state.components
+                .filter((c) => wanted.has(c.source))
+                .map((component) => ({ well, volume: state.volume, component })),
+            ),
+        });
+      }
+      containers.sort((a, b) => a.container.name.localeCompare(b.container.name));
+      return { containers };
     },
   }),
 ];
