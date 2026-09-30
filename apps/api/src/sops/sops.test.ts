@@ -1,5 +1,7 @@
 import type { Actor, Converted, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Assistant } from '../assistant/assistant.ts';
+import type { ChatModel, ModelRequest, ModelTurn } from '../assistant/model.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
@@ -20,6 +22,7 @@ let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
 let otherLab: RecordContext;
+let kinds: KindRegistry;
 
 /** One section per "# " heading, one passage per paragraph. */
 const converter: Converter = {
@@ -52,7 +55,7 @@ beforeEach(async () => {
     orgId: other.orgId,
     labId: other.labId,
   };
-  const kinds = new KindRegistry();
+  kinds = new KindRegistry();
   for (const kind of [...labwareKinds, ...reagentKinds, ...fileKinds, ...libraryKinds, ...sopKinds])
     kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
@@ -643,5 +646,175 @@ describe('sops.check_citations', () => {
     );
     expect(checked.citations[1]?.foundIn).toBeDefined();
     expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
+  });
+});
+
+/** A reviewer that plays back one turn per call, and keeps what it was sent. */
+class PlaybackModel implements ChatModel {
+  readonly provider = 'test';
+  readonly model = 'reviewer';
+  readonly requests: ModelRequest[] = [];
+  constructor(readonly turns: (ModelTurn | Error)[]) {}
+  async complete(request: ModelRequest): Promise<ModelTurn> {
+    this.requests.push(structuredClone(request));
+    const turn = this.turns.shift() ?? { text: 'Nothing more.', toolCalls: [], stop: 'end' };
+    if (turn instanceof Error) throw turn;
+    return turn;
+  }
+}
+
+const call = (name: string, input: Record<string, unknown>, id = name): ModelTurn => ({
+  text: '',
+  toolCalls: [{ id, name, input }],
+  stop: 'tool_use',
+});
+
+function withReviewer(model: ChatModel | undefined) {
+  return createRegistry(
+    db,
+    kinds,
+    new ActivityBus(),
+    new Assistant(model ? { model, agentName: 'Test' } : { reason: 'No model' }),
+    { files: new MemoryFileStore(), converter },
+  );
+}
+
+describe('sops.review', () => {
+  it('fixes what the source settles, asks where it is unclear, keeps each round, and stops when clean', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'elisa.md',
+      mediaType: 'text/markdown',
+      text: '# Washing\nWash 3 times with 300 uL wash buffer per well.\n\n# Reading\nRead at 450 nm within 30 minutes.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Vendor ELISA sheet',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    await run(person, 'library.parse', { document: doc.id });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      source: { document: doc.id },
+    });
+    const model = new PlaybackModel([
+      {
+        text: 'Checking the wash.',
+        toolCalls: [
+          {
+            id: 'a',
+            name: 'sop_fix',
+            input: {
+              path: '/steps/1/parameters/0/quantity',
+              value: q('300', 'uL'),
+              reason: 'The source says 300 uL per wash',
+              cite: { document: doc.id, quote: 'Wash 3 times with 300 uL wash buffer per well.' },
+            },
+          },
+          {
+            id: 'b',
+            name: 'sop_fix',
+            input: { path: '/questions/0/status', value: 'answered', reason: 'Settled' },
+          },
+          {
+            id: 'c',
+            name: 'sop_fix',
+            input: { path: '/steps/1/uses/0', value: 'nothing', reason: 'Try a bad role' },
+          },
+        ],
+        stop: 'tool_use',
+      },
+      call('sop_ask', {
+        question: 'Read within 30 minutes of the stop solution or of the last wash?',
+        suggestion: 'Of the stop solution',
+        about: { step: 'read' },
+      }),
+      call('sop_finish', { summary: 'Fixed the wash volume; asked about the read window.' }),
+      // Round 2: nothing more to change.
+      { text: 'All good.', toolCalls: [], stop: 'end' },
+    ]);
+    const reviewing = withReviewer(model);
+    const result = await reviewing.execute(agent, 'sops.review', {
+      sop: sop.id,
+      expectedVersion: sop.version,
+    });
+    expect(result.status).toBe('done');
+    const out = (result as { output: unknown }).output as {
+      sop: RecordEnvelope;
+      rounds: {
+        round: number;
+        findings: { type: string; path: string; before?: unknown }[];
+        refused: { problem: string }[];
+        toVersion?: number;
+        summary?: string;
+      }[];
+      stopped: string;
+    };
+    expect(out.stopped).toBe('clean');
+    expect(out.rounds).toHaveLength(2);
+    const [first, second] = out.rounds;
+    expect(first?.findings.map((f) => [f.type, f.path])).toEqual([
+      ['fix', '/steps/1/parameters/0/quantity'],
+      ['question', '/questions/1'],
+    ]);
+    expect(first?.findings[0]?.before).toEqual(q('400', 'uL'));
+    expect(first?.refused.map((r) => r.problem)).toEqual([
+      expect.stringContaining('sop_ask'),
+      expect.stringContaining('uses nothing'),
+    ]);
+    expect(first?.summary).toContain('wash volume');
+    expect(second?.findings).toEqual([]);
+    expect(second?.toVersion).toBeUndefined();
+    expect(model.requests[0]?.messages[0]).toMatchObject({
+      role: 'user',
+      text: expect.stringContaining('Wash 3 times with 300 uL'),
+    });
+
+    const a = out.sop.attributes as typeof elisa;
+    expect(a.steps[1]?.parameters[0]).toEqual({ name: 'volume', quantity: q('300', 'uL') });
+    expect(out.sop.version).toBe(sop.version + 1);
+    expect(out.sop.evidence?.steps).toMatchObject({
+      source: 'stated',
+      by: { type: 'agent', agentName: 'Test (reviewer)' },
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.message).toContain(
+      'stop solution',
+    );
+    const kept = await run<{ rounds: unknown[] }>(person, 'sops.reviews', { sop: sop.id });
+    expect(kept.rounds).toEqual(out.rounds);
+    await expect(run(otherLab, 'sops.reviews', { sop: sop.id })).rejects.toMatchObject({
+      code: 'not_found',
+    });
+  });
+
+  it('refuses without a model or on a stale version, and reports a failed model call', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    await expect(
+      withReviewer(undefined).execute(person, 'sops.review', { sop: sop.id, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    await expect(
+      withReviewer(new PlaybackModel([])).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: 7,
+      }),
+    ).rejects.toMatchObject({ code: 'version_conflict' });
+    await expect(
+      withReviewer(new PlaybackModel([])).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: 1,
+        rounds: 9,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    const failed = await withReviewer(new PlaybackModel([new Error('timed out')])).execute(
+      person,
+      'sops.review',
+      { sop: sop.id, expectedVersion: 1 },
+    );
+    expect((failed as { output: unknown }).output).toMatchObject({
+      stopped: 'failed',
+      problem: expect.stringContaining('timed out'),
+      rounds: [],
+    });
   });
 });

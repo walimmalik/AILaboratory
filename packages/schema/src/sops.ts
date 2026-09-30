@@ -245,3 +245,34 @@ export const SopAttributes = z.strictObject({
   notes: z.string().min(1).optional(),
 });
 export type SopAttributes = z.infer<typeof SopAttributes>;
+
+/**
+ * One change the reviewer made (G11): a fix to a value the source settles, or a question where it
+ * doesn't. `path` points into the SOP's attributes, e.g. `/steps/2/parameters/0/quantity`.
+ */
+export const ReviewFinding = z.object({
+  type: z.enum(['fix', 'question']),
+  path: z.string().describe('Where in the SOP, as a JSON pointer into its attributes'),
+  before: z.unknown().optional().describe('The value before the fix; absent when it added one'),
+  after: z.unknown().optional().describe('The value after the fix, or the question asked'),
+  reason: z.string().min(1).describe('One line: why, e.g. "step 3 says 300 uL"'),
+  cite: Citation.optional().describe('The passage the fix relied on'),
+});
+export type ReviewFinding = z.infer<typeof ReviewFinding>;
+
+/** One round of the AI review cycle, kept with the SOP so a person can see what the reviewer caught. */
+export const SopReviewRound = z.object({
+  id: z.string(),
+  sop: SopId,
+  round: z.number().int().positive(),
+  model: z.string().describe('The reviewer model, e.g. openrouter/deepseek/deepseek-chat'),
+  fromVersion: z.number().int().positive(),
+  toVersion: z.number().int().positive().optional().describe('Absent when it changed nothing'),
+  findings: z.array(ReviewFinding),
+  refused: z
+    .array(z.object({ tool: z.string(), problem: z.string() }))
+    .describe('Changes the reviewer tried that were refused, and why'),
+  summary: z.string().optional().describe("The reviewer's own summary"),
+  at: z.iso.datetime(),
+});
+export type SopReviewRound = z.infer<typeof SopReviewRound>;

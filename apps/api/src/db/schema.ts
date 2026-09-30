@@ -9,6 +9,7 @@ import type {
   RecordEnvelope,
   RecordOperation,
   RecordStatus,
+  ReviewFinding,
   SectionReview,
   WellRef,
   WellState,
@@ -455,4 +456,31 @@ export const libraryMentions = pgTable(
       sql`${t.status} in ('proposed', 'confirmed', 'rejected')`,
     ),
   ],
+);
+
+/** Rounds of the SOP review cycle (plan 012c, ADR 0038), owned by the SOP module. */
+export const sopReviews = pgTable(
+  'sop_reviews',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    sopId: text('sop_id')
+      .notNull()
+      .references(() => records.id),
+    round: integer('round').notNull(),
+    model: text('model').notNull(),
+    fromVersion: integer('from_version').notNull(),
+    toVersion: integer('to_version'),
+    findings: jsonb('findings').$type<ReviewFinding[]>().notNull(),
+    refused: jsonb('refused').$type<{ tool: string; problem: string }[]>().notNull(),
+    summary: text('summary'),
+    by: jsonb('by').$type<Actor>().notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('sop_reviews_sop_idx').on(t.labId, t.sopId)],
 );

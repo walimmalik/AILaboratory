@@ -4,7 +4,7 @@ import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
-import { SopAttributes, SopId, SopName } from '../sops.ts';
+import { SopAttributes, SopId, SopName, SopReviewRound } from '../sops.ts';
 
 /** A variable name in a digital SOP formula: letters, digits and _, dotted for values read from records. */
 export const VariableName = z
@@ -177,4 +177,41 @@ export const sopsCheckCitations = defineContract({
     matches: z.number().int(),
     problems: z.number().int().describe('Citations not found or pointing at the wrong passage'),
   }),
+});
+
+export const sopsReview = defineContract({
+  id: 'sops.review',
+  summary:
+    'Run the AI review cycle on a draft SOP: a reviewer model checks every step and value against its cited passages and readiness checks, fixes what the source settles (each fix a tracked change with its reason and passage) and asks an open question where the source is unclear. Stops when a round finds nothing or after `rounds`. Never confirms anything; a person still does',
+  effect: 'write',
+  input: z.strictObject({
+    sop: SopId,
+    expectedVersion: z.number().int().positive(),
+    rounds: z
+      .number()
+      .int()
+      .min(1)
+      .max(3)
+      .optional()
+      .describe('At most this many rounds; default 2'),
+    reason: Reason,
+  }),
+  output: z.object({
+    sop: RecordEnvelope,
+    rounds: z.array(SopReviewRound),
+    stopped: z
+      .enum(['clean', 'rounds', 'failed'])
+      .describe(
+        'clean: the last round found nothing; rounds: the limit was reached; failed: the model call failed',
+      ),
+    problem: z.string().optional().describe('Why it failed, in words'),
+  }),
+});
+
+export const sopsReviews = defineContract({
+  id: 'sops.reviews',
+  summary: "The AI review rounds kept with an SOP: each round's fixes and questions, oldest first",
+  effect: 'read',
+  input: z.strictObject({ sop: SopId }),
+  output: z.object({ rounds: z.array(SopReviewRound) }),
 });

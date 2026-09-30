@@ -12,6 +12,8 @@ Plan: [012](../plans/012-digital-sops.md). A lab SOP as a structured, versioned 
 | Operation contracts | `packages/schema/src/operations/sops.ts` |
 | Operations | `apps/api/src/sops/operations.ts` |
 | Binding roles and reading record values | `apps/api/src/sops/resolve.ts` |
+| Citation checks | `apps/api/src/sops/citations.ts` |
+| Review cycle, and its table `sop_reviews` | `apps/api/src/sops/review.ts` |
 | Seed loader for `seed/sops/own/` | `apps/api/src/sops/seed.ts`, run by `pnpm --filter @ailab/api seed` |
 | Agent skill | `skills/sops/SKILL.md`, and a row in `skills/calculators/SKILL.md` |
 
@@ -36,6 +38,8 @@ Writes are refused when names repeat or a step, parameter, layout, timing rule o
 | `sops.calculate` | Works out an SOP's variables for a run (calculator) | read |
 | `sops.answer_question` | Answers an open question or accepts its suggestion | people only |
 | `sops.check_citations` | Checks each cited quote against its library document | read |
+| `sops.review` | Runs the AI review cycle on a draft | direct |
+| `sops.reviews` | Lists the review rounds kept with an SOP | read |
 
 ## Binding roles and reading values (012b)
 
@@ -51,10 +55,14 @@ An open question (G6) blocks confirming until a person settles it with `sops.ans
 
 `sops.check_citations` reads each cited document's passages through `library.read` and looks for each quote, ignoring spacing and case: `matches` (in the cited passage, or anywhere when no passage is named), `found_elsewhere` (in another passage, named in `foundIn`), `not_found`, or `unparsed` (the document has no text yet). It is how a digitizer or reviewer checks its own quotes before a person reads the draft. `library.read` takes `passages` (ids) to read cited passages back.
 
+## The review cycle (012c, ADR 0038)
+
+`sops.review` has the assistant's model review a draft in rounds (default 2). The reviewer sees the SOP, the failing readiness checks, the citation problems and the source's passages. It changes the draft only through tools: `sop_fix` (a JSON pointer, a value or `remove`, a reason, a passage), `sop_ask` (an open question with a suggestion) and `sop_finish`. A change is kept only if the SOP stays valid and its references hold; refused changes go back to the model and are kept with the round. Each round's changes land as one record update by "<agent> (reviewer)", with evidence `stated` for cited fixes and `assumed` otherwise. The round (model, versions, findings with before and after, refused changes, summary) is stored in `sop_reviews` and listed by `sops.reviews`. A round with no findings ends the cycle. Code: `apps/api/src/sops/review.ts`, with the citation helpers in `citations.ts`.
+
 ## The lab's own SOPs (012a)
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
 
 ## Not yet
 
-Dead volume per pipetting instrument kind (007 L4) as a field to read; the AI review loop and benchmark (rest of 012c); the SOP page (012d).
+Dead volume per pipetting instrument kind (007 L4) as a field to read; the benchmark (rest of 012c); a separate reviewer model setting; the SOP page (012d).
