@@ -52,6 +52,26 @@ export function ReviewBlocks({
     setScrollTo(section);
   };
   const titles = Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]));
+  // A confirmed active record leads with its content (the drawing, the bench view, the deck).
+  // Readiness and the sections fold into one block below it, one line each, opened on demand.
+  const settled =
+    record.status === 'active' &&
+    readiness.ready &&
+    readiness.checks.every((c) => c.passed || c.severity !== 'blocker');
+  if (settled && !editing) {
+    return (
+      <>
+        {aside}
+        <SettledDetails
+          record={record}
+          readiness={readiness}
+          titles={titles}
+          renderValue={renderValue}
+          onEdit={fix}
+        />
+      </>
+    );
+  }
   return (
     <>
       <ReadinessBlock record={record} readiness={readiness} titles={titles} onFix={fix} />
@@ -179,6 +199,123 @@ function ReadinessBlock({
     </section>
   );
 }
+
+/**
+ * A settled record's readiness and sections as one block: a line each, saying who confirmed it and
+ * how many of its fields hold a value, opened in place. Editing a section opens the full review.
+ */
+function SettledDetails({
+  record,
+  readiness,
+  titles,
+  renderValue,
+  onEdit,
+}: {
+  record: RecordEnvelope;
+  readiness: Readiness;
+  titles: Record<string, string>;
+  renderValue: (value: unknown) => ReactNode;
+  onEdit: (section: string) => void;
+}) {
+  const me = useMe();
+  const [open, setOpen] = useState<string>();
+  const toggle = (id: string) => setOpen(open === id ? undefined : id);
+  const warnings = readiness.checks.filter((c) => !c.passed).length;
+  const passing = readiness.checks.length - warnings;
+  return (
+    <section className="block" aria-label="Details">
+      <header>
+        <h2>Details</h2>
+        <span className="state ok-ink">✓ confirmed</span>
+      </header>
+      <div className="body">
+        <ul className="settled">
+          {readiness.checks.length > 0 && (
+            <li>
+              <button
+                type="button"
+                className="settled-line"
+                aria-expanded={open === 'readiness'}
+                onClick={() => toggle('readiness')}
+              >
+                <b>Checks</b>
+                <span className="muted">
+                  {passing} {passing === 1 ? 'check passes' : 'checks pass'}
+                  {warnings > 0 && (
+                    <span className="warn-ink">
+                      {' '}
+                      · {warnings} {warnings === 1 ? 'warning' : 'warnings'}
+                    </span>
+                  )}
+                </span>
+              </button>
+              {open === 'readiness' && (
+                <Checks
+                  checks={readiness.checks}
+                  titles={titles}
+                  onFix={onEdit}
+                  target={{ id: record.id, version: readiness.version }}
+                />
+              )}
+            </li>
+          )}
+          {readiness.sections.map((section) => {
+            const count = filled(section);
+            return (
+              <li key={section.id} id={`section-${section.id}`}>
+                <button
+                  type="button"
+                  className="settled-line"
+                  aria-expanded={open === section.id}
+                  onClick={() => toggle(section.id)}
+                >
+                  <b>{section.title}</b>
+                  <span className="muted">
+                    {count === 0 ? 'empty' : `${count} of ${section.fields.length} filled`}
+                    {section.review &&
+                      ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`}
+                  </span>
+                </button>
+                {open === section.id && (
+                  <>
+                    <SectionValues
+                      section={section}
+                      me={me}
+                      renderValue={renderValue}
+                      notApplicable={readiness.notApplicable}
+                      hideEmpty
+                    />
+                    {record.status !== 'archived' && (
+                      <div className="actions">
+                        <button type="button" className="btn" onClick={() => onEdit(section.id)}>
+                          Edit {section.title.toLowerCase()}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <details className="tech">
+          <summary>technical details</summary>
+          <pre className="json">{JSON.stringify(record, null, 2)}</pre>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+/** How many of a section's fields hold a value. */
+const filled = (section: ReadinessSection) =>
+  section.fields.filter((f) => !isEmpty(f.value)).length;
+
+const isEmpty = (value: unknown) =>
+  value === undefined ||
+  value === null ||
+  value === '' ||
+  (Array.isArray(value) && value.length === 0);
 
 const rank = (c: CheckResult) => (c.passed ? 2 : c.severity === 'blocker' ? 0 : 1);
 
@@ -402,18 +539,24 @@ function SectionValues({
   me,
   renderValue,
   notApplicable,
+  hideEmpty = false,
 }: {
   section: ReadinessSection;
   me: Me | undefined;
   renderValue: (value: unknown) => ReactNode;
   notApplicable: string[];
+  /** Leaves out fields with no value, for a confirmed record read rather than reviewed. */
+  hideEmpty?: boolean;
 }) {
+  const [showEmpty, setShowEmpty] = useState(false);
+  const emptyCount = hideEmpty ? section.fields.filter((f) => isEmpty(f.value)).length : 0;
   return (
     <div className="table-wrap">
       <table className="review-fields">
         <tbody>
           {section.fields
             .filter((f) => !(notApplicable.includes(f.field) && f.value === undefined))
+            .filter((f) => !hideEmpty || showEmpty || !isEmpty(f.value))
             .map((f) => (
               <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
                 <td className="name">{fieldLabel(f.field)}</td>
@@ -438,6 +581,11 @@ function SectionValues({
             ))}
         </tbody>
       </table>
+      {emptyCount > 0 && (
+        <button type="button" className="link-btn" onClick={() => setShowEmpty(!showEmpty)}>
+          {showEmpty ? 'hide empty fields' : `show ${emptyCount} empty fields`}
+        </button>
+      )}
     </div>
   );
 }

@@ -32,6 +32,8 @@ React + Vite (`apps/web`). Plan 004: the shell, sign-in, the live activity ledge
 | Ask bar (top bar; `/` focuses it; starts a new conversation) and the assistant panel (right column; replies continue the shown conversation; each step it took as a plain line with the record or the proposal to review, and technical details; after a turn, a linked "Waiting for you" line for the drafts and changes it left; a step whose operation returns a file shows it with Download and Copy; the reply box attaches text files by button or drop) | `src/pages/Shell.tsx`, `src/pages/AssistantPanel.tsx` |
 | Files operations return (contracts with `file`, such as the Opentrons export): Download and Copy, never pasted into chat | `src/lib/files.ts`, `src/pages/FileCard.tsx` |
 
+A confirmed active record leads with its content (drawing, bench view, deck, contents): its readiness and sections fold into one "Details" block below it, a line per section with who confirmed it and how many fields are filled, opened in place with empty fields hidden. Editing a section, or anything unconfirmed or blocked, brings back the full review layout (`SettledDetails` in `src/pages/RecordReview.tsx`).
+
 ## Sign-in
 
 Email and password (ADR 0019). `POST /auth/login` sets an HttpOnly, SameSite=Strict session cookie for 30 days; `POST /auth/logout` ends it. The API accepts either a bearer token (agents, scripts) or the cookie (the web app); cookie-authenticated writes must be JSON. `bootstrap` sets the first password; `password` resets it.

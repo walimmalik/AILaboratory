@@ -190,7 +190,10 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   // The last section's button says it activates the record, and it does.
   await appearance.getByRole('button', { name: 'Confirm appearance and activate' }).click();
   await expect(page.locator('.chip.active')).toBeVisible();
-  await expect(readiness.getByText('✓ confirmed')).toBeVisible();
+  // Once active and confirmed, the sections fold into one Details block.
+  await expect(
+    page.getByRole('region', { name: 'Details' }).getByText('✓ confirmed'),
+  ).toBeVisible();
   await expect(page.getByRole('row', { name: /v5/ })).toContainText(
     'confirmed appearance and activated',
   );

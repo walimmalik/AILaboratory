@@ -90,7 +90,7 @@ export function ReviewPage() {
             <fieldset className="filters">
               <legend className="sr-only">Show</legend>
               <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
-                All<span className="num">{total}</span>
+                All <span className="num">{total}</span>
               </button>
               {[...groups].map(([key, group]) => (
                 <button
@@ -99,8 +99,7 @@ export function ReviewPage() {
                   aria-pressed={shown === key}
                   onClick={() => setShow(key)}
                 >
-                  {group.label}
-                  <span className="num">{group.count}</span>
+                  {group.label} <span className="num">{group.count}</span>
                 </button>
               ))}
             </fieldset>

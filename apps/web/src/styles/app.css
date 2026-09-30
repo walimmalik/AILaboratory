@@ -134,7 +134,7 @@ a {
   border-color: var(--accent);
 }
 .filters button .num {
-  margin-left: 6px;
+  margin-left: 2px;
   color: var(--ink-2);
 }
 .filters button[aria-pressed="true"] {
@@ -1401,4 +1401,42 @@ ul.reviewer-fixes {
   .sop-print {
     border: none;
   }
+}
+
+/* A settled record's details: one line per section, opened in place. */
+.settled {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.settled > li {
+  border-top: 1px solid var(--rule);
+}
+.settled > li:first-child {
+  border-top: 0;
+}
+.settled-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.settled-line b {
+  min-width: 10em;
+  font-weight: 600;
+}
+.settled-line::before {
+  content: "▸";
+  color: var(--ink-2);
+}
+.settled-line[aria-expanded="true"]::before {
+  content: "▾";
 }
