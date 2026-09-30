@@ -121,7 +121,7 @@ export function RecordList({
         {isPending ? (
           <p className="empty">Loading…</p>
         ) : records.length === 0 ? (
-          <p className="empty">{deferred ? 'Nothing matches.' : empty}</p>
+          <p className="empty">{deferred || narrow ? 'Nothing matches.' : empty}</p>
         ) : (
           <div className="table-wrap">
             <table>

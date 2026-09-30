@@ -17,6 +17,7 @@ import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
+import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { StatusChip } from './StatusChip.tsx';
@@ -101,6 +102,10 @@ export function RecordPage() {
               </>
             ) : r.kind === 'instrument' ? (
               <InstrumentBlocks record={r} />
+            ) : r.kind === 'product' ? (
+              <ProductBlocks record={r} />
+            ) : r.kind === 'liquid_class' ? (
+              <LiquidClassBlocks record={r} />
             ) : undefined
           }
         />
