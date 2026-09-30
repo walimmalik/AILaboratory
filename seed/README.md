@@ -20,6 +20,7 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | `inventory.yaml` | Lots, and containers with what is in them and where they are | 009a (lots, via `reagent-library.yaml`) / 010b (containers as proposals) / 010c (samples, fills and the stamp, as proposals) |
 | `sops/own/` | Short SOPs written for this lab, with their variables in front matter | 011 |
 | `assays.yaml` | Assay templates that tie SOPs, labware, reagents and instruments together | 012 onward |
+| `campaigns.yaml` | Two demo campaigns (BRD4 degraders, IL-6 reporter panel) with four experiments that follow the assay templates' SOPs | 013 |
 | `opentrons/` | Opentrons labware definitions the labware entries name, so well positions load offline | 007 |
 | `worklists/` | Mock worklist and instrument report examples, one per instrument, until real exports exist | 016 (golden-file tests) |
 

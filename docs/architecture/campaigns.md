@@ -7,7 +7,7 @@ Plan [013](../plans/013-campaigns-and-experiments.md). The scientific frame ever
 | Kind | Id, name | Holds | Sections |
 | --- | --- | --- | --- |
 | `campaign` | `cam_`, `CAM-001` | goal, background, aims (`id`, text, success), owner and contributors, dates, `about` (entities), `references` (documents), `stage` | Goal, Aims, What it is about |
-| `experiment` | `exp_`, `EXP-0001` | campaign and aim, question, hypotheses (each with an optional prediction: readout, measure, comparison, threshold), `followsUp`, subjects, `protocol` (parts that each pin an SOP `{id, version}`), documents followed or cited, conditions, controls, readouts, success criteria, `stage` | Question, What is tested, Protocol, Conditions and controls, Readouts |
+| `experiment` | `exp_`, `EXP-0001` | campaign and aim, question, hypotheses (each with an optional prediction: readout, measure, comparison, threshold), `followsUp`, subjects, `protocol` (parts that each pin an SOP `{id, version}`), documents followed or cited, conditions, controls (each with an optional `subject`, e.g. the DMSO entity, linked as `control`), readouts, success criteria, `stage` | Question, What is tested, Protocol, Conditions and controls, Readouts |
 | `run` | `run_`, `RUN-0001` | `experiment` pinned `{id, version}`, status (scheduled, in progress, done, failed, aborted), date, operator | none yet (013c adds step actuals) |
 
 Code: `packages/schema/src/campaigns.ts`, `apps/api/src/campaigns/`.
@@ -31,8 +31,12 @@ Each protocol part pins a confirmed SOP version. `related` checks every pin with
 | `experiments.adopt_versions` | direct on drafts, proposal on active |
 | `experiments.where_used` (campaigns, experiments and runs using a record, optionally one version) | read |
 
-Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed documents, `references` cited ones, `tests` its subjects and `follows_up` or `repeats_with_changes` an earlier experiment. A run `runs` its experiment. A campaign is `about` entities and `references` documents.
+Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed documents, `references` cited ones, `tests` its subjects, links its control compounds as `control`, and `follows_up` or `repeats_with_changes` an earlier experiment. A run `runs` its experiment. A campaign is `about` entities and `references` documents.
+
+## The demo campaigns (013a)
+
+`seed/campaigns.yaml` holds two campaigns: BRD4 degraders (a single-point screen, then a HiBiT dose-response that follows up on it) and the IL-6 reporter panel (Dual-Glo, then an ELISA). Each experiment names an assay template in `seed/assays.yaml`, and its protocol pins that template's SOPs at the version the lab has. Subjects, the campaign's `about` and control compounds are entities found by their seed label. `apps/api/src/campaigns/seed.ts` drafts each campaign the lab doesn't have yet (by title) after the SOPs. It leaves out, and reports, any SOP or entity the lab lacks. The seed SOPs are drafts, so the experiments stay in designing, and `protocol_confirmed` blocks planning until a person confirms the SOPs.
 
 ## Not yet
 
-013b protocol binding (roles, inputs, recompute, reservations), 013c run recording, conclusions and sets, 013d screens and the drafting skill in full, and the demo campaign in the seed.
+013b protocol binding (roles, inputs, recompute, reservations), 013c run recording, conclusions and sets, 013d screens and the drafting skill in full.
