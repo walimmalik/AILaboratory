@@ -8,6 +8,8 @@ import type { RecordEnvelope, RelatedContext } from '@ailab/schema';
 export interface PinReport {
   /** The pinned record now, when it exists and is of the kind. */
   record?: RecordEnvelope;
+  /** The record as it was at the pinned version. */
+  pinned?: RecordEnvelope;
   /** Refuses the write: the record is missing, of another kind, or has no such version. */
   invalid?: string;
   /** The pinned version was never confirmed. */
@@ -19,14 +21,15 @@ export interface PinReport {
 export async function checkPin(
   context: Pick<RelatedContext, 'get' | 'getVersion'>,
   pin: { id: string; version: number },
-  kind: string,
+  kind: string | readonly string[],
   noun: string,
 ): Promise<PinReport> {
   const record = await context.get(pin.id);
-  if (record?.kind !== kind) return { invalid: `${pin.id} is not ${noun} in this lab` };
+  if (!record || ![kind].flat().includes(record.kind))
+    return { invalid: `${pin.id} is not ${noun} in this lab` };
   const pinned = await context.getVersion(pin.id, pin.version);
   if (!pinned) return { record, invalid: `${record.name} has no version ${pin.version}` };
-  const report: PinReport = { record };
+  const report: PinReport = { record, pinned };
   if (pinned.status !== 'active') {
     report.unconfirmed = `${record.name} v${pin.version} was not confirmed`;
   }

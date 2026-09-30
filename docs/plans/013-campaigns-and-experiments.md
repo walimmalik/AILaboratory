@@ -103,6 +103,6 @@ Recommended option in bold. Asked 2026-09-29.
 ## Proposed split (after decisions)
 
 - **013a:** campaign, experiment and run kinds with sections and checks, stages, operations, seed demo campaign. Built: the kinds, stages, pinned SOP versions (ADR 0039), `experiments.adopt_versions`, `experiments.where_used` and the demo campaigns in `seed/campaigns.yaml`.
-- **013b:** protocol binding against 012 (pin, bind roles and inputs, recompute, flags on new SOP versions), reservations.
-- **013c:** run recording (bench view, deviations, data files), conclusions, sets.
+- **013b:** protocol binding against 012 (pin, bind roles and inputs, recompute, flags on new SOP versions), reservations. Built: `experiments.bind_protocol`, `experiments.calculate` at pinned versions, planning that needs the protocol to work out, adopting newer versions of bound records. Reservations wait on how an SOP says how much of each material a run uses.
+- **013c:** run recording (bench view, deviations, data files), conclusions, sets. Built (013c-1): `runs.start` as a checklist from the pinned SOP steps, ticking, done as planned, deviations, data files, finishing. Scanning containers and lots during a run waits for the bench view.
 - **013d:** campaign and experiment screens, agent drafting from a question, skill.

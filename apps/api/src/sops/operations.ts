@@ -71,10 +71,20 @@ export const sopOperations = [
   }),
   implement(sopsCalculate, {
     run: async (ctx, input, deps) => {
-      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
-      if (record.kind !== 'sop') {
-        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      const service = new RecordService(deps.db, deps.kinds);
+      const current = await service.get(ctx, input.sop);
+      if (current.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${current.name} is not an SOP`);
       }
+      const atVersion = async (id: string, version: number) => {
+        const found = (await service.history(ctx, id)).find((v) => v.version === version);
+        if (!found) {
+          const r = await service.get(ctx, id);
+          throw new OperationError('invalid_input', `${r.name} has no version ${version}`);
+        }
+        return found.snapshot;
+      };
+      const record = input.version ? await atVersion(current.id, input.version) : current;
       const a = record.attributes as SopAttributes;
       const given = new Map((input.inputs ?? []).map((i) => [i.name, i.value] as const));
       for (const name of given.keys()) {
@@ -87,8 +97,13 @@ export const sopOperations = [
           );
         }
       }
-      const service = new RecordService(deps.db, deps.kinds);
-      const fetch = (id: string) => service.get(ctx, id).catch(() => undefined);
+      const pinned = new Map<string, number>();
+      for (const b of input.bindings ?? []) if (b.version) pinned.set(b.record, b.version);
+      const fetch = async (id: string) => {
+        const version = pinned.get(id);
+        if (version) return atVersion(id, version);
+        return service.get(ctx, id).catch(() => undefined);
+      };
       const roles = new Set(a.materials.map((m) => m.role));
       const bound = new Map<string, string>();
       for (const b of input.bindings ?? []) {
