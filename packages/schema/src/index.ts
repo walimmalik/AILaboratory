@@ -22,3 +22,4 @@ export * from './record.ts';
 export * from './session.ts';
 export * from './sops.ts';
 export * from './transfers.ts';
+export * from './workcells.ts';

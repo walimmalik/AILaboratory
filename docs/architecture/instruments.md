@@ -1,6 +1,6 @@
 # Instruments
 
-Instrument kinds, equipment kinds, the capability catalog and resolving a configuration (plan 008, ADR 0025); registered instruments, equipment items and configuration changes (008b, ADR 0026). Screens arrive in 008c and workcells in 008d.
+Instrument kinds, equipment kinds, the capability catalog and resolving a configuration (plan 008, ADR 0025); registered instruments, equipment items and configuration changes (008b, ADR 0026). Screens (008c) and workcells (008d, ADR 0047).
 
 ## Pieces
 
@@ -11,6 +11,7 @@ Instrument kinds, equipment kinds, the capability catalog and resolving a config
 | Kinds `instrument_kind`, `equipment_kind`, `instrument` and `equipment_item`, with sections and readiness checks | `apps/api/src/instruments/kinds.ts` |
 | Resolver | `packages/domain/src/instruments.ts` |
 | Seed loader for `seed/instrument-library.yaml` (sources from `seed/instruments.yaml`) | `apps/api/src/instruments/seed.ts`, `apps/api/src/seed.ts` |
+| Workcells: kind `workcell` with its checks, and `workcells.draft`, `workcells.change_members`, `workcells.of_instrument` | `packages/schema/src/workcells.ts`, `apps/api/src/instruments/workcell-kind.ts`, `apps/api/src/instruments/workcells.ts` |
 | Skill | `skills/instruments/SKILL.md` |
 
 ## Model
@@ -55,6 +56,10 @@ Parents are placed before their children, so nothing is placed on equipment that
 
 - Capabilities mean what the catalog says; kinds only add limits (I5).
 - Every check names its source. Blockers: mount and slot names unique, sites on real mounts and slots, capability sites listed, extra slots only for allowed slots. Warnings: limits the catalog expects, manufacturer and model, a kind that can do nothing, a manual station set to machine.
+
+## Workcells
+
+A workcell (`WCL-0001`, ADR 0047) lists the registered instruments that work together, each with the device it maps to in the echo650-twin workcell (`twin`) and whether people can also use it by hand. Positions, robots, reach and move times live in the twin and are never stored here. Writes refuse members that aren't instruments in the lab, members listed twice and two members on one twin device. Readiness blocks confirming until every member is a confirmed instrument, no member is in another confirmed workcell (I9; drafts may share instruments to plan other arrangements) and the twin workcell and every twin device are named; a warning says the mapping is recorded as given until the twin connection (015) can check it. `workcells.of_instrument` says which confirmed workcell uses an instrument, and which drafts plan it; an instrument in no confirmed workcell is standalone.
 
 ## Seed
 
