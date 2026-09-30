@@ -39,7 +39,9 @@ beforeEach(async () => {
   };
   const kinds = new KindRegistry();
   for (const kind of [...labwareKinds, ...fileKinds, ...libraryKinds]) kinds.register(kind);
-  registry = createRegistry(db, kinds, new ActivityBus(), undefined, new MemoryFileStore());
+  registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
+    files: new MemoryFileStore(),
+  });
 });
 afterEach(() => close());
 

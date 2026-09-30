@@ -10,6 +10,7 @@ import { fileStoreFromEnv } from './files/store.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
+import { converterFromEnv } from './library/convert.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
@@ -52,8 +53,13 @@ console.log(
 const port = Number(process.env.API_PORT ?? 3001);
 serve(
   {
-    fetch: createApp({ db: connection.db, kinds, assistant, files: fileStoreFromEnv(process.env) })
-      .fetch,
+    fetch: createApp({
+      db: connection.db,
+      kinds,
+      assistant,
+      files: fileStoreFromEnv(process.env),
+      converter: converterFromEnv(process.env),
+    }).fetch,
     port,
     hostname: '0.0.0.0',
   },

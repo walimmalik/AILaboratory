@@ -16,6 +16,7 @@ import type {
 import { sql } from 'drizzle-orm';
 import {
   check,
+  customType,
   index,
   integer,
   jsonb,
@@ -339,5 +340,70 @@ export const inventoryLines = pgTable(
     primaryKey({ columns: [t.eventId, t.seq] }),
     index('inventory_lines_well_idx').on(t.containerId, t.well),
     check('inventory_lines_change_check', sql`${t.change} in ('in', 'out', 'set')`),
+  ],
+);
+
+/** Postgres full-text vector, filled by a generated column. */
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
+
+/** How each document file was turned into text (plan 011b): one row per document and file. */
+export const libraryParses = pgTable(
+  'library_parses',
+  {
+    documentId: text('document_id')
+      .notNull()
+      .references(() => records.id),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => records.id),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    sha256: text('sha256').notNull(),
+    converter: text('converter').notNull(),
+    sections: integer('sections').notNull(),
+    passages: integer('passages').notNull(),
+    warnings: jsonb('warnings').$type<string[]>().notNull(),
+    parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull(),
+    parsedBy: jsonb('parsed_by').$type<Actor>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.documentId, t.fileId] })],
+);
+
+/** Searchable passages of parsed document files (plan 011b), with their heading path and page. */
+export const libraryPassages = pgTable(
+  'library_passages',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => records.id),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => records.id),
+    section: integer('section').notNull(),
+    heading: jsonb('heading').$type<string[]>().notNull(),
+    sectionPageFrom: integer('section_page_from'),
+    sectionPageTo: integer('section_page_to'),
+    seq: integer('seq').notNull(),
+    page: integer('page'),
+    text: text('text').notNull(),
+    search: tsvector('search')
+      .notNull()
+      .generatedAlwaysAs(sql`to_tsvector('english', coalesce(heading_text, '') || ' ' || text)`),
+    headingText: text('heading_text').notNull(),
+  },
+  (t) => [
+    index('library_passages_document_idx').on(t.documentId, t.fileId, t.section, t.seq),
+    index('library_passages_search_idx').using('gin', t.search),
   ],
 );

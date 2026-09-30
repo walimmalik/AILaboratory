@@ -7,6 +7,7 @@ import { users } from './db/schema.ts';
 import { fileKinds } from './files/kinds.ts';
 import { fileStoreFromEnv } from './files/store.ts';
 import { labwareKinds } from './labware/kinds.ts';
+import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -77,13 +78,10 @@ if (!ctx) {
 
 const kinds = new KindRegistry();
 for (const kind of [...labwareKinds, ...fileKinds, ...libraryKinds]) kinds.register(kind);
-const registry = createRegistry(
-  connection.db,
-  kinds,
-  new ActivityBus(),
-  undefined,
-  fileStoreFromEnv(process.env),
-);
+const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
+  files: fileStoreFromEnv(process.env),
+  converter: converterFromEnv(process.env),
+});
 const license = values.license ?? '';
 const plan = hasManifest
   ? await readManifestFolder(folder)
@@ -97,5 +95,9 @@ console.log(
 );
 for (const line of report.added) console.log(`  + ${line}`);
 for (const skip of report.missing) console.log(`  missing ${skip.key}: ${skip.reason}`);
+console.log(
+  `Text: ${report.parsed.length} parsed for search, ${report.unparsed.length} not readable yet.`,
+);
+for (const skip of report.unparsed) console.log(`  not parsed ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

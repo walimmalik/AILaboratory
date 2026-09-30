@@ -44,7 +44,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 ```
 apps/api       TypeScript API (Hono): operations, REST, MCP, event log
 apps/web       React + Vite UI
-apps/science   Python service (FastAPI): statistics, curve fits, chemistry, sequences
+apps/science   Python service (FastAPI): library file conversion, statistics, curve fits, chemistry, sequences
 packages/      shared TypeScript packages (see packages/README.md)
 docs/          architecture, decisions (ADRs), plans
 skills/        one skill per module, explaining its operations to agents
@@ -67,7 +67,7 @@ Run from the repo root unless noted.
 | Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
 | Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |
-| Science service (:8001) | `cd apps/science && uv run uvicorn science.main:app --reload --port 8001` |
+| Science service (:8001; the seed and library:import need it to make documents searchable) | `cd apps/science && uv run uvicorn science.main:app --reload --port 8001` |
 | Full stack in containers (web on :8080) | `docker compose up --build` |
 | All TypeScript checks | `pnpm check` (lint, typecheck, test) |
 | End-to-end tests (needs a bootstrapped database; see `apps/web/playwright.config.ts`) | `pnpm --filter @ailab/web e2e` |

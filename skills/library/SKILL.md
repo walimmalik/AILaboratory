@@ -15,7 +15,7 @@ A **file** (`file`, `FIL-0001`) is stored bytes with what they are: `mediaType`,
 
 ## Reading
 
-- `files.get` with `{id}` returns the text of a text file or the base64 of anything else; `as: "none"` for the record alone. Don't read a large PDF as base64 to answer a question: document text and search arrive with the library (plan 011b).
+- `files.get` with `{id}` returns the text of a text file or the base64 of anything else; `as: "none"` for the record alone. Don't read a large PDF as base64 to answer a question; use the library's text (below).
 - People open a file in the app at `/api/v1/files/<id>`.
 
 A file's bytes never change. A revised SOP or manual is a new upload.
@@ -27,4 +27,11 @@ A **document** (`document`, `DOC-0001`) is a source as published, with its files
 - `library.add` with `{label, type, license: {name, sharePolicy}, files: [{file, role: "original"}], authors?, vendor?, version?, published?, doi?, url?, journal?, partNumbers?, language?, assays?, tags?, notes?, evidence?}` drafts one. Upload the files first. Exactly one file is the `original`; the DOCX of a PDF is an `alternate`, a plate map image a `supplement`. `published` is `"2018"`, `"2018-05"` or a date; `doi` has no `https://doi.org/`.
 - Set `sharePolicy: "lab_private"` for All Rights Reserved, vendor and non-commercial documents; say where values came from in `evidence` (e.g. `{"doi": {"source": "datasheet", "reference": "<url>"}}`), or they show as assumed.
 - A person confirms each section (Source, License, Files, Topics). Before adding, check `records.list` with `kind: "document"` and a `search` so you don't add the same source twice.
+- `library.parse` with `{document}` turns its original into searchable sections and passages (Markdown, HTML, code and text now; PDF and DOCX not yet). Run it after `library.add` and after a new revision.
 - `library.add_revision` with `{document, expectedVersion, file, version?, published?}` when the source is revised: the old file stays as an earlier revision. On a confirmed document it is a proposal.
+
+## Searching and reading
+
+- `library.search` with `{text}` finds passages containing all the words (stemmed: "blocking" finds "block"), best first. Quote a phrase (`"room temperature"`), exclude with `-word`, use `or` between alternatives. Filter with `type` (`sop`, `paper`…), `assay` or `document`. Each hit has the document, heading path, page and a snippet with matches in `[[ ]]`.
+- Search matches words, not meaning, for now: try the words the source would use (`"reagent diluent"`, `"1 hour"`) and synonyms with `or`.
+- `library.read` with `{document}` gives the outline; add `section` (an index from the outline) or `pages: {from, to}` to read the text. Read the passage before you quote it, and cite it as the document's name, heading and page.

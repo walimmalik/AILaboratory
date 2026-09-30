@@ -11,6 +11,7 @@ import type { Db } from './db/client.ts';
 import { labs, users } from './db/schema.ts';
 import { readBytes } from './files/operations.ts';
 import { type FileStore, MemoryFileStore } from './files/store.ts';
+import type { Converter } from './library/convert.ts';
 import { describeOperation, openApiDocument } from './operations/describe.ts';
 import { httpStatus, toErrorBody } from './operations/errors.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -26,6 +27,8 @@ export interface AppDependencies {
   assistant?: Assistant;
   /** Where file bytes live; in memory unless given (tests). */
   files?: FileStore;
+  /** Turns library files into text; none unless given (tests). */
+  converter?: Converter;
 }
 
 type Env = { Variables: { ctx: RecordContext } };
@@ -44,8 +47,12 @@ export function createApp({
   bus = new ActivityBus(),
   assistant = new Assistant({ reason: 'No model is set up' }),
   files = new MemoryFileStore(),
+  converter,
 }: AppDependencies) {
-  const registry = createRegistry(db, kinds, bus, assistant, files);
+  const registry = createRegistry(db, kinds, bus, assistant, {
+    files,
+    ...(converter ? { converter } : {}),
+  });
   const app = new Hono<Env>();
 
   app.get('/health', (c) => c.json({ status: 'ok', service: 'api' }));

@@ -37,9 +37,10 @@ const statusByCode: Record<OperationErrorCode, number> = {
   version_conflict: 409,
   linked: 409,
   not_ready: 409,
+  unavailable: 503,
   internal: 500,
 };
 
-export function httpStatus(code: OperationErrorCode): 400 | 401 | 403 | 404 | 409 | 500 {
-  return statusByCode[code] as 400 | 401 | 403 | 404 | 409 | 500;
+export function httpStatus(code: OperationErrorCode): 400 | 401 | 403 | 404 | 409 | 500 | 503 {
+  return statusByCode[code] as 400 | 401 | 403 | 404 | 409 | 500 | 503;
 }

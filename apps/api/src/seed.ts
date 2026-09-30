@@ -15,6 +15,7 @@ import { inventoryKinds } from './inventory/kinds.ts';
 import { loadSeedInventory, readSeedInventory } from './inventory/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
+import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -87,13 +88,10 @@ for (const kind of [
   ...libraryKinds,
 ])
   kinds.register(kind);
-const registry = createRegistry(
-  connection.db,
-  kinds,
-  new ActivityBus(),
-  undefined,
-  fileStoreFromEnv(process.env),
-);
+const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
+  files: fileStoreFromEnv(process.env),
+  converter: converterFromEnv(process.env),
+});
 
 const yaml = await readFile(new URL('../../../seed/labware.yaml', import.meta.url), 'utf8');
 const definitions = await readDefinitions(new URL('../../../seed/opentrons/', import.meta.url));
@@ -219,6 +217,8 @@ const library = {
   added: [] as string[],
   existing: [] as string[],
   missing: [] as { key: string; reason: string }[],
+  parsed: [] as string[],
+  unparsed: [] as { key: string; reason: string }[],
 };
 for (const plan of [
   await readMarkdownFolder(fileURLToPath(new URL('../../../seed/sops/own/', import.meta.url)), {
@@ -236,11 +236,17 @@ for (const plan of [
   library.added.push(...part.added);
   library.existing.push(...part.existing);
   library.missing.push(...part.missing);
+  library.parsed.push(...part.parsed);
+  library.unparsed.push(...part.unparsed);
 }
 console.log(
   `Library: ${library.added.length} documents drafted, ${library.existing.length} already there, ${library.missing.length} without their files here (import them from their folder with library:import).`,
 );
 for (const line of library.added) console.log(`  + ${line}`);
 for (const skip of library.missing) console.log(`  missing ${skip.key}: ${skip.reason}`);
+console.log(
+  `Library text: ${library.parsed.length} documents parsed for search, ${library.unparsed.length} not readable yet.`,
+);
+for (const skip of library.unparsed) console.log(`  not parsed ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
