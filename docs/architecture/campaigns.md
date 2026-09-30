@@ -67,10 +67,21 @@ A set (E10) is a named list of entities, samples or containers with the criterio
 
 `apps/api/src/campaigns/conclusions.ts` holds these operations.
 
+## Screens (013d)
+
+The menu has an Experiments group: Campaigns, Experiments, Runs and Sets, each a list with its key facts (stage, aims, runs done of total, members). `apps/web/src/pages/Experiments.tsx` adds blocks to the record page, summaries first:
+
+- **Campaign:** each aim with the experiments serving it, their stage and their conclusion.
+- **Experiment:** a Next step block with where it stands, whether the protocol works out (problems folded away), and the one or two actions its stage allows (plan it, start a run, analyse, conclude with a verdict per hypothesis); then its runs and its conclusion. The design stays in the section blocks.
+- **Run:** a checklist of the pinned steps with their planned values. Each step is ticked "Done as planned", or "Something differed" (type only the values that differed, and why) or "Skipped" (why). "The rest went as planned" ticks what's left, and the run is finished as done, failed or aborted. Other deviations are recorded below.
+- **Set:** its members with their notes, why they made it, and the experiments that test it.
+
+Every button calls an operation; the pure rules (which actions a stage allows, run progress) are in `apps/web/src/lib/experiments.ts`.
+
 ## The demo campaigns (013a)
 
 `seed/campaigns.yaml` holds two campaigns: BRD4 degraders (a single-point screen, then a HiBiT dose-response that follows up on it) and the IL-6 reporter panel (Dual-Glo, then an ELISA). Each experiment names an assay template in `seed/assays.yaml`, and its protocol pins that template's SOPs at the version the lab has. Subjects, the campaign's `about` and control compounds are entities found by their seed label. `apps/api/src/campaigns/seed.ts` drafts each campaign the lab doesn't have yet (by title) after the SOPs. It leaves out, and reports, any SOP or entity the lab lacks. The seed SOPs are drafts, so the experiments stay in designing, and `protocol_confirmed` blocks planning until a person confirms the SOPs.
 
 ## Not yet
 
-Reservations (010 V8: confirmed plans soft-reserve stock) come with the transfer designer (016), which knows exact volumes (Wali, 2026-09-30); SOP defaults are read live rather than pinned when a role is left unbound; scanning containers and lots during a run (inventory fill and consume); 013d screens and the drafting skill in full.
+Reservations (010 V8: confirmed plans soft-reserve stock) come with the transfer designer (016), which knows exact volumes (Wali, 2026-09-30); SOP defaults are read live rather than pinned when a role is left unbound; scanning containers and lots during a run (inventory fill and consume); attaching data files from the run screen (the operation exists); a campaign flow drawing of experiments and the sets between them.

@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
 import { DocumentsPage } from './pages/Documents.tsx';
+import { CampaignsPage, ExperimentsPage, RunsPage, SetsPage } from './pages/Experiments.tsx';
 import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
 import {
   ContainersPage,
@@ -155,6 +156,26 @@ const sops = createRoute({
   path: '/sops',
   component: SopsPage,
 });
+const campaigns = createRoute({
+  getParentRoute: () => app,
+  path: '/campaigns',
+  component: CampaignsPage,
+});
+const experiments = createRoute({
+  getParentRoute: () => app,
+  path: '/experiments',
+  component: ExperimentsPage,
+});
+const runs = createRoute({
+  getParentRoute: () => app,
+  path: '/runs',
+  component: RunsPage,
+});
+const sets = createRoute({
+  getParentRoute: () => app,
+  path: '/sets',
+  component: SetsPage,
+});
 const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
@@ -195,6 +216,10 @@ const routeTree = root.addChildren([
     entityKinds,
     documents,
     sops,
+    campaigns,
+    experiments,
+    runs,
+    sets,
     records,
     record,
     wiki,
