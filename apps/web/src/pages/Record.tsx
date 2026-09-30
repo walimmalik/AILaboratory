@@ -257,12 +257,25 @@ function confirmedSections(
  * objects (an SOP's variables or steps) as a small table, one row per item.
  */
 function renderValue(value: unknown): ReactNode {
-  const isRef = typeof value === 'string' && /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
+  const isRef = typeof value === 'string' && isRecordId(value);
   if (isRef) return <LinkedName id={value as string} />;
   if (Array.isArray(value) && value.length > 0 && value.every(isPlainObject))
     return <ItemsTable items={value as Record<string, unknown>[]} />;
+  // A small object holding a reference (a container's place) names the record, not its ID.
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.some(([, v]) => typeof v === 'string' && isRecordId(v)))
+      return entries.map(([k, v], i) => (
+        <span key={k}>
+          {i > 0 && ' · '}
+          {fieldLabel(k)} {renderValue(v)}
+        </span>
+      ));
+  }
   return formatValue(value);
 }
+
+const isRecordId = (v: string) => /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(v);
 
 const isPlainObject = (v: unknown) =>
   !!v && typeof v === 'object' && !Array.isArray(v) && !isQuantity(v);
@@ -298,7 +311,12 @@ function Field({ name, value }: { name: string; value: unknown }) {
   return (
     <>
       <dt>{fieldLabel(name)}</dt>
-      <dd className="mono">{renderValue(value)}</dd>
+      {/* A choice like in_use reads as words; names and IDs are left as they are. */}
+      <dd className="mono">
+        {typeof value === 'string' && /^[a-z]+(_[a-z]+)+$/.test(value) && name !== 'name'
+          ? value.replaceAll('_', ' ')
+          : renderValue(value)}
+      </dd>
     </>
   );
 }

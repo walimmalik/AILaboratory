@@ -107,6 +107,12 @@ describe('rules in words', () => {
     expect(
       storageRangeWords({ min: { value: '2', unit: 'degC' }, max: { value: '8', unit: 'degC' } }),
     ).toBe('2 °C to 8 °C');
+    expect(
+      storageRangeWords({
+        min: { value: '-20', unit: 'degC' },
+        max: { value: '-20', unit: 'degC' },
+      }),
+    ).toBe('at -20 °C');
   });
 });
 

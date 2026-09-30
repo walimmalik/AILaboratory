@@ -20,6 +20,7 @@ import { type CSSProperties, Fragment, type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
 import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
+  atWords,
   contentGroups,
   fullestWell,
   gridOf,
@@ -30,7 +31,6 @@ import {
   ruleSources,
   ruleTitle,
   ruleWells,
-  storageRangeWords,
   volumeText,
   wellRanges,
 } from '../lib/inventory.ts';
@@ -266,6 +266,8 @@ function PlaceContents({ id }: { id: string }) {
                     <td className="muted">
                       {c.path
                         .slice(here.path.length)
+                        // The container's own row already names it.
+                        .filter((p) => p.id !== c.container.id)
                         .map((p) => (p.position ? `${p.name} ${p.position}` : p.label))
                         .join(' › ') || 'here'}
                       {c.position ? ` ${c.position}` : ''}
@@ -600,7 +602,7 @@ function RulesBlock({ record, filled }: { record: RecordEnvelope; filled: number
         <ul className="rules">
           {effective.storage && (
             <li>
-              <b>Store at {storageRangeWords(effective.storage.range)}</b>
+              <b>Store {atWords(effective.storage.range)}</b>
               {effective.storage.conflict && (
                 <span className="warn-ink"> {effective.storage.conflict}</span>
               )}

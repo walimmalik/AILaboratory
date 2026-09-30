@@ -11,6 +11,7 @@ import {
   recordsConfirmSection,
 } from '@ailab/schema';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
@@ -399,20 +400,30 @@ function CheckRow({
       <td>
         {check.label}
         {!check.passed && check.message && <span className={tone}> · {check.message}</span>}
-        {!check.passed && (check.fix || section) && (
+        {!check.passed && (check.fix || section || check.record) && (
           <div className="muted">
             {check.fix}
-            {check.fix && section && ' · '}
-            {section && (
-              <button type="button" className="link-btn" onClick={() => onFix(section)}>
-                Fix in {titles[section]?.toLowerCase()}
-              </button>
+            {check.fix && (section || check.record) && ' · '}
+            {/* A check waiting on another record is fixed there, not in a section of this one. */}
+            {check.record ? (
+              <Link to="/records/$id" params={{ id: check.record }}>
+                Open it
+              </Link>
+            ) : (
+              section && (
+                <button type="button" className="link-btn" onClick={() => onFix(section)}>
+                  Fix in {titles[section]?.toLowerCase()}
+                </button>
+              )
             )}
           </div>
         )}
         {!check.passed && check.quickFix && <QuickFix fix={check.quickFix} target={target} />}
       </td>
-      <td className="muted source">{check.source}</td>
+      {/* The source in lab words; plan and ADR numbers stay on hover. */}
+      <td className="muted source" title={check.source}>
+        {check.source?.replace(/\s*\((?:plan|ADR)[^)]*\)/gi, '')}
+      </td>
     </tr>
   );
 }

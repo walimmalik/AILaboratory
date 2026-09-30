@@ -81,10 +81,19 @@ export function placeWords(
 const periodWords = (p: { value: string; unit: string }) => formatQuantity(p);
 
 export function storageRangeWords(range: StorageRange): string {
-  if (range.min && range.max) return `${formatQuantity(range.min)} to ${formatQuantity(range.max)}`;
+  if (range.min && range.max)
+    return compare(range.min, range.max) === 0
+      ? `at ${formatQuantity(range.min)}`
+      : `${formatQuantity(range.min)} to ${formatQuantity(range.max)}`;
   if (range.min) return `at least ${formatQuantity(range.min)}`;
   if (range.max) return `at most ${formatQuantity(range.max)}`;
   return 'any temperature';
+}
+
+/** "at 4 °C", "at 2 °C to 8 °C", "at least 15 °C": a range after a verb or a period. */
+export function atWords(range: StorageRange): string {
+  const words = storageRangeWords(range);
+  return words.startsWith('at ') ? words : `at ${words}`;
 }
 
 /** The limit a rule sets, in a few words, e.g. "30 min" or "1 freeze-thaw". */
@@ -95,7 +104,7 @@ export function ruleLimit(rule: HandlingRule): string | undefined {
     case 'stable_after_opening':
       return periodWords(rule.period);
     case 'stable_after_preparation':
-      return `${periodWords(rule.period)}${rule.at ? ` at ${storageRangeWords(rule.at)}` : ''}`;
+      return `${periodWords(rule.period)}${rule.at ? ` ${atWords(rule.at)}` : ''}`;
     case 'equilibrate':
     case 'reconstitute':
       return rule.period ? `rest ${periodWords(rule.period)}` : undefined;
