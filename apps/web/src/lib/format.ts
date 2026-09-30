@@ -277,3 +277,19 @@ export function foldRepeats(entries: readonly ActivityEntry[]) {
   }
   return lines;
 }
+
+/** "partOf" → "part of", "dead_volume" → "dead volume". */
+export function fieldLabel(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replaceAll('_', ' ')
+    .toLowerCase();
+}
+
+/** A readiness path in words: "volume" → "volume", "/steps/wash" → "step wash" (ADR 0049). */
+export function pathLabel(path: string): string {
+  if (!path.startsWith('/')) return fieldLabel(path);
+  const [, list = '', key = ''] = path.split('/');
+  const one = list.endsWith('ies') ? `${list.slice(0, -3)}y` : list.replace(/s$/, '');
+  return `${fieldLabel(one)} ${key}`;
+}

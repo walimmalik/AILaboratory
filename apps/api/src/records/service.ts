@@ -1,4 +1,13 @@
-import { formatName, newId, readiness, runChecks, sameValue, sectionValues } from '@ailab/domain';
+import {
+  formatName,
+  itemPath,
+  keyedItems,
+  newId,
+  readiness,
+  runChecks,
+  sameValue,
+  sectionValues,
+} from '@ailab/domain';
 import {
   type Actor,
   type EvidenceInput,
@@ -17,6 +26,7 @@ import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
+import { checkCalculated } from './calculations.ts';
 import { RecordError } from './errors.ts';
 import { type KindRegistry, namePrefixesOf } from './kinds.ts';
 
@@ -88,7 +98,16 @@ export class RecordService {
     const attributes = parseAttributes(kind, input.attributes);
     const related = await this.#related(this.db, ctx, kind, attributes);
     const at = this.now();
-    const evidence = nextEvidence(ctx.actor, at, undefined, attributes, {}, input.evidence);
+    const evidence = nextEvidence(
+      ctx.actor,
+      at,
+      undefined,
+      attributes,
+      {},
+      input.evidence,
+      kind.items,
+    );
+    await checkCalculatedEvidence(this.db, ctx, attributes, input.evidence, kind.items);
     // A person who creates a record active confirms every section as they wrote it (ADR 0021).
     const reviews: Record<string, SectionReview> = {};
     if (input.status === 'active' && kind.sections?.length) {
@@ -200,6 +219,7 @@ export class RecordService {
             ? record.attributes
             : parseAttributes(kind, input.attributes);
         if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
+        await checkCalculatedEvidence(tx, ctx, attributes, input.evidence, kind.items);
         return {
           label: input.label ?? record.label,
           attributes,
@@ -210,6 +230,7 @@ export class RecordService {
             attributes,
             record.evidence,
             input.evidence,
+            kind.items,
           ),
           reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
         };
@@ -429,13 +450,16 @@ export class RecordService {
         const earlier = await findVersion(tx, record.id, input.version);
         const attributes = parseAttributes(kind, earlier.snapshot.attributes);
         await this.#related(tx, ctx, kind, attributes, record);
-        // Restored values keep the evidence they had in that version.
+        // Restored values keep the evidence they had in that version, items of keyed lists too.
         const evidence: Record<string, FieldEvidence> = {};
         for (const field of Object.keys(attributes)) {
-          const kept = sameValue(record.attributes[field], attributes[field])
-            ? record.evidence[field]
-            : earlier.snapshot.evidence[field];
-          if (kept) evidence[field] = kept;
+          const from = sameValue(record.attributes[field], attributes[field])
+            ? record.evidence
+            : earlier.snapshot.evidence;
+          if (from[field]) evidence[field] = from[field];
+          for (const [key, kept] of Object.entries(from)) {
+            if (key.startsWith(`/${field}/`)) evidence[key] = kept;
+          }
         }
         return {
           label: earlier.snapshot.label,
@@ -652,6 +676,10 @@ function approvalReviews(
  * Evidence after a change (ADR 0021). Each attribute whose value changed gets new evidence from the
  * actor: what they named, or "assumed" for an agent and "person" for a person. Evidence named for an
  * unchanged attribute replaces what it had, so an agent can cite a source for an earlier estimate.
+ *
+ * A keyed list (ADR 0049) also keeps evidence per item, at `/<list>/<key>`: only the items that
+ * changed get new evidence (named for the item, else named for the list, else the default), and the
+ * others keep theirs, so one edited step leaves the rest as they were.
  */
 function nextEvidence(
   actor: Actor,
@@ -660,12 +688,22 @@ function nextEvidence(
   after: Record<string, unknown>,
   current: Record<string, FieldEvidence>,
   named: Record<string, EvidenceInput> | undefined,
+  items: Readonly<Record<string, string>> = {},
 ): Record<string, FieldEvidence> {
-  for (const field of Object.keys(named ?? {})) {
-    if (!(field in after)) {
+  for (const key of Object.keys(named ?? {})) {
+    if (key.startsWith('/')) {
+      const [, list = '', item = ''] = key.split('/');
+      const keyField = items[list];
+      if (!keyField || !keyedItems(after[list], keyField).has(item)) {
+        throw new RecordError(
+          'invalid_input',
+          `Evidence names "${key}", which is not an item of a list this kind keys by ${keyField ?? 'id'}`,
+        );
+      }
+    } else if (!(key in after)) {
       throw new RecordError(
         'invalid_input',
-        `Evidence names "${field}", which is not an attribute with a value`,
+        `Evidence names "${key}", which is not an attribute with a value`,
       );
     }
   }
@@ -675,23 +713,64 @@ function nextEvidence(
       'Only an agent can record a value as stated by the person it works for; values you enter are yours',
     );
   }
+  const stamp = (given: EvidenceInput): FieldEvidence => {
+    const { output, ...rest } = given;
+    return { ...rest, ...(output ? { output } : {}), by: actor, at: at.toISOString() };
+  };
+  const fallback = (): FieldEvidence => ({
+    source: actor.type === 'agent' ? 'assumed' : 'person',
+    by: actor,
+    at: at.toISOString(),
+  });
   const evidence: Record<string, FieldEvidence> = {};
   for (const [field, value] of Object.entries(after)) {
     const changed = !before || !sameValue(before[field], value);
     const given = named?.[field];
-    if (given) {
-      evidence[field] = { ...given, by: actor, at: at.toISOString() };
-    } else if (changed) {
-      evidence[field] = {
-        source: actor.type === 'agent' ? 'assumed' : 'person',
-        by: actor,
-        at: at.toISOString(),
-      };
-    } else if (current[field]) {
-      evidence[field] = current[field];
+    if (given) evidence[field] = stamp(given);
+    else if (changed) evidence[field] = fallback();
+    else if (current[field]) evidence[field] = current[field];
+
+    const keyField = items[field];
+    if (!keyField) continue;
+    const was = keyedItems(before?.[field], keyField);
+    for (const [key, item] of keyedItems(value, keyField)) {
+      const path = itemPath(field, key);
+      const itemChanged = !before || !was.has(key) || !sameValue(was.get(key), item);
+      const own = named?.[path] ?? (itemChanged ? given : undefined);
+      if (own) evidence[path] = stamp(own);
+      else if (itemChanged) evidence[path] = fallback();
+      else {
+        // Items from before item evidence existed inherit what the list had.
+        const kept = current[path] ?? current[field];
+        if (kept) evidence[path] = kept;
+      }
     }
   }
   return evidence;
+}
+
+/** Each value named as calculated must be what its calculation returned (ADR 0049). */
+async function checkCalculatedEvidence(
+  db: Db,
+  ctx: RecordContext,
+  attributes: Record<string, unknown>,
+  named: Record<string, EvidenceInput> | undefined,
+  items: Readonly<Record<string, string>> = {},
+): Promise<void> {
+  for (const [key, given] of Object.entries(named ?? {})) {
+    if (given.source !== 'calculated') continue;
+    if (!given.calculation) {
+      throw new RecordError(
+        'invalid_input',
+        `${key} is marked calculated without a calculation handle; name the handle the calculator returned`,
+      );
+    }
+    const [, list = '', item = ''] = key.split('/');
+    const value = key.startsWith('/')
+      ? keyedItems(attributes[list], items[list] ?? 'id').get(item)
+      : attributes[key];
+    await checkCalculated(db, ctx, key, value, given.calculation, given.output);
+  }
 }
 
 function parseAttributes(kind: KindDefinition, attributes: unknown): Record<string, unknown> {

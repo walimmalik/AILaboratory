@@ -3,6 +3,7 @@ import type {
   KindCheck,
   KindSection,
   Readiness,
+  ReadinessItem,
   ReadinessSection,
   RecordEnvelope,
 } from '@ailab/schema';
@@ -75,7 +76,23 @@ export interface KindRules {
   sections?: readonly KindSection[] | undefined;
   checks?: readonly KindCheck<never>[] | undefined;
   notApplicable?: ((attributes: never) => string[]) | undefined;
+  /** Keyed lists: attribute → the field that keys each item (ADR 0049). */
+  items?: Readonly<Record<string, string>> | undefined;
 }
+
+/** A keyed list's items by key, in order; items without a string key are left out. */
+export function keyedItems(list: unknown, keyField: string): Map<string, unknown> {
+  const items = new Map<string, unknown>();
+  if (!Array.isArray(list)) return items;
+  for (const item of list) {
+    const key = (item as Record<string, unknown> | null)?.[keyField];
+    if (typeof key === 'string' && !items.has(key)) items.set(key, item);
+  }
+  return items;
+}
+
+/** The evidence key of one item of a keyed list. */
+export const itemPath = (field: string, key: string) => `/${field}/${key}`;
 
 /**
  * `related` are checks that needed other records (an entity against its kind), worked out by the
@@ -99,6 +116,46 @@ export function readiness(
         : sameValue(review.values[field], value)
           ? ('confirmed' as const)
           : ('changed' as const);
+      const keyField = kind.items?.[field];
+      if (keyField) {
+        const now = keyedItems(value, keyField);
+        const was = keyedItems(review?.values[field], keyField);
+        const items: ReadinessItem[] = [...now].map(([key, item]) => {
+          const path = itemPath(field, key);
+          const own = record.evidence[path] ?? evidence;
+          const itemState = !review
+            ? ('unconfirmed' as const)
+            : !was.has(key)
+              ? ('added' as const)
+              : sameValue(was.get(key), item)
+                ? ('confirmed' as const)
+                : ('changed' as const);
+          return {
+            key,
+            path,
+            value: item,
+            state: itemState,
+            assumed: itemState !== 'confirmed' && own?.source === 'assumed',
+            ...(itemState === 'changed' ? { confirmedValue: was.get(key) } : {}),
+            ...(own ? { evidence: own } : {}),
+          };
+        });
+        const removed = [...was].filter(([key]) => !now.has(key));
+        const sameKeys = removed.length === 0 && now.size === was.size;
+        const reordered =
+          !!review && sameKeys && [...now.keys()].join('\u0000') !== [...was.keys()].join('\u0000');
+        return {
+          field,
+          value,
+          state,
+          assumed: items.some((i) => i.assumed),
+          ...(state === 'changed' ? { confirmedValue: review?.values[field] } : {}),
+          ...(evidence ? { evidence } : {}),
+          items,
+          ...(removed.length ? { removed: removed.map(([key, v]) => ({ key, value: v })) } : {}),
+          ...(reordered ? { reordered } : {}),
+        };
+      }
       return {
         field,
         value,
@@ -136,7 +193,12 @@ export function readiness(
     checks: results,
     ready: missing.length === 0,
     missing,
-    assumed: sectionStates.flatMap((s) => s.fields.filter((f) => f.assumed).map((f) => f.field)),
+    // A keyed list names the items that are guesses, so "3 assumed" counts steps, not the list.
+    assumed: sectionStates.flatMap((s) =>
+      s.fields.flatMap((f) =>
+        f.items ? f.items.filter((i) => i.assumed).map((i) => i.path) : f.assumed ? [f.field] : [],
+      ),
+    ),
     notApplicable: notApplicable(kind, attributes),
   };
 }

@@ -42,6 +42,51 @@ describe('the operation catalog', () => {
   });
 });
 
+describe('calculation handles (ADR 0049)', () => {
+  it('returns a handle with a calculator result, and records.update checks against it', async () => {
+    const result = await registry.execute(person, 'sops.evaluate', {
+      variables: [
+        { name: 'wells', value: '8' },
+        { name: 'well_volume', value: { value: '50', unit: 'uL' } },
+        { name: 'total', expression: 'wells * well_volume' },
+      ],
+    });
+    expect(result.status).toBe('done');
+    const calculation = (result as { calculation?: string }).calculation;
+    expect(calculation).toMatch(/^calc_/);
+    const w = await create(agent);
+    const updated = await run<RecordEnvelope>(agent, 'records.update', {
+      id: w.id,
+      expectedVersion: w.version,
+      attributes: { color: 'teal', volume: { value: '400', unit: 'uL' } },
+      evidence: { volume: { source: 'calculated', calculation } },
+    });
+    expect(updated.evidence.volume?.calculation).toBe(calculation);
+    const error = await refused(
+      registry.execute(agent, 'records.update', {
+        id: w.id,
+        expectedVersion: updated.version,
+        attributes: { color: 'teal', volume: { value: '401', unit: 'uL' } },
+        evidence: { volume: { source: 'calculated', calculation } },
+      }),
+    );
+    expect(error.message).toMatch(/did not give this value/);
+  });
+
+  it('refuses record evidence that does not say which record', async () => {
+    const w = await create(agent);
+    const error = await refused(
+      registry.execute(agent, 'records.update', {
+        id: w.id,
+        expectedVersion: w.version,
+        attributes: { color: 'red', volume: attributes.volume },
+        evidence: { color: { source: 'record' } },
+      }),
+    );
+    expect(error.message).toMatch(/names the record it came from/);
+  });
+});
+
 const attributes = { color: 'teal', volume: { value: '50', unit: 'uL' } };
 
 beforeEach(async () => {

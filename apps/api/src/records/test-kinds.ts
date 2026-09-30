@@ -47,3 +47,16 @@ export const gadget = defineKind({
   nameWidth: 4,
   attributes: z.object({ color: z.string() }),
 });
+
+/** A test-only kind with a keyed list: a protocol whose steps keep their own evidence (ADR 0049). */
+export const protocol = defineKind({
+  kind: 'protocol',
+  idPrefix: 'prt',
+  namePrefix: 'PRT',
+  nameWidth: 4,
+  attributes: z.object({
+    steps: z.array(z.object({ id: z.string(), text: z.string(), volume: Quantity.optional() })),
+  }),
+  items: { steps: 'id' },
+  sections: [{ id: 'steps', title: 'Steps', fields: ['steps'] }],
+});

@@ -17,6 +17,7 @@ import {
 import { OperationError } from '../operations/errors.ts';
 import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement } from '../operations/registry.ts';
+import { saveCalculation } from '../records/calculations.ts';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
 
@@ -142,19 +143,25 @@ export const labwareOperations = [
         );
       }
       const shape = `${wells.rows} × ${wells.columns}`;
+      const placed = {
+        ...wells,
+        pitch: mmOf(standard.pitch),
+        a1: { x: mmOf(standard.a1.x), y: mmOf(standard.a1.y) },
+      };
+      const calculation = await saveCalculation(
+        deps.db,
+        ctx,
+        'labware.use_standard_positions',
+        { rows: wells.rows, columns: wells.columns },
+        placed,
+      );
       return service.update(ctx, record.id, {
         expectedVersion: input.expectedVersion,
-        attributes: {
-          ...record.attributes,
-          wells: {
-            ...wells,
-            pitch: mmOf(standard.pitch),
-            a1: { x: mmOf(standard.a1.x), y: mmOf(standard.a1.y) },
-          },
-        },
+        attributes: { ...record.attributes, wells: placed },
         evidence: {
           wells: {
             source: 'calculated',
+            calculation,
             reference: SBS_POSITIONS_REFERENCE,
             note: `Pitch and A1 offset are the standard for an SBS ${shape} grid; the rest of the wells is as it was. Check them against the datasheet drawing.`,
           },

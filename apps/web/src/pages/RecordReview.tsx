@@ -15,7 +15,11 @@ import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
-import { formatWhen, isAgent } from '../lib/format.ts';
+import { fieldLabel, formatWhen, isAgent, pathLabel } from '../lib/format.ts';
+import { LinkedName } from './Value.tsx';
+
+export { fieldLabel } from '../lib/format.ts';
+
 import { useMe } from '../session.ts';
 import { SectionEditor } from './SectionEditor.tsx';
 
@@ -155,7 +159,7 @@ export function ReadinessBlock({
             {readiness.assumed.length === 1
               ? 'One value is'
               : `${readiness.assumed.length} values are`}{' '}
-            an agent's estimate: {readiness.assumed.map(fieldLabel).join(', ')}. Check{' '}
+            an agent's estimate: {readiness.assumed.map(pathLabel).join(', ')}. Check{' '}
             {readiness.assumed.length === 1 ? 'it' : 'them'} before you confirm.
           </p>
         )}
@@ -601,6 +605,7 @@ function SectionValues({
                   <span className={f.state === 'changed' ? 'now' : undefined}>
                     {renderValue(f.value, f.field)}
                   </span>
+                  {f.items && f.state !== 'confirmed' && <ItemChanges field={f} />}
                 </td>
                 <td className="source">
                   {f.assumed ? (
@@ -622,6 +627,33 @@ function SectionValues({
   );
 }
 
+/**
+ * What changed in a keyed list since it was confirmed (ADR 0049): which items changed, were added or
+ * removed, whether the order moved, and which are guesses. Unchanged items stay confirmed.
+ */
+function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
+  const items = field.items ?? [];
+  const by = (state: string) => items.filter((i) => i.state === state).map((i) => i.key);
+  const parts = [
+    [by('changed'), 'changed'],
+    [by('added'), 'added'],
+    [(field.removed ?? []).map((r) => r.key), 'removed'],
+  ] as const;
+  const assumed = items.filter((i) => i.assumed).map((i) => i.key);
+  const confirmed = by('confirmed').length;
+  return (
+    <p className="muted item-changes">
+      {parts
+        .filter(([keys]) => keys.length > 0)
+        .map(([keys, word]) => `${keys.join(', ')} ${word}`)
+        .join(' · ')}
+      {field.reordered && ' · order changed'}
+      {confirmed > 0 && field.state === 'changed' && ` · ${confirmed} still confirmed`}
+      {assumed.length > 0 && <span className="agent-ink"> · assumed: {assumed.join(', ')}</span>}
+    </p>
+  );
+}
+
 const sourceWords: Record<FieldEvidence['source'], string> = {
   // Only shown once a person has confirmed the value; before that it reads "assumed by …".
   assumed: 'estimated',
@@ -631,6 +663,9 @@ const sourceWords: Record<FieldEvidence['source'], string> = {
   imported: 'imported',
   measured: 'measured',
   calculated: 'calculated',
+  record: 'from',
+  template: 'template default from',
+  memory: 'lab memory',
 };
 
 function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: Me | undefined }) {
@@ -642,14 +677,23 @@ function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: M
       ? `entered by ${who(by, me)}`
       : evidence.source === 'stated' && by.type === 'agent'
         ? `${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} told ${by.agentName}`
-        : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;
+        : evidence.from
+          ? sourceWords[evidence.source]
+          : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;
   const conversation =
     evidence.source === 'stated' && by.type === 'agent' && by.sessionRef?.startsWith('cnv_')
       ? by.sessionRef
       : undefined;
   return (
-    <span className="muted">
+    // Only guesses and what a person told an agent are in agent ink (plan 004e R5).
+    <span className={evidence.source === 'stated' ? 'agent-ink' : 'muted'}>
       {words}
+      {evidence.from && (
+        <>
+          {' '}
+          <LinkedName id={evidence.from.id} /> v{evidence.from.version}
+        </>
+      )}
       {conversation && (
         <>
           {' · '}
@@ -679,12 +723,4 @@ function who(actor: Actor | undefined, me: Me | undefined): string {
   if (!actor) return 'someone';
   if (actor.type === 'agent') return actor.agentName;
   return me && actor.userId === me.user.id ? 'you' : 'a lab member';
-}
-
-/** "partOf" → "part of", "dead_volume" → "dead volume". */
-export function fieldLabel(field: string): string {
-  return field
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replaceAll('_', ' ')
-    .toLowerCase();
 }

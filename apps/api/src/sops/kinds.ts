@@ -88,6 +88,14 @@ export const sop = defineKind({
       ),
     ].map((toId) => ({ toId, relation: 'cites' })),
   ],
+  // Each step, value, material and question keeps its own evidence and confirmation (ADR 0049).
+  items: {
+    steps: 'id',
+    variables: 'name',
+    materials: 'role',
+    solutions: 'role',
+    questions: 'id',
+  },
   sections: [
     {
       id: 'overview',

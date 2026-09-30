@@ -62,7 +62,10 @@
               "datasheet",
               "imported",
               "measured",
-              "calculated"
+              "calculated",
+              "record",
+              "template",
+              "memory"
             ]
           },
           "by": {
@@ -123,6 +126,39 @@
             "type": "string"
           },
           "reference": {
+            "type": "string"
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "path": {
+                "description": "e.g. /steps/coat/parameters/0",
+                "type": "string",
+                "format": "starts_with",
+                "pattern": "^\\/.*"
+              }
+            },
+            "required": [
+              "id",
+              "version"
+            ],
+            "additionalProperties": false
+          },
+          "calculation": {
+            "type": "string",
+            "pattern": "^calc_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "output": {
+            "description": "Where in the calculation output the value is",
             "type": "string"
           }
         },

@@ -7,6 +7,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import { pathLabel } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { Checks, fieldLabel, SettledDetails } from './RecordReview.tsx';
@@ -109,7 +110,7 @@ function SopStatus({
             {readiness.assumed.length === 1
               ? 'One part holds'
               : `${readiness.assumed.length} parts hold`}{' '}
-            an agent's estimate: {readiness.assumed.map(fieldLabel).join(', ')}. Check before you
+            an agent's estimate: {readiness.assumed.map(pathLabel).join(', ')}. Check before you
             confirm.
           </p>
         )}
