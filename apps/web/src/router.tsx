@@ -18,6 +18,7 @@ import {
   SamplesPage,
 } from './pages/Inventory.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
+import { LayoutsPage, PlateMapsPage } from './pages/PlateMaps.tsx';
 import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pages/Reagents.tsx';
 import { RecordPage } from './pages/Record.tsx';
 import { RecordsPage } from './pages/Records.tsx';
@@ -176,6 +177,16 @@ const sets = createRoute({
   path: '/sets',
   component: SetsPage,
 });
+const plateMaps = createRoute({
+  getParentRoute: () => app,
+  path: '/plate-maps',
+  component: PlateMapsPage,
+});
+const layouts = createRoute({
+  getParentRoute: () => app,
+  path: '/layouts',
+  component: LayoutsPage,
+});
 const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
@@ -220,6 +231,8 @@ const routeTree = root.addChildren([
     experiments,
     runs,
     sets,
+    plateMaps,
+    layouts,
     records,
     record,
     wiki,

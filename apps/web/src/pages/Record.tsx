@@ -21,6 +21,7 @@ import { ContainerBlocks, EntityBlocks } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
+import { LayoutBlocks, PlateMapBlocks } from './PlateMaps.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
 import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
@@ -117,6 +118,10 @@ export function RecordPage() {
               <CampaignBlocks record={r} />
             ) : r.kind === 'experiment' ? (
               <ExperimentBlocks record={r} />
+            ) : r.kind === 'layout' ? (
+              <LayoutBlocks record={r} />
+            ) : r.kind === 'plate_map' ? (
+              <PlateMapBlocks record={r} />
             ) : undefined
           }
         />

@@ -1257,6 +1257,86 @@ ul.rules {
   font-size: 14px;
 }
 
+/* Plate maps (plan 014b): roles in a few tones, a series shaded from dark (top) to light. */
+.plate .well.role-subject,
+.legend i.role-subject {
+  background: var(--accent);
+}
+.plate .well.role-standard,
+.legend i.role-standard {
+  background: var(--warn);
+}
+.plate .well.role-subject.shade-3 {
+  background: color-mix(in srgb, var(--accent) 70%, var(--well-empty));
+}
+.plate .well.role-subject.shade-2 {
+  background: color-mix(in srgb, var(--accent) 45%, var(--well-empty));
+}
+.plate .well.role-subject.shade-1 {
+  background: color-mix(in srgb, var(--accent) 25%, var(--well-empty));
+}
+.plate .well.role-standard.shade-3 {
+  background: color-mix(in srgb, var(--warn) 70%, var(--well-empty));
+}
+.plate .well.role-standard.shade-2 {
+  background: color-mix(in srgb, var(--warn) 45%, var(--well-empty));
+}
+.plate .well.role-standard.shade-1 {
+  background: color-mix(in srgb, var(--warn) 25%, var(--well-empty));
+}
+.plate .well.role-positive,
+.legend i.role-positive {
+  background: var(--ink-2);
+}
+.plate .well.role-neutral,
+.legend i.role-neutral {
+  background: var(--well-empty);
+  box-shadow: inset 0 0 0 2px var(--ink-2);
+}
+.plate .well.role-negative,
+.legend i.role-negative {
+  background: var(--lamp-off);
+  box-shadow: inset 0 0 0 2px var(--ink-3);
+}
+.plate .well.role-blank,
+.legend i.role-blank {
+  background: var(--well-empty);
+  border: 1px dashed var(--ink-3);
+}
+.plate .well.role-other,
+.legend i.role-other {
+  background: var(--ink-3);
+}
+.plate .well.override::after {
+  content: "";
+  display: block;
+  width: 30%;
+  height: 30%;
+  margin: 35%;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.plate-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.plate-strip .btn[aria-pressed="true"] {
+  border-color: var(--ink);
+}
+.warn-text {
+  color: var(--warn);
+}
+.try-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.try-count input {
+  width: 7em;
+}
+
 /* Scan */
 .scan-bar {
   margin-bottom: 16px;

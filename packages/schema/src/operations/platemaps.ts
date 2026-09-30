@@ -100,8 +100,9 @@ export const platemapsOverride = defineContract({
 export const platemapsExport = defineContract({
   id: 'platemaps.export',
   summary:
-    'The plate map as a CSV file (plate, well, role, subject, name, replicate, point, concentration, unit), for people and for instruments that take a plate map file',
+    "The plate map as a CSV file (plate, well, role, subject, name, replicate, point, concentration, unit), for people and for instruments that take a plate map file. The app offers it to the person as a file to download; don't copy it into your reply",
   effect: 'read',
   input: z.strictObject({ id: PlateMapId, version: z.number().int().positive().optional() }),
   output: z.object({ filename: z.string(), csv: z.string() }),
+  file: ({ filename, csv }) => ({ name: filename, mediaType: 'text/csv', text: csv }),
 });

@@ -58,6 +58,10 @@ Readiness: it places something and its layout version is confirmed (blockers); a
 
 Subjects, controls and strategy change through `records.update`; confirming is `records.confirm_section`, like every design.
 
+## Screens (014b-1)
+
+Layouts and Plate maps sit in the Experiments menu group. A layout's record page shows its plate full, with how many subjects fit per plate and a count to try ("41 samples → 2 plates"), from `layouts.preview`. A plate map's page shows its plates (a strip moves between them), a key by role with counts, the wells by role, a series shaded from its top point, hand edits marked, a well's details on select, and the CSV to save. See [web-app.md](web-app.md).
+
 ## Not yet
 
-The plate editor and layout library (014b). Real barcoded plates come with the transfer plan (016).
+Editing on the plate (select wells, pick a role or subject, which becomes a hand edit) and saving a map as a layout (014b-2). Real barcoded plates come with the transfer plan (016).
