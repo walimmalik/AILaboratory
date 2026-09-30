@@ -260,7 +260,6 @@ function SettledDetails({
             </li>
           )}
           {readiness.sections.map((section) => {
-            const count = filled(section);
             return (
               <li key={section.id} id={`section-${section.id}`}>
                 <button
@@ -271,7 +270,7 @@ function SettledDetails({
                 >
                   <b>{section.title}</b>
                   <span className="muted">
-                    {count === 0 ? 'empty' : `${count} of ${section.fields.length} filled`}
+                    {filledWords(section)}
                     {section.review &&
                       ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`}
                   </span>
@@ -307,9 +306,16 @@ function SettledDetails({
   );
 }
 
-/** How many of a section's fields hold a value. */
-const filled = (section: ReadinessSection) =>
-  section.fields.filter((f) => !isEmpty(f.value)).length;
+/** "11 steps", "6 materials · 2 solutions" for sections of lists; "2 of 7 filled" otherwise. */
+function filledWords(section: ReadinessSection): string {
+  const values = section.fields.filter((f) => !isEmpty(f.value));
+  if (values.length === 0) return 'empty';
+  if (values.every((f) => Array.isArray(f.value)))
+    return values
+      .map((f) => `${(f.value as unknown[]).length} ${fieldLabel(f.field).toLowerCase()}`)
+      .join(' · ');
+  return `${values.length} of ${section.fields.length} filled`;
+}
 
 const isEmpty = (value: unknown) =>
   value === undefined ||

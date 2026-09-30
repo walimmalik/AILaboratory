@@ -654,6 +654,15 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await procedure.getByText('Values for a run').click();
   await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(/9\.60* mL/);
 
+  // Variables are edited one per row, a value as a line of text, not as JSON.
+  const variables = page.getByRole('region', { name: 'Variables' });
+  await variables.getByRole('button', { name: 'Edit variables' }).click();
+  await variables.locator('summary').filter({ hasText: 'Well volume' }).click();
+  await variables.getByRole('textbox', { name: 'value', exact: true }).fill('150 uL');
+  await variables.getByRole('button', { name: 'Save' }).click();
+  await expect(variables.getByRole('button', { name: 'Edit variables' })).toBeVisible();
+  await expect(procedure).toContainText('volume 150 µL (Well volume)');
+
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');
   await questions.getByRole('button', { name: 'Accept the suggestion' }).click();

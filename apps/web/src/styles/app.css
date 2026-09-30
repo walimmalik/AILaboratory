@@ -953,6 +953,13 @@ table.checks td.mark {
   display: grid;
   gap: 14px;
 }
+/* A list of objects: one line per item, opening in place; indents, not boxes. */
+.items {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  justify-items: start;
+}
 .form-rows {
   display: grid;
   gap: 8px;
@@ -979,6 +986,9 @@ table.checks td.mark {
   width: 100%;
   max-width: 48ch;
 }
+.form-row > .control > .items {
+  max-width: 96ch;
+}
 .form-row .form-rows {
   padding-left: 12px;
   width: 100%;
@@ -1003,6 +1013,28 @@ table.checks td.mark {
   gap: 8px;
   width: 100%;
   justify-items: start;
+}
+.items-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.item-row {
+  border-bottom: 1px solid var(--rule);
+  padding: 4px 0;
+}
+.item-head {
+  cursor: pointer;
+}
+.item-body {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 8px 12px;
+}
+.item-actions {
+  display: flex;
+  gap: 6px;
 }
 .json-field {
   width: 100%;
@@ -1558,4 +1590,10 @@ ul.reviewer-fixes {
 }
 .settled-line[aria-expanded="true"]::before {
   content: "▾";
+}
+
+/* A list of objects shown as a value (an SOP's variables or steps): a plain table inside the row. */
+table.review-fields table.items-table td {
+  vertical-align: top;
+  background: none;
 }

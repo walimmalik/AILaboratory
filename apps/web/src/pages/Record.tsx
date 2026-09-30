@@ -1,8 +1,15 @@
 import type { RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
-import { actorLabel, diffRecords, formatValue, formatWhen, isAgent } from '../lib/format.ts';
+import { type ReactNode, useState } from 'react';
+import {
+  actorLabel,
+  diffRecords,
+  formatValue,
+  formatWhen,
+  isAgent,
+  isQuantity,
+} from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -227,10 +234,46 @@ function confirmedSections(
     .map(([id]) => fieldLabel(id));
 }
 
-/** A value as a person reads it: linked records by name, quantities with their unit. */
-function renderValue(value: unknown) {
+/**
+ * A value as a person reads it: linked records by name, quantities with their unit, and a list of
+ * objects (an SOP's variables or steps) as a small table, one row per item.
+ */
+function renderValue(value: unknown): ReactNode {
   const isRef = typeof value === 'string' && /^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/.test(value);
-  return isRef ? <LinkedName id={value as string} /> : formatValue(value);
+  if (isRef) return <LinkedName id={value as string} />;
+  if (Array.isArray(value) && value.length > 0 && value.every(isPlainObject))
+    return <ItemsTable items={value as Record<string, unknown>[]} />;
+  return formatValue(value);
+}
+
+const isPlainObject = (v: unknown) =>
+  !!v && typeof v === 'object' && !Array.isArray(v) && !isQuantity(v);
+
+function ItemsTable({ items }: { items: Record<string, unknown>[] }) {
+  // Columns in the order the items use them; source quotes stay on the record's history.
+  const columns = [...new Set(items.flatMap((item) => Object.keys(item)))].filter(
+    (key) => key !== 'cite',
+  );
+  return (
+    <table className="items-table">
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c}>{fieldLabel(c)}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <tr key={JSON.stringify(item)}>
+            {columns.map((c) => (
+              <td key={c}>{item[c] === undefined ? '' : renderValue(item[c])}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
 function Field({ name, value }: { name: string; value: unknown }) {
