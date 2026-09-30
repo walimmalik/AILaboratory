@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
+import { entityKinds } from '../entities/kinds.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
 import {
@@ -36,7 +37,13 @@ beforeEach(async () => {
     labId: other.labId,
   };
   const kinds = new KindRegistry();
-  for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...inventoryKinds]) {
+  for (const kind of [
+    ...labwareKinds,
+    ...instrumentKinds,
+    ...reagentKinds,
+    ...entityKinds,
+    ...inventoryKinds,
+  ]) {
     kinds.register(kind);
   }
   registry = createRegistry(db, kinds, new ActivityBus());
@@ -305,5 +312,96 @@ describe('fill, transfer and the ledger', () => {
     expect(hidden.message).toContain('is not a container in this lab');
     const foreign = await refused(run(otherLab, 'inventory.history', { container: tube.id }));
     expect(foreign.code).toBe('invalid_input');
+  });
+});
+
+describe('samples and discarding', () => {
+  it('registers a miniprep with its QC, fills a tube with it, and discards the tube', async () => {
+    const { tube, box, compound } = await lab();
+    const kind = await run<RecordEnvelope>(person, 'entities.draft_kind', {
+      label: 'Plasmid',
+      attributes: { base: 'dna', prefix: 'PLS', fields: [] },
+    });
+    const plasmid = await run<RecordEnvelope>(person, 'entities.draft', {
+      label: 'pIL6p-luc2',
+      entityKind: kind.id,
+      fields: {},
+    });
+    const miniprep = await run<RecordEnvelope>(person, 'samples.register', {
+      label: 'pIL6p-luc2 miniprep, colony 1',
+      entity: plasmid.id,
+      method: 'miniprep',
+      made: '2026-09-25',
+      qc: [
+        { key: 'concentration', value: { value: '185', unit: 'ng/uL' }, method: 'NanoDrop' },
+        { key: 'sequence_verified', value: true, method: 'Sanger' },
+      ],
+    });
+    expect(miniprep).toMatchObject({ name: 'SMP-0001', status: 'active' });
+    const wrong = await refused(
+      run(person, 'samples.register', {
+        label: 'Bad',
+        entity: plasmid.id,
+        method: 'miniprep',
+        derivedFrom: ['lot_01M3QZX866A5SB53SPYV40HA9G'],
+        qc: [
+          { key: 'concentration', value: '1' },
+          { key: 'concentration', value: '2' },
+        ],
+      }),
+    );
+    expect(wrong.message).toContain('is not a sample or lot in this lab');
+    expect(wrong.message).toContain('QC concentration is listed twice');
+    const proposed = await registry.execute(agent, 'samples.register', {
+      label: 'Proposed prep',
+      entity: plasmid.id,
+      method: 'miniprep',
+    });
+    expect(proposed.status).toBe('proposed');
+
+    await run(person, 'inventory.fill', {
+      container: tube.id,
+      fills: [
+        {
+          wells: ['A1'],
+          volume: { value: '48', unit: 'uL' },
+          components: [{ source: miniprep.id, concentration: { value: '185', unit: 'ng/uL' } }],
+        },
+      ],
+    });
+    // A box holding the tube can't be discarded.
+    const current = await run<RecordEnvelope>(person, 'records.get', { id: tube.id });
+    await run(person, 'inventory.move', {
+      container: tube.id,
+      expectedVersion: current.version,
+      to: { container: box.id, position: 'A1' },
+    });
+    const full = await refused(
+      run(person, 'inventory.discard', { container: box.id, expectedVersion: box.version }),
+    );
+    expect(full.message).toContain('still holds TUB-000001');
+    const moved = await run<RecordEnvelope>(person, 'records.get', { id: tube.id });
+    const discarded = await run<{ container: RecordEnvelope; event?: InventoryEvent }>(
+      person,
+      'inventory.discard',
+      { container: tube.id, expectedVersion: moved.version, reason: 'Used up' },
+    );
+    expect(discarded.container.attributes).toMatchObject({ status: 'discarded' });
+    expect(discarded.event?.type).toBe('discard');
+    expect((await run<Wells>(person, 'inventory.wells', { container: tube.id })).wells).toEqual([]);
+    const again = await refused(
+      run(person, 'inventory.discard', {
+        container: tube.id,
+        expectedVersion: discarded.container.version,
+      }),
+    );
+    expect(again.message).toContain('already discarded');
+    const emptyBox = await run<{ container: RecordEnvelope; event?: InventoryEvent }>(
+      person,
+      'inventory.discard',
+      { container: box.id, expectedVersion: box.version },
+    );
+    expect(emptyBox.event).toBeUndefined();
+    void compound;
   });
 });

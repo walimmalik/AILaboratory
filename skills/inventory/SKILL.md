@@ -29,4 +29,9 @@ What a well holds is a `WellState` (see `skills/calculators`). To know what a tr
 
 - `inventory.wells` with `{container}` lists what each well holds; `inventory.history` with `{container, well?}` gives its ledger.
 - Recording what happened at the bench (all proposals from an agent): `inventory.fill` with `{container, fills: [{wells: ["A3:P22"], volume, components, assumed?}]}` for liquid from outside the inventory (components are lots or samples with their concentration); `inventory.transfer` with `{transfers: [{from: {container, well}, to: {container, well}, volume}]}`; `inventory.consume` with `{container, wells, volume}`; `inventory.correct` with `{container, wells, state, reason}` for a measurement.
+- `inventory.discard` with `{container, expectedVersion, reason?}` when something is thrown away; empty a box first.
 - A tube or trough is well `A1`. Mark estimates `assumed: true`. Read `warnings` in the result (a well below its dead volume) and tell the person.
+
+## Samples
+
+A batch the lab made (a miniprep, PCR product, purified protein, culture, cell bank) is a **sample** (`SMP-0001`): `samples.register` with `{label, entity, method, made?, madeBy?, derivedFrom?, qc?: [{key, value, measured?, method?}], notes?}`. QC values are quantities (`{"value": "185", "unit": "ng/uL"}`), `true`/`false` or short text, one per key. Then fill its tubes with `inventory.fill`, the sample as the component. Bought things and recipe batches are lots, not samples.
