@@ -27,6 +27,7 @@ import { campaignOperations } from '../campaigns/operations.ts';
 import { runOperations } from '../campaigns/runs.ts';
 import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
+import { transferCalculators } from '../transfers/calculators.ts';
 import { OperationError } from './errors.ts';
 
 export { OperationError } from './errors.ts';
@@ -69,6 +70,7 @@ export function createRegistry(
     ...runOperations,
     ...conclusionOperations,
     ...plateMapOperations,
+    ...transferCalculators,
     ...assistantOperations,
   );
 }

@@ -98,7 +98,7 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution optimizer, source volumes, tip counting), the recommendation operations, transfer plan operations, reservations. Built (016a-1): `packages/domain/src/transfers.ts` with volume fitting, direct dispense, backfill, dilution options, source volumes, tip counting, device ranking and the dilution optimizer.
+- **016a:** schemas, `packages/domain/transfers` (solver, feasibility, dilution optimizer, source volumes, tip counting), the recommendation operations, transfer plan operations, reservations. Built (016a-1): `packages/domain/src/transfers.ts` with volume fitting, direct dispense, backfill, dilution options, source volumes, tip counting, device ranking and the dilution optimizer. Built (016a-2): the calculator operations `transfers.dilution_options`, `transfers.optimize_dilution`, `transfers.source_volumes` and `transfers.options`.
 - **016b:** Echo pick list writer and transfer and survey report import, Opentrons protocol writer checked in the simulator, deck layouts, against the examples in `seed/worklists/`.
 - **016c:** worklist format records and the generic CSV writer: Hamilton STAR and Vantage, Mantis, PreciseDrop, FeliX.
 - **016d:** transfer plan page, deck view, loading list, report view, agent drafting, skill.
