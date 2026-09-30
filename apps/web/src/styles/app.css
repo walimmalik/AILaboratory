@@ -1118,3 +1118,90 @@ table.checks td.mark {
   min-width: 14em;
   max-width: 22em;
 }
+
+/* Inventory (plan 010e): places tree, plate maps shaded by volume, inherited rules. */
+.places {
+  display: grid;
+  grid-template-columns: minmax(14em, 1fr) 2fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .places {
+    grid-template-columns: 1fr;
+  }
+}
+.tree,
+ul.plain,
+ul.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+ul.rules {
+  gap: 12px;
+}
+.tree .link-btn[aria-pressed="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.well-grid-wrap {
+  overflow-x: auto;
+  display: grid;
+  gap: 8px;
+}
+.well-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+  width: auto;
+  font: 11px / 1 var(--font-mono);
+}
+.well-grid-wrap .well-grid th {
+  color: var(--ink-3);
+  font-weight: 400;
+  padding: 0 3px;
+  text-align: center;
+  border: 0;
+}
+.well-grid-wrap .cell {
+  padding: 0;
+  border: 0;
+}
+.well-grid-wrap .well {
+  display: block;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: var(--field);
+  cursor: pointer;
+}
+.well-grid-wrap .well.heat-1 {
+  background: color-mix(in srgb, var(--accent) 25%, var(--field));
+}
+.well-grid-wrap .well.heat-2 {
+  background: color-mix(in srgb, var(--accent) 45%, var(--field));
+}
+.well-grid-wrap .well.heat-3 {
+  background: color-mix(in srgb, var(--accent) 70%, var(--field));
+}
+.well-grid-wrap .well.heat-4 {
+  background: var(--accent);
+}
+.well-grid-wrap .well.heat-unknown {
+  background: repeating-linear-gradient(45deg, var(--field) 0 3px, var(--accent-soft) 3px 6px);
+}
+.well-grid-wrap .well.assumed {
+  border-color: var(--agent);
+}
+.well-grid-wrap .well[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.block .body .well-detail h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
