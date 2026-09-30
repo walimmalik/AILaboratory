@@ -682,10 +682,41 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   const variables = page.getByRole('region', { name: 'Variables' });
   await variables.getByRole('button', { name: 'Edit variables' }).click();
   await variables.locator('summary').filter({ hasText: 'Well volume' }).click();
-  await variables.getByRole('textbox', { name: 'value', exact: true }).fill('150 uL');
+  await variables.getByRole('textbox', { name: 'Value', exact: true }).fill('150 uL');
+  // A formula is written with the values' lab names, picked as they are typed, and worked out live.
+  await variables.locator('summary').filter({ hasText: 'Coating solution' }).click();
+  const formula = variables.getByRole('textbox', { name: 'Formula' });
+  await expect(formula).toHaveValue('[Wells] × [Well volume]');
+  await formula.fill('[Wells] × well vol');
+  await variables
+    .getByRole('list', { name: 'Matching values' })
+    .getByRole('button', { name: 'Well volume' })
+    .click();
+  await expect(formula).toHaveValue('[Wells] × [Well volume]');
+  await formula.press('End');
+  await formula.pressSequentially(' × 1.1');
+  await expect(variables).toContainText(/= 15\.840* mL/);
   await variables.getByRole('button', { name: 'Save' }).click();
   await expect(variables.getByRole('button', { name: 'Edit variables' })).toBeVisible();
   await expect(procedure).toContainText('volume 150 µL (Well volume)');
+  await procedure
+    .locator('details')
+    .filter({ hasText: 'Values for a run' })
+    .evaluate((d) => {
+      (d as HTMLDetailsElement).open = true;
+    });
+  await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(
+    /15\.840* mL/,
+  );
+
+  // A step reads as its action, words and settings, a value named by its lab name.
+  const steps = page.getByRole('region', { name: 'Procedure' });
+  await steps.getByRole('button', { name: 'Edit procedure' }).click();
+  await steps.locator('summary').filter({ hasText: 'Coat' }).click();
+  await expect(steps.getByRole('combobox', { name: 'Action' })).toHaveValue('add');
+  await expect(steps.getByRole('combobox', { name: 'volume value' })).toHaveValue('[Well volume]');
+  await expect(steps.getByRole('checkbox', { name: 'Coating plate' })).toBeChecked();
+  await steps.getByRole('button', { name: 'Cancel' }).click();
 
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { type ComponentType, createContext, type ReactNode, useContext, useState } from 'react';
 import {
   discriminator,
   isQuantity,
@@ -28,11 +28,36 @@ interface EditorContext {
   kindOfPrefix: Record<string, string>;
   /** Dotted paths that don't apply to this record (`Readiness.notApplicable`); left out unless set. */
   hidden: ReadonlySet<string>;
+  /** The record's values as edited so far, for editors that refer to other fields (an SOP's steps). */
+  document?: Record<string, unknown>;
+  /** Editors of their own for the items of some lists, by the list's path (an SOP's variables). */
+  itemEditors?: Record<string, ItemEditor>;
 }
 const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {}, hidden: new Set() });
 
 export function EditorScope({ children, ...value }: EditorContext & { children: ReactNode }) {
   return <Context.Provider value={value}>{children}</Context.Provider>;
+}
+
+export const useEditorScope = () => useContext(Context);
+
+export interface ItemEditorProps {
+  /** The item's schema, for fields the custom editor leaves to the generic ones. */
+  schema: JsonSchema;
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+  label: string;
+  path: string;
+  /** Its place in the list, from 0. */
+  index: number;
+}
+
+export interface ItemEditor {
+  Edit: ComponentType<ItemEditorProps>;
+  /** A new item, given the list so far (for a fresh id). */
+  create?: (items: unknown[]) => Record<string, unknown>;
+  /** The item's line in the list. */
+  title?: (item: Record<string, unknown>) => string;
 }
 
 const unitWords: Record<string, string> = { uL: 'µL', um: 'µm' };
@@ -418,6 +443,9 @@ function itemTitle(item: unknown): string {
   return [action, title].filter(Boolean).join(' · ') || 'new, not filled in yet';
 }
 
+const asObject = (item: unknown) =>
+  (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+
 let nextItemKey = 0;
 
 /** What one item of a list is called, where dropping the "s" doesn't say it. */
@@ -445,6 +473,7 @@ function ItemsEditor({
   label: string;
   path: string;
 }) {
+  const custom = useContext(Context).itemEditors?.[path];
   const items = Array.isArray(value) ? value : [];
   // Keys follow the items as they move, so an open item's fields stay with it.
   const [keys, setKeys] = useState(() => items.map(() => nextItemKey++));
@@ -477,20 +506,36 @@ function ItemsEditor({
             <li key={key} className="item-row">
               <details open={open.has(key)} onToggle={(e) => toggle(key, e.currentTarget.open)}>
                 <summary className="item-head">
-                  <span className="num muted">{i + 1}</span> {itemTitle(item)}
+                  <span className="num muted">{i + 1}</span>{' '}
+                  {custom?.title?.(asObject(item)) || itemTitle(item)}
                 </summary>
                 <div className="item-body">
-                  <ValueEditor
-                    schema={schema}
-                    value={item}
-                    label={`${label} ${i + 1}`}
-                    path={path}
-                    onChange={(next) => {
-                      const nextItems = [...items];
-                      nextItems[i] = next ?? {};
-                      update(nextItems, keys);
-                    }}
-                  />
+                  {custom ? (
+                    <custom.Edit
+                      schema={schema}
+                      value={asObject(item)}
+                      label={`${label} ${i + 1}`}
+                      path={path}
+                      index={i}
+                      onChange={(next) => {
+                        const nextItems = [...items];
+                        nextItems[i] = next;
+                        update(nextItems, keys);
+                      }}
+                    />
+                  ) : (
+                    <ValueEditor
+                      schema={schema}
+                      value={item}
+                      label={`${label} ${i + 1}`}
+                      path={path}
+                      onChange={(next) => {
+                        const nextItems = [...items];
+                        nextItems[i] = next ?? {};
+                        update(nextItems, keys);
+                      }}
+                    />
+                  )}
                   <div className="item-actions">
                     <button
                       type="button"
@@ -533,7 +578,7 @@ function ItemsEditor({
         onClick={() => {
           const key = nextItemKey++;
           setOpen(new Set(open).add(key));
-          update([...items, {}], [...keys, key]);
+          update([...items, custom?.create?.(items) ?? {}], [...keys, key]);
         }}
       >
         Add {itemNoun[label.toLowerCase()] ?? label.toLowerCase().replace(/s$/, '')}

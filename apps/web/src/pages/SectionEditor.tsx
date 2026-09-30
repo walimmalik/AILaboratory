@@ -5,6 +5,7 @@ import { api } from '../api.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { fieldLabel } from './RecordReview.tsx';
+import { sopItemEditors } from './SopEditors.tsx';
 
 type Source = 'person' | 'measured' | 'datasheet' | 'calculated';
 const sources: [Source, string][] = [
@@ -96,7 +97,13 @@ export function SectionEditor({
   const kindOfPrefix = Object.fromEntries(kinds?.map((k) => [k.idPrefix, k.kind]) ?? []);
 
   return (
-    <EditorScope root={root} kindOfPrefix={kindOfPrefix} hidden={new Set(notApplicable)}>
+    <EditorScope
+      root={root}
+      kindOfPrefix={kindOfPrefix}
+      hidden={new Set(notApplicable)}
+      document={{ ...base.attributes, ...values }}
+      {...(record.kind === 'sop' ? { itemEditors: sopItemEditors } : {})}
+    >
       <form
         className="editor"
         // A field whose text can't be a value (not a number, not JSON) holds Save until it is fixed.

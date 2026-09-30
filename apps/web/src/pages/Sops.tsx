@@ -29,7 +29,7 @@ import { RecordList } from './Records.tsx';
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
 
-const actionWords: Record<SopStep['action'], string> = {
+export const actionWords: Record<SopStep['action'], string> = {
   add: 'Add',
   transfer: 'Transfer',
   serial_dilute: 'Serial dilution',

@@ -1036,6 +1036,66 @@ table.checks td.mark {
   display: flex;
   gap: 6px;
 }
+/* SOP editors: a value's kind as a choice, formulas in lab words, step settings as rows. */
+.choices {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.choices.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.more-head {
+  cursor: pointer;
+  color: var(--muted);
+}
+.more > .form-rows {
+  padding-top: 8px;
+}
+.formula {
+  display: grid;
+  gap: 6px;
+}
+.formula > .suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.formula-help {
+  display: grid;
+  gap: 6px;
+}
+.formula-help > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.formula-result {
+  margin: 0;
+}
+.settings {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.setting-row > .field:first-child {
+  width: 11em;
+}
 .json-field {
   width: 100%;
   font-family: var(--font-mono);
