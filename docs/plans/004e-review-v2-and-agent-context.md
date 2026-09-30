@@ -1,6 +1,6 @@
 # 004e: Review v2 and agent context
 
-- Status: in planning. Added by Wali on 2026-09-30 after the human interaction review; decisions R1 to R12 below are open.
+- Status: accepted. Added by Wali on 2026-09-30 after the human interaction review; R1 to R12 accepted by Wali the same day, all as recommended. Each step writes its ADR when it is built.
 - Extends: [004 Agent shell](004-agent-shell.md) (004c draft and confirm, 004d one Review page), ADRs [0021](../decisions/0021-draft-and-confirm.md), [0022](../decisions/0022-one-place-to-review.md), [0024](../decisions/0024-lab-calculators.md)
 - Goes before: 013c (run recording needs change sets), 014a (plate maps need finer evidence), 016a (transfer volumes need checkable calculations), 017 (one confirm per design). 013b is already in flight and is not held for it.
 - Roadmap change chosen with it: 005 lab memory moves before 017.
@@ -29,7 +29,7 @@ Screen fixes that need no decision (lot to container "Where it is", SOP bench st
 
 ## Round 1: decisions
 
-Recommendations in bold.
+Wali chose the recommended option (bold) for all twelve on 2026-09-30.
 
 | # | Question | Options | Recommendation and why |
 | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ Recommendations in bold.
 | R11 | People parity | A) **Archive, Restore this version and Discard draft on the record page, Discard on agent drafts in Review, one generic Calculators page rendered from calculator contracts, and a CI rule that every agent write has a UI caller or an allowlisted reason** · B) Only the record actions · C) Leave as is | **A.** Today a person asks the assistant, it proposes, and the person confirms their own request. The generic page costs nothing per calculator. |
 | R12 | Checked calculations | A) **Calculator outputs carry a calculation handle; `calculated` evidence must reference one and the record service checks the value against it** · B) The handle is optional and shown when present · C) Leave to 016a | **A, built in 004e-2 with evidence.** "Numbers come from calculators" can't be checked today; 016, 017 and 019 lean on it hardest. |
 
-## Proposed UI rules (to add to the wiki once R1 to R12 are chosen)
+## UI rules (added to the wiki's [UI page](../wiki/ui.md))
 
 1. What you confirm is what you read: each kind renders a section in its lab form, never as a field dump, and any ID at any depth shows as a linked name.
 2. Up front: blockers, guesses and what changed since you last looked; everything confirmed or derived folds to one line, and empty fields hide.

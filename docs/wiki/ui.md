@@ -27,6 +27,26 @@ These read as "AI tells" and are not allowed:
 
 Instead: **one outline per top-level block**, and state said in words, lamps or icons ("needs review" in agent ink, "✓ confirmed" in green, "● live").
 
+## Human interaction rules
+
+Added 2026-09-30 with [plan 004e](../plans/004e-review-v2-and-agent-context.md), after the human interaction review. The rule behind them is Wali's: keep all information available, but design what shows first.
+
+1. **What you confirm is what you read.** Each kind renders a section in its lab form (steps, plate, table, graph), never as a field dump, and any ID at any depth shows as a linked name.
+2. **Up front: blockers, guesses and what changed since you last looked.** Everything confirmed or derived folds to one line, and empty fields hide.
+3. **Agent ink is rare.** Only values an agent guessed or was told show in agent ink; values from confirmed records, templates, memory or calculators say where they came from in normal ink.
+4. **One queue, one count.** Everything waiting for a person is a Review item with an addressee; only what blocks something is counted, and a truncated list always says its total.
+5. **One intent, one confirm.** What an agent does for one ask is confirmed or rejected as one; a group with no guesses and no failing checks can be confirmed together.
+6. **Confirm rules, not rows.** Derived content (wells generated from a layout) is marked calculated and not reviewed item by item.
+7. **A person's own edit is their confirmation** of the values they typed.
+8. **People are never slower than agents.** Anything an agent can propose, a person can do on the page it concerns.
+9. **Plain words are part of the contract.** No screen shows an operation ID, and a failure shows its reason on the row.
+10. **A person never edits JSON** for a value whose shape the schema knows.
+11. **Every record answers "where is it" and "what's in it"** on its own page; a grid of wells has a contents legend and a search.
+12. **Every fix is a choice with a consequence**, and a "Fix in…" link goes where the fix is made.
+13. **Show state only when it isn't the default**, and a check's source is the reason in lab words, with plan numbers under technical details.
+14. **Laptop width is the normal case:** tables scroll rather than clip, with the assistant open.
+15. **Agents discover, then load:** a small core toolset plus calculators, with skills and module tools served on demand.
+
 ## Language
 
 - Plain lab language on screen. Record IDs, operation IDs and JSON sit under "technical details".
