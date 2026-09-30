@@ -28,7 +28,7 @@ const labwareType = defineKind({
 });
 ```
 
-ID and name prefixes are unique across kinds; a kind that names records with more than one prefix lists the others in `otherNamePrefixes` (containers: `PLT`, `TUB`, `BOX`…) so they are reserved too. A kind may also declare `related` (ADR 0029): rules that read other records in the lab, run inside every write and readiness read. They return problems that refuse the write, extra readiness checks, and optionally the readable name prefix for a new record (an entity is named with its entity kind's prefix, which must not be one a code kind holds). A kind that people review may also declare `sections` and `checks`; see "Draft and confirm" below. `links` reads references out of the attributes; the service keeps `record_links` in sync on every write.
+ID and name prefixes are unique across kinds; a kind that names records with more than one prefix lists the others in `otherNamePrefixes` (containers: `PLT`, `TUB`, `BOX`…) so they are reserved too. A kind may also declare `related` (ADR 0029): rules that read other records in the lab, run inside every write and readiness read. They return problems that refuse the write, extra readiness checks, and optionally the readable name prefix for a new record (an entity is named with its entity kind's prefix, which must not be one a code kind holds). A kind whose records only one operation may make declares `createdBy` (files: `files.upload`), and `records.create` refuses it. A kind that people review may also declare `sections` and `checks`; see "Draft and confirm" below. `links` reads references out of the attributes; the service keeps `record_links` in sync on every write.
 
 ## Rules the service enforces
 

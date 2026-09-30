@@ -23,7 +23,7 @@ The lab's reading shelf (plan [011](../plans/011-sop-library.md)): stored files,
 
 ## Files (011a)
 
-Bytes live in a content-addressed store, named by their sha256, so identical files are stored once. `FILE_STORE_DIR` sets the folder (default `apps/api/data/files`; the `files` volume at `/data/files` in compose). A `file` record (`fil_`, `FIL-0001`) is created active and holds `sha256`, `size` in bytes, `mediaType`, `originalName` and `source`: `upload`, `url` (with the URL), `folder` (with its path in an imported folder) or `derived` (from another file, linked `derived_from`). The bytes never change; the record service refuses a new hash or size.
+Bytes live in a content-addressed store, named by their sha256, so identical files are stored once. `FILE_STORE_DIR` sets the folder (default `apps/api/data/files`; the `files` volume at `/data/files` in compose). A `file` record (`fil_`, `FIL-0001`) is created active and holds `sha256`, `size` in bytes, `mediaType`, `originalName` and `source`: `upload`, `url` (with the URL), `folder` (with its path in an imported folder) or `derived` (from another file, linked `derived_from`). The bytes never change; the record service refuses a new hash or size. Only `files.upload` makes a file record (the kind's `createdBy`); `records.create` refuses the kind, since knowing a hash is not holding the bytes.
 
 - `files.upload` takes `base64` or `text`, up to 50 MB. The same bytes again in the same lab return the existing record with `stored: false`.
 - `files.get` returns the record with `text` (text types: `text/*`, JSON, XML, YAML, code) or `base64`, or `as: "none"` for the record only.

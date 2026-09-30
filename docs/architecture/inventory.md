@@ -67,7 +67,7 @@ A `sample` (`smp_`, `SMP-0001`) is a batch the lab made of an entity: a miniprep
 
 ## Volume ledger (010c, V4 and V7)
 
-Every change to a well is an event in `inventory_events` (fill, transfer, stamp, consume, correct, discard) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
+Every change to a well is an event in `inventory_events` (fill, transfer, stamp, consume, correct, discard) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. Every inventory write first takes a per-lab transaction lock (`pg_advisory_xact_lock`), before it reads any well, so two operations on the same wells run one after the other instead of each writing its result over the other's. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
 
 - Refused: taking more than a well holds (the whole event rolls back), filling past the labware type's `maxVolume`, a well the container doesn't have, a source that isn't a lot or sample in the lab, a discarded container.
 - Warned: a well left below the labware type's dead volume.
