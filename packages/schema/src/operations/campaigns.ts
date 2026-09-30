@@ -6,11 +6,15 @@ import {
   ExperimentAttributes,
   ExperimentId,
   ExperimentStage,
+  ProtocolStep,
+  RoleBinding,
 } from '../campaigns.ts';
 import { EvidenceInput } from '../design.ts';
 import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { RecordEnvelope } from '../record.ts';
+import { SopName } from '../sops.ts';
+import { sopsCalculate } from './sops.ts';
 
 const Reason = z.string().min(1).optional().describe('Why; kept in history');
 const Evidence = z
@@ -79,10 +83,49 @@ export const experimentsSetStage = defineContract({
   output: RecordEnvelope,
 });
 
+export const experimentsBindProtocol = defineContract({
+  id: 'experiments.bind_protocol',
+  summary:
+    "Bind what an SOP the experiment follows leaves open, for one protocol part: its material roles to records (a labware type, product, lot, instrument kind or entity pinned by `version`; a container, sample or instrument by id) and its input variables (n_samples = 40). Given roles and inputs replace earlier ones; `unbind` and `clear` remove them. Then experiments.calculate works out the run's values",
+  effect: 'write',
+  input: z.strictObject({
+    id: ExperimentId,
+    expectedVersion: z.number().int().positive(),
+    part: z.string().min(1).describe("The protocol part's id, e.g. coating"),
+    bindings: z.array(RoleBinding).optional(),
+    inputs: ProtocolStep.shape.inputs,
+    unbind: z.array(SopName).optional().describe('Roles to go back to the SOP default'),
+    clear: z.array(SopName).optional().describe('Inputs to go back to the SOP value'),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const experimentsCalculate = defineContract({
+  id: 'experiments.calculate',
+  calculator: true,
+  summary:
+    "Work out every protocol part of an experiment as it is pinned: each SOP at its pinned version, with the experiment's bindings (read at their pinned versions) and inputs. Says where every value came from and what is still missing or does not fit, which planning needs cleared",
+  effect: 'read',
+  input: z.strictObject({ id: ExperimentId }),
+  output: z.object({
+    parts: z.array(
+      z.object({
+        part: z.string(),
+        sop: z.object({ id: z.string(), name: z.string(), version: z.number().int() }),
+        bindings: sopsCalculate.output.shape.bindings,
+        variables: sopsCalculate.output.shape.variables,
+        problems: z.array(z.string()).describe('Missing values and misfit records, in words'),
+      }),
+    ),
+    ready: z.boolean().describe('Every value works out and every record fits'),
+  }),
+});
+
 export const experimentsAdoptVersions = defineContract({
   id: 'experiments.adopt_versions',
   summary:
-    'Move every SOP an experiment follows to its latest confirmed version, when that version changed something. The experiment keeps its pins until someone adopts; see what changed with records.history first',
+    'Move every SOP and bound record an experiment pins to its latest confirmed version, when that version changed something. Bindings and inputs the new SOP version no longer has are dropped and named in the reason. The experiment keeps its pins until someone adopts; see what changed with records.history first',
   effect: 'write',
   input: z.strictObject({
     id: ExperimentId,

@@ -373,3 +373,253 @@ describe('experiment stages and runs', () => {
     ).rejects.toMatchObject({ code: 'not_found' });
   });
 });
+
+describe('binding the protocol (013b)', () => {
+  const q = (value: string, unit: string) => ({ value, unit });
+  async function lab() {
+    const product = await run(person, 'records.create', {
+      kind: 'product',
+      label: 'IL-6 capture antibody',
+      status: 'active',
+      attributes: {
+        category: 'antibody',
+        origin: 'bought',
+        lotFields: [
+          {
+            key: 'workingConcentration',
+            label: 'Working concentration',
+            unit: 'ug/mL',
+            typical: q('2', 'ug/mL'),
+          },
+        ],
+      },
+    });
+    const lot = await run(person, 'records.create', {
+      kind: 'lot',
+      label: 'Lot 1234',
+      status: 'active',
+      attributes: {
+        product: product.id,
+        lotNumber: '1234',
+        status: 'unopened',
+        values: [{ field: 'workingConcentration', value: q('4', 'ug/mL') }],
+      },
+    });
+    const plate = await run(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'High-bind 96',
+      attributes: { family: 'plate', deadVolume: q('10', 'uL') },
+    });
+    const sop = await confirm(
+      await run(agent, 'sops.draft', {
+        label: 'Coating',
+        materials: [
+          { role: 'capture_ab', label: 'Capture antibody', type: 'reagent', default: product.id },
+          { role: 'plate', label: 'Plate', type: 'labware', default: plate.id },
+        ],
+        variables: [
+          { name: 'wells', label: 'Wells', kind: 'input' },
+          { name: 'well_volume', label: 'Well volume', kind: 'default', value: q('100', 'uL') },
+          {
+            name: 'capture_conc',
+            label: 'Capture antibody working concentration',
+            kind: 'record',
+            value: q('1', 'ug/mL'),
+            readFrom: { role: 'capture_ab', field: 'workingConcentration' },
+          },
+          {
+            name: 'dead',
+            label: 'Dead volume',
+            kind: 'record',
+            readFrom: { role: 'plate', field: 'deadVolume' },
+          },
+          {
+            name: 'coating',
+            label: 'Coating solution',
+            kind: 'computed',
+            expression: 'wells * (well_volume + dead)',
+            unit: 'mL',
+          },
+        ],
+        steps: [{ id: 'coat', action: 'add', text: 'Coat.', uses: ['plate', 'capture_ab'] }],
+      }),
+    );
+    const campaign = await activeCampaign();
+    const experiment = await run(agent, 'experiments.draft', {
+      label: 'Coating check',
+      campaign: campaign.id,
+      question: 'Does the new lot coat as well?',
+      protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
+      readouts: [{ id: 'od', label: 'Absorbance at 450 nm' }],
+    });
+    return { product, lot, plate, sop, experiment };
+  }
+  type Calculated = {
+    parts: {
+      variables: { name: string; quantity?: { value: string; unit: string }; from: string }[];
+      problems: string[];
+    }[];
+    ready: boolean;
+  };
+  const value = (c: Calculated, name: string) => c.parts[0]?.variables.find((v) => v.name === name);
+
+  it('binds roles at pinned versions and inputs, and works the run out from what is pinned', async () => {
+    const { lot, experiment } = await lab();
+    let calc = await run<Calculated>(agent, 'experiments.calculate', { id: experiment.id });
+    expect(calc.ready).toBe(false);
+    expect(calc.parts[0]?.problems.join()).toContain('wells');
+
+    const bound = await run(agent, 'experiments.bind_protocol', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      part: 'coating',
+      bindings: [{ role: 'capture_ab', record: lot.id, version: lot.version }],
+      inputs: [{ name: 'wells', value: '48' }],
+    });
+    calc = await run<Calculated>(person, 'experiments.calculate', { id: experiment.id });
+    expect(calc.ready).toBe(true);
+    expect(value(calc, 'capture_conc')).toMatchObject({
+      quantity: q('4', 'ug/mL'),
+      from: 'record',
+    });
+    expect(value(calc, 'coating')?.quantity).toMatchObject({ unit: 'mL', value: '5.28' });
+
+    // The lot's certificate changes: the experiment keeps what it pinned until someone adopts.
+    const relabelled = await run(person, 'records.update', {
+      id: lot.id,
+      expectedVersion: lot.version,
+      attributes: {
+        ...lot.attributes,
+        values: [{ field: 'workingConcentration', value: q('5', 'ug/mL') }],
+      },
+    });
+    calc = await run<Calculated>(person, 'experiments.calculate', { id: experiment.id });
+    expect(value(calc, 'capture_conc')?.quantity).toMatchObject(q('4', 'ug/mL'));
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: experiment.id });
+    expect(readiness.checks.find((c) => c.id === 'protocol_current')?.message).toContain(
+      `${lot.name} v${relabelled.version}`,
+    );
+    const adopted = await run(agent, 'experiments.adopt_versions', {
+      id: experiment.id,
+      expectedVersion: bound.version,
+    });
+    expect(adopted.attributes).toMatchObject({
+      protocol: [
+        {
+          bindings: [{ role: 'capture_ab', version: relabelled.version }],
+          inputs: [{ name: 'wells' }],
+        },
+      ],
+    });
+    calc = await run<Calculated>(person, 'experiments.calculate', { id: experiment.id });
+    expect(value(calc, 'capture_conc')?.quantity).toMatchObject(q('5', 'ug/mL'));
+
+    // Unbinding goes back to the SOP's default, the product's typical value.
+    const unbound = await run(agent, 'experiments.bind_protocol', {
+      id: experiment.id,
+      expectedVersion: adopted.version,
+      part: 'coating',
+      unbind: ['capture_ab'],
+    });
+    expect(
+      (unbound.attributes as { protocol: { bindings?: unknown }[] }).protocol[0]?.bindings,
+    ).toBeUndefined();
+    calc = await run<Calculated>(person, 'experiments.calculate', { id: experiment.id });
+    expect(value(calc, 'capture_conc')).toMatchObject({
+      quantity: q('2', 'ug/mL'),
+      from: 'typical',
+    });
+  });
+
+  it('refuses unknown roles, parts and inputs, a definition bound without its version, and flags a misfit', async () => {
+    const { lot, plate, experiment } = await lab();
+    const bind = (input: object) =>
+      registry.execute(agent, 'experiments.bind_protocol', {
+        id: experiment.id,
+        expectedVersion: experiment.version,
+        part: 'coating',
+        ...input,
+      });
+    await expect(bind({ part: 'washing' })).rejects.toMatchObject({
+      message: expect.stringContaining('has no protocol part washing'),
+    });
+    await expect(
+      bind({ bindings: [{ role: 'detection_ab', record: lot.id, version: 1 }] }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('has no material detection_ab'),
+    });
+    await expect(
+      bind({ bindings: [{ role: 'capture_ab', record: lot.id }] }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('pin LOT'),
+    });
+    await expect(bind({ inputs: [{ name: 'coating', value: '3' }] })).rejects.toMatchObject({
+      message: expect.stringContaining('worked out by a formula'),
+    });
+    await expect(bind({ inputs: [{ name: 'plates', value: '3' }] })).rejects.toMatchObject({
+      message: expect.stringContaining('has no variable plates'),
+    });
+
+    // A draft labware type: a misfit for the reagent role, and an unconfirmed pin.
+    const misfit = await bind({
+      bindings: [{ role: 'capture_ab', record: plate.id, version: plate.version }],
+    });
+    const id = (misfit as { output: RecordEnvelope }).output.id;
+    const readiness = await run<Readiness>(person, 'records.readiness', { id });
+    expect(readiness.checks.find((c) => c.id === 'bindings_fit')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+    });
+    expect(readiness.checks.find((c) => c.id === 'protocol_confirmed')?.passed).toBe(false);
+  });
+
+  it('plans only when the protocol works out', async () => {
+    const { experiment } = await lab();
+    const confirmed = await confirm(experiment);
+    await expect(
+      registry.execute(person, 'experiments.set_stage', {
+        id: confirmed.id,
+        expectedVersion: confirmed.version,
+        stage: 'planned',
+      }),
+    ).rejects.toMatchObject({
+      code: 'not_ready',
+      message: expect.stringContaining('coating: wells'),
+    });
+    // On a confirmed experiment an agent's binding is a proposal; another lab can't read it.
+    const proposed = await registry.execute(agent, 'experiments.bind_protocol', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      part: 'coating',
+      inputs: [{ name: 'wells', value: '96' }],
+    });
+    expect(proposed.status).toBe('proposed');
+    await expect(
+      registry.execute(otherLab, 'experiments.calculate', { id: confirmed.id }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      registry.execute(person, 'sops.calculate', {
+        sop: (confirmed.attributes as { protocol: { sop: { id: string } }[] }).protocol[0]?.sop.id,
+        version: 99,
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('has no version 99') });
+    const bound = await run(person, 'experiments.bind_protocol', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      part: 'coating',
+      inputs: [{ name: 'wells', value: '96' }],
+    });
+    expect(bound.status).toBe('active');
+    const reconfirmed = await run(person, 'records.confirm_section', {
+      id: bound.id,
+      expectedVersion: bound.version,
+      section: 'protocol',
+    });
+    const planned = await run(person, 'experiments.set_stage', {
+      id: bound.id,
+      expectedVersion: reconfirmed.version,
+      stage: 'planned',
+    });
+    expect(planned.attributes).toMatchObject({ stage: 'planned' });
+  });
+});
