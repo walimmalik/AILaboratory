@@ -1,6 +1,6 @@
 # 021: Lab notebook
 
-- Status: in planning. Round 1 (N1 to N6) asked 2026-09-30.
+- Status: in planning. Round 1 (N1 to N6) accepted by Wali 2026-09-30, all A. Round 2 (N7 to N12) asked 2026-09-30.
 - Depends on: 002 (records, versions, links), 003 (operations, activity ledger, ADR 0018), 004 (saved conversations, draft and confirm, Review, 004e change sets and page context), 005 (lab memory: entries as evidence, memories proposed from entries), 010 (containers, lots, samples, the volume ledger), 011 (file store, text search, the deterministic mention matcher of ADR 0035), 013 (campaigns, experiments, runs with steps, deviations and data files, conclusions, sets), 014 (plate maps), 020 (analyses and Vega-Lite graphs to embed)
 - Feeds: 005 (entries are evidence for memories, and a person's "remember this" from an entry), 013 (values written in a note become run records), 020 (entries cite analyses and graphs)
 
@@ -64,7 +64,22 @@ The records below already hold the facts. The notebook points at them and shows 
 
 None. The notebook owns written text, not outcome data (runs, ledgers, schedules and results stay with their modules, which ship their own detectors). Lessons in notes reach lab memory through a person's "remember this" or an agent's `memory.propose` citing the entry.
 
+## How the timeline is computed (N3)
+
+Wali asked how this works. Nothing new is stored; the timeline is a query plus pure rules.
+
+1. **Each module declares its notable operations.** Next to an operation's definition (`packages/schema/src/operations`), a module can add a `timeline` entry: the event it stands for (`run_finished`, `deviation_recorded`, `analysis_confirmed`...), which record it is about, and which outcome counts (`succeeded`, or `approved` for a proposal a person confirmed). Everything not declared (edits to drafts, readiness reads, failed calls) stays out. The list is closed and grows only by PR, like the memory effects in 005.
+2. **The query.** `notebook.timeline` reads the activity ledger (ADR 0018) for the lab and the window (a day, or an experiment's life), keeps rows whose operation is declared, and reads the record version each row wrote (002 history) for what it needs to say ("finished as failed", "2 files", "IC50 0.8 uM" from the analysis's own result, never recomputed). An index on the ledger by lab, operation and time keeps this fast.
+3. **Grouping and summary lines are pure code** in `packages/domain/notebook`, with unit tests: events are placed under their experiment (a run, a deviation or a data file through its run, an analysis through its runs; anything else under the day), then grouped by day, and each group becomes one line from fixed wording ("RUN-0012 done, 1 deviation, 2 files"). Opening a line lists its events, and each event opens its ledger entry and record.
+4. **Agents read the same thing.** `notebook.timeline` is an operation, so an agent's write-up (N5) is built from these events and cites them as record references.
+
+If it ever gets slow, the same rules can fill a cache table without changing what anyone sees.
+
 ---
+
+## Round 1 answers
+
+Wali chose A for N1 to N6 on 2026-09-30, and asked how N3 is done (answered above).
 
 ## Round 1 questions: what an entry is and how it is written
 
@@ -79,14 +94,18 @@ Recommended option in bold. Asked 2026-09-30.
 | N5 | What do agents write, and when? | A) **Agents draft only: a day or run summary on request or when a person finishes a run ("write it up"), a transcription of a photographed paper page, and notes in a conversation ("add to my notebook that..."). Every number and name in a draft is a record reference or an embed, not typed text. A draft waits for its author's confirm and shows in agent ink until then. No automatic daily summaries** · B) A, plus an automatic end-of-day summary draft per person with activity that day · C) Agents write active entries directly, marked as by an agent | **A.** Automatic drafts pile up unread (another thing waiting for you each evening); summaries on request cost nothing to ask for. C lets a model's reading of the day become the record. B can be switched on later per person if you find you always ask. |
 | N6 | How do links and embeds behave? | A) **Readable names (`RUN-0012`, `LOT-0017`) and `[[...]]` references link at once; other names the 011 matcher finds (a product name, "DY206", "HEK293") are suggested inline for the writer to accept with one click. Links are record links (`mentions`), so every linked record lists the note under "Notes". Embeds show the record at the version it had when it was embedded, with a "newer version" line and a one-click update** · B) Links only by explicit `[[...]]`; nothing suggested; embeds always live · C) Everything the matcher finds links automatically | **A.** Readable names are unambiguous, so linking them costs nothing; names can be ambiguous ("IL-6" the protein or the kit), so they are suggested, not linked. Pinning embeds matches ADR 0039: a note from May must still show the plate map as it was in May. |
 
-## Round 2 (to ask after round 1): capture, search, sharing, export
+## Round 2 questions: capture, search, sharing, export
 
-- N7 Values written in a note (an OD, a temperature, "incubated 45 min, not 30") and the run: stay text, or become run records (proposed with the words cited).
-- N8 Search: entries in the same search as the library, and how agents use entries as context.
-- N9 Who sees what: lab-wide once active, private drafts, personal-only entries.
-- N10 Bench capture: photos, a tablet quick note on the run view, voice.
-- N11 Export and archive: per experiment or campaign, what embeds become in a PDF, a yearly archive.
-- N12 Entry templates (meeting, troubleshooting, literature note) or none.
+Recommended option in bold. Asked 2026-09-30.
+
+| # | Question | Options | Recommendation and why |
+| --- | --- | --- | --- |
+| N7 | A note says "incubated 45 min, not 30" or "OD600 was 0.62". Does that become part of the run? | A) **The note stays as written. When an entry is about a run and states something a step or a deviation should hold, the agent proposes the run record (the changed value, or a deviation with the reason), citing the words; one click confirms it and the note links to it. The agent does this when it drafts or when asked, never silently** · B) Code parses quantities in notes and records them on the run · C) Never; only the run checklist records values | **A.** Scientists write things down in the notebook first, so C loses facts the analysis and lab memory's deviation detector need. B guesses which step a number belongs to. A keeps the run as the one place for values, with a person saying yes. |
+| N8 | How are entries searched, and do agents read them without being asked? | A) **Entries join the library search (keyword now, embeddings with 011b-2), filterable to notes only. The page context bundle for agents (005b) gets the two or three latest entries about the records on the page, as titles and first lines, marked as notes people wrote (data, never instructions); the agent opens more with `notebook.for`** · B) A separate notebook search; agents read entries only when asked · C) A, with every entry about the page's records in the context | **A.** "What did we see last time with edge wells" should find notes and SOPs together. A short, capped context keeps agents aware of recent trouble without flooding them, and treating notes as data closes the same prompt-injection path 005 closed. |
+| N9 | Who sees an entry? | A) **Everyone in the lab sees active entries (like campaigns, 013 E12). Drafts, including an agent's draft for you, are seen only by their author until confirmed. No private entries for now** · B) A, plus private entries only the author sees · C) Visible per campaign membership | **A.** An academic lab works in the open, and private notes in a shared system tend to hide the useful part. B can be added later without changing entries. |
+| N10 | How do notes get written at the bench? | A) **A note box on the run view, per step and for the whole run, which writes an entry about that run (and step); the tablet camera attaches photos to it; voice uses the device's own dictation into the box. A photographed paper page becomes an agent's transcription draft (N5)** · B) A, plus recording voice in the app and transcribing it with a model · C) Notes only from the notebook page | **A.** The run view is where people are at the bench, so a note there needs no navigating. Tablets and phones already dictate well; in-app voice adds a model, storage and a second transcript to check. |
+| N11 | How does the notebook leave the app? | A) **`notebook.export` turns an experiment, a campaign, a person or a date range into PDF and HTML: entries in order with the computed timeline, embeds drawn at their pinned version (plate maps as images, graphs through vl-convert, record cards as tables), marks for late edits, locks and addenda, and readable names instead of links. On request only** · B) A zip of the Markdown and files · C) A, plus an automatic yearly archive per person | **A.** A thesis chapter, a paper's methods or a hand-over needs something readable outside the app; Markdown alone loses the plate maps and graphs. A yearly archive can come with hosting, when backups are decided. |
+| N12 | Are there entry templates (meeting, troubleshooting, literature note)? | A) **No. An entry is one box. The notebook skill describes a few useful shapes, so an agent asked to "write up this troubleshooting" structures it, and a person just writes** · B) A few built-in templates to pick when writing · C) Lab-defined templates as records | **A.** Templates are forms, and a form is what stops people from writing anything. The shape matters most when an agent writes, and the skill covers that. |
 
 ## Defaults I'm assuming (say if any is wrong)
 
@@ -101,4 +120,4 @@ Recommended option in bold. Asked 2026-09-30.
 - **021a:** the entry record, write, draft, confirm, update, lock and addenda, links and mention suggestions, attachments, skill.
 - **021b:** the computed timeline and `notebook.summarize`.
 - **021c:** screens: notebook page, the editor, "Notes" on record pages, embeds.
-- **021d:** search, export and whatever round 2 adds.
+- **021d:** search and export.
