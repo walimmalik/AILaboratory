@@ -27,7 +27,7 @@ const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
 /** Trailing zeros off a decimal string: "25.000" reads "25". */
 const plain = (value: string) => (value.includes('.') ? value.replace(/\.?0+$/, '') : value);
 
-async function instrumentKindOf(deps: OperationDeps, ctx: RecordContext, id: string) {
+export async function instrumentKindOf(deps: OperationDeps, ctx: RecordContext, id: string) {
   const records = service(deps);
   const instrument = await records.get(ctx, id);
   const kind = await records.get(ctx, (instrument.attributes as InstrumentAttributes).kind);

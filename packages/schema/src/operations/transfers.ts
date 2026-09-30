@@ -416,3 +416,52 @@ export const transfersExport = defineContract({
     skipped: z.array(z.object({ group: z.string(), why: z.string() })),
   }),
 });
+
+const ReportWell = z.object({ plate: z.string(), well: z.string() });
+
+export const transfersImportReport = defineContract({
+  id: 'transfers.import_report',
+  summary:
+    'Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report says which planned transfers were done, short, failed or not run, and records what really moved in the inventory ledger as from a run log (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export',
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    file: recordIdOf('fil').describe('The report, uploaded with files.upload'),
+    containers: z
+      .array(z.strictObject({ plate: LocalId, container: ContainerId }))
+      .optional()
+      .describe(
+        "The containers used for the plan's plates on the day, when the plan and the report barcodes don't say",
+      ),
+    reason: Reason,
+  }),
+  output: z.object({
+    report: z.enum(['echo_transfer', 'echo_survey']),
+    plan: z.object({ id: z.string(), name: z.string(), version: z.number().int() }),
+    counts: z.object({
+      rows: z.number().int(),
+      done: z.number().int(),
+      short: z.number().int(),
+      failed: z.number().int(),
+      notInReport: z.number().int(),
+      notInPlan: z.number().int(),
+      flagged: z
+        .number()
+        .int()
+        .describe('Survey wells with a status or a volume off the inventory'),
+    }),
+    problems: z.array(
+      z.object({
+        kind: z.enum(['short', 'failed', 'not_in_report', 'not_in_plan', 'survey']),
+        source: ReportWell.optional(),
+        destination: ReportWell.optional(),
+        requested: Quantity.optional(),
+        actual: Quantity.optional(),
+        message: z.string(),
+      }),
+    ),
+    recorded: z.number().int().describe('Transfers written to the inventory ledger'),
+    event: z.string().optional().describe('The inventory event they were written in'),
+    notes: z.array(z.string()),
+  }),
+});

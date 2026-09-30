@@ -39,3 +39,7 @@ A transfer plan (`TFP-0001`) is a design: plates and groups of transfers that co
 ## Instrument files
 
 `transfers.export {id, group?}` writes the files for a confirmed plan: an Echo pick list for each group on an Echo, stored as a file record (hand it over as the file, not pasted). Groups done by hand or on instruments without a writer yet come back under `skipped` with why. A draft plan is refused: a person confirms it first. When the Echo source plate type is ambiguous, set the group's liquid class (`transfers.set_instrument`); when a plate has no Echo type, the labware type needs `echoPlateTypes`.
+
+## Echo reports
+
+Upload the Echo transfer report or survey with `files.upload`, then `transfers.import_report {id, file, containers?}`. A transfer report returns counts (done, short, failed, not in the report, not in the plan), each problem in lab words, and records what really moved in the inventory; each report is recorded once. When a plate has no container (the assay plate made on the day), nothing is recorded and a note says so: give `containers: [{plate, container}]` and import again. A survey only compares: correct volumes with `inventory.correct` if the survey is right. Tell the person which wells failed or came up short; they may need to be excluded in analysis.

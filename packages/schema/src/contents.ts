@@ -133,6 +133,7 @@ export const InventoryEvent = z.object({
   actor: Actor,
   operationId: z.string(),
   reason: z.string().optional(),
+  runLog: recordIdOf('fil').optional().describe('The instrument report it was recorded from'),
   lines: z.array(LedgerLine),
 });
 export type InventoryEvent = z.infer<typeof InventoryEvent>;

@@ -8,6 +8,7 @@ import {
   WellRef,
   WellState,
 } from '../contents.ts';
+import { recordIdOf } from '../ids.ts';
 import { ContainerId } from '../inventory.ts';
 import { LiquidVolume, WellName } from '../labware.ts';
 import { defineContract } from '../operation.ts';
@@ -77,6 +78,11 @@ export const inventoryTransfer = defineContract({
       .array(z.strictObject({ from: WellRef, to: WellRef, volume: LiquidVolume }))
       .min(1)
       .max(6144),
+    runLog: recordIdOf('fil')
+      .optional()
+      .describe(
+        'The instrument report (a file) these transfers are read from. A run log is evidence, so an agent records it directly (V7); each report is recorded once',
+      ),
     reason: Reason,
   }),
   output: Changed,
