@@ -1,0 +1,309 @@
+import {
+  type CapabilityProvider,
+  type EquipmentKindAttributes,
+  type InstrumentAttributes,
+  type InstrumentKindAttributes,
+  instrumentsResolve,
+  type RecordEnvelope,
+} from '@ailab/schema';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { api } from '../api.ts';
+import {
+  capabilityLabel,
+  type DeckView,
+  deckView,
+  limitWords,
+  statusLamp,
+  statusWords,
+} from '../lib/instruments.ts';
+import { type KindPage, libraryPages } from '../lib/kinds.ts';
+import { recordQuery, recordsQuery } from '../queries.ts';
+import { RecordList } from './Records.tsx';
+
+const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
+
+function Head({ page, lede }: { page: KindPage; lede: string }) {
+  return (
+    <div className="page-head">
+      <div>
+        <div className="crumbs">
+          lab / library / <b>{page.title.toLowerCase()}</b>
+        </div>
+        <h1>{page.title}</h1>
+        <p className="lede">{lede}</p>
+      </div>
+    </div>
+  );
+}
+
+const words = (id: string) => id.replaceAll('_', ' ');
+const capabilityList = (providers: CapabilityProvider[] | undefined) =>
+  providers && providers.length > 0
+    ? [...new Set(providers.map((p) => capabilityLabel(p.capability).toLowerCase()))].join(', ')
+    : '—';
+
+/** Labels of records by ID, for list columns. */
+function useLabels(kind: string) {
+  const records = useQuery(recordsQuery({ kind })).data ?? [];
+  return new Map(records.map((r) => [r.id, r.label]));
+}
+
+/** The lab's registered instruments (plan 008c): status lamp, model, room, calibration due. */
+export function InstrumentsPage() {
+  const models = useLabels('instrument_kind');
+  const of = (r: RecordEnvelope) => r.attributes as Partial<InstrumentAttributes>;
+  return (
+    <>
+      <Head
+        page={page('instrument')}
+        lede="The lab's instruments: what each one is, where it stands, what is installed on it and whether it is ready."
+      />
+      <RecordList
+        title="Instruments"
+        kind="instrument"
+        placeholder="Find by name, e.g. Flex 1 or INS-0001"
+        empty="No instruments yet. Ask the assistant to register one, or load the seed lab."
+        columns={[
+          {
+            header: 'Short name',
+            cell: (r) => of(r).shortName ?? '—',
+            className: 'mono',
+          },
+          {
+            header: 'Availability',
+            cell: (r) => {
+              const status = of(r).status;
+              return status ? (
+                <span className="nowrap">
+                  <span className={`lamp ${statusLamp(status)}`} />
+                  {statusWords[status]}
+                </span>
+              ) : (
+                '—'
+              );
+            },
+          },
+          { header: 'Model', cell: (r) => models.get(of(r).kind ?? '') ?? '…' },
+          { header: 'Room', cell: (r) => of(r).room ?? '—', className: 'muted' },
+          {
+            header: 'Calibration due',
+            cell: (r) => of(r).calibrationDue ?? '—',
+            className: 'num',
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/** Instrument models (plan 008): what each model can do and what can be mounted on it. */
+export function InstrumentModelsPage() {
+  const vendors = useLabels('vendor');
+  const of = (r: RecordEnvelope) => r.attributes as Partial<InstrumentKindAttributes>;
+  return (
+    <>
+      <Head
+        page={page('instrument_kind')}
+        lede="The models the lab's instruments are, and manual stations worked by a person. Each says what it can do by itself and where equipment is mounted."
+      />
+      <RecordList
+        title="Instrument models"
+        kind="instrument_kind"
+        placeholder="Find by name, e.g. STAR or INK-0001"
+        empty="No instrument models yet. Load the seed lab, or ask the assistant to add one from a datasheet."
+        columns={[
+          { header: 'Type', cell: (r) => (of(r).category ? words(of(r).category as string) : '—') },
+          {
+            header: 'Manufacturer',
+            cell: (r) =>
+              vendors.get(of(r).manufacturer ?? '') ??
+              (of(r).performedBy === 'person' ? 'worked by a person' : '—'),
+          },
+          {
+            header: 'Can do by itself',
+            cell: (r) => capabilityList(of(r).capabilities),
+            className: 'muted',
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/** Equipment kinds (plan 008): pipettes, heads, grippers, modules, carriers, adapters. */
+export function EquipmentPage() {
+  const vendors = useLabels('vendor');
+  const of = (r: RecordEnvelope) => r.attributes as Partial<EquipmentKindAttributes>;
+  return (
+    <>
+      <Head
+        page={page('equipment_kind')}
+        lede="Parts that are mounted on instruments: pipettes, heads, grippers, modules, carriers and adapters. What an instrument can do comes from what is mounted on it."
+      />
+      <RecordList
+        title="Equipment"
+        kind="equipment_kind"
+        placeholder="Find by name, e.g. heater-shaker or EQK-0001"
+        empty="No equipment yet. Load the seed lab, or ask the assistant to add some."
+        columns={[
+          { header: 'Type', cell: (r) => (of(r).role ? words(of(r).role as string) : '—') },
+          { header: 'Manufacturer', cell: (r) => vendors.get(of(r).manufacturer ?? '') ?? '—' },
+          { header: 'Adds', cell: (r) => capabilityList(of(r).capabilities), className: 'muted' },
+        ]}
+      />
+    </>
+  );
+}
+
+/**
+ * Beside a registered instrument: its deck from above with what is mounted where, and what it can
+ * do now with its limits, both from resolving its current configuration.
+ */
+export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
+  const attributes = record.attributes as Partial<InstrumentAttributes>;
+  const model = useQuery({
+    ...recordQuery(attributes.kind ?? ''),
+    enabled: !!attributes.kind,
+  }).data;
+  const equipment = useLabels('equipment_kind');
+  const resolved = useQuery({
+    queryKey: ['record', record.id, 'resolved', record.version],
+    queryFn: () => api.run(instrumentsResolve, { instrument: record.id }),
+    retry: false,
+  });
+  if (resolved.error) {
+    return (
+      <section className="block" aria-label="Deck">
+        <header>
+          <h2>Deck</h2>
+        </header>
+        <div className="body">
+          <p className="muted">Can't work out the configuration: {resolved.error.message}</p>
+        </div>
+      </section>
+    );
+  }
+  const result = resolved.data;
+  if (!result || !model) return null;
+  const nodes = new Map((attributes.configuration?.equipment ?? []).map((n) => [n.id, n]));
+  const nodeLabel = (id: string) => {
+    if (id === 'instrument') return record.label;
+    const node = nodes.get(id);
+    return node?.label ?? equipment.get(node?.kind ?? '') ?? id;
+  };
+  const mounts = (model.attributes as Partial<InstrumentKindAttributes>).mounts ?? [];
+  const views = mounts.map((m) => deckView(m, result.claims));
+  const errors = result.issues.filter((i) => i.severity === 'error');
+  return (
+    <>
+      <section className="block" aria-label="Deck">
+        <header>
+          <h2>Deck</h2>
+          <span className="state muted">{model.label} · from above, not to scale</span>
+        </header>
+        <div className="body">
+          {errors.length > 0 && (
+            <ul className="error-text">
+              {errors.map((e) => (
+                <li key={`${e.rule}-${e.node}`}>{e.message}</li>
+              ))}
+            </ul>
+          )}
+          {views.length === 0 ? (
+            <p className="muted">{model.label} has no mounts for equipment.</p>
+          ) : (
+            <div className="decks">
+              {views.map((view) => (
+                <MountDrawing key={view.mount} view={view} label={nodeLabel} />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      <section className="block" aria-label="What it can do">
+        <header>
+          <h2>What it can do</h2>
+          <span className="state muted">with what is installed now</span>
+        </header>
+        <div className="body">
+          {result.capabilities.length === 0 ? (
+            <p className="muted">Nothing yet: install equipment that brings capabilities.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <tbody>
+                  {result.capabilities.map((c) => (
+                    <tr key={`${c.node}-${c.capability}`}>
+                      <td>{capabilityLabel(c.capability)}</td>
+                      <td className="muted">{limitWords(c.limits) || '—'}</td>
+                      <td className="muted">
+                        {c.performedBy === 'person' ? 'by a person' : nodeLabel(c.node)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="muted">
+            {result.sites.length} places for labware.{' '}
+            <Link to="/instrument-models">Instrument models</Link> say what each one offers.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
+const CELL = { w: 150, h: 44, gap: 6, rail: 14 };
+
+/** One mount from above: slots as a grid, a rail as its tracks, what is on each named. */
+function MountDrawing({ view, label }: { view: DeckView; label: (node: string) => string }) {
+  const rail = view.columns > 16;
+  const cw = rail ? CELL.rail : CELL.w;
+  const gap = rail ? 0 : CELL.gap;
+  const width = view.columns * cw + (view.columns - 1) * gap;
+  const height = view.rows * CELL.h + (view.rows - 1) * gap;
+  return (
+    <figure className="drawing deck-view">
+      <svg
+        viewBox={`-1 -1 ${width + 2} ${height + 2}`}
+        style={{ width: width + 2 }}
+        role="img"
+        aria-label={view.label}
+      >
+        {view.cells.map((cell) => {
+          const x = cell.column * (cw + gap);
+          const y = cell.row * (CELL.h + gap);
+          const w = cell.span * cw + (cell.span - 1) * gap;
+          const name = cell.node ? label(cell.node) : undefined;
+          return (
+            <g key={`${cell.place}-${cell.column}`}>
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={CELL.h}
+                rx={3}
+                className={cell.node ? 'occupied' : 'free'}
+              />
+              <text x={x + 5} y={y + 14} className="place">
+                {cell.place}
+              </text>
+              {name && (
+                <text x={x + 5} y={y + 32} className="what">
+                  {name.length * 6 > w - 8
+                    ? `${name.slice(0, Math.max(3, Math.floor((w - 8) / 6) - 1))}…`
+                    : name}
+                  <title>{name}</title>
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption>{view.label}</figcaption>
+    </figure>
+  );
+}

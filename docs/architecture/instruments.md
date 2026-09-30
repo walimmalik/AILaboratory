@@ -61,3 +61,7 @@ Parents are placed before their children, so nothing is placed on equipment that
 `seed/instrument-library.yaml` holds the lab's instrument and equipment kinds in the library's shape. Each entry names its research entry in `seed/instruments.yaml`, whose first source URL becomes datasheet evidence for every attribute except those the entry lists under `assumed` (estimates and layout choices nobody has checked yet), which load as assumed. Manual stations have no research entry, so all their values are assumed. The loader creates what the lab doesn't have yet, matched by kind and label, and leaves the rest alone.
 
 The file's `instruments` list is the demo lab's registered instruments (from the `instances` in `seed/instruments.yaml`): name, short name, serial, room and variant, with configurations whose nodes name kinds by key. They go in through `instruments.register`, so each configuration is checked on the way in, and load as assumed.
+
+## Screens
+
+The web app (008c) has three library pages: Instruments (the lab's registered instruments with an availability lamp and calibration due), Instrument models and Equipment. An instrument's page shows its deck, one drawing per mount with what is installed on each slot or run of tracks, and what it can do with its limits, both from `instruments.resolve`. Changes go through the same operations an agent uses. See [web-app.md](web-app.md).
