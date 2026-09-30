@@ -99,8 +99,25 @@ export const sopsCalculate = defineContract({
   effect: 'read',
   input: z.strictObject({
     sop: SopId,
+    version: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Work out this version of the SOP, as an experiment that pins it does'),
     bindings: z
-      .array(z.strictObject({ role: SopName, record: RecordId }))
+      .array(
+        z.strictObject({
+          role: SopName,
+          record: RecordId,
+          version: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("Read the record as it was at this version (a design's pin)"),
+        }),
+      )
       .optional()
       .describe('Records for material roles, e.g. the lot picked for capture_ab'),
     inputs: z

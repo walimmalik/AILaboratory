@@ -3,8 +3,8 @@ import { UserId } from './actor.ts';
 import { pinOf } from './design.ts';
 import { RecordId, recordIdOf } from './ids.ts';
 import { DocumentId } from './library.ts';
-import { Quantity } from './quantity.ts';
-import { SopId } from './sops.ts';
+import { DecimalString, Quantity } from './quantity.ts';
+import { SopId, SopName } from './sops.ts';
 
 /**
  * Campaigns, experiments and runs (plan 013, ADR 0039). A campaign is a lab project with aims; an
@@ -86,10 +86,42 @@ export const Hypothesis = z.strictObject({
   prediction: Prediction.optional(),
 });
 
-/** A confirmed digital SOP version the experiment follows (E5); roles and inputs bind in 013b. */
+/**
+ * A role of the SOP bound to a record for this experiment (013b, E5). Definitions (labware types,
+ * products, lots, instrument kinds, entities) are pinned by version (ADR 0039); physical things
+ * (containers, samples, instruments) are bound by id and checked live.
+ */
+export const RoleBinding = z.strictObject({
+  role: SopName,
+  record: RecordId,
+  version: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'The confirmed version, for definitions; left out for containers, samples and instruments',
+    ),
+});
+export type RoleBinding = z.infer<typeof RoleBinding>;
+
+/** A confirmed digital SOP version the experiment follows (E5), with its roles and inputs bound. */
 export const ProtocolStep = z.strictObject({
   id: LocalName.describe('How the experiment names this part, e.g. seeding or readout'),
   sop: pinOf(SopId),
+  bindings: z
+    .array(RoleBinding)
+    .optional()
+    .describe("Records for the SOP's material roles; roles left out use the SOP's default"),
+  inputs: z
+    .array(
+      z.strictObject({
+        name: SopName,
+        value: z.union([DecimalString, Quantity, z.array(z.union([DecimalString, Quantity]))]),
+      }),
+    )
+    .optional()
+    .describe("Values for the SOP's input and default variables, e.g. n_samples = 40"),
   note: z.string().min(1).optional(),
 });
 export type ProtocolStep = z.infer<typeof ProtocolStep>;

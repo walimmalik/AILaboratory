@@ -4,7 +4,7 @@ The scientific frame (013), the designers that fill it (014, 016, 017) the workf
 
 ## Campaigns, experiments and runs (plan 013)
 
-[Plan 013](../plans/013-campaigns-and-experiments.md). 013a built: the three records, stages, and SOP versions pinned by version ([ADR 0039](../decisions/0039-designs-pin-inputs.md)); see [campaigns.md](../architecture/campaigns.md). Binding, run recording and screens are next.
+[Plan 013](../plans/013-campaigns-and-experiments.md). 013a built: the three records, stages, and SOP versions pinned by version ([ADR 0039](../decisions/0039-designs-pin-inputs.md)); see [campaigns.md](../architecture/campaigns.md). 013b binds each SOP's roles and inputs per experiment, pinned by version, and works the run out from what is pinned (`experiments.calculate`). Run recording and screens are next; reservations wait on how SOPs state the amount each material uses.
 
 | Level | What it is | Stages |
 | --- | --- | --- |

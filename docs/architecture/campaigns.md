@@ -22,12 +22,24 @@ Stage is an attribute, separate from the record status, and outside every sectio
 
 Each protocol part pins a confirmed SOP version. `related` checks every pin with `checkPin` (`apps/api/src/records/pins.ts`). A pin to a missing version, to another kind or to another lab refuses the write. Readiness has three checks: `protocol_confirmed` is a blocker when a pinned version was never confirmed, `protocol_current` warns when a newer confirmed version changed something, and `documents_compute` warns when a followed document isn't digitized. The `protocol_current` warning offers `experiments.adopt_versions` as its one-click fix. A run pins the experiment version it follows, and that version must be confirmed.
 
+## Binding the protocol (013b)
+
+Each protocol part carries `bindings` (the SOP's material roles bound to records) and `inputs` (values for its input and default variables, such as `n_samples`). Roles and inputs that are left out use the SOP's own default record and value.
+- **Definitions are pinned.** Labware types, products, lots, instrument kinds, equipment kinds and entities are bound with their `version` (ADR 0039).
+- **Physical things are not.** Containers, samples and instruments are bound by id alone and checked live.
+- **What `related` refuses:** a role or input the pinned SOP version doesn't have, a computed variable given as input, a definition without its version, and a version on a physical thing.
+- **What readiness flags:** a record of the wrong kind for its role (`bindings_fit`, blocker), an unconfirmed pinned version (`protocol_confirmed`, blocker), and a newer confirmed version of a bound record (`protocol_current`, warning).
+
+`experiments.calculate` works out every part through `sops.calculate`. It uses the SOP at its pinned version and reads each bound record at its pinned version (`sops.calculate` takes `version`, and a binding's `version`), then lists what is missing or doesn't fit. Moving to planned needs that list to be empty. `experiments.adopt_versions` also moves pinned bindings to their latest confirmed version. When a newer SOP version drops a role or variable, adopting drops its binding or input and says so in the reason.
+
 ## Operations
 
 | Operation | Agents |
 | --- | --- |
 | `campaigns.draft`, `experiments.draft` | direct (drafts; campaigns start proposed, experiments designing) |
 | `campaigns.set_stage`, `experiments.set_stage` | proposal |
+| `experiments.bind_protocol` (roles and inputs of one part; `unbind`, `clear`) | direct on drafts, proposal on active |
+| `experiments.calculate` (every part worked out as pinned) | read, calculator |
 | `experiments.adopt_versions` | direct on drafts, proposal on active |
 | `experiments.where_used` (campaigns, experiments and runs using a record, optionally one version) | read |
 
@@ -39,4 +51,4 @@ Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed 
 
 ## Not yet
 
-013b protocol binding (roles, inputs, recompute, reservations), 013c run recording, conclusions and sets, 013d screens and the drafting skill in full.
+Reservations (010 V8: confirmed plans soft-reserve stock) need to know how much of each material a run uses, which SOPs don't say yet; SOP defaults are read live rather than pinned when a role is left unbound; 013c run recording, conclusions and sets, 013d screens and the drafting skill in full.
