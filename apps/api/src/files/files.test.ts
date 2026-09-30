@@ -36,7 +36,7 @@ beforeEach(async () => {
     labId: other.labId,
   };
   files = new MemoryFileStore();
-  registry = createRegistry(db, kinds(), new ActivityBus(), undefined, files);
+  registry = createRegistry(db, kinds(), new ActivityBus(), undefined, { files });
 });
 afterEach(() => close());
 

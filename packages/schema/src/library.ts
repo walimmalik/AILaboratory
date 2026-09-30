@@ -94,3 +94,54 @@ export const DocumentAttributes = z.strictObject({
   notes: z.string().min(1).optional(),
 });
 export type DocumentAttributes = z.infer<typeof DocumentAttributes>;
+
+/** A passage: a stretch of text short enough to search and cite, with its page when known. */
+export const ConvertedPassage = z.object({
+  text: z.string(),
+  page: z.number().int().positive().nullish(),
+});
+
+/** Text under one heading path, e.g. ["Protocol", "Coating"], as the science service returns it. */
+export const ConvertedSection = z.object({
+  heading: z.array(z.string()),
+  pageFrom: z.number().int().positive().nullish(),
+  pageTo: z.number().int().positive().nullish(),
+  passages: z.array(ConvertedPassage),
+});
+
+/** What the science service's `/convert` returns (plan 011b). */
+export const Converted = z.object({
+  converter: z.string().min(1),
+  sections: z.array(ConvertedSection),
+  warnings: z.array(z.string()),
+});
+export type Converted = z.infer<typeof Converted>;
+
+/** How a document's file was turned into text. */
+export const DocumentParse = z.object({
+  file: FileId,
+  sha256: z.string(),
+  converter: z.string(),
+  sections: z.number().int().min(0),
+  passages: z.number().int().min(0),
+  warnings: z.array(z.string()),
+  parsedAt: z.iso.datetime(),
+});
+export type DocumentParse = z.infer<typeof DocumentParse>;
+
+export const SectionOutline = z.object({
+  index: z.number().int().min(0),
+  heading: z.array(z.string()),
+  pageFrom: z.number().int().positive().nullish(),
+  pageTo: z.number().int().positive().nullish(),
+  passages: z.number().int().min(0),
+});
+
+export const PassageText = z.object({
+  id: z.string(),
+  section: z.number().int().min(0),
+  heading: z.array(z.string()),
+  page: z.number().int().positive().nullish(),
+  text: z.string(),
+});
+export type PassageText = z.infer<typeof PassageText>;

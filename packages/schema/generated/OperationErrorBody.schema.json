@@ -17,6 +17,7 @@
         "invalid_link",
         "linked",
         "not_ready",
+        "unavailable",
         "internal"
       ]
     },

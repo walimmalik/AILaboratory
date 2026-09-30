@@ -32,7 +32,7 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 | Plan | Delivers | Status | Split |
 | --- | --- | --- | --- |
-| [011 SOP and literature library](../plans/011-sop-library.md) | File store, documents, parsing, hybrid search, mining mentions | 011a built: file store (ADR 0033), documents, folder import, seed | 011a to 011d |
+| [011 SOP and literature library](../plans/011-sop-library.md) | File store, documents, parsing, hybrid search, mining mentions | 011a built: file store (ADR 0033), documents, folder import, seed; 011b-1 text and keyword search (ADR 0034); 011b-2 Docling and embeddings next | 011a to 011d |
 | [012 Digital SOPs](../plans/012-digital-sops.md) | Structured SOPs with typed steps and variables, the digitizer, AI review loop, benchmark | Locked; after 011 | 012a to 012d |
 | [013 Campaigns and experiments](../plans/013-campaigns-and-experiments.md) | Campaigns, experiments, runs, sets, protocol binding, run recording | Locked; after 012 (013a can start after 010a) | 013a to 013d |
 | [014 Plate map designer](../plans/014-plate-map-designer.md) | Layout templates, plate maps, the plate editor | Locked; after 013a and 010c | 014a, 014b |

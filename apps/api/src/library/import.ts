@@ -171,11 +171,16 @@ export interface ImportReport {
   added: string[];
   existing: string[];
   missing: { key: string; reason: string }[];
+  /** Documents turned into searchable text this run. */
+  parsed: string[];
+  /** Documents whose text isn't readable yet, and why (a PDF before Docling, no science service). */
+  unparsed: { key: string; reason: string }[];
 }
 
 /**
- * Uploads each item's files and adds it as a draft document. A document the lab already has (same
- * title) is left alone, so the import can run again.
+ * Uploads each item's files, adds it as a draft document and parses its text when a reader can. A
+ * document the lab already has (same title) is left alone, except that it is parsed if it wasn't
+ * yet, so the import can run again once the science service is up.
  */
 export async function importIntoLibrary(
   registry: OperationRegistry,
@@ -188,7 +193,26 @@ export async function importIntoLibrary(
     if (result.status !== 'done') throw new Error(`${operation} was ${result.status}, not done`);
     return result.output as T;
   };
-  const report: ImportReport = { added: [], existing: [], missing: [...plan.missing] };
+  const report: ImportReport = {
+    added: [],
+    existing: [],
+    missing: [...plan.missing],
+    parsed: [],
+    unparsed: [],
+  };
+  const parse = async (document: RecordEnvelope) => {
+    const read = await run<{ parse?: unknown }>('library.read', { document: document.id });
+    if (read.parse) return;
+    try {
+      await run('library.parse', { document: document.id });
+      report.parsed.push(`${document.name} ${document.label}`);
+    } catch (error) {
+      report.unparsed.push({
+        key: `${document.name} ${document.label}`,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
   for (const item of plan.items) {
     const earlier = (
       await run<{ records: RecordEnvelope[] }>('records.list', {
@@ -199,6 +223,7 @@ export async function importIntoLibrary(
     ).records.find((r) => r.label === item.label);
     if (earlier) {
       report.existing.push(`${earlier.name} ${item.label}`);
+      await parse(earlier);
       continue;
     }
     const files: DocumentFile[] = [];
@@ -230,6 +255,7 @@ export async function importIntoLibrary(
       reason,
     });
     report.added.push(`${document.name} ${item.label}`);
+    await parse(document);
   }
   return report;
 }

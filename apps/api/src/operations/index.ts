@@ -7,6 +7,7 @@ import { instrumentOperations } from '../instruments/operations.ts';
 import { contentsOperations } from '../inventory/contents.ts';
 import { inventoryOperations } from '../inventory/operations.ts';
 import { labwareOperations } from '../labware/operations.ts';
+import type { Converter } from '../library/convert.ts';
 import { libraryOperations } from '../library/operations.ts';
 import { liquidOperations } from '../reagents/liquid-operations.ts';
 import { reagentOperations } from '../reagents/operations.ts';
@@ -19,8 +20,18 @@ import { OperationRegistry } from './registry.ts';
 import { reviewOperations } from './review-operations.ts';
 
 export { ActivityBus } from './activity.ts';
+
+import { OperationError } from './errors.ts';
+
 export { OperationError } from './errors.ts';
 export { OperationRegistry } from './registry.ts';
+
+/** Without a science service, parsing is refused with a message. */
+const noConverter: Converter = {
+  convert: async () => {
+    throw new OperationError('unavailable', 'No science service is set up to convert files');
+  },
+};
 
 /** The registry with every operation the app offers. */
 export function createRegistry(
@@ -28,9 +39,12 @@ export function createRegistry(
   kinds: KindRegistry,
   bus = new ActivityBus(),
   assistant = new Assistant({ reason: 'No model is set up' }),
-  files: FileStore = new MemoryFileStore(),
+  {
+    files = new MemoryFileStore(),
+    converter = noConverter,
+  }: { files?: FileStore; converter?: Converter } = {},
 ) {
-  return new OperationRegistry({ db, kinds, bus, assistant, files }).register(
+  return new OperationRegistry({ db, kinds, bus, assistant, files, converter }).register(
     ...recordOperations,
     ...proposalOperations,
     ...reviewOperations,

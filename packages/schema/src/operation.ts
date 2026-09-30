@@ -62,6 +62,7 @@ export const OperationErrorCode = z.enum([
   'invalid_link',
   'linked',
   'not_ready',
+  'unavailable',
   'internal',
 ]);
 export type OperationErrorCode = z.infer<typeof OperationErrorCode>;
