@@ -28,6 +28,7 @@ import { runOperations } from '../campaigns/runs.ts';
 import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { transferCalculators } from '../transfers/calculators.ts';
+import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
 import { OperationError } from './errors.ts';
 
@@ -73,6 +74,7 @@ export function createRegistry(
     ...plateMapOperations,
     ...transferCalculators,
     ...transferPlanOperations,
+    draftFromPlateMap,
     ...assistantOperations,
   );
 }

@@ -44,7 +44,7 @@ const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
 const MOVES = ['transfer', 'dispense'];
 
 /** Domain refusals become invalid input, in the domain's words. */
-async function calculating<T>(work: () => T | Promise<T>): Promise<T> {
+export async function calculating<T>(work: () => T | Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {

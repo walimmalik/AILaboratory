@@ -42,6 +42,10 @@ A `transfer_plan` (`tfp_`, `TFP-0001`) has two sections a person confirms: **pla
 - **`transfers.check`** runs the same rules plus live ones: instruments ready with the limits the plan used, and each source well's draws plus its dead volume against what it holds less other plans' reservations (warnings, V8). It also totals transfers, tips (estimated from each group's rule) and source wells.
 - **Reservations** (`apps/api/src/transfers/reservations.ts`) are derived, not stored: every active plan reserves what it draws from its source containers. Archiving a plan ends them; recording its run will too (016b). `transfers.reserved {container}` lists them per well.
 
+## Drafting from a plate map (016a-4)
+
+`transfers.draft_from_plate_map` (`apps/api/src/transfers/from-plate-map.ts`) turns a plate map's concentrations into a transfer plan. It reads the wells at the map's current version, groups each subject's wells by concentration into curve points, and runs `optimizeDilution` with the dispensing instrument's limits (wells per point is the most any point of that subject has). Unreachable points refuse the draft with why. The plan gets the source plates given, one destination plate per map plate (pinned to the map and its plate type) and the intermediate plates the optimizer packs. Groups, in order: solvent into intermediate wells, stock into them, compounds into the map plates (each dispense drawn from the intermediate wells in the optimizer's order until each has given what it planned), and backfill so every well that isn't empty ends with the same solvent volume. All groups start on the dispensing instrument; readiness shows which volumes it can't move (usually the intermediate diluent), and `transfers.set_instrument` moves that group. Wells without concentrations are not drafted here.
+
 ## Not yet
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. Drafting plans from plate maps (016a-4), worklists and reports (016b, 016c), screens (016d).
+Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, worklists and reports (016b, 016c), screens (016d).
