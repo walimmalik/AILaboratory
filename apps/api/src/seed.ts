@@ -4,6 +4,7 @@ import { contextFor } from './auth.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { entityKinds } from './entities/kinds.ts';
+import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
@@ -16,7 +17,8 @@ import { KindRegistry } from './records/kinds.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
- * types, instrument and equipment kinds and instruments, then reagents (lots as proposals). Runs as the agent "Seed loader" on behalf of a user,
+ * types, instrument and equipment kinds and instruments, reagents (lots as proposals), liquid
+ * classes, then entity kinds and entities. Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
  * nobody else has changed their wells (confirmed types as a proposal).
@@ -139,5 +141,18 @@ const classes = await loadSeedLiquidClasses(
 console.log(
   `Liquid classes: ${classes.created.length} drafted, ${classes.existing.length} already there, ${classes.skipped.length} skipped (the lab lacks their instrument, device, tips or liquid type).`,
 );
+
+const entities = await loadSeedEntities(
+  registry,
+  ctx,
+  readSeedEntities(await seedFile('entity-library.yaml'), await seedFile('reagent-library.yaml')),
+);
+console.log(
+  `Entity kinds: ${entities.kinds.created.length} drafted, ${entities.kinds.existing.length} already there.`,
+);
+console.log(
+  `Entities: ${entities.entities.created.length} drafted, ${entities.entities.existing.length} already there.`,
+);
+for (const line of entities.entities.created) console.log(`  + ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

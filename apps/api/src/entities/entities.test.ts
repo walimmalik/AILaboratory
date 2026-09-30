@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
@@ -12,9 +13,11 @@ import {
   type OperationRegistry,
 } from '../operations/index.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
+import { loadSeedReagents, readSeedReagents } from '../reagents/seed.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { entityKinds } from './kinds.ts';
+import { loadSeedEntities, readSeedEntities } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -300,4 +303,54 @@ describe('entities', () => {
     await refused(run(agent, 'entities.search', { sequence: 'AT' }));
     await refused(run(agent, 'entities.search', { base: 'mineral' }));
   });
+});
+
+describe('seed entity library', () => {
+  it('drafts the seed kinds and entities once, linked to their vendors, products and parents', async () => {
+    const seedFile = (name: string) =>
+      readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const reagentLibrary = await seedFile('reagent-library.yaml');
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    await loadSeedReagents(registry, seeder, readSeedReagents(reagentLibrary));
+    const library = readSeedEntities(await seedFile('entity-library.yaml'), reagentLibrary);
+    const report = await loadSeedEntities(registry, seeder, library);
+    expect(report.kinds.created).toHaveLength(library.kinds.length);
+    expect(report.entities.created).toHaveLength(library.entities.length);
+    const again = await loadSeedEntities(registry, seeder, library);
+    expect(again.kinds.existing).toHaveLength(library.kinds.length);
+    expect(again.entities.existing).toHaveLength(library.entities.length);
+
+    type Found = { entities: { entity: RecordEnvelope }[] };
+    const [hek] = (await run<Found>(person, 'entities.search', { text: 'HEK293' })).entities;
+    expect(hek?.entity.name).toBe('CEL-0001');
+    expect(hek?.entity.evidence.fields).toMatchObject({ source: 'datasheet' });
+    const [demo] = (await run<Found>(person, 'entities.search', { text: 'IL6p' })).entities;
+    const links = await run<{ links: { relation: string }[] }>(person, 'records.links', {
+      id: demo?.entity.id,
+      direction: 'from',
+    });
+    expect(links.links.map((l) => l.relation).sort()).toEqual(['is_a', 'refers_to']);
+    const [puc] = (await run<Found>(person, 'entities.search', { text: 'pUC19' })).entities;
+    expect(puc?.entity.evidence.fields).toMatchObject({ source: 'assumed' });
+    const [stauro] = (await run<Found>(person, 'entities.search', { text: 'Staurosporine' }))
+      .entities;
+    expect(stauro?.entity.name).toMatch(/^CMP-/);
+
+    // Nothing but the kinds' own confirmation stands in the way of the seed entities.
+    for (const { entity } of (await run<Found>(person, 'entities.search', { limit: 500 }))
+      .entities) {
+      const state = await run<Readiness>(person, 'records.readiness', { id: entity.id });
+      const blockers = state.checks
+        .filter((c) => !c.passed && c.severity === 'blocker' && c.id !== 'kind_confirmed')
+        .map((c) => c.message);
+      expect([entity.label, blockers]).toEqual([entity.label, []]);
+    }
+  }, 300_000);
 });
