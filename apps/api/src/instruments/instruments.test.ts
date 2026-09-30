@@ -456,6 +456,39 @@ describe('registered instruments', () => {
     expect(wrong).toMatchObject({ code: 'not_found' });
   });
 
+  it('checks the configuration on every write, not only the instrument operations', async () => {
+    const { kind, eight } = await setup();
+    const middle = { equipment: [left(eight.id, { placement: { on: 'slot', slot: 'middle' } })] };
+    const created = await refused(
+      run(person, 'records.create', {
+        kind: 'instrument',
+        label: 'Flex 1',
+        attributes: { kind: kind.id, configuration: middle, status: 'ready' },
+      }),
+    );
+    expect(created.message).toContain('has no slot middle');
+    const flex1 = await run<RecordEnvelope>(person, 'instruments.register', {
+      label: 'Flex 1',
+      kind: kind.id,
+    });
+    const edited = await refused(
+      run(person, 'records.update', {
+        id: flex1.id,
+        expectedVersion: flex1.version,
+        attributes: { ...flex1.attributes, configuration: middle },
+      }),
+    );
+    expect(edited.message).toContain('has no slot middle');
+    const readiness = await run<{ checks: { id: string; passed: boolean }[] }>(
+      person,
+      'records.readiness',
+      { id: flex1.id },
+    );
+    expect(readiness.checks.find((c) => c.id === 'configuration_resolves')).toMatchObject({
+      passed: true,
+    });
+  });
+
   it('changes the configuration as a whole, with items tracked by serial', async () => {
     const { kind, eight } = await setup();
     const item = await create(person, 'equipment_item', 'Flex 8-Channel 1000 uL SN 123', {

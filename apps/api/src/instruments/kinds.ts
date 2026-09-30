@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
   type CapabilityProvider,
   capabilityCatalog,
@@ -10,6 +11,7 @@ import {
   type MountDefinition,
   type SiteDefinition,
 } from '@ailab/schema';
+import { findOf, resolveWith } from './resolve.ts';
 
 const LIBRARY = 'Instrument library (plan 008)';
 
@@ -253,8 +255,9 @@ const instrumentChecksOnInstance: KindCheck<InstrumentAttributes>[] = [
 ];
 
 /**
- * A registered instrument (008b): the real machine, with what is installed on it now. Its
- * configuration changes through instruments.change_configuration, which checks it against the kinds.
+ * A registered instrument (008b): the real machine, with what is installed on it now. Every write
+ * resolves its configuration against the kinds (ADR 0041); instruments.change_configuration is the
+ * convenient way to change it.
  */
 export const instrument = defineKind({
   kind: 'instrument',
@@ -283,6 +286,34 @@ export const instrument = defineKind({
     },
   ],
   checks: instrumentChecksOnInstance,
+  related: async (a, { get, list, current }) => {
+    const before = current?.attributes as InstrumentAttributes | undefined;
+    const changed =
+      before?.kind !== a.kind || !isDeepStrictEqual(before.configuration, a.configuration);
+    const kind = await findOf({ get, list }, a.kind, 'instrument_kind');
+    const errors = kind
+      ? (await resolveWith({ get, list }, kind, a.configuration, current?.id)).issues
+          .filter((i) => i.severity === 'error')
+          .map((i) => i.message)
+      : [`${a.kind} is not an instrument kind in this lab`];
+    return {
+      ...(changed && errors.length > 0
+        ? { invalid: [`The configuration doesn't work: ${errors.join('; ')}`] }
+        : {}),
+      checks: [
+        {
+          id: 'configuration_resolves',
+          label: 'Installed equipment fits the instrument',
+          severity: 'blocker',
+          source: `${LIBRARY}: mounts, sites and equipment on the kinds`,
+          section: 'configuration',
+          passed: errors.length === 0,
+          ...(errors.length > 0 ? { message: errors.join('; ') } : {}),
+          fix: 'Change the installed equipment so every piece has a place it fits',
+        },
+      ],
+    };
+  },
 });
 
 /** A serial-bearing part that moves between instruments (I4): a Flex pipette, gripper or module. */
