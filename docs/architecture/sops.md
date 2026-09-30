@@ -11,6 +11,7 @@ Plan: [012](../plans/012-digital-sops.md). A lab SOP as a structured, versioned 
 | SOP kind: sections, reference checks, readiness | `apps/api/src/sops/kinds.ts` |
 | Operation contracts | `packages/schema/src/operations/sops.ts` |
 | Operations | `apps/api/src/sops/operations.ts` |
+| Binding roles and reading record values | `apps/api/src/sops/resolve.ts` |
 | Seed loader for `seed/sops/own/` | `apps/api/src/sops/seed.ts`, run by `pnpm --filter @ailab/api seed` |
 | Agent skill | `skills/sops/SKILL.md`, and a row in `skills/calculators/SKILL.md` |
 
@@ -34,10 +35,18 @@ Writes are refused when names repeat or a step, parameter, layout, timing rule o
 | `sops.draft` | Drafts an SOP | direct (drafts) |
 | `sops.calculate` | Works out an SOP's variables for a run (calculator) | read |
 
+## Binding roles and reading values (012b)
+
+A material role is filled by a record of a kind that fits its type: labware by a labware type or a container (read through to its labware type), a reagent or solution by a product or lot, an entity by an entity or sample, an instrument by an instrument kind, an instrument or an equipment kind, a consumable by a labware type, product or lot.
+
+A record variable reads its `readFrom` field from the role's record: a lot's certificate value for that field (falling back to its product's typical value), a product's typical lot value (shown as typical), or any attribute by dotted path (`deadVolume`, `workingVolume.max`). A ratio or missing field is a problem in words, and the variable falls back to the SOP's typical value when it has one.
+
+`sops.calculate` takes `bindings` (a record per role for this run; otherwise each role's default) as well as `inputs`, and returns each role's record with any misfit, and each variable with where it came from (`input`, `record`, `typical`, `default`, `computed`, `missing`), the record and field it was read from, and any problem. Readiness blocks on defaults that don't fit their role and warns about record variables their default can't provide.
+
 ## The lab's own SOPs (012a)
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
 
 ## Not yet
 
-Binding roles and reading values from records (012b); the digitizer and review loop (012c); the SOP page (012d).
+Dead volume per pipetting instrument kind (007 L4) as a field to read; the digitizer and review loop (012c); the SOP page (012d).

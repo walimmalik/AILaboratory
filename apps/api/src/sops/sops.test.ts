@@ -4,8 +4,10 @@ import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { fileKinds } from '../files/kinds.ts';
+import { labwareKinds } from '../labware/kinds.ts';
 import { libraryKinds } from '../library/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
+import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from './kinds.ts';
@@ -30,7 +32,8 @@ beforeEach(async () => {
     labId: other.labId,
   };
   const kinds = new KindRegistry();
-  for (const kind of [...fileKinds, ...libraryKinds, ...sopKinds]) kinds.register(kind);
+  for (const kind of [...labwareKinds, ...reagentKinds, ...fileKinds, ...libraryKinds, ...sopKinds])
+    kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus());
 });
 afterEach(() => close());
@@ -315,5 +318,164 @@ describe('sops.calculate', () => {
       code: 'invalid_input',
     });
     await expect(calc(otherLab, [])).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('binding roles (012b)', () => {
+  async function lab() {
+    const product = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'product',
+      label: 'IL-6 capture antibody',
+      attributes: {
+        category: 'antibody',
+        origin: 'bought',
+        lotFields: [
+          {
+            key: 'workingConcentration',
+            label: 'Working concentration',
+            unit: 'ug/mL',
+            typical: q('2', 'ug/mL'),
+          },
+        ],
+      },
+    });
+    const lot = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'lot',
+      label: 'Lot 1234',
+      attributes: {
+        product: product.id,
+        lotNumber: '1234',
+        status: 'unopened',
+        values: [{ field: 'workingConcentration', value: q('4', 'ug/mL') }],
+      },
+    });
+    const plate = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'High-bind 96',
+      attributes: { family: 'plate', deadVolume: q('10', 'uL') },
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      label: 'Coating',
+      materials: [
+        { role: 'capture_ab', label: 'Capture antibody', type: 'reagent', default: product.id },
+        { role: 'plate', label: 'Plate', type: 'labware', default: plate.id },
+      ],
+      variables: [
+        { name: 'wells', label: 'Wells', kind: 'input', value: '96' },
+        { name: 'well_volume', label: 'Well volume', kind: 'default', value: q('100', 'uL') },
+        {
+          name: 'capture_conc',
+          label: 'Capture antibody working concentration',
+          kind: 'record',
+          value: q('1', 'ug/mL'),
+          readFrom: { role: 'capture_ab', field: 'workingConcentration' },
+        },
+        {
+          name: 'dead',
+          label: 'Dead volume',
+          kind: 'record',
+          readFrom: { role: 'plate', field: 'deadVolume' },
+        },
+        {
+          name: 'coating',
+          label: 'Coating solution',
+          kind: 'computed',
+          expression: 'wells * (well_volume + dead)',
+          unit: 'mL',
+        },
+      ],
+      steps: [{ id: 'coat', action: 'add', text: 'Coat.', uses: ['plate', 'capture_ab'] }],
+    });
+    return { product, lot, plate, sop };
+  }
+  type Calculated = {
+    bindings: Record<string, unknown>[];
+    variables: Record<string, unknown>[];
+  };
+  const byName = (c: Calculated) => new Map(c.variables.map((v) => [v.name, v]));
+
+  it('reads typical values from defaults and certificate values from a picked lot', async () => {
+    const { sop, lot, product, plate } = await lab();
+    const planned = await run<Calculated>(agent, 'sops.calculate', { sop: sop.id });
+    expect(planned.bindings).toEqual([
+      expect.objectContaining({ role: 'capture_ab', record: product.id, by: 'default' }),
+      expect.objectContaining({ role: 'plate', record: plate.id, by: 'default' }),
+    ]);
+    expect(byName(planned).get('capture_conc')).toMatchObject({
+      quantity: q('2', 'ug/mL'),
+      from: 'typical',
+      source: { record: product.id, field: 'workingConcentration' },
+    });
+    expect(byName(planned).get('dead')).toMatchObject({ quantity: q('10', 'uL'), from: 'record' });
+    expect(byName(planned).get('coating')).toMatchObject({ quantity: q('10.56', 'mL') });
+
+    const onTheDay = await run<Calculated>(person, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'capture_ab', record: lot.id }],
+      inputs: [{ name: 'wells', value: '48' }],
+    });
+    expect(byName(onTheDay).get('capture_conc')).toMatchObject({
+      quantity: q('4', 'ug/mL'),
+      from: 'record',
+      source: { record: lot.id, name: lot.name },
+    });
+    expect(byName(onTheDay).get('coating')).toMatchObject({ quantity: q('5.28', 'mL') });
+  });
+
+  it('says when a record does not fit its role or lacks the field', async () => {
+    const { sop, plate } = await lab();
+    const wrong = await run<Calculated>(agent, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'capture_ab', record: plate.id }],
+    });
+    expect(wrong.bindings[0]?.problem).toMatch(
+      /is a labware type; Capture antibody needs a product or lot/,
+    );
+    expect(byName(wrong).get('capture_conc')).toMatchObject({
+      quantity: q('1', 'ug/mL'),
+      from: 'typical',
+    });
+    await expect(
+      registry.execute(agent, 'sops.calculate', {
+        sop: sop.id,
+        bindings: [{ role: 'reader', record: plate.id }],
+      }),
+    ).rejects.toMatchObject({ message: 'SOP-0001 has no material reader' });
+
+    const bare = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'No dead volume',
+      attributes: { family: 'plate' },
+    });
+    const noDead = await run<Calculated>(agent, 'sops.calculate', {
+      sop: sop.id,
+      bindings: [{ role: 'plate', record: bare.id }],
+    });
+    expect(byName(noDead).get('dead')).toMatchObject({
+      ok: false,
+      from: 'missing',
+      problem: `${bare.name} has no deadVolume`,
+    });
+    expect(byName(noDead).get('coating')).toMatchObject({ ok: false, waitsOn: ['dead'] });
+  });
+
+  it('checks defaults in readiness', async () => {
+    const { sop, plate } = await lab();
+    const a = sop.attributes as { materials: { role: string }[] };
+    const updated = await run<RecordEnvelope>(person, 'records.update', {
+      id: sop.id,
+      expectedVersion: sop.version,
+      attributes: {
+        ...(sop.attributes as object),
+        materials: a.materials.map((m) =>
+          m.role === 'capture_ab' ? { ...m, default: plate.id } : m,
+        ),
+      },
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: updated.id });
+    expect(ready.checks.find((c) => c.id === 'materials_fit')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+    });
   });
 });

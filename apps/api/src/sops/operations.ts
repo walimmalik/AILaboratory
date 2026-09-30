@@ -15,6 +15,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { sopVariableDefinitions } from './kinds.ts';
+import { bindRoles, type ReadValue, readField } from './resolve.ts';
 
 /** Digital SOP operations (plan 012). */
 export const sopOperations = [
@@ -77,24 +78,63 @@ export const sopOperations = [
           );
         }
       }
+      const service = new RecordService(deps.db, deps.kinds);
+      const fetch = (id: string) => service.get(ctx, id).catch(() => undefined);
+      const roles = new Set(a.materials.map((m) => m.role));
+      const bound = new Map<string, string>();
+      for (const b of input.bindings ?? []) {
+        if (!roles.has(b.role)) {
+          throw new OperationError('invalid_input', `${record.name} has no material ${b.role}`);
+        }
+        bound.set(b.role, b.record);
+      }
+      const bindings = await bindRoles(a, bound, fetch);
+      const byRole = new Map(bindings.map((b) => [b.role, b]));
+      const read = new Map<string, ReadValue>();
+      for (const v of a.variables) {
+        if (v.kind !== 'record' || !v.readFrom || given.has(v.name)) continue;
+        const binding = byRole.get(v.readFrom.role);
+        if (!binding?.record || binding.problem) continue;
+        read.set(v.name, await readField(binding.record, v.readFrom.field, fetch));
+      }
       const outcomes = evaluateVariables(
-        sopVariableDefinitions(a).map((d) =>
-          given.has(d.name) ? { ...d, value: given.get(d.name) as NonNullable<typeof d.value> } : d,
-        ),
+        sopVariableDefinitions(a).map((d) => {
+          if (given.has(d.name))
+            return { ...d, value: given.get(d.name) as NonNullable<typeof d.value> };
+          const r = read.get(d.name);
+          return r?.value !== undefined ? { ...d, value: r.value } : d;
+        }),
       );
       return {
+        bindings: bindings.map((b) => ({
+          role: b.role,
+          ...(b.record ? { record: b.record.id, name: b.record.name, label: b.record.label } : {}),
+          ...(b.by ? { by: b.by } : {}),
+          ...(b.problem ? { problem: b.problem } : {}),
+        })),
         variables: a.variables.map((v) => {
           const out = outcomeWords(v.name, outcomes.get(v.name));
+          const r = read.get(v.name);
+          const fromRecord = r?.value !== undefined;
           const from = given.has(v.name)
             ? 'input'
             : v.kind === 'computed'
               ? 'computed'
-              : v.value === undefined
-                ? 'missing'
-                : v.kind === 'record'
+              : fromRecord
+                ? r?.typical
                   ? 'typical'
-                  : 'default';
-          return { ...out, from } as const;
+                  : 'record'
+                : v.value === undefined
+                  ? 'missing'
+                  : v.kind === 'record'
+                    ? 'typical'
+                    : 'default';
+          return {
+            ...out,
+            from,
+            ...(fromRecord && r?.from ? { source: r.from } : {}),
+            ...(r?.problem ? { problem: r.problem } : {}),
+          } as const;
         }),
       };
     },
