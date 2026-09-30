@@ -836,6 +836,73 @@ describe('recording runs (013c)', () => {
     });
     expect(finished.attributes).toMatchObject({ status: 'done' });
   });
+
+  it('corrects a finished run late: a step value stays structured, anything else is a deviation', async () => {
+    const experiment = await plannedExperiment();
+    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const correct = (ctx: typeof person, target: RecordEnvelope, input: object) =>
+      registry.execute(ctx, 'runs.correct', {
+        id: target.id,
+        expectedVersion: target.version,
+        ...input,
+      });
+    const late = {
+      part: 'coating',
+      step: 'coat',
+      changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      why: 'Coating solution ran short',
+      source: 'notebook entry of 30 Sep',
+    };
+    await expect(correct(person, started, late)).rejects.toMatchObject({
+      code: 'invalid_state',
+      message: expect.stringContaining('runs.record_step'),
+    });
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    const finished = await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    const finishedAt = (finished.attributes as { finishedAt: string }).finishedAt;
+
+    const proposed = await correct(agent, finished, late);
+    expect(proposed.status).toBe('proposed');
+    await expect(correct(otherLab, finished, late)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      correct(person, finished, { changed: late.changed, why: 'No step' }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(correct(person, finished, { ...late, what: 'Both' })).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+
+    const stepFixed = await correct(person, finished, late);
+    if (stepFixed.status !== 'done') throw new Error('runs.correct was proposed');
+    const fixed = stepFixed.output as RecordEnvelope;
+    expect(fixed.attributes).toMatchObject({
+      status: 'done',
+      finishedAt,
+      steps: [
+        {
+          status: 'done',
+          actuals: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+          deviation: { what: 'volume 90 µL (planned 100 µL)', why: 'Coating solution ran short' },
+          corrections: [{ by: person.actor, source: 'notebook entry of 30 Sep' }],
+        },
+        { status: 'done' },
+      ],
+    });
+    const noted = await correct(person, fixed, {
+      what: 'Plate sat on the bench 40 min before reading',
+      why: 'Reader busy',
+    });
+    if (noted.status !== 'done') throw new Error('runs.correct was proposed');
+    expect((noted.output as RecordEnvelope).attributes).toMatchObject({
+      deviations: [{ what: 'Plate sat on the bench 40 min before reading', corrected: true }],
+    });
+  });
 });
 
 describe('conclusions and sets (013c)', () => {

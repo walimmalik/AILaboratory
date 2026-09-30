@@ -280,6 +280,45 @@ export const runsFinish = defineContract({
   output: RecordEnvelope,
 });
 
+export const runsCorrect = defineContract({
+  id: 'runs.correct',
+  summary:
+    "Record a late actual or deviation on a finished run, e.g. from a notebook entry written after the checklist closed. Give the part and step with `changed` values when it is a step's value (kept structured like runs.record_step, so lab memory can group it), or `what` for anything else; always `why`, and `source` for where it came from. The run's finish time stays; the history shows the correction. A person's correction is recorded directly; an agent's is a proposal",
+  effect: 'write',
+  input: z
+    .strictObject({
+      ...RunTarget,
+      part: z.string().min(1).optional(),
+      step: z.string().min(1).optional(),
+      changed: z
+        .array(z.strictObject({ name: z.string().min(1), value: RunValue }))
+        .min(1)
+        .optional()
+        .describe('The values that really differed'),
+      what: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("What went differently, when it is not a step's value"),
+      why: z.string().min(1),
+      impact: z.string().min(1).optional(),
+      source: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Where it was stated, e.g. a notebook entry ID'),
+      reason: Reason,
+    })
+    .refine((i) => (i.changed !== undefined) !== (i.what !== undefined), {
+      message:
+        "Give `changed` with a part and step for a step's value, or `what` for anything else",
+    })
+    .refine((i) => i.changed === undefined || (i.part !== undefined && i.step !== undefined), {
+      message: 'Say which part and step the changed values belong to',
+    }),
+  output: RecordEnvelope,
+});
+
 export const experimentsConclude = defineContract({
   id: 'experiments.conclude',
   summary:

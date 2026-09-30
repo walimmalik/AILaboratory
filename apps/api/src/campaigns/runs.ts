@@ -7,6 +7,7 @@ import {
   type RunStep,
   type RunValue,
   runsAttachData,
+  runsCorrect,
   runsDoneAsPlanned,
   runsFinish,
   runsRecordDeviation,
@@ -55,6 +56,15 @@ async function runOf(deps: Pick<OperationDeps, 'db' | 'kinds'>, ctx: RecordConte
   }
   return { run, a };
 }
+
+/** Plain words for a step's changed values against its plan. */
+const differences = (
+  changed: { name: string; value: RunValue }[],
+  planned: Map<string, RunValue>,
+) =>
+  changed
+    .map((c) => `${c.name} ${show(c.value)} (planned ${show(planned.get(c.name))})`)
+    .join('; ');
 
 function stepOf(run: RecordEnvelope, a: RunAttributes, part: string, step: string) {
   const i = (a.steps ?? []).findIndex((s) => s.part === part && s.step === step);
@@ -158,13 +168,7 @@ export const runOperations = [
         ...(changed.length || input.skipped
           ? {
               deviation: {
-                what: input.skipped
-                  ? `Skipped ${step.title}`
-                  : changed
-                      .map(
-                        (c) => `${c.name} ${show(c.value)} (planned ${show(planned.get(c.name))})`,
-                      )
-                      .join('; '),
+                what: input.skipped ? `Skipped ${step.title}` : differences(changed, planned),
                 why: input.why as string,
                 ...(input.impact ? { impact: input.impact } : {}),
               },
@@ -268,6 +272,94 @@ export const runOperations = [
           ...(input.note ? { notes: a.notes ? `${a.notes}\n${input.note}` : input.note } : {}),
         },
         reason: input.reason ?? `Finished ${run.name}: ${input.status}`,
+      });
+    },
+  }),
+  implement(runsCorrect, {
+    agentPolicy: 'propose',
+    run: async (ctx, input, deps) => {
+      const run = await recordOf(service(deps), ctx, input.id, 'run', 'run');
+      const a = run.attributes as RunAttributes;
+      if (a.status === 'scheduled' || a.status === 'in_progress') {
+        throw new OperationError(
+          'invalid_state',
+          `${run.name} is ${a.status.replace('_', ' ')}; record into it with runs.record_step or runs.record_deviation`,
+        );
+      }
+      const at = new Date().toISOString();
+      const correction = {
+        at,
+        by: ctx.actor,
+        why: input.why,
+        ...(input.source ? { source: input.source } : {}),
+      };
+      const evidence =
+        ctx.actor.type === 'agent'
+          ? {
+              [input.changed ? 'steps' : 'deviations']: {
+                source: 'stated' as const,
+                note: input.source ? `Stated in ${input.source}` : 'Stated after the run finished',
+              },
+            }
+          : undefined;
+      if (!input.changed) {
+        return service(deps).update(ctx, run.id, {
+          expectedVersion: input.expectedVersion,
+          attributes: {
+            ...a,
+            deviations: [
+              ...(a.deviations ?? []),
+              {
+                what: input.what as string,
+                why: input.why,
+                ...(input.impact ? { impact: input.impact } : {}),
+                at,
+                by: ctx.actor,
+                corrected: true as const,
+              },
+            ],
+          },
+          ...(evidence ? { evidence } : {}),
+          reason: input.reason ?? `Corrected after the run: ${input.what}`,
+        });
+      }
+      const i = stepOf(run, a, input.part as string, input.step as string);
+      const step = a.steps?.[i] as RunStep;
+      const planned = new Map(step.planned.map((p) => [p.name, p.value]));
+      const values = new Map((step.actuals ?? []).map((v) => [v.name, v.value]));
+      for (const c of input.changed) values.set(c.name, c.value);
+      const actuals = [...values]
+        .filter(([name, value]) => stable(value) !== stable(planned.get(name)))
+        .map(([name, value]) => ({ name, value }));
+      const { actuals: _a, deviation, ...rest } = step;
+      const next: RunStep = {
+        ...rest,
+        ...(step.status === 'pending' ? { status: 'done' as const, at, by: ctx.actor } : {}),
+        ...(actuals.length ? { actuals } : {}),
+        ...(actuals.length
+          ? {
+              deviation: {
+                what: differences(actuals, planned),
+                why: input.why,
+                ...((input.impact ?? deviation?.impact)
+                  ? { impact: (input.impact ?? deviation?.impact) as string }
+                  : {}),
+              },
+            }
+          : step.status === 'skipped' && deviation
+            ? { deviation }
+            : {}),
+        corrections: [...(step.corrections ?? []), correction],
+      };
+      const steps = [...(a.steps ?? [])];
+      steps[i] = next;
+      return service(deps).update(ctx, run.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: { ...a, steps },
+        ...(evidence ? { evidence } : {}),
+        reason:
+          input.reason ??
+          `Corrected ${step.title} after the run: ${actuals.length ? differences(actuals, planned) : 'as planned'}`,
       });
     },
   }),
