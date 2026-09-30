@@ -7,6 +7,10 @@ description: Draft reagent products, kits and lab-made solutions in AILaboratory
 
 A **product** (`product`, `PRD-0001`) is something the lab pipettes: a bought reagent, a kit, or a solution the lab makes. A **lot** (`lot`, `LOT-0001`) is one batch of it. A **liquid type** (`liquid_type`, `LQT-0001`) says how a liquid behaves when pipetted. Read `records.kinds` for the full schemas.
 
+## Finding products
+
+Before drafting, check the lab doesn't have it: `reagents.search` with `{text?, category?, vendor?, liquidType?, storage?, origin?, inDate?, expiringWithinDays?, status?}`. `text` matches the name, `PRD-0001`, a catalog number or the CAS number; `storage` is `room`, `fridge`, `freezer`, `deep_freezer` or `cryo`. Each result has `lots: {count, inDate, nextExpiry}`, so "what expires this month" is `{expiringWithinDays: 30}`.
+
 ## Drafting a product
 
 Use `reagents.draft_product` with `{label, attributes, components?, evidence?}`.

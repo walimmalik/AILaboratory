@@ -251,6 +251,56 @@ describe('liquids.record_verification', () => {
   });
 });
 
+describe('liquids.search_classes', () => {
+  it('filters by liquid type, platform and verification, with the latest check', async () => {
+    const { flex, aqueous, glycerol, cls } = await lab();
+    const water = await cls('Water', { labDefault: true, platformName: 'water_default' });
+    const thick = await cls('Glycerol', { liquidTypes: [glycerol.id] });
+    await recordCheck(water.id, '2026-09-29', false);
+    await recordCheck(water.id, '2026-09-30', true);
+    type Found = {
+      classes: { liquidClass: RecordEnvelope; verified: boolean; lastCheck?: unknown }[];
+      total: number;
+    };
+    const all = await run<Found>(agent, 'liquids.search_classes', { instrumentKind: flex.id });
+    expect(all.total).toBe(2);
+    const forWater = await run<Found>(agent, 'liquids.search_classes', {
+      liquidType: aqueous.id,
+    });
+    expect(forWater.classes).toEqual([
+      expect.objectContaining({
+        verified: true,
+        lastCheck: { date: '2026-09-30', passed: true, demo: true },
+      }),
+    ]);
+    expect(forWater.classes[0]?.liquidClass.id).toBe(water.id);
+    const byName = await run<Found>(agent, 'liquids.search_classes', { text: 'WATER_DEF' });
+    expect(byName.total).toBe(1);
+    const unverified = await run<Found>(agent, 'liquids.search_classes', { verified: false });
+    expect(unverified.classes.map((c) => c.liquidClass.id)).toEqual([thick.id]);
+    const echo = await run<Found>(agent, 'liquids.search_classes', { platform: 'echo' });
+    expect(echo.total).toBe(0);
+    const elsewhere = await run<Found>(otherLab, 'liquids.search_classes', {});
+    expect(elsewhere.total).toBe(0);
+    await refused(run(agent, 'liquids.search_classes', { platform: 'tecan' }));
+  });
+});
+
+/** A passing gravimetric check; the first (real) one verifies, the second (demo) is latest. */
+async function recordCheck(liquidClass: string, date: string, demo: boolean) {
+  await run(person, 'liquids.record_verification', {
+    liquidClass,
+    method: 'gravimetric',
+    date,
+    target: uL('10'),
+    replicates: 10,
+    mean: uL('10.1'),
+    cv: '1',
+    limits: { accuracy: '5', cv: '3' },
+    demo,
+  });
+}
+
 describe('seed liquid classes', () => {
   it('drafts the vendor defaults for what the lab has, once, and they resolve once confirmed', async () => {
     const seedFile = (name: string) =>

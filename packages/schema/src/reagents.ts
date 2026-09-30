@@ -252,6 +252,22 @@ export const LotAttributes = z.strictObject({
 });
 export type LotAttributes = z.infer<typeof LotAttributes>;
 
+/** Storage temperature in words, from the upper end of the range (plan 009c filters). */
+export const StorageBand = z
+  .enum(['room', 'fridge', 'freezer', 'deep_freezer', 'cryo'])
+  .describe(
+    'room (above 10 °C), fridge (to 10 °C), freezer (to −10 °C), deep_freezer (to −60 °C), cryo (to −130 °C)',
+  );
+export type StorageBand = z.infer<typeof StorageBand>;
+
+/** A product's lots at a glance: how many, how many usable today, and the next expiry among them. */
+export const LotSummary = z.object({
+  count: z.number().int(),
+  inDate: z.number().int().describe('Unopened or opened, and not past expiry'),
+  nextExpiry: CalendarDate.optional().describe('The soonest expiry among lots in date'),
+});
+export type LotSummary = z.infer<typeof LotSummary>;
+
 // ---------------------------------------------------------------------------------------------
 // Liquid types (R4): platform-neutral pipetting behaviour. Liquid classes are 009b.
 

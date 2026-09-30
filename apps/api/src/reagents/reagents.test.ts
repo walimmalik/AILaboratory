@@ -349,6 +349,63 @@ describe('lots', () => {
   });
 });
 
+describe('reagents.search', () => {
+  it('filters by text, storage and lots in date, with each lot summary', async () => {
+    const { product: buffer } = await draft(person, 'PBS', {
+      ...pbs,
+      catalog: [{ number: '10010-023' }],
+    });
+    const { product: antibody } = await draft(person, 'IL-6 Detection Antibody', {
+      category: 'antibody',
+      origin: 'bought',
+      storage: { min: { value: '2', unit: 'degC' }, max: { value: '8', unit: 'degC' } },
+    });
+    for (const [lotNumber, expiry] of [
+      ['L1', '2026-10-10'],
+      ['L2', '2027-03-01'],
+      ['L3', '2026-09-01'],
+    ]) {
+      await run(person, 'reagents.receive_lot', { product: antibody.id, lotNumber, expiry });
+    }
+    type Found = {
+      products: { product: RecordEnvelope; storage?: string; lots: unknown }[];
+      total: number;
+    };
+    const today = '2026-09-30';
+    const all = await run<Found>(person, 'reagents.search', { today });
+    expect(all.total).toBe(2);
+    const byCatalog = await run<Found>(person, 'reagents.search', { text: '10010', today });
+    expect(byCatalog.products.map((p) => p.product.id)).toEqual([buffer.id]);
+    expect(byCatalog.products[0]?.storage).toBe('room');
+
+    const cold = await run<Found>(person, 'reagents.search', { storage: 'fridge', today });
+    expect(cold.products).toEqual([
+      expect.objectContaining({
+        storage: 'fridge',
+        lots: { count: 3, inDate: 2, nextExpiry: '2026-10-10' },
+      }),
+    ]);
+    const inDate = await run<Found>(person, 'reagents.search', { inDate: true, today });
+    expect(inDate.products.map((p) => p.product.id)).toEqual([antibody.id]);
+    const soon = await run<Found>(person, 'reagents.search', { expiringWithinDays: 5, today });
+    expect(soon.total).toBe(0);
+    const month = await run<Found>(person, 'reagents.search', { expiringWithinDays: 30, today });
+    expect(month.total).toBe(1);
+    const limited = await run<Found>(person, 'reagents.search', { limit: 1, today });
+    expect(limited).toMatchObject({ total: 2 });
+    expect(limited.products).toHaveLength(1);
+
+    const elsewhere = await run<Found>(otherLab, 'reagents.search', { today });
+    expect(elsewhere.total).toBe(0);
+  });
+
+  it('refuses unknown filters and malformed values', async () => {
+    await refused(run(person, 'reagents.search', { storage: 'cold' }));
+    await refused(run(person, 'reagents.search', { color: 'red' }));
+    await refused(run(person, 'reagents.search', { today: '30/09/2026' }));
+  });
+});
+
 describe('seed reagent library', () => {
   it('drafts every product once with sources, kits linked, and proposes the lots', async () => {
     const library = readSeedReagents(

@@ -28,8 +28,9 @@ A closed list; each rule has plain words (`text`), a `source` (`vendor` with a r
 | `reagents.scale_recipe` | Amounts of each component for a target batch | read |
 | `reagents.receive_lot` | Records a lot (active); checks certificate values against the product's lot fields and units, component lots against the kit or recipe, and the lot number against the product's other lots | proposed |
 | `reagents.set_lot_status` | Opened (with the date), quarantined, expired, used up, unopened | proposed |
+| `reagents.search` | Products by text (name, readable name, catalog number, CAS), category, vendor, liquid type, storage band, origin, a lot in date or expiring within some days; each with its lot count, lots in date and next expiry (`lotSummary` and `storageBand` in `packages/domain`) | read |
 
-Editing and confirming products use `records.update` and review. Liquid classes and the class resolver arrive in 009b, the library screens and search in 009c.
+Editing and confirming products use `records.update` and review. Storage bands come from the upper end of the storage range: room above 10 °C, fridge to 10 °C, freezer to −10 °C, deep freezer to −60 °C, cryo to −130 °C. A lot is in date when it is unopened or opened and not past its expiry. "Used in" (SOPs, plates) waits for those records (011, 010).
 
 ## Seed
 
@@ -55,6 +56,7 @@ A product can name `liquidClasses` to use instead of the lab default for its liq
 | `liquids.resolve_class` | Picks the class for a transfer: explicit, then the product's own, then the lab default for its liquid type (verified first); only confirmed classes; says why or what is missing | read |
 | `liquids.mixture_type` | A mixture's liquid type from its parts (largest part, unless DMSO ≥ 70%, glycerol > 20%, ethanol or volatile ≥ 50%) | read |
 | `liquids.record_verification` | Records a check and its result; passing real runs make a class verified in this lab | proposed |
+| `liquids.search_classes` | Classes by text (name or vendor name), instrument model, device, tip, liquid type, platform, verified; each with whether it is verified and its latest check | read |
 
 ### Seed classes
 

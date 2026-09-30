@@ -11,6 +11,8 @@ A **liquid type** (`liquid_type`, `LQT-0001`) says how a liquid behaves: aqueous
 
 Never pick a class yourself. Call `liquids.resolve_class` with `{liquid: {product} or {liquidType}, instrumentKind, device?, tip?, sourceLabware?, mode?, volume, liquidClass?}`. It returns the class, how it was chosen (`explicit`, `product_override`, `lab_default` or `none`), `why` in plain words, `verified`, and alternatives. Quote `why` to the person. When it returns `none`, tell the person the `issue`; don't substitute a class.
 
+To see what the lab has (a class for a device, which liquid types have none, which are verified), call `liquids.search_classes` with `{text?, instrumentKind?, device?, tip?, liquidType?, platform?, verified?, status?}`. It lists classes with `verified` and the `lastCheck`. It is for looking around; the choice for a transfer still comes from `liquids.resolve_class`.
+
 For a mixture (a well with sample, buffer and DMSO), call `liquids.mixture_type` with the parts and volumes first. The type it returns is an assumption; say so.
 
 ## Drafting a class
