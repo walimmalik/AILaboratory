@@ -13,6 +13,7 @@ Volumes, concentrations, dilutions and amounts come from a calculator, never fro
 | `inventory.map_plates` | Which source well lands on which destination well when stamping (one to one, quadrant, offset) | `{from, to, mapping, wells?}` |
 | `reagents.scale_recipe` | How much of each component a lab-made product needs for a batch | `{product, target}` |
 | `sops.evaluate` | Formulas over named values with units, as SOP variables use them: totals with dead volume, C1V1, rounding up to a tube size | `{variables: [{name, value} or {name, expression, unit?}]}` |
+| `sops.score` | How well a digitized SOP matches what its source must contain: materials, steps, values and questions found, what is missing | `{sop, expected: SopExpectation}` |
 | `liquids.resolve_class` | Which liquid class a transfer uses, and why | `{liquid, instrumentKind, device?, tip?, sourceLabware?, mode?, volume}` |
 
 A `WellState` is `{volume: {"value": "25", "unit": "uL"} or "unknown", components: [{source: "lot_…" or "smp_…", concentration?} or {source, amount?}]}`. Concentrations can be molar (`mM`), mass (`ng/uL`), activity (`U/mL`), cells or colonies per volume, `%v/v` or `%w/v`; those all mix. `%w/w` doesn't mix by volume and becomes unknown once mixed. A component without a concentration is present but unmeasured, and stays unknown.

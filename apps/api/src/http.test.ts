@@ -153,6 +153,7 @@ describe('MCP', () => {
       'reagents.scale_recipe',
       'sops.calculate',
       'sops.evaluate',
+      'sops.score',
     ]);
     expect(listed.every((o: { calculator?: boolean }) => o.calculator)).toBe(true);
   });

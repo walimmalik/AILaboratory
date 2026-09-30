@@ -12,4 +12,5 @@ export * from './mentions.ts';
 export * from './opentrons.ts';
 export * from './readiness.ts';
 export * from './reagents.ts';
+export * from './sop-benchmark.ts';
 export * from './units.ts';

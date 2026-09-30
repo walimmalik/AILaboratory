@@ -4,7 +4,14 @@ import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
-import { SopAttributes, SopId, SopName, SopReviewRound } from '../sops.ts';
+import {
+  SopAttributes,
+  SopExpectation,
+  SopId,
+  SopName,
+  SopReviewRound,
+  SopScore,
+} from '../sops.ts';
 
 /** A variable name in a digital SOP formula: letters, digits and _, dotted for values read from records. */
 export const VariableName = z
@@ -214,4 +221,14 @@ export const sopsReviews = defineContract({
   effect: 'read',
   input: z.strictObject({ sop: SopId }),
   output: z.object({ rounds: z.array(SopReviewRound) }),
+});
+
+export const sopsScore = defineContract({
+  id: 'sops.score',
+  calculator: true,
+  summary:
+    'Score a digitized SOP against what its source must contain (the digitizing benchmark): the share of expected materials, steps (by action and stated values), values and unclear spots raised as questions the draft has, what is missing, and whether the steps keep their order',
+  effect: 'read',
+  input: z.strictObject({ sop: SopId, expected: SopExpectation }),
+  output: SopScore,
 });

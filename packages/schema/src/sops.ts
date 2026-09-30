@@ -276,3 +276,51 @@ export const SopReviewRound = z.object({
   at: z.iso.datetime(),
 });
 export type SopReviewRound = z.infer<typeof SopReviewRound>;
+
+/**
+ * What a correct digitization of a source must contain (plan 012 G11), hand-checked or derived from
+ * a machine-readable model such as LabOP. Kept in `seed/sop-benchmark/`.
+ */
+export const SopExpectation = z.strictObject({
+  key: z.string().min(1),
+  document: z.string().min(1).describe('The library document it is for, by title'),
+  basis: z.string().min(1).describe('Where the expectation came from, e.g. "LabOP model"'),
+  checked: z.boolean().describe('Whether a person has checked it'),
+  materials: z
+    .array(z.strictObject({ label: z.string().min(1), aliases: z.array(z.string()).optional() }))
+    .optional(),
+  steps: z
+    .array(
+      z.strictObject({
+        action: z.union([StepAction, z.array(StepAction).min(1)]),
+        quantities: z.array(Quantity).optional(),
+        words: z.array(z.string().min(1)).optional(),
+      }),
+    )
+    .optional(),
+  values: z
+    .array(z.strictObject({ quantity: Quantity, about: z.string().min(1).optional() }))
+    .optional(),
+  questions: z
+    .array(z.strictObject({ about: z.string().min(1), words: z.array(z.string().min(1)).min(1) }))
+    .optional(),
+});
+export type SopExpectation = z.infer<typeof SopExpectation>;
+
+const SectionScore = z.object({
+  expected: z.number().int(),
+  found: z.number().int(),
+  recall: z.number(),
+  precision: z.number().optional(),
+  order: z.number().optional(),
+  missing: z.array(z.string()),
+});
+
+export const SopScore = z.object({
+  materials: SectionScore.optional(),
+  steps: SectionScore.optional(),
+  values: SectionScore.optional(),
+  questions: SectionScore.optional(),
+  overall: z.number().describe('The mean recall of the sections expected, 0 to 1'),
+});
+export type SopScore = z.infer<typeof SopScore>;

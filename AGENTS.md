@@ -64,6 +64,7 @@ Run from the repo root unless noted.
 | Set or reset your web sign-in | `pnpm --filter @ailab/api password --email you@example.org` |
 | Load the seed lab as drafts to review (labware, instrument kinds and the lab's instruments, reagents with lots as proposals, vendor liquid classes, entity kinds with the demo entities, library documents from seed/sops/own and docs/sop-library, the lab's own SOPs as digital SOPs, then locations, containers, samples and contents as proposals: run it again after approving each layer) | `pnpm --filter @ailab/api seed` |
 | Import a folder of documents into the library (a `manifest.json` folder, or Markdown SOPs with `--license`) | `pnpm --filter @ailab/api library:import --folder <path>` |
+| Score the SOPs digitized from the benchmark documents in `seed/sop-benchmark` (prints a Markdown table; `--out <file>` saves it) | `pnpm --filter @ailab/api sop:benchmark` |
 | Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
 | Regenerate JSON Schema and migrations after schema changes | `pnpm generate` (CI fails if they are stale) |
 | Dev servers (api :3001, web :5173) | `pnpm dev` |

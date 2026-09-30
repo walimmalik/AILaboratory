@@ -1,0 +1,66 @@
+# What a digitization of the 2022 iGEM InterLab Experiment 1 must contain (plan 012 G11), read off
+# the LabOP model's generated protocol (docs/sop-library/sops/igem-interlab-2022-exp1/labop-generated.md).
+# Not yet checked by a person.
+key: igem-interlab-2022-exp1
+document: 2022 iGEM InterLab Experiment 1 (human protocol + LabOP machine-readable version)
+basis: LabOP model (labop-generated.md)
+checked: false
+materials:
+  - { label: DH5 alpha competent cells }
+  - { label: Negative control, aliases: [BBa_J428100] }
+  - { label: Positive control, aliases: [BBa_I20270] }
+  - { label: Test Device 1, aliases: [BBa_J428112, green device] }
+  - { label: Test Device 2, aliases: [BBa_J428110, mRFP1] }
+  - { label: Test Device 3, aliases: [BBa_J428111] }
+  - { label: Test Device 4, aliases: [BBa_J428101, RiboJ] }
+  - { label: Test Device 5, aliases: [BBa_J428108] }
+  - { label: Test Device 6, aliases: [BBa_J428106] }
+  - { label: LB broth chloramphenicol }
+  - { label: LB agar chloramphenicol }
+  - { label: Chloramphenicol stock }
+  - { label: Plate reader }
+  - { label: Shaking incubator }
+  - { label: Petri dish }
+  - { label: Culture tube }
+  - { label: Microfuge tube }
+  - { label: Conical tube }
+  - { label: 96 well plate, aliases: [96-well microplate, 96 well microplate] }
+steps:
+  - { action: [manual, add, transfer], words: [transform] }
+  - { action: [incubate, manual], quantities: [{ value: "16", unit: h }, { value: "37", unit: degC }] }
+  - { action: [add, transfer, manual], quantities: [{ value: "5", unit: mL }], words: [inoculate] }
+  - action: [incubate, shake, manual]
+    quantities: [{ value: "16", unit: h }, { value: "37", unit: degC }, { value: "220", unit: rpm }]
+  - action: [serial_dilute, add, transfer, make_solution, manual]
+    quantities: [{ value: "5", unit: mL }]
+    words: ["1:10", "1 in 10", tenfold]
+  - { action: [transfer, add], quantities: [{ value: "1", unit: mL }] }
+  - { action: read, quantities: [{ value: "600", unit: nm }] }
+  - action: [serial_dilute, add, transfer, make_solution, manual]
+    quantities: [{ value: "12", unit: mL }]
+    words: ["0.02"]
+  - { action: [transfer, add], quantities: [{ value: "200", unit: uL }], words: [plate 1] }
+  - { action: [transfer, add], quantities: [{ value: "200", unit: uL }], words: [blank] }
+  - { action: read, quantities: [{ value: "600", unit: nm }] }
+  - { action: read, quantities: [{ value: "488", unit: nm }, { value: "530", unit: nm }] }
+  - { action: read, quantities: [{ value: "405", unit: nm }, { value: "450", unit: nm }] }
+  - { action: read, quantities: [{ value: "561", unit: nm }, { value: "610", unit: nm }] }
+  - action: [incubate, shake]
+    quantities: [{ value: "6", unit: h }, { value: "37", unit: degC }, { value: "220", unit: rpm }]
+  - { action: [transfer, add], quantities: [{ value: "200", unit: uL }], words: [plate 2] }
+  - { action: [transfer, add], quantities: [{ value: "200", unit: uL }], words: [blank] }
+  - { action: read, quantities: [{ value: "600", unit: nm }] }
+  - { action: read, quantities: [{ value: "485", unit: nm }, { value: "530", unit: nm }] }
+  - { action: read, quantities: [{ value: "405", unit: nm }, { value: "450", unit: nm }] }
+  - { action: read, quantities: [{ value: "561", unit: nm }, { value: "610", unit: nm }] }
+values:
+  - { quantity: { value: "34", unit: ug/mL }, about: chloramphenicol in LB }
+  - { quantity: { value: "34", unit: mg/mL }, about: chloramphenicol stock }
+  - { quantity: { value: "5", unit: mL }, about: overnight culture }
+  - { quantity: { value: "12", unit: mL }, about: back-diluted culture }
+  - { quantity: { value: "200", unit: uL }, about: per well }
+  - { quantity: { value: "220", unit: rpm }, about: shaking }
+  - { quantity: { value: "6", unit: h }, about: growth between reads }
+questions:
+  # The green excitation is 488 nm at 0 h and 485 nm at 6 h: the source contradicts itself.
+  - { about: Green excitation 488 or 485 nm, words: ["485", "488"] }

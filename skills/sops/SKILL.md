@@ -27,6 +27,10 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 
 `library.read` with `passages: [id, …]` reads cited passages back by id.
 
+## The benchmark
+
+To compare models, digitize a document that has an expectation in `seed/sop-benchmark/` (its `document` is the library title), then `sops.score` with `{sop, expected}` gives each section's share found and what is missing. People run all of them with `pnpm --filter @ailab/api sop:benchmark`.
+
 ## Formulas
 
 - Use `sops.evaluate` for every number an SOP computes; never do the arithmetic yourself (ADR 0024).
