@@ -198,7 +198,16 @@ Each line is one small plan. Plans 001 to 006 are platform, lab memory and seed 
 | 021 Lab notebook | Entries built on the event log plus free-form writing, linked to everything | Editor |
 | 022 Device gateway | Python gateway on the lab network implementing capability contracts for real hardware (Opentrons, Hamilton Python SDK), plus hand-off of workflows to Cellario | Transport between app and gateway, safety interlocks, which instrument first |
 
-Suggested first end-to-end target once 007 to 014 exist: **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step. It exercises almost every registry at thin depth and proves the draft/confirm UX before the heavier designers.
+First acceptance milestone, chosen by Wali on 2026-09-30: **one complete, scientifically trustworthy ELISA journey**, with the agent drafting each step and a person reviewing and confirming. Build the necessary thin slices of the numbered plans around that journey. The first usable path runs from a sourced digital SOP through a plate map and transfer plan to a worklist; transfer generation also needs plan 016, beyond 007 to 014. Recording the run and reviewing its analysis complete the assay journey. This is a milestone, not a claim that those designers are built or that a generated worklist has been validated on hardware.
+
+The acceptance path must make the scientist's next action clear: inspect the source, answer a missing scientific input, review a concrete proposed change, or confirm a ready design. Preserve the agent dock and access to every operation while keeping registry maintenance, technical identifiers and audit details subordinate to the current task. A plate view must remain recognizably proportioned, with labels aligned to usable well targets at both ordinary desktop width and with the assistant open.
+
+Two directions were agreed during the architecture review and need their implementation contracts and ADRs before dependent work starts:
+
+- **Confirmed scientific inputs are pinned.** A later edit to an SOP, reagent definition, labware definition or tested instrument setting must not silently change a confirmed downstream design. A person explicitly adopts a newer version. Execution still checks current inventory, availability, calibration and safety constraints; pinning a definition does not freeze physical state.
+- **Draft editing stays flexible; confirmation enforces validity.** People and agents may work on incomplete instrument configurations. Confirmation must resolve and validate the configuration through every write path before it becomes eligible for downstream use.
+
+Other recommendations from the review remain proposals: the ownership of run preparation and reservations, how repeated runs bind reusable designs to real containers, and the boundary between scientific timing constraints and learned duration estimates. Resolve those choices in the affected plans and ADRs, rather than treating the review as implementation approval. [The roadmap](../wiki/roadmap.md#next-acceptance-milestone) describes the acceptance evidence to agree next.
 
 ---
 

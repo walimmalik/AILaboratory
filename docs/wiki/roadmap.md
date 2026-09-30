@@ -52,4 +52,22 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 ## Build order
 
-007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
+Keep the dependencies in the plan rows, but choose each next thin slice for the ELISA acceptance journey below. At the architecture review baseline (`0a5ca53`, 2026-09-30), the registries, inventory and document-library screens exist, and the SOP schema, formulas and draft seed loader have landed. SOP binding is the next open slice. The experiment, plate-map, transfer, workflow, scheduler and analysis designers remain planned; their locked decisions do not mean their workflows have passed acceptance.
+
+## Next acceptance milestone
+
+Wali chose **one complete, scientifically trustworthy ELISA journey first** on 2026-09-30. Agents remain central: they prepare the work through operations, show evidence and unknowns, ask for consequential missing inputs, and hand the person a linked, reviewable result.
+
+The original foundation target ends at a worklist. That first usable path needs the transfer designer (016), as well as the registries, SOP and plate map. A complete assay journey also includes recording the run and reviewing analysis. Build only the required slices of those modules before broadening to more assay families; do not require the full future designer catalog merely to demonstrate the first assay.
+
+Proposed acceptance evidence, to refine in the affected numbered plans before implementation:
+
+1. A source-linked ELISA SOP and only its needed labware, reagent lots and instrument configuration are reviewed. Missing values and assumptions remain visible; calculator operations supply scientific numbers.
+2. The agent drafts a plate map and transfer plan. The person can understand well roles, quantities, source containers and destinations, and can correct a missing input without navigating through unrelated registries.
+3. Every proposed inventory change shows its concrete effects before confirmation. Concurrent operations preserve quantities, and open pages show the confirmed state promptly.
+4. Confirmed designs use explicit versions of scientific inputs. Adopting a new definition is visible and deliberate; run preparation checks current physical inventory, equipment availability, calibration and safety.
+5. The exported worklist has deterministic validation against the selected capability contract. Simulation and export evidence are distinguished from physical instrument validation.
+6. Run recording distinguishes measured, entered and estimated observations. Analysis links its results to the input file, plate map, run and method versions and exposes quality failures for review.
+7. The UI passes the approved bench-console direction with the assistant open: a proportioned plate grid, aligned labels, usable well selection, readable readiness actions and a clear next step. History and technical detail remain available without dominating the task.
+
+The architecture review's defects, reproductions and recommendations belong in its PR description. This milestone does not approve the unresolved run-binding, reservation-ownership or scientific-timing choices. Record those decisions in the affected plans and ADRs. The agreed directions for pinning confirmed inputs and validating configurations before confirmation are in [plan 000](../plans/000-foundation-architecture.md#5-plan-sequence).
