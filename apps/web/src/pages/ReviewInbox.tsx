@@ -36,8 +36,15 @@ export function ReviewPage() {
   const [show, setShow] = useState('all');
   // One chip per kind of draft waiting, plus changes to active records, counted over everything
   // waiting rather than over the page of items read.
+  // Proposed changes are all listed, so they are grouped here by the kind of record they touch.
   const groups = new Map<string, { label: string; count: number }>();
-  if (counts?.changes) groups.set('changes', { label: 'Changes', count: counts.changes });
+  for (const item of all) {
+    if (item.type !== 'change') continue;
+    const key = groupOf(item);
+    const kind = changeKind(item.proposal);
+    const label = kind ? `${kindPage(kind)?.title ?? kind}, proposed` : 'Other changes';
+    groups.set(key, { label, count: (groups.get(key)?.count ?? 0) + 1 });
+  }
   for (const [kind, count] of Object.entries(counts?.drafts ?? {})) {
     groups.set(kind, { label: kindPage(kind)?.title ?? kind, count });
   }
@@ -45,7 +52,9 @@ export function ReviewPage() {
   // A kind whose drafts didn't all fit in the first page is read on its own.
   const loadedOf = (key: string) => all.filter((i) => groupOf(i) === key).length;
   const needsOwnPage =
-    shown !== 'all' && shown !== 'changes' && loadedOf(shown) < (groups.get(shown)?.count ?? 0);
+    shown !== 'all' &&
+    !shown.startsWith('changes') &&
+    loadedOf(shown) < (groups.get(shown)?.count ?? 0);
   const ofKind = useQuery({ ...reviewKindQuery(shown), enabled: needsOwnPage });
   const items =
     shown === 'all'
@@ -162,7 +171,31 @@ export function ReviewPage() {
 
 /** Drafts group by their kind; proposed changes form one group. */
 function groupOf(item: ReviewItem): string {
-  return item.type === 'change' ? 'changes' : item.record.kind;
+  return item.type === 'change'
+    ? `changes:${changeKind(item.proposal) ?? 'other'}`
+    : item.record.kind;
+}
+
+/**
+ * The kind of record a proposed change touches, read from its preview: the record itself, or the
+ * first record the operation returned (a container for an inventory event, a lot for a receipt).
+ */
+function changeKind(proposal: Proposal): string | undefined {
+  const isRecord = (v: unknown): v is { kind: string } =>
+    typeof v === 'object' &&
+    v !== null &&
+    typeof (v as { kind?: unknown }).kind === 'string' &&
+    typeof (v as { id?: unknown }).id === 'string';
+  const preview = proposal.preview;
+  if (isRecord(preview)) return preview.kind;
+  if (typeof preview === 'object' && preview !== null) {
+    for (const value of Object.values(preview)) {
+      if (isRecord(value)) return value.kind;
+      if (Array.isArray(value) && isRecord(value[0])) return value[0].kind;
+    }
+  }
+  const kind = (proposal.input as { kind?: unknown } | undefined)?.kind;
+  return typeof kind === 'string' ? kind : undefined;
 }
 
 const decisionWords: Record<Proposal['status'], string> = {
@@ -281,7 +314,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
           </thead>
           <tbody>
             {changes.map((c) => (
-              <Change key={c.field} field={c.field} before={c.before} after={c.after} isNew={!id} />
+              <Change key={c.key} field={c.field} before={c.before} after={c.after} isNew={!id} />
             ))}
           </tbody>
         </table>

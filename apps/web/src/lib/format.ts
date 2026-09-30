@@ -149,6 +149,8 @@ export function formatWhen(iso: string, now = new Date()): string {
 }
 
 export interface FieldChange {
+  /** Unique within one diff: a record's own status and an attribute named status both show. */
+  key: string;
   field: string;
   before: unknown;
   after: unknown;
@@ -169,7 +171,7 @@ export function diffRecords(
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   for (const field of ['label', 'status'] as const) {
     if (!same(before?.[field], after?.[field]))
-      changes.push({ field, before: before?.[field], after: after?.[field] });
+      changes.push({ key: field, field, before: before?.[field], after: after?.[field] });
   }
   const keys = new Set([
     ...Object.keys(before?.attributes ?? {}),
@@ -178,7 +180,7 @@ export function diffRecords(
   for (const key of [...keys].sort()) {
     const a = before?.attributes?.[key];
     const b = after?.attributes?.[key];
-    if (!same(a, b)) changes.push({ field: key, before: a, after: b });
+    if (!same(a, b)) changes.push({ key: `attributes.${key}`, field: key, before: a, after: b });
   }
   return changes;
 }

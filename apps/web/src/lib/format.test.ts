@@ -63,9 +63,18 @@ describe('diffRecords', () => {
       attributes: { color: 'red', volume: { value: '50', unit: 'uL' } },
     };
     expect(diffRecords(before, after)).toEqual([
-      { field: 'status', before: 'active', after: 'archived' },
-      { field: 'color', before: 'teal', after: 'red' },
+      { key: 'status', field: 'status', before: 'active', after: 'archived' },
+      { key: 'attributes.color', field: 'color', before: 'teal', after: 'red' },
     ]);
+  });
+
+  it('keys a record status and an attribute named status apart', () => {
+    const keys = diffRecords(undefined, {
+      label: 'Lot',
+      status: 'active',
+      attributes: { status: 'unopened' },
+    }).map((c) => c.key);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it('treats a new record as all new fields', () => {
