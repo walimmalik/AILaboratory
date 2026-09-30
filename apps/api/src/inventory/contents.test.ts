@@ -276,6 +276,34 @@ describe('fill, transfer and the ledger', () => {
       reason: 'Measured by weight and LC-MS',
     });
     expect(corrected.event.lines[0]?.change).toBe('set');
+    const correct = (state: unknown) =>
+      refused(
+        run(person, 'inventory.correct', {
+          container: tube.id,
+          wells: ['A1'],
+          state,
+          reason: 'Recount',
+        }),
+      );
+    expect(
+      (await correct({ volume: { value: '-5', unit: 'uL' }, components: [] })).message,
+    ).toContain("can't hold a negative volume");
+    expect(
+      (
+        await correct({
+          volume: { value: '180', unit: 'uL' },
+          components: [{ source: compound.id, concentration: { value: '9.6', unit: 'uL' } }],
+        })
+      ).message,
+    ).toContain('µL is not a concentration');
+    expect(
+      (
+        await correct({
+          volume: { value: '0', unit: 'uL' },
+          components: [{ source: compound.id, amount: { value: '-1', unit: 'nmol' } }],
+        })
+      ).message,
+    ).toContain("an amount can't be negative");
     await run(person, 'inventory.consume', {
       container: tube.id,
       wells: ['A1'],
@@ -492,6 +520,43 @@ describe('stamping and lineage', () => {
     }>(person, 'inventory.lineage', { container: assay.id, well: 'A4' });
     expect(lineage.steps.map((s) => [s.type, s.depth, s.from?.well])).toEqual([
       ['stamp', 1, 'A2'],
+      ['fill', 2, undefined],
+    ]);
+    expect(lineage.steps[1]?.components).toEqual(stock(compound, dmso));
+  });
+});
+
+describe('lineage', () => {
+  it('follows a well back from the line it gave, not the whole event', async () => {
+    const { source, assay, compound, dmso, medium } = await lab();
+    await run(person, 'inventory.fill', {
+      container: source.id,
+      fills: [
+        { wells: ['A1'], volume: { value: '50', unit: 'uL' }, components: stock(compound, dmso) },
+        {
+          wells: ['A3'],
+          volume: { value: '50', unit: 'uL' },
+          components: [{ source: medium.id }],
+        },
+      ],
+    });
+    // One event: A1 gives to the assay plate, then A1 is topped up from A3.
+    const hop = (from: string, to: { container: string; well: string }) => ({
+      from: { container: source.id, well: from },
+      to,
+      volume: { value: '5', unit: 'uL' },
+    });
+    await run(person, 'inventory.transfer', {
+      transfers: [
+        hop('A1', { container: assay.id, well: 'B1' }),
+        hop('A3', { container: source.id, well: 'A1' }),
+      ],
+    });
+    const lineage = await run<{
+      steps: { type: string; depth: number; from?: { well: string }; components?: unknown[] }[];
+    }>(person, 'inventory.lineage', { container: assay.id, well: 'B1' });
+    expect(lineage.steps.map((s) => [s.type, s.depth, s.from?.well])).toEqual([
+      ['transfer', 1, 'A1'],
       ['fill', 2, undefined],
     ]);
     expect(lineage.steps[1]?.components).toEqual(stock(compound, dmso));
