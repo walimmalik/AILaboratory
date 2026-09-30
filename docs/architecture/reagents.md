@@ -36,3 +36,22 @@ Editing and confirming products use `records.update` and review. Liquid classes 
 `seed/reagent-library.yaml` holds the lab's products in the library's shape, made from the research in `seed/reagents.yaml`: 28 products, the reagent components of their kits (consumables such as plates, sealers and columns are left to labware and inventory), two lab-made buffers from the DuoSet datasheet (Reagent Diluent, Wash Buffer) with recipes, and the eight liquid types. A product's first datasheet is the evidence for every attribute except those it lists under `assumed` (liquid types picked from pipetting hints, estimated hazards, guessed forms), which load as assumed. The research's handling rules are mapped onto the typed list; what doesn't fit a typed rule is `advice`. Shelf lives in months stay in the notes, since periods run to days.
 
 The demo lab's lots (from `seed/inventory.yaml`) go through `reagents.receive_lot`. The seed runs as an agent, so they wait on the Review page as proposals; a second run skips lots already recorded or waiting.
+
+## Liquid classes (009b, ADR 0028)
+
+| Kind | IDs | Holds |
+| --- | --- | --- |
+| `liquid_class` | `lqc_`, `LQC-0001` | Instrument model, device, tips or source plate, dispense mode, volume range, liquid types served, lab default, platform name, origin, per-platform settings |
+| `liquid_class_verification` | `lqv_`, `LQV-0001` | Class, instrument, method, date, target, replicates, mean, CV, limits, raw data link, demo |
+
+Schemas are in `packages/schema/src/liquids.ts`; the calculators (`resolveClass`, `mixtureLiquidType`, `verificationResult`) are in `packages/domain/src/liquids.ts`.
+
+Settings per platform: `opentrons` (the full transfer properties for one pipette model and tip rack, as in Opentrons' liquid class schema 1), `hamilton` (the Venus class with an optional read-only parameter copy and `changedHere`), `echo` (calibration code; the platform name is the full `384PP_DMSO2`), `dispenser`, `manual` (technique).
+
+A product can name `liquidClasses` to use instead of the lab default for its liquid type on each class's device.
+
+| Operation | Does | Agents |
+| --- | --- | --- |
+| `liquids.resolve_class` | Picks the class for a transfer: explicit, then the product's own, then the lab default for its liquid type (verified first); only confirmed classes; says why or what is missing | read |
+| `liquids.mixture_type` | A mixture's liquid type from its parts (largest part, unless DMSO ≥ 70%, glycerol > 20%, ethanol or volatile ≥ 50%) | read |
+| `liquids.record_verification` | Records a check and its result; passing real runs make a class verified in this lab | proposed |

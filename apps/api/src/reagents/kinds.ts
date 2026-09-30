@@ -6,6 +6,8 @@ import {
   ProductAttributes,
 } from '@ailab/schema';
 
+import { liquidKinds } from './liquid-kinds.ts';
+
 const PLAN = 'Reagents and liquids (plan 009)';
 
 const productChecks: KindCheck<ProductAttributes>[] = [
@@ -93,6 +95,7 @@ export const product = defineKind({
       c.supplier ? [{ toId: c.supplier, relation: 'supplied_by' }] : [],
     ),
     ...(a.liquidType ? [{ toId: a.liquidType, relation: 'pipettes_as' }] : []),
+    ...(a.liquidClasses ?? []).map((c) => ({ toId: c, relation: 'uses_class' })),
     ...(a.components ?? []).map((c) => ({ toId: c.product, relation: 'has_component' })),
     ...(a.recipe?.components ?? []).map((c) => ({ toId: c.product, relation: 'made_from' })),
   ],
@@ -118,7 +121,7 @@ export const product = defineKind({
     {
       id: 'handling',
       title: 'Storage and handling',
-      fields: ['storage', 'shelfLife', 'liquidType', 'handlingRules', 'hazards'],
+      fields: ['storage', 'shelfLife', 'liquidType', 'liquidClasses', 'handlingRules', 'hazards'],
     },
   ],
   checks: productChecks,
@@ -159,4 +162,4 @@ export const liquidType = defineKind({
   attributes: LiquidTypeAttributes,
 });
 
-export const reagentKinds = [product, lot, liquidType];
+export const reagentKinds = [product, lot, liquidType, ...liquidKinds];
