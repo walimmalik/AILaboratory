@@ -24,6 +24,7 @@ import { ReviewPage } from './pages/ReviewInbox.tsx';
 import { ScanPage } from './pages/Scan.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
+import { SopsPage } from './pages/Sops.tsx';
 import { WikiPage } from './pages/Wiki.tsx';
 import { meQuery } from './session.ts';
 
@@ -149,6 +150,11 @@ const documents = createRoute({
   path: '/documents',
   component: DocumentsPage,
 });
+const sops = createRoute({
+  getParentRoute: () => app,
+  path: '/sops',
+  component: SopsPage,
+});
 const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
@@ -188,6 +194,7 @@ const routeTree = root.addChildren([
     entities,
     entityKinds,
     documents,
+    sops,
     records,
     record,
     wiki,

@@ -1,0 +1,484 @@
+import {
+  type Citation,
+  type RecordEnvelope,
+  type ReviewFinding,
+  type SopAttributes,
+  type SopStep,
+  type StepParameter,
+  sopsAnswerQuestion,
+  sopsCalculate,
+  sopsCheckCitations,
+  sopsReview,
+  sopsReviews,
+} from '@ailab/schema';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { type FormEvent, useState } from 'react';
+import { api } from '../api.ts';
+import { formatValue } from '../lib/format.ts';
+import { type KindPage, libraryPages } from '../lib/kinds.ts';
+import { recordQuery } from '../queries.ts';
+import { Head } from './Instruments.tsx';
+import { RecordList } from './Records.tsx';
+
+/**
+ * Digital SOP screens (plan 012d): the list, and on an SOP's page the procedure as a person reads
+ * it at the bench, with its run values, open questions, and the checks against its source. Editing
+ * stays in the section blocks below it.
+ */
+
+const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
+
+const actionWords: Record<SopStep['action'], string> = {
+  add: 'Add',
+  transfer: 'Transfer',
+  serial_dilute: 'Serial dilution',
+  mix: 'Mix',
+  wash: 'Wash',
+  incubate: 'Incubate',
+  shake: 'Shake',
+  spin: 'Spin',
+  seal: 'Seal',
+  peel: 'Peel',
+  read: 'Read',
+  image: 'Image',
+  wait: 'Wait',
+  make_solution: 'Make a solution',
+  manual: 'By hand',
+};
+
+const fromWords = {
+  input: 'chosen for this run',
+  record: 'from the record',
+  default: 'usual value',
+  typical: 'typical value, until a lot is picked',
+  computed: 'worked out',
+  missing: 'missing',
+} as const;
+
+export function SopsPage() {
+  const page = libraryPages.find((p) => p.kind === 'sop') as KindPage;
+  return (
+    <>
+      <Head
+        page={page}
+        lede="The lab's procedures as structured SOPs: steps, materials, values and formulas, each traced to its source, confirmed by a person before experiments use them."
+      />
+      <RecordList
+        title="SOPs"
+        kind="sop"
+        placeholder="Find by title or name, e.g. ELISA or SOP-0001"
+        empty="No SOPs yet. Ask the assistant to digitize a library document, or load the seed lab."
+        columns={[
+          { header: 'Assay', cell: (r) => of(r).assays?.join(', ') || '—' },
+          { header: 'Steps', cell: (r) => of(r).steps?.length ?? 0, className: 'num' },
+          {
+            header: 'Open questions',
+            cell: (r) => (of(r).questions ?? []).filter((q) => q.status === 'open').length,
+            className: 'num',
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/** The blocks an SOP's page shows above its sections. */
+export function SopBlocks({ record }: { record: RecordEnvelope }) {
+  return (
+    <>
+      <ProcedureBlock record={record} />
+      <QuestionsBlock record={record} />
+      <SourceChecksBlock record={record} />
+    </>
+  );
+}
+
+const calculationQuery = (record: RecordEnvelope) => ({
+  queryKey: ['record', record.id, 'sop', 'calculate', record.version],
+  queryFn: () => api.run(sopsCalculate, { sop: record.id }),
+});
+
+function ProcedureBlock({ record }: { record: RecordEnvelope }) {
+  const a = of(record);
+  const calc = useQuery(calculationQuery(record));
+  const values = new Map((calc.data?.variables ?? []).map((v) => [v.name, v]));
+  const labels = new Map(a.variables.map((v) => [v.name, v.label]));
+  const roles = new Map([
+    ...a.materials.map((m) => [m.role, m.label] as const),
+    ...(a.solutions ?? []).map((s) => [s.role, s.label] as const),
+    ...a.steps.flatMap((s) => (s.produces ?? []).map((p) => [p.role, p.label] as const)),
+  ]);
+  const runValue = (name: string) => {
+    const v = values.get(name);
+    if (!v?.ok) return undefined;
+    return formatValue(v.quantity ?? v.number ?? v.list);
+  };
+  const parameter = (p: StepParameter) => {
+    if (p.variable) {
+      const value = runValue(p.variable);
+      return `${p.name} ${value ?? '…'} (${labels.get(p.variable) ?? p.variable})`;
+    }
+    return `${p.name} ${formatValue(p.quantity ?? p.number ?? p.text)}`;
+  };
+  const shown = a.variables.filter((v) => values.get(v.name));
+  const unsure = (calc.data?.variables ?? []).filter(
+    (v) => v.from === 'typical' || v.from === 'missing' || !v.ok,
+  );
+  return (
+    <section className="block sop-print" aria-label="At the bench">
+      <header>
+        <h2>At the bench</h2>
+        <span className="state muted num">
+          {a.steps.length} steps
+          {unsure.length > 0 && ` · ${unsure.length} values to settle`}
+        </span>
+      </header>
+      <div className="body">
+        {a.purpose && <p>{a.purpose}</p>}
+        {a.steps.length === 0 ? (
+          <p className="empty">No steps yet.</p>
+        ) : (
+          <ol className="sop-steps">
+            {a.steps.map((s) => (
+              <li key={s.id}>
+                <p className="sop-line">
+                  <b>{s.title ?? actionWords[s.action]}.</b> {s.text}
+                  {s.repeat && <span className="muted"> Repeat {s.repeat} times.</span>}
+                </p>
+                {(s.parameters?.length || s.uses?.length) && (
+                  <p className="sop-line muted sop-note">
+                    {[
+                      ...(s.parameters ?? []).map(parameter),
+                      ...(s.uses?.length
+                        ? [`uses ${s.uses.map((u) => roles.get(u) ?? u).join(', ')}`]
+                        : []),
+                    ].join(' · ')}
+                  </p>
+                )}
+                <Cites cites={s.cite} />
+              </li>
+            ))}
+          </ol>
+        )}
+        {shown.length > 0 && (
+          <details>
+            <summary>Values for a run ({shown.length})</summary>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Value</th>
+                    <th>Amount</th>
+                    <th>Where it comes from</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map((v) => {
+                    const result = values.get(v.name);
+                    const assumed = result?.from === 'typical' || result?.from === 'missing';
+                    return (
+                      <tr key={v.name}>
+                        <td>{v.label}</td>
+                        <td className="num">
+                          {result?.ok ? runValue(v.name) : (result?.error ?? '—')}
+                        </td>
+                        <td className={assumed ? 'agent-ink' : 'muted'}>
+                          {result ? fromWords[result.from] : '—'}
+                          {result?.source && ` (${result.source.name}, ${result.source.field})`}
+                          {result?.problem && ` · ${result.problem}`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        )}
+        {calc.error && <p className="error-text">{calc.error.message}</p>}
+        <div className="actions no-print">
+          <button type="button" className="btn" onClick={() => window.print()}>
+            Print
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A step's source passages, folded away: page and quote. */
+function Cites({ cites }: { cites: Citation[] | undefined }) {
+  if (!cites?.length) return null;
+  return (
+    <details className="cites no-print">
+      <summary className="cite-toggle">
+        source{cites[0]?.page ? `, p. ${cites[0].page}` : ''}
+      </summary>
+      {cites.map((c) => (
+        <blockquote key={`${c.document}-${c.passage ?? ''}-${c.quote}`}>
+          “{c.quote}” <SourceName id={c.document} />
+          {c.page ? `, p. ${c.page}` : ''}
+        </blockquote>
+      ))}
+    </details>
+  );
+}
+
+function SourceName({ id }: { id: string }) {
+  const { data } = useQuery(recordQuery(id));
+  return (
+    <Link to="/records/$id" params={{ id }} className="muted">
+      {data ? data.label : id}
+    </Link>
+  );
+}
+
+function useRefresh(record: RecordEnvelope) {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['record', record.id] });
+}
+
+function QuestionsBlock({ record }: { record: RecordEnvelope }) {
+  const questions = of(record).questions ?? [];
+  const open = questions.filter((q) => q.status === 'open');
+  if (questions.length === 0) return null;
+  return (
+    <section className="block no-print" aria-label="Questions to settle">
+      <header>
+        <h2>Questions to settle</h2>
+        <span className="state muted num">
+          {open.length === 0 ? 'all settled' : `${open.length} open`}
+        </span>
+      </header>
+      <div className="body">
+        {open.length === 0 ? (
+          <p className="muted">Every question has an answer.</p>
+        ) : (
+          open.map((q) => <Question key={q.id} record={record} id={q.id} />)
+        )}
+        {questions.length > open.length && (
+          <details>
+            <summary>Settled ({questions.length - open.length})</summary>
+            <ul>
+              {questions
+                .filter((q) => q.status !== 'open')
+                .map((q) => (
+                  <li key={q.id}>
+                    {q.question} <b>{q.answer}</b>
+                    {q.status === 'accepted_suggestion' && (
+                      <span className="muted"> (the suggested answer)</span>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Question({ record, id }: { record: RecordEnvelope; id: string }) {
+  const q = (of(record).questions ?? []).find((x) => x.id === id);
+  const [answer, setAnswer] = useState('');
+  const refresh = useRefresh(record);
+  const settle = useMutation({
+    mutationFn: (how: { answer: string } | { acceptSuggestion: true }) =>
+      api.run(sopsAnswerQuestion, {
+        sop: record.id,
+        expectedVersion: record.version,
+        question: id,
+        ...how,
+      }),
+    onSuccess: refresh,
+  });
+  if (!q) return null;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (answer.trim()) settle.mutate({ answer: answer.trim() });
+  };
+  return (
+    <form className="question" onSubmit={submit} aria-label={q.question}>
+      <p className="question-line">
+        <b>{q.question}</b>
+        {q.about?.step && <span className="muted"> · step {q.about.step}</span>}
+      </p>
+      {q.suggestion && <p className="question-line agent-ink">Suggested: {q.suggestion}</p>}
+      <Cites cites={q.passages} />
+      <div className="actions">
+        {q.suggestion && (
+          <button
+            type="button"
+            className="btn"
+            disabled={settle.isPending}
+            onClick={() => settle.mutate({ acceptSuggestion: true })}
+          >
+            Accept the suggestion
+          </button>
+        )}
+        <label>
+          <span className="sr-only">Your answer</span>
+          <input
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            placeholder="Or answer in your words"
+          />
+        </label>
+        <button type="submit" className="btn" disabled={settle.isPending || !answer.trim()}>
+          Answer
+        </button>
+      </div>
+      {settle.error && <p className="error-text">{settle.error.message}</p>}
+    </form>
+  );
+}
+
+/** A reviewer's change in words: "Step 2 (Wash), volume: 400 µL → 300 µL". */
+function whereWords(a: SopAttributes, path: string): string {
+  const [section, index, ...rest] = path.slice(1).split('/');
+  const i = Number(index);
+  const tail = rest.filter((t) => Number.isNaN(Number(t))).join(' ');
+  if (section === 'steps') {
+    const step = a.steps[i];
+    const param = rest[0] === 'parameters' ? step?.parameters?.[Number(rest[1])]?.name : undefined;
+    return `Step ${i + 1}${step?.title ? ` (${step.title})` : ''}${param ? `, ${param}` : tail ? `, ${tail}` : ''}`;
+  }
+  if (section === 'variables')
+    return `${a.variables[i]?.label ?? 'A value'}${tail ? `, ${tail}` : ''}`;
+  if (section === 'materials')
+    return `${a.materials[i]?.label ?? 'A material'}${tail ? `, ${tail}` : ''}`;
+  if (section === 'questions') return 'A new question';
+  return [section, ...rest].filter(Boolean).join(' ');
+}
+
+function SourceChecksBlock({ record }: { record: RecordEnvelope }) {
+  const a = of(record);
+  const refresh = useRefresh(record);
+  const [checking, setChecking] = useState(false);
+  const citations = useQuery({
+    queryKey: ['record', record.id, 'sop', 'citations', record.version],
+    queryFn: () => api.run(sopsCheckCitations, { sop: record.id }),
+    enabled: checking,
+  });
+  const reviews = useQuery({
+    queryKey: ['record', record.id, 'sop', 'reviews'],
+    queryFn: () => api.run(sopsReviews, { sop: record.id }),
+  });
+  const review = useMutation({
+    mutationFn: () => api.run(sopsReview, { sop: record.id, expectedVersion: record.version }),
+    onSuccess: refresh,
+  });
+  const fixes = (reviews.data?.rounds ?? []).flatMap((r) =>
+    r.findings.map((f, i) => ({ ...f, key: `${r.id}-${i}`, round: r.round })),
+  );
+  const problems = (citations.data?.citations ?? []).filter((c) => c.result !== 'matches');
+  if (!a.source && a.steps.every((s) => !s.cite?.length) && fixes.length === 0) return null;
+  return (
+    <section className="block no-print" aria-label="Checks against the source">
+      <header>
+        <h2>Checks against the source</h2>
+        {fixes.length > 0 && (
+          <span className="state muted num">
+            {fixes.filter((f) => f.type === 'fix').length} reviewer fixes
+          </span>
+        )}
+      </header>
+      <div className="body">
+        {citations.data && (
+          <p className={problems.length ? 'error-text' : 'muted'}>
+            {citations.data.matches} of {citations.data.citations.length} quotes are in the passage
+            they cite
+            {problems.length > 0 && `; ${problems.length} to fix`}.
+          </p>
+        )}
+        {problems.length > 0 && (
+          <ul>
+            {problems.map((c) => (
+              <li key={`${c.where}-${c.quote}`}>
+                {c.where}: “{c.quote}”{' '}
+                <span className="muted">
+                  {c.result === 'not_found'
+                    ? 'is not in the document'
+                    : c.result === 'found_elsewhere'
+                      ? 'is in a different passage'
+                      : 'the document has no text yet'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {fixes.length > 0 && (
+          <details open={fixes.length <= 5}>
+            <summary>What the reviewer changed ({fixes.length})</summary>
+            <ul className="reviewer-fixes">
+              {fixes.map((f) => (
+                <Finding key={f.key} a={a} finding={f} round={f.round} />
+              ))}
+            </ul>
+          </details>
+        )}
+        {review.data && (
+          <p className="muted">
+            {review.data.stopped === 'clean'
+              ? 'The reviewer has nothing more to change.'
+              : review.data.stopped === 'failed'
+                ? review.data.problem
+                : `The reviewer ran ${review.data.rounds.length} rounds; run it again to continue.`}
+          </p>
+        )}
+        {(citations.error ?? review.error) && (
+          <p className="error-text">{(citations.error ?? review.error)?.message}</p>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => (checking ? citations.refetch() : setChecking(true))}
+          >
+            Check the quotes
+          </button>
+          {record.status === 'draft' && (
+            <button
+              type="button"
+              className="btn"
+              disabled={review.isPending}
+              onClick={() => review.mutate()}
+            >
+              {review.isPending ? 'The reviewer is reading…' : 'Have the reviewer check it'}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Finding({
+  a,
+  finding,
+  round,
+}: {
+  a: SopAttributes;
+  finding: ReviewFinding;
+  round: number;
+}) {
+  if (finding.type === 'question') {
+    const q = finding.after as { question?: string } | undefined;
+    return (
+      <li className="agent-ink">
+        Asked: {q?.question} <span className="muted">(round {round})</span>
+      </li>
+    );
+  }
+  return (
+    <li className="agent-ink">
+      {whereWords(a, finding.path)}: {formatValue(finding.before)} →{' '}
+      {finding.after === undefined ? 'removed' : formatValue(finding.after)}.{' '}
+      <span className="muted">
+        {finding.reason}
+        {finding.cite?.page ? `, p. ${finding.cite.page}` : ''} (round {round})
+      </span>
+    </li>
+  );
+}

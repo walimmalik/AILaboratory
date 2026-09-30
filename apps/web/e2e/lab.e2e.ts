@@ -547,3 +547,65 @@ test('a file added on the documents page becomes a draft document with its file'
   );
   await expect(page.getByRole('region', { name: 'Text' })).toContainText('not read yet');
 });
+
+test('an SOP reads as a procedure with its run values, and a person settles its open question', async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  const drafted = await asAgent(request, 'sops.draft', {
+    label: `Plate coating ${stamp}`,
+    materials: [{ role: 'plate', label: 'Coating plate', type: 'labware' }],
+    variables: [
+      { name: 'wells', label: 'Wells', kind: 'input', value: '96' },
+      {
+        name: 'well_volume',
+        label: 'Well volume',
+        kind: 'default',
+        value: { value: '100', unit: 'uL' },
+      },
+      {
+        name: 'total',
+        label: 'Coating solution',
+        kind: 'computed',
+        expression: 'wells * well_volume',
+        unit: 'mL',
+      },
+    ],
+    steps: [
+      {
+        id: 'coat',
+        action: 'add',
+        title: 'Coat',
+        text: 'Add coating solution to every well.',
+        uses: ['plate'],
+        parameters: [{ name: 'volume', variable: 'well_volume' }],
+      },
+    ],
+    questions: [
+      {
+        id: 'q1',
+        question: 'Overnight at 4 °C or at room temperature?',
+        suggestion: 'At 4 °C',
+        status: 'open',
+      },
+    ],
+  });
+  await signIn(page);
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'SOPs' })
+    .click();
+  await page.getByRole('row', { name: new RegExp(`Plate coating ${stamp}`) }).click();
+  await expect(page).toHaveURL(new RegExp(`/records/${drafted.output.id}`));
+  const procedure = page.getByRole('region', { name: 'At the bench' });
+  await expect(procedure).toContainText('Coat.');
+  await expect(procedure).toContainText('volume 100 µL (Well volume)');
+  await procedure.getByText('Values for a run').click();
+  await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(/9\.60* mL/);
+
+  const questions = page.getByRole('region', { name: 'Questions to settle' });
+  await expect(questions).toContainText('1 open');
+  await questions.getByRole('button', { name: 'Accept the suggestion' }).click();
+  await expect(questions).toContainText('all settled');
+});
