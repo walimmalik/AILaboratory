@@ -36,6 +36,13 @@
       "when": 1790712063771,
       "tag": "0004_records_evidence_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790733596642,
+      "tag": "0005_inventory_contents_ledger",
+      "breakpoints": true
     }
   ]
 }

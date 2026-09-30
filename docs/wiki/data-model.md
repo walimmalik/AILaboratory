@@ -60,7 +60,7 @@ Seed data uses its own marking per value: verified, estimated or unknown. Loader
 
 ## IDs and readable names
 
-Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
+Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and liquid classes (009), entity kinds and entities (010a), locations and containers (010b), plus the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
 
 | Kind | ID prefix | Readable name | Plan |
 | --- | --- | --- | --- |
@@ -74,11 +74,12 @@ Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-00
 | Liquid type | `lqt_` | `LQT-0001` | 009 |
 | Liquid class | `lqc_` | `LQC-0001` | 009 |
 | Lot | `lot_` | `LOT-0001` | 009 |
-| Entity kind | `enk_` | `ENK-0001` | 010 |
-| Entity | `ent_` | per kind: `PLS-0012`, `CMP-0003`, `CEL-0001` | 010 |
+| Entity kind | `enk_` | `ENK-0001` | 010, built |
+| Entity | `ent_` | per kind: `PLS-0012`, `CMP-0003`, `CEL-0001` | 010, built |
 | Sample | `smp_` | `SMP-0001` | 010 |
-| Container | `lw_` | per family: `PLT-`, `TUB-`, `FLK-`, `RES-`, `BOX-`; the name is the barcode | 010 |
-| Location | `loc_` | `LOC-0001` | 010 |
+| Container | `lw_` | per family: `PLT-`, `TUB-`, `RES-`, `BOX-`, `TIP-`, `LID-` + 6 digits; the name is the barcode | 010, built |
+| Location | `loc_` | `LOC-0001` | 010, built |
+| Inventory event (not a record: a ledger entry) | `iev_` | none | 010, built |
 | Library document | `doc_` | `DOC-0001` | 011 |
 | File | `fil_` | `FIL-0001` | 011 |
 | Digital SOP | `sop_` | `SOP-0001` | 012 |
@@ -99,7 +100,11 @@ Built kinds: `labware_type` and `vendor` (007a), plus the test `widget` (`WDG-00
 | Analysis | `ana_` | `ANA-0001` | 020 |
 | View | `viw_` | `VIW-0001` | 020 |
 
-The seed's placeholder `DL` + 6 digit barcodes are replaced by container names (010-V5).
+The seed's placeholder `DL` + 6 digit barcodes were replaced by container names (010-V5).
+
+## Well contents and the volume ledger
+
+Well contents are state, not records: `well_contents` holds each well's volume and components (lots and samples with concentrations), and every change is an event in the volume ledger (`inventory_events`, one line per well in `inventory_lines`, with the state after). See [ADR 0031](../decisions/0031-well-contents.md) and [inventory.md](../architecture/inventory.md).
 
 ## Units
 

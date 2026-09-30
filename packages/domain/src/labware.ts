@@ -58,6 +58,42 @@ export function parseWellName(name: string): { row: number; column: number } {
   return { row, column };
 }
 
+/**
+ * Expands well names and blocks ("A3:P22", corner to corner) into canonical names, in the order
+ * given, each block row by row. Refuses a well that isn't in `available`, and repeats.
+ */
+export function expandWells(specs: readonly string[], available: readonly string[]): string[] {
+  const known = new Set(available);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (name: string, spec: string) => {
+    if (!known.has(name))
+      throw new LabwareError('invalid_well', `There is no well ${name} (${spec})`);
+    if (seen.has(name)) throw new LabwareError('invalid_well', `${name} is listed twice`);
+    seen.add(name);
+    out.push(name);
+  };
+  for (const spec of specs) {
+    const [first, last] = spec.split(':');
+    const a = parseWellName(first as string);
+    if (last === undefined) {
+      push(wellName(a.row, a.column), spec);
+      continue;
+    }
+    const b = parseWellName(last);
+    for (let row = Math.min(a.row, b.row); row <= Math.max(a.row, b.row); row++) {
+      for (
+        let column = Math.min(a.column, b.column);
+        column <= Math.max(a.column, b.column);
+        column++
+      ) {
+        push(wellName(row, column), spec);
+      }
+    }
+  }
+  return out;
+}
+
 const mm = (value: number): Millimetres => ({ value: round(value), unit: 'mm' });
 
 /** Rounds to 3 decimals (1 µm), as a decimal string without trailing zeros. */

@@ -2,6 +2,7 @@ import type { WellGeometry, WellLayout } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
 import {
   computeWells,
+  expandWells,
   gridFitProblem,
   heightForVolume,
   parseWellName,
@@ -144,5 +145,15 @@ describe('liquid height', () => {
     expect(() => wellCapacity({ ...cylinder, bottom: 'v' })).toThrow('flat-bottomed');
     expect(() => wellCapacity({ top: cylinder.top, bottom: 'flat' })).toThrow('top size and depth');
     expect(() => heightForVolume(cylinder, 10_000)).toThrow('does not fit');
+  });
+});
+
+describe('expandWells', () => {
+  const names = computeWells({ layout: 'grid', rows: 8, columns: 12 }).map((w) => w.name);
+  it('expands blocks row by row and refuses unknown or repeated wells', () => {
+    expect(expandWells(['A1', 'B2:C3'], names)).toEqual(['A1', 'B2', 'B3', 'C2', 'C3']);
+    expect(expandWells(['a01'], names)).toEqual(['A1']);
+    expect(() => expandWells(['H12:I12'], names)).toThrow('There is no well I12 (H12:I12)');
+    expect(() => expandWells(['A1', 'A1:A2'], names)).toThrow('A1 is listed twice');
   });
 });

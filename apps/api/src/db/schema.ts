@@ -2,11 +2,15 @@ import type {
   Actor,
   AssistantMessage,
   FieldEvidence,
+  InventoryEventType,
   OperationErrorBody,
+  Quantity,
   RecordEnvelope,
   RecordOperation,
   RecordStatus,
   SectionReview,
+  WellRef,
+  WellState,
 } from '@ailab/schema';
 import { sql } from 'drizzle-orm';
 import {
@@ -267,5 +271,71 @@ export const conversationMessages = pgTable(
   (t) => [
     unique('conversation_messages_seq_unique').on(t.conversationId, t.seq),
     check('conversation_messages_role_check', sql`${t.role} in ('user', 'assistant', 'tool')`),
+  ],
+);
+
+/** What each well of a container holds now (plan 010c, ADR 0031). Empty wells have no row. */
+export const wellContents = pgTable(
+  'well_contents',
+  {
+    containerId: text('container_id')
+      .notNull()
+      .references(() => records.id),
+    well: text('well').notNull(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    state: jsonb('state').$type<WellState>().notNull(),
+    lastEventId: text('last_event_id').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.containerId, t.well] })],
+);
+
+/** The volume ledger (plan 010c, V4): one row per physical event. */
+export const inventoryEvents = pgTable(
+  'inventory_events',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    type: text('type').$type<InventoryEventType>().notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    actor: jsonb('actor').$type<Actor>().notNull(),
+    operationId: text('operation_id').notNull(),
+    reason: text('reason'),
+  },
+  (t) => [index('inventory_events_lab_at_idx').on(t.labId, t.at)],
+);
+
+/** Each well an event changed, with what it held after (lineage reads `from`). */
+export const inventoryLines = pgTable(
+  'inventory_lines',
+  {
+    eventId: text('event_id')
+      .notNull()
+      .references(() => inventoryEvents.id),
+    seq: integer('seq').notNull(),
+    containerId: text('container_id')
+      .notNull()
+      .references(() => records.id),
+    well: text('well').notNull(),
+    change: text('change').$type<'in' | 'out' | 'set'>().notNull(),
+    volume: jsonb('volume').$type<Quantity>(),
+    from: jsonb('from').$type<WellRef>(),
+    to: jsonb('to').$type<WellRef>(),
+    after: jsonb('after').$type<WellState>().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.seq] }),
+    index('inventory_lines_well_idx').on(t.containerId, t.well),
+    check('inventory_lines_change_check', sql`${t.change} in ('in', 'out', 'set')`),
   ],
 );

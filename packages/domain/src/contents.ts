@@ -36,6 +36,7 @@ const DISSOLVED: Record<string, string> = {
   enzyme_activity: 'U/mL',
   cell_count: 'cells/mL',
   colony_count: 'CFU/mL',
+  volume: '%v/v',
 };
 
 const ZERO_VOLUME: Quantity = { value: '0', unit: 'uL' };
@@ -176,14 +177,24 @@ export function mix(well: WellState, portion: Portion): WellState {
     }
   }
   for (const c of portion.components) {
+    if (c.amount) {
+      note(c.source, DISSOLVED[getUnit(c.amount.unit).dimension], c.amount);
+      continue;
+    }
     const amount = c.concentration ? amountIn(c.concentration, portion.volume) : undefined;
     const kept = c.concentration && !amount && empty ? c.concentration : undefined;
     note(c.source, c.concentration?.unit, amount, kept);
   }
 
+  const dry = volume !== 'unknown' && isZero(volume);
   const components: Component[] = [];
   for (const t of tallies.values()) {
-    if (t.kept) {
+    if (dry) {
+      components.push({
+        source: t.source as Component['source'],
+        ...(t.amount && !t.unknown ? { amount: t.amount } : {}),
+      });
+    } else if (t.kept) {
       components.push({ source: t.source as Component['source'], concentration: t.kept });
     } else if (
       t.unknown ||
