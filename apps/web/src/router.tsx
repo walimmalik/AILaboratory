@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
+import { DocumentsPage } from './pages/Documents.tsx';
 import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
 import {
   ContainersPage,
@@ -143,6 +144,11 @@ const entityKinds = createRoute({
   path: '/entity-kinds',
   component: EntityKindsPage,
 });
+const documents = createRoute({
+  getParentRoute: () => app,
+  path: '/documents',
+  component: DocumentsPage,
+});
 const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
@@ -181,6 +187,7 @@ const routeTree = root.addChildren([
     samples,
     entities,
     entityKinds,
+    documents,
     records,
     record,
     wiki,

@@ -82,4 +82,4 @@ Recommended option in bold.
 - **011a:** file store and `fil_` records, document kind, upload and folder import, seed loader. Built (ADR 0033).
 - **011b:** conversion in the science service, sections and passages, full-text and embeddings, `library.search` and `library.read`. Built in two steps (ADR 0034): 011b-1 plain readers, passages, keyword search and reading (built); 011b-2 Docling and embeddings, after the model checks on the laptop.
 - **011c:** mining (mentions, proposed links, bulk confirm), "mentioned in" on record pages. Built (ADR 0035).
-- **011d:** library and document screens, agent skill.
+- **011d:** library and document screens, agent skill. Built; the PDF viewer and the text diff between revisions wait for 011b-2's PDF reading.

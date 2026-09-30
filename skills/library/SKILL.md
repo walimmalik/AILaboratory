@@ -38,6 +38,8 @@ A **document** (`document`, `DOC-0001`) is a source as published, with its files
 
 ## Mentions
 
+- People see a document's text, files and mentions on its page, and "Mentioned in" on every record the library mentions; the Documents page searches the text and takes uploads.
+
 - After `library.parse`, run `library.mine` with `{document}`: it proposes the products, labware, instruments and entities the text names, by catalog number, name, model or synonym. Imports and the seed do this already.
 - Then read the document (`library.read`) and add what matching missed with `library.propose_mentions`: the assay (`{passage, text: "sandwich ELISA", assay: "ELISA"}`), stated parameters as quantities (`{passage, text: "block for 1 hour", parameter: {name: "blocking time", value: {value: "1", unit: "h"}}}`), and records named differently (`{passage, text, record}`). `text` is the words exactly as written in that passage. Up to 200 per call.
 - A person confirms or rejects them (`library.review_mentions`); you can't. Say what you proposed and that it waits for review.

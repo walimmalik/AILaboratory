@@ -13,6 +13,7 @@ import {
   recordQuery,
 } from '../queries.ts';
 import { useMe } from '../session.ts';
+import { DocumentBlocks } from './Documents.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks } from './Inventory.tsx';
@@ -152,6 +153,7 @@ export function RecordPage() {
 
       {r.kind === 'container' && <ContainerBlocks record={r} />}
       {r.kind === 'entity' && <EntityBlocks record={r} />}
+      {r.kind === 'document' && <DocumentBlocks record={r} />}
       {r.kind !== 'document' && <MentionedIn record={r} />}
 
       <section className="block">

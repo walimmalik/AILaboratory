@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, join } from 'node:path';
+import { mediaTypeOf } from '@ailab/domain';
 import type {
   DocumentAttributes,
   DocumentFile,
@@ -18,25 +19,6 @@ import { sharePolicyFor } from './kinds.ts';
  * `docs/sop-library`, or a folder of Markdown SOPs with front matter like `seed/sops/own`. Every
  * file goes through `files.upload` and every document through `library.add`, as drafts.
  */
-
-const MEDIA_TYPES: Record<string, string> = {
-  '.pdf': 'application/pdf',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.html': 'text/html',
-  '.htm': 'text/html',
-  '.md': 'text/markdown',
-  '.txt': 'text/plain',
-  '.py': 'text/x-python',
-  '.json': 'application/json',
-  '.csv': 'text/csv',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-};
-
-export function mediaTypeOf(path: string): string {
-  return MEDIA_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream';
-}
 
 export interface ImportFile {
   /** Its path inside the folder, kept as the file's source. */
