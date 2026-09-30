@@ -67,7 +67,7 @@ A `sample` (`smp_`, `SMP-0001`) is a batch the lab made of an entity: a miniprep
 
 ## Volume ledger (010c, V4 and V7)
 
-Every change to a well is an event in `inventory_events` (fill, transfer, stamp, consume, correct, discard) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
+Every change to a well is an event in `inventory_events` (fill, transfer, stamp, consume, correct, discard) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. Every inventory write first takes a per-lab transaction lock (`pg_advisory_xact_lock`), before it reads any well, so two operations on the same wells run one after the other instead of each writing its result over the other's. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
 
 - Refused: taking more than a well holds (the whole event rolls back), filling past the labware type's `maxVolume`, a well the container doesn't have, a source that isn't a lot or sample in the lab, a discarded container.
 - Warned: a well left below the labware type's dead volume.
@@ -101,7 +101,7 @@ Under **Inventory** in the Library (`apps/web/src/pages/Inventory.tsx`, helpers 
 - **Places**: the location tree; picking a place lists everything under it with its path.
 - **Scan** (under Lab, `apps/web/src/pages/Scan.tsx`): one field, focused on arrival, that takes any code a USB scanner types (readable names with or without the dash, printed codes) and shows the record and where it is. For a container it offers Move (scan the place or box, and a position for a box), Record use (wells and a volume per well) and Discard, each through its operation.
 - An entity's page lists its samples.
-- A container's page adds a **Wells** plate map shaded by volume in five steps against the fullest well (unknown volumes hatched, assumed contents outlined in agent ink; a well opens its components and concentrations), a **Handling** block with the rules and storage temperature it inherits and where each comes from, and its **Ledger**. A box or rack shows what is in it instead.
+- A container's page adds a **Wells** plate map shaded by volume in five steps against the fullest well (unknown volumes hatched, assumed contents outlined in agent ink; a well opens its components and concentrations). It is drawn as in the bench console mockup: round wells at one pitch in a bounded grid, column and row labels centred on the wells, a key above and a line under it naming the well pointed at; plates wider than 12 columns use smaller wells, and a plate wider than the page scrolls on its own, a **Handling** block with the rules and storage temperature it inherits and where each comes from, and its **Ledger**. A box or rack shows what is in it instead.
 
 ## Operations
 

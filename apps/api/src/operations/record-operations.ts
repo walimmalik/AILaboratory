@@ -43,15 +43,23 @@ export const recordOperations = [
       }
       return input.status === 'active' ? 'propose' : 'direct';
     },
-    run: (ctx, input, deps) =>
-      service(deps).create(ctx, {
+    run: (ctx, input, deps) => {
+      const { createdBy } = deps.kinds.get(input.kind);
+      if (createdBy) {
+        throw new OperationError(
+          'invalid_input',
+          `A ${input.kind} is created with ${createdBy}, not records.create`,
+        );
+      }
+      return service(deps).create(ctx, {
         kind: input.kind,
         label: input.label,
         attributes: input.attributes,
         ...(input.status ? { status: input.status } : {}),
         ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
-      }),
+      });
+    },
   }),
   implement(recordsKinds, {
     run: async (_ctx, _input, deps) => ({

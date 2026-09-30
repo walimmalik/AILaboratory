@@ -35,6 +35,9 @@ export function SectionEditor({
 }) {
   const kinds = useQuery(kindsQuery).data;
   const definition = kinds?.find((k) => k.kind === record.kind);
+  // The version the person started from. Saving is checked against it, so a change someone else
+  // makes while the editor is open is never silently written over.
+  const [base, setBase] = useState(record);
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     Object.fromEntries(fields.map((f) => [f, record.attributes[f]])),
   );
@@ -43,11 +46,19 @@ export function SectionEditor({
   const [note, setNote] = useState('');
   const queryClient = useQueryClient();
 
-  const changed = fields.filter((f) => !same(values[f], record.attributes[f]));
+  const changed = fields.filter((f) => !same(values[f], base.attributes[f]));
+  const theirs = record.version !== base.version;
+  /** Take the newer version, keeping the values this person changed. */
+  const takeTheirs = () => {
+    setValues((v) =>
+      Object.fromEntries(fields.map((f) => [f, changed.includes(f) ? v[f] : record.attributes[f]])),
+    );
+    setBase(record);
+  };
   const save = useMutation({
     mutationFn: () => {
-      const attributes: Record<string, unknown> = { ...record.attributes };
-      for (const field of fields) {
+      const attributes: Record<string, unknown> = { ...base.attributes };
+      for (const field of changed) {
         if (values[field] === undefined) delete attributes[field];
         else attributes[field] = values[field];
       }
@@ -62,7 +73,7 @@ export function SectionEditor({
       const withValue = changed.filter((f) => values[f] !== undefined);
       return api.run(recordsUpdate, {
         id: record.id,
-        expectedVersion: record.version,
+        expectedVersion: base.version,
         attributes,
         ...(given && withValue.length > 0
           ? { evidence: Object.fromEntries(withValue.map((f) => [f, given])) }
@@ -149,11 +160,20 @@ export function SectionEditor({
             </FormRow>
           )}
         </div>
+        {theirs && (
+          <p className="warn-ink" role="alert">
+            This record changed to version {record.version} while you were editing.{' '}
+            <button type="button" className="link-btn" onClick={takeTheirs}>
+              Load the new values
+            </button>{' '}
+            (your own changes are kept) before saving.
+          </p>
+        )}
         <div className="actions">
           <button
             type="submit"
             className="btn primary"
-            disabled={changed.length === 0 || save.isPending}
+            disabled={changed.length === 0 || theirs || save.isPending}
           >
             Save
           </button>

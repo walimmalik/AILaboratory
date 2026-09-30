@@ -20,6 +20,11 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
    */
   otherNamePrefixes?: string[];
   attributes: A;
+  /**
+   * The operation that creates records of this kind, when a generic `records.create` must not: a
+   * file record is only made by `files.upload`, which proves the caller holds the bytes.
+   */
+  createdBy?: string;
   links?: (attributes: z.infer<A>) => Omit<RecordLink, 'fromId'>[];
   /**
    * Draft and confirm (plan 004c): groups of attributes a person confirms one by one. Kinds with

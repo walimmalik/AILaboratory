@@ -44,6 +44,8 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0032](../decisions/0032-inherited-handling-rules.md) | A container inherits the handling rules of its contents; per rule type the strictest wins, enforced if any source is, every source listed |
 | [0033](../decisions/0033-file-store.md) | Files: bytes in a content-addressed store (a folder now, S3-compatible later), one `fil_` record per lab per hash, bytes never change, risky types served sandboxed |
 | [0034](../decisions/0034-library-text-and-search.md) | Library text as sections and passages in Postgres with a generated full-text vector; plain readers now, Docling and embeddings once checked on the laptop |
+| [0041](../decisions/0041-invariants-on-the-kind.md) | A record's rules live on its kind (`related`, `checks`, `createdBy`), so generic writes can't skip them; instrument rules stay data with one generic resolver |
+| [0042](../decisions/0042-inventory-write-lock.md) | Inventory writes in a lab run one at a time (a per-lab transaction lock), so simultaneous changes can't lose volume |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

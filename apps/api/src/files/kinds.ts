@@ -13,6 +13,7 @@ export const file = defineKind({
   idPrefix: 'fil',
   namePrefix: 'FIL',
   nameWidth: 4,
+  createdBy: 'files.upload',
   attributes: FileAttributesSchema,
   links: (a) =>
     a.source.from === 'derived' ? [{ toId: a.source.file, relation: 'derived_from' }] : [],

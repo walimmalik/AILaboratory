@@ -46,7 +46,7 @@ import {
   samplesRegister,
   type WellState,
 } from '@ailab/schema';
-import { and, desc, eq, inArray, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { inventoryEvents, inventoryLines, wellContents } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -117,8 +117,18 @@ function isEmpty(state: WellState): boolean {
   );
 }
 
+/**
+ * Serializes inventory writes in a lab until the transaction ends, so two operations can't both
+ * read a well's state and each write their own result over the other's. Taken before any well
+ * is read; one lock per lab also covers wells that have no row yet and avoids lock-order deadlocks.
+ */
+async function lockInventory(db: Db, ctx: RecordContext) {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtext(${`inventory:${ctx.labId}`}))`);
+}
+
 /** Collects one event's changes, then writes the event, its lines and the new well states. */
 class Ledger {
+  #locked = false;
   readonly #states = new Map<string, WellState>();
   readonly #vessels = new Map<string, Vessel>();
   readonly #sources = new Set<string>();
@@ -138,6 +148,10 @@ class Ledger {
   }
 
   async vessel(id: string): Promise<Vessel> {
+    if (!this.#locked) {
+      await lockInventory(this.db, this.ctx);
+      this.#locked = true;
+    }
     let v = this.#vessels.get(id);
     if (!v) {
       v = await vessel(this.service, this.ctx, id);
@@ -366,6 +380,7 @@ export const contentsOperations = [
           `${record.name} still holds ${held.map((c) => c.name).join(', ')}; move or discard them first`,
         );
       }
+      await lockInventory(deps.db, ctx);
       const rows = await deps.db
         .select({ well: wellContents.well })
         .from(wellContents)

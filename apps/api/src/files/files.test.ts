@@ -153,6 +153,18 @@ describe('files', () => {
     await expect(registry.execute(otherLab, 'files.get', { id: file.id })).rejects.toMatchObject({
       code: 'not_found',
     });
+    // Knowing the hash is not holding the bytes: only files.upload makes a file record.
+    await expect(
+      registry.execute(otherLab, 'records.create', {
+        kind: 'file',
+        label: 'borrowed.txt',
+        status: 'active',
+        attributes: file.attributes,
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: 'A file is created with files.upload, not records.create',
+    });
     const { entries } = await run<{ entries: { operationId: string; input: unknown }[] }>(
       person,
       'activity.list',
