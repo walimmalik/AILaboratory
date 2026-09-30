@@ -1,8 +1,16 @@
-import { generatePlateMap, PlateMapError } from '@ailab/domain';
 import {
+  generatePlateMap,
+  PlateMapError,
+  parseRegion,
+  plateFormat,
+  sortWells,
+} from '@ailab/domain';
+import {
+  type FixedRegion,
   type LayoutAttributes,
   layoutsDraft,
   layoutsPreview,
+  layoutsSaveFromMap,
   type PlateMapAttributes,
   platemapsDraft,
   platemapsExport,
@@ -64,6 +72,70 @@ async function wellsOf(
 /** Agents edit a draft plate map directly; changes to a confirmed one are proposals. */
 const draftOnly: AgentPolicy<{ id: string }> = async (ctx, input, deps) =>
   (await service(deps).get(ctx, input.id)).status === 'draft' ? 'direct' : 'propose';
+
+/** Roles that name what a well is for rather than which sample goes in it. */
+const SUBJECT_ROLES = ['sample', 'compound'];
+
+/**
+ * A layout from a plate map (P3): the pinned layout with the map's strategy, and plate 1's hand
+ * edits that change what a well is for as fixed regions. Wells they take leave the regions that
+ * held them, written out well by well.
+ */
+export function layoutFromMap(
+  layout: LayoutAttributes,
+  map: PlateMapAttributes,
+  source: string,
+): { attributes: LayoutAttributes; kept: number; left: number } {
+  const format = plateFormat(layout.wells);
+  const edits = (map.overrides ?? []).filter(
+    (o) => o.plate === 1 && !SUBJECT_ROLES.includes(o.role),
+  );
+  const taken = new Set(edits.map((o) => o.well));
+  const without = (region: string[]) => {
+    const wells = region.flatMap((r) => parseRegion(r, format));
+    const kept = wells.filter((w) => !taken.has(w));
+    return kept.length === wells.length ? region : sortWells(kept, layout.fillOrder ?? 'row');
+  };
+  const fixed: FixedRegion[] = [];
+  for (const f of layout.fixed ?? []) {
+    const region = without(f.region);
+    if (region.length) fixed.push({ ...f, region });
+  }
+  const groups = new Map<string, typeof edits>();
+  for (const o of edits) {
+    const key = [o.role, o.label ?? '', o.subject ?? ''].join('|');
+    groups.set(key, [...(groups.get(key) ?? []), o]);
+  }
+  let n = 0;
+  for (const group of groups.values()) {
+    const first = group[0] as (typeof edits)[number];
+    n += 1;
+    fixed.push({
+      id: `edit_${n}`,
+      role: first.role,
+      ...(first.label ? { label: first.label } : {}),
+      region: sortWells(
+        group.map((o) => o.well),
+        layout.fillOrder ?? 'row',
+      ),
+      ...(first.subject ? { subject: first.subject } : {}),
+    });
+  }
+  const { subjectRegion, strategy, notes: _notes, ...rest } = layout;
+  const region = subjectRegion ? without(subjectRegion) : undefined;
+  const left = (map.overrides ?? []).length - edits.length;
+  return {
+    attributes: {
+      ...rest,
+      ...(region ? { subjectRegion: region } : {}),
+      ...(fixed.length ? { fixed } : {}),
+      ...((map.strategy ?? strategy) ? { strategy: map.strategy ?? strategy } : {}),
+      notes: `Saved from ${source}${edits.length ? ` with ${edits.length} hand edit${edits.length === 1 ? '' : 's'} as regions` : ''}`,
+    },
+    kept: edits.length,
+    left,
+  };
+}
 
 const csvCell = (v: string | number | undefined) => {
   const s = v === undefined ? '' : String(v);
@@ -213,6 +285,36 @@ export const plateMapOperations = [
         ),
       ];
       return { filename: `${map.name}.csv`, csv: `${lines.join('\n')}\n` };
+    },
+  }),
+  implement(layoutsSaveFromMap, {
+    agentPolicy: 'direct',
+    touches: (input, output) => [input.map, ...(output ? [output.id] : [])],
+    run: async (ctx, input, deps) => {
+      const records = service(deps);
+      const map = await recordAt(records, ctx, input.map, 'plate_map', 'a plate map');
+      const a = map.attributes as PlateMapAttributes;
+      const layout = await recordAt(
+        records,
+        ctx,
+        a.layout.id,
+        'layout',
+        'a layout',
+        a.layout.version,
+      );
+      const { attributes, left } = layoutFromMap(
+        layout.attributes as LayoutAttributes,
+        a,
+        `${map.name} (${layout.name} v${a.layout.version})`,
+      );
+      return records.create(ctx, {
+        kind: 'layout',
+        label: input.label,
+        attributes,
+        reason:
+          input.reason ??
+          `Saved ${map.name} as a layout${left ? `; ${left} hand edit${left === 1 ? '' : 's'} naming samples or on later plates left out` : ''}`,
+      });
     },
   }),
 ];
