@@ -192,4 +192,17 @@ describe('evaluateVariables', () => {
     expect(out.get('d')).toMatchObject({ ok: false, error: 'The expression ends too early' });
     expect(out.get('e')).toMatchObject({ ok: true, result: { type: 'number', value: '3' } });
   });
+
+  it("treats a name that isn't a variable as a mistake, not an input still to come", () => {
+    const out = evaluateVariables([
+      { name: 'volume', expression: 'missing_typo * 100 uL' },
+      { name: 'total', expression: 'volume * 2' },
+    ]);
+    expect(out.get('volume')).toEqual({
+      name: 'volume',
+      ok: false,
+      error: "Uses missing_typo, which isn't a declared variable",
+    });
+    expect(out.get('total')).toMatchObject({ ok: false, waitsOn: ['volume'] });
+  });
 });

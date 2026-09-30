@@ -289,6 +289,27 @@ describe('sops.draft', () => {
     expect(byId.get('questions_answered')?.passed).toBe(true);
   });
 
+  it('flags a formula that uses a name no variable has', async () => {
+    const sop = await run<RecordEnvelope>(person, 'sops.draft', {
+      ...elisa,
+      variables: [
+        ...elisa.variables.slice(0, -1),
+        {
+          name: 'diluent',
+          label: 'Coating solution',
+          kind: 'computed',
+          expression: 'missing_typo * 100 uL',
+        },
+      ],
+      questions: [],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'formulas_work')).toMatchObject({
+      passed: false,
+      message: "diluent: Uses missing_typo, which isn't a declared variable",
+    });
+  });
+
   it('refuses unknown roles, variables, steps and units, and a record variable with no source', async () => {
     const refused = (input: unknown) => registry.execute(agent, 'sops.draft', input);
     await expect(
