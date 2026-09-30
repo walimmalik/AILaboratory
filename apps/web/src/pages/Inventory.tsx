@@ -550,3 +550,48 @@ function LedgerBlock({ record }: { record: RecordEnvelope }) {
     </section>
   );
 }
+
+/** On an entity's page: the batches the lab made of it. */
+export function EntityBlocks({ record }: { record: RecordEnvelope }) {
+  const samples = (useQuery(recordsQuery({ kind: 'sample' })).data ?? []).filter(
+    (s) => (s.attributes as Partial<SampleAttributes>).entity === record.id,
+  );
+  if (samples.length === 0) return null;
+  return (
+    <section className="block" aria-label="Samples">
+      <header>
+        <h2>Samples</h2>
+        <span className="state muted num">{samples.length}</span>
+      </header>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Label</th>
+              <th>How</th>
+              <th>Made</th>
+            </tr>
+          </thead>
+          <tbody>
+            {samples.map((s) => {
+              const a = s.attributes as Partial<SampleAttributes>;
+              return (
+                <tr key={s.id}>
+                  <td>
+                    <Link to="/records/$id" params={{ id: s.id }}>
+                      {s.name}
+                    </Link>
+                  </td>
+                  <td>{s.label}</td>
+                  <td>{a.method ? words(a.method) : '—'}</td>
+                  <td className="num">{a.made ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

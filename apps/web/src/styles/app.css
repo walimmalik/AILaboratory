@@ -1205,3 +1205,21 @@ ul.rules {
   margin: 0 0 6px;
   font-size: 14px;
 }
+
+/* Scan */
+.scan-bar {
+  margin-bottom: 16px;
+}
+.scan-found {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.block .body.scan-found > p {
+  margin: 0;
+}
+.scan-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

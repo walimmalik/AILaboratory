@@ -63,7 +63,7 @@ The four registries hold what the lab has: labware, instruments, reagents and ph
 - **Soft reservations**: confirmed plans reserve what they need; pickers show available = current minus reserved.
 - **Cell culture**: passage, confluence, viability and count on flasks; banks are samples; mycoplasma results are QC.
 - **Imports**: an agent drafts an import from any spreadsheet; a person confirms.
-- Split: 010a entities, 010b locations, containers and barcodes, 010c contents and ledger, 010d handling-rule inheritance, 010e screens (lists, places tree and container page with plate map, handling and ledger built; scan page and drafting next).
+- Split: 010a entities, 010b locations, containers and barcodes, 010c contents and ledger, 010d handling-rule inheritance, 010e screens (lists, places tree and container page with plate map, handling and ledger and scan page built; bulk import of freezer lists (V12) still to come).
 
 **Built (010a, ADR 0029):** kinds `entity_kind` (base, prefix, typed fields: text, number with a unit, choice, yes/no, date, url, link) and `entity` (field values by key, a sequence or a structure, synonyms, handling rules), named with their kind's prefix. Every write checks an entity against its kind through the record service's related rules; required fields and a draft kind block the final confirm; same sequence or InChIKey warns. `entities.draft_kind`, `entities.draft`, `entities.search` (text, kind, base, field, a stretch of sequence on either strand). See [inventory.md](../architecture/inventory.md). The seed (`seed/entity-library.yaml`) drafts the ten seed kinds and the demo lab's cell lines, plasmids, compounds and enzyme.
 
