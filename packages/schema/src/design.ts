@@ -226,6 +226,25 @@ export const Readiness = z.object({
 export type Readiness = z.infer<typeof Readiness>;
 
 /**
+ * A record's readiness in one line (plan 004e R9, ADR 0050), stored with it at every write so lists,
+ * Review and batch confirm agree with the record page. It includes checks that read other records.
+ */
+export const ReadinessSummary = z.object({
+  ready: z.boolean(),
+  /** Failing blocker checks. */
+  blockers: z.number().int().nonnegative(),
+  /** Failing warnings. */
+  warnings: z.number().int().nonnegative(),
+  /** Values (or list items) that are an agent's unconfirmed estimate. */
+  assumed: z.number().int().nonnegative(),
+  /** Sections not confirmed as they stand, by title. */
+  sectionsLeft: z.array(z.string()),
+  /** Sections holding values changed since a person confirmed them, by title. */
+  changed: z.array(z.string()),
+});
+export type ReadinessSummary = z.infer<typeof ReadinessSummary>;
+
+/**
  * A design's input pinned to the version it was built on (ADR 0039): a confirmed SOP, labware type,
  * product or lot at that version. A newer confirmed version is adopted explicitly, never followed
  * silently. Physical state (volumes, instrument availability) is not pinned; it is checked live.

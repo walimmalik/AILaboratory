@@ -85,6 +85,13 @@
       "when": 1790809270779,
       "tag": "0011_calculations",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790809955535,
+      "tag": "0012_record_summaries",
+      "breakpoints": true
     }
   ]
 }

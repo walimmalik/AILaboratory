@@ -554,8 +554,11 @@ describe('review inbox', () => {
     const output = await run<{ items: ReviewItem[]; counts: unknown }>(person, 'review.list', {});
     expect(() => reviewList.output.parse(output)).not.toThrow();
     const { items } = output;
-    expect(output.counts).toEqual({ total: 2, changes: 1, drafts: { widget: 1 } });
+    expect(output.counts).toEqual({ total: 2, changes: 1, needsYou: 1, drafts: { widget: 1 } });
     expect(items.map((i) => i.type)).toEqual(['change', 'draft']);
+    // A proposed change blocks the agent, so it needs you; a draft waits to be confirmed.
+    expect(items.map((i) => i.tier)).toEqual(['needs_you', 'to_confirm']);
+    expect(items.every((i) => i.for === (person.actor as { userId: string }).userId)).toBe(true);
     expect(items[1]).toMatchObject({
       type: 'draft',
       record: { id: draft.id, name: 'WDG-0001' },
@@ -563,7 +566,72 @@ describe('review inbox', () => {
       missing: ['Volume is not confirmed'],
       ready: false,
       assumed: 1,
+      byAgent: true,
+      batchable: false,
     });
+  });
+
+  it('confirms a batch only when nothing in it is a guess, all or nothing', async () => {
+    const clean = await create(agent, {
+      evidence: {
+        color: { source: 'datasheet', reference: 'https://example.org' },
+        volume: { source: 'datasheet', reference: 'https://example.org' },
+      },
+    });
+    const second = await create(agent, {
+      label: 'Second',
+      evidence: {
+        color: { source: 'datasheet', reference: 'https://example.org' },
+        volume: { source: 'datasheet', reference: 'https://example.org' },
+      },
+    });
+    const guessed = await create(agent, { label: 'Guessed' });
+    const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    const batchable = listed.items.flatMap((i) =>
+      i.type === 'draft' && i.batchable ? [i.record.id] : [],
+    );
+    expect(batchable.sort()).toEqual([clean.id, second.id].sort());
+
+    const refusedBatch = await refused(
+      registry.execute(person, 'records.confirm_many', {
+        records: [clean, guessed].map((r) => ({ id: r.id, expectedVersion: r.version })),
+      }),
+    );
+    expect(refusedBatch.message).toMatch(/Nothing was confirmed.*WDG-0003 \(2 assumed\)/);
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: clean.id })).status).toBe(
+      'draft',
+    );
+
+    const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
+      records: [clean, second].map((r) => ({ id: r.id, expectedVersion: r.version })),
+    });
+    expect(done.confirmed.map((r) => r.status)).toEqual(['active', 'active']);
+    expect(
+      (
+        await refused(
+          registry.execute(agent, 'records.confirm_many', {
+            records: [{ id: guessed.id, expectedVersion: guessed.version }],
+          }),
+        )
+      ).code,
+    ).toBe('forbidden');
+  });
+
+  it('stores the readiness summary with the record at every write', async () => {
+    const draft = await create(agent);
+    expect(draft.readiness).toEqual({
+      ready: false,
+      blockers: 0,
+      warnings: 0,
+      assumed: 2,
+      sectionsLeft: ['Appearance', 'Volume'],
+      changed: [],
+    });
+    const confirmed = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: draft.id,
+      expectedVersion: draft.version,
+    });
+    expect(confirmed.readiness).toMatchObject({ ready: true, assumed: 0, sectionsLeft: [] });
   });
 
   it('counts every draft per kind, and lists one kind on its own', async () => {
@@ -583,14 +651,14 @@ describe('review inbox', () => {
     );
     // The kind filter leaves proposed changes out of the items but not out of the counts.
     expect(one.items.map((i) => i.type)).toEqual(['draft', 'draft']);
-    expect(one.counts).toEqual({ total: 3, changes: 1, drafts: { widget: 2 } });
+    expect(one.counts).toEqual({ total: 3, changes: 1, needsYou: 1, drafts: { widget: 2 } });
   });
 
   it('is empty when nothing waits, and refuses unknown input', async () => {
     await create(person, { status: 'active' });
     expect(await run(agent, 'review.list', {})).toEqual({
       items: [],
-      counts: { total: 0, changes: 0, drafts: {} },
+      counts: { total: 0, changes: 0, needsYou: 0, drafts: {} },
     });
     expect((await refused(registry.execute(person, 'review.list', { x: 1 }))).code).toBe(
       'invalid_input',

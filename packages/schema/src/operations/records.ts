@@ -103,6 +103,26 @@ export const recordsActivate = defineContract({
   output: RecordEnvelope,
 });
 
+export const recordsConfirmMany = defineContract({
+  id: 'records.confirm_many',
+  verbs: { done: 'confirmed a batch of records', intent: 'confirm a batch of records' },
+  summary:
+    'A person confirms many records in one step (plan 004e R3): only when none holds an assumed value, a failing check or a value changed since it was confirmed; otherwise nothing is confirmed and the refusal names which records to open. Each record still gets its own confirmation',
+  effect: 'write',
+  input: z.object({
+    records: z
+      .array(z.object({ id: RecordId, expectedVersion: z.number().int().positive() }))
+      .min(1)
+      .max(500),
+    reason: z.string().min(1).optional(),
+  }),
+  output: z.object({
+    confirmed: z.array(
+      z.object({ id: RecordId, name: z.string(), status: RecordStatus, version: z.number() }),
+    ),
+  }),
+});
+
 export const recordsConfirmSection = defineContract({
   id: 'records.confirm_section',
   verbs: { done: 'confirmed a section of', intent: 'confirm a section of' },

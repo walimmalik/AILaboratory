@@ -88,6 +88,11 @@ export const sop = defineKind({
       ),
     ].map((toId) => ({ toId, relation: 'cites' })),
   ],
+  // The first sentence of the purpose, and how many steps (ADR 0050).
+  summarize: (a) =>
+    [a.purpose?.split(/(?<=\.)\s/)[0], a.steps.length ? `${a.steps.length} steps` : undefined]
+      .filter(Boolean)
+      .join(' · '),
   // Each step, value, material and question keeps its own evidence and confirmation (ADR 0049).
   items: {
     steps: 'id',

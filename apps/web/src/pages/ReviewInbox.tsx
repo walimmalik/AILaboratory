@@ -5,6 +5,8 @@ import {
   proposalsReject,
   type RecordEnvelope,
   type ReviewItem,
+  recordsConfirmMany,
+  recordsDeleteDraft,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -33,37 +35,28 @@ export function ReviewPage() {
   const me = useMe();
   const all = waiting.data?.items ?? [];
   const counts = waiting.data?.counts;
-  const total = counts?.total ?? 0;
+  const changes = all.filter((i) => i.type === 'change');
+  const drafts = all.filter((i) => i.type === 'draft');
+  const draftTotal = Object.values(counts?.drafts ?? {}).reduce((sum, n) => sum + n, 0);
   const [show, setShow] = useState('all');
-  // One chip per kind of draft waiting, plus changes to active records, counted over everything
-  // waiting rather than over the page of items read.
-  // Proposed changes are all listed, so they are grouped here by the kind of record they touch.
+  // One chip per kind of draft waiting, counted over everything waiting rather than the page read.
   const groups = new Map<string, { label: string; count: number }>();
-  for (const item of all) {
-    if (item.type !== 'change') continue;
-    const key = groupOf(item);
-    const kind = changeKind(item.proposal);
-    const label = kind ? `${kindPage(kind)?.title ?? kindWords(kind)}, proposed` : 'Other changes';
-    groups.set(key, { label, count: (groups.get(key)?.count ?? 0) + 1 });
-  }
   for (const [kind, count] of Object.entries(counts?.drafts ?? {})) {
     groups.set(kind, { label: kindPage(kind)?.title ?? kindWords(kind), count });
   }
   const shown = show === 'all' || !groups.has(show) ? 'all' : show;
   // A kind whose drafts didn't all fit in the first page is read on its own.
-  const loadedOf = (key: string) => all.filter((i) => groupOf(i) === key).length;
-  const needsOwnPage =
-    shown !== 'all' &&
-    !shown.startsWith('changes') &&
-    loadedOf(shown) < (groups.get(shown)?.count ?? 0);
+  const loadedOf = (key: string) => drafts.filter((i) => i.record.kind === key).length;
+  const needsOwnPage = shown !== 'all' && loadedOf(shown) < (groups.get(shown)?.count ?? 0);
   const ofKind = useQuery({ ...reviewKindQuery(shown), enabled: needsOwnPage });
-  const items =
+  const items = (
     shown === 'all'
-      ? all
+      ? drafts
       : needsOwnPage
         ? (ofKind.data ?? [])
-        : all.filter((i) => groupOf(i) === shown);
-  const expected = shown === 'all' ? total : (groups.get(shown)?.count ?? 0);
+        : drafts.filter((i) => i.record.kind === shown)
+  ).filter((i): i is DraftItem => i.type === 'draft');
+  const expected = shown === 'all' ? draftTotal : (groups.get(shown)?.count ?? 0);
   const leftOut = waiting.data && !(needsOwnPage && ofKind.isPending) ? expected - items.length : 0;
 
   return (
@@ -75,57 +68,75 @@ export function ReviewPage() {
           </div>
           <h1>Review</h1>
           <p className="lede">
-            Everything waiting for you. Agents draft new records and you confirm them section by
-            section; changes to active records wait here until you confirm them.
+            What needs you first, then drafts to confirm. Agents draft; you confirm what you read.
           </p>
         </div>
       </div>
 
-      <section className="block">
-        <header>
-          <h2>Waiting for you</h2>
-          <span className={`state ${total ? 'agent-ink' : 'muted'}`}>{total} waiting</span>
-        </header>
-        <div className="body">
-          {(groups.size > 1 || total > all.length) && (
-            <fieldset className="filters">
-              <legend className="sr-only">Show</legend>
-              <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
-                All <span className="num">{total}</span>
-              </button>
-              {[...groups].map(([key, group]) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={shown === key}
-                  onClick={() => setShow(key)}
-                >
-                  {group.label} <span className="num">{group.count}</span>
+      {waiting.error && <p className="error-text">{waiting.error.message}</p>}
+      {waiting.data && changes.length + draftTotal === 0 && (
+        <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
+      )}
+
+      {changes.length > 0 && (
+        <section className="block" aria-label="Needs you">
+          <header>
+            <h2>Needs you</h2>
+            <span className="state agent-ink">
+              {changes.length} {changes.length === 1 ? 'change waits' : 'changes wait'} on you
+            </span>
+          </header>
+          <div className="body">
+            {changes.map(
+              (item) =>
+                item.type === 'change' && (
+                  <PendingProposal key={item.proposal.id} proposal={item.proposal} />
+                ),
+            )}
+          </div>
+        </section>
+      )}
+
+      {draftTotal > 0 && (
+        <section className="block" aria-label="To confirm">
+          <header>
+            <h2>To confirm</h2>
+            <span className="state muted">
+              {draftTotal} {draftTotal === 1 ? 'draft' : 'drafts'}
+            </span>
+          </header>
+          <div className="body">
+            {groups.size > 1 && (
+              <fieldset className="filters">
+                <legend className="sr-only">Show</legend>
+                <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
+                  All <span className="num">{draftTotal}</span>
                 </button>
-              ))}
-            </fieldset>
-          )}
-          {waiting.error && <p className="error-text">{waiting.error.message}</p>}
-          {waiting.data && total === 0 && (
-            <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
-          )}
-          {items.map((item) =>
-            item.type === 'draft' ? (
-              <WaitingDraft key={item.record.id} item={item} />
-            ) : (
-              <PendingProposal key={item.proposal.id} proposal={item.proposal} />
-            ),
-          )}
-          {leftOut > 0 && (
-            <p className="muted">
-              Showing the newest {items.length} of {expected}.{' '}
-              {shown === 'all'
-                ? 'Pick a kind above to see all of its drafts.'
-                : 'Confirm some of these to see the rest.'}
-            </p>
-          )}
-        </div>
-      </section>
+                {[...groups].map(([key, group]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={shown === key}
+                    onClick={() => setShow(key)}
+                  >
+                    {group.label} <span className="num">{group.count}</span>
+                  </button>
+                ))}
+              </fieldset>
+            )}
+            <BatchConfirm items={items} complete={leftOut === 0} />
+            <DraftTable items={items} me={me} />
+            {leftOut > 0 && (
+              <p className="muted">
+                Showing the newest {items.length} of {expected}.{' '}
+                {shown === 'all'
+                  ? 'Pick a kind above to see all of its drafts.'
+                  : 'Confirm some of these to see the rest.'}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="block">
         <header>
@@ -170,39 +181,10 @@ export function ReviewPage() {
   );
 }
 
-/** Drafts group by their kind; proposed changes form one group. */
 /** A kind with no library page, in words: "entity_kind" → "Entity kind". */
 function kindWords(kind: string): string {
   const words = kind.replaceAll('_', ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-function groupOf(item: ReviewItem): string {
-  return item.type === 'change'
-    ? `changes:${changeKind(item.proposal) ?? 'other'}`
-    : item.record.kind;
-}
-
-/**
- * The kind of record a proposed change touches, read from its preview: the record itself, or the
- * first record the operation returned (a container for an inventory event, a lot for a receipt).
- */
-function changeKind(proposal: Proposal): string | undefined {
-  const isRecord = (v: unknown): v is { kind: string } =>
-    typeof v === 'object' &&
-    v !== null &&
-    typeof (v as { kind?: unknown }).kind === 'string' &&
-    typeof (v as { id?: unknown }).id === 'string';
-  const preview = proposal.preview;
-  if (isRecord(preview)) return preview.kind;
-  if (typeof preview === 'object' && preview !== null) {
-    for (const value of Object.values(preview)) {
-      if (isRecord(value)) return value.kind;
-      if (Array.isArray(value) && isRecord(value[0])) return value[0].kind;
-    }
-  }
-  const kind = (proposal.input as { kind?: unknown } | undefined)?.kind;
-  return typeof kind === 'string' ? kind : undefined;
 }
 
 const decisionWords: Record<Proposal['status'], string> = {
@@ -212,41 +194,153 @@ const decisionWords: Record<Proposal['status'], string> = {
   failed: 'failed',
 };
 
-/** A draft to review: what is left, and a link to its review. */
-function WaitingDraft({ item }: { item: Extract<ReviewItem, { type: 'draft' }> }) {
-  const me = useMe();
+type DraftItem = Extract<ReviewItem, { type: 'draft' }>;
+
+/**
+ * Confirm a whole list in one press (plan 004e R3): offered only when every draft in view holds no
+ * guess, no failing check and no changed confirmed value, and the whole list is in view.
+ */
+function BatchConfirm({ items, complete }: { items: DraftItem[]; complete: boolean }) {
+  const queryClient = useQueryClient();
+  const confirm = useMutation({
+    mutationFn: () =>
+      api.run(recordsConfirmMany, {
+        records: items.map((i) => ({ id: i.record.id, expectedVersion: i.record.version })),
+      }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['review'] }),
+        queryClient.invalidateQueries({ queryKey: ['records'] }),
+        queryClient.invalidateQueries({ queryKey: ['record'] }),
+      ]),
+  });
+  if (items.length < 2) return null;
+  const open = items.filter((i) => !i.batchable).length;
+  return (
+    <div className="actions batch">
+      {open === 0 && complete ? (
+        <button
+          type="button"
+          className="btn primary"
+          disabled={confirm.isPending}
+          onClick={() => confirm.mutate()}
+        >
+          Confirm all {items.length}
+        </button>
+      ) : (
+        <span className="muted">
+          {open > 0
+            ? `${open} of ${items.length} hold an estimate, a failing check or a changed value, so each opens on its own.`
+            : 'Some drafts are not listed; pick a kind to confirm them together.'}
+        </span>
+      )}
+      {open === 0 && complete && (
+        <span className="muted">Nothing in these is a guess and every check passes.</span>
+      )}
+      {confirm.error && <p className="error-text">{confirm.error.message}</p>}
+    </div>
+  );
+}
+
+/** Drafts as one dense row each: name, what it is, what is left, and the actions. */
+function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof useMe> }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="table-wrap">
+      <table className="dense">
+        <thead>
+          <tr>
+            <th>Draft</th>
+            <th>What is left</th>
+            <th>Changed</th>
+            <th>
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <DraftRow key={item.record.id} item={item} me={me} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> }) {
+  const queryClient = useQueryClient();
   const { record } = item;
+  const discard = useMutation({
+    mutationFn: () =>
+      api.run(recordsDeleteDraft, {
+        id: record.id,
+        expectedVersion: record.version,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['review'] }),
+  });
+  const [sure, setSure] = useState(false);
   const todo = item.sectionsToConfirm.length
-    ? `Confirm ${item.sectionsToConfirm.map((t) => t.toLowerCase()).join(' and ')}`
+    ? `Confirm ${new Intl.ListFormat('en', { type: 'conjunction' }).format(item.sectionsToConfirm.map((t) => t.toLowerCase()))}`
     : item.missing.length
       ? item.missing.join('; ')
       : 'Confirm it';
   return (
-    <article className="proposal" aria-label={`Draft ${record.name}`}>
-      <div className="line">
+    <tr aria-label={`Draft ${record.name}`}>
+      <td>
         <Link to="/records/$id" params={{ id: record.id }} className="mono">
           {record.name}
-        </Link>
-        <span>{record.label}</span>
-        <span className="agent-ink">draft · needs your review</span>
-        <span className="muted mono">{formatWhen(item.at)}</span>
-      </div>
-      <p className="reason">
-        {todo}.
+        </Link>{' '}
+        {record.label}
+        {record.summary && <div className="muted">{record.summary}</div>}
+      </td>
+      <td>
+        {todo}
         {item.assumed > 0 && (
           <span className="agent-ink">
             {' '}
-            {item.assumed === 1 ? 'One value is' : `${item.assumed} values are`} an estimate by{' '}
-            {actorLabel(record.updatedBy, me)}.
+            · {item.assumed} {item.assumed === 1 ? 'estimate' : 'estimates'}
           </span>
         )}
-      </p>
-      <div className="decide">
-        <Link to="/records/$id" params={{ id: record.id }} className="btn primary">
-          Review {record.name}
+      </td>
+      <td className="when">
+        {formatWhen(item.at)}
+        <div className={record.updatedBy.type === 'agent' ? 'agent-ink' : 'muted'}>
+          {actorLabel(record.updatedBy, me)}
+        </div>
+      </td>
+      <td className="row-actions">
+        <Link
+          to="/records/$id"
+          params={{ id: record.id }}
+          className="btn small"
+          aria-label={`Review ${record.name}`}
+        >
+          Review
         </Link>
-      </div>
-    </article>
+        {item.byAgent &&
+          (sure ? (
+            <>
+              <button
+                type="button"
+                className="btn small"
+                disabled={discard.isPending}
+                onClick={() => discard.mutate()}
+              >
+                Discard {record.name}
+              </button>
+              <button type="button" className="link-btn" onClick={() => setSure(false)}>
+                keep
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link-btn" onClick={() => setSure(true)}>
+              Discard
+            </button>
+          ))}
+        {discard.error && <div className="error-text">{discard.error.message}</div>}
+      </td>
+    </tr>
   );
 }
 

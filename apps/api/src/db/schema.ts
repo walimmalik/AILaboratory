@@ -6,6 +6,7 @@ import type {
   InventoryEventType,
   OperationErrorBody,
   Quantity,
+  ReadinessSummary,
   RecordEnvelope,
   RecordOperation,
   RecordStatus,
@@ -101,6 +102,9 @@ export const records = pgTable(
     evidence: jsonb('evidence').$type<Record<string, FieldEvidence>>().notNull().default({}),
     /** Section confirmations by people (plan 004c, ADR 0021). */
     reviews: jsonb('reviews').$type<Record<string, SectionReview>>().notNull().default({}),
+    /** The kind's one-line summary and the readiness summary, stored at write time (ADR 0050). */
+    summary: text('summary'),
+    readiness: jsonb('readiness').$type<ReadinessSummary>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     createdBy: jsonb('created_by').$type<Actor>().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),

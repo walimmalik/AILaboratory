@@ -31,7 +31,8 @@ function ShellLayout() {
   const live = useLive();
   const [theme, setTheme] = useTheme();
   const counts = useQuery(reviewQuery).data?.counts;
-  const pending = counts?.total ?? 0;
+  // Only what blocks something counts in the nav (plan 004e R1); drafts show on their own pages.
+  const pending = counts?.needsYou ?? 0;
   const draftsOf = (kind: string) => counts?.drafts[kind] ?? 0;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -119,7 +120,11 @@ function ShellLayout() {
             <li>
               <Link to="/review">
                 Review
-                <span className={`count num ${pending ? 'pending' : ''}`}>{pending}</span>
+                {pending > 0 && (
+                  <span className="count num pending" title={`${pending} need you`}>
+                    {pending}
+                  </span>
+                )}
               </Link>
             </li>
             <li>
@@ -185,7 +190,7 @@ function ShellLayout() {
         )}
         {pending > 0 && (
           <Link to="/review" className="agent-ink">
-            {pending} waiting for you
+            {pending} {pending === 1 ? 'needs' : 'need'} you
           </Link>
         )}
         <span className="push muted">{me?.user.displayName}</span>
