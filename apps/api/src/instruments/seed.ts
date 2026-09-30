@@ -5,6 +5,8 @@ import {
   InstrumentAttributes,
   InstrumentKindAttributes,
   type RecordEnvelope,
+  WorkcellAttributes,
+  WorkcellMember,
 } from '@ailab/schema';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -44,11 +46,22 @@ const Instance = z.strictObject({
   configuration: z.array(EquipmentNode.extend({ kind: z.string().min(1) })).optional(),
 });
 
+const SeedWorkcell = z.strictObject({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  ...WorkcellAttributes.omit({ members: true }).shape,
+  /** Members name instruments by their key in this file. */
+  members: z.array(WorkcellMember.extend({ instrument: z.string().min(1) })).min(1),
+});
+
 const Library = z.strictObject({
   instrument_kinds: z.array(Entry(InstrumentKindAttributes.omit({ manufacturer: true }))),
   equipment_kinds: z.array(Entry(EquipmentKindAttributes.omit({ manufacturer: true }))),
   instruments: z.array(Instance),
+  workcells: z.array(SeedWorkcell).optional(),
 });
+
+export type SeedWorkcell = z.infer<typeof SeedWorkcell>;
 
 export type SeedInstrument = z.infer<typeof Instance>;
 
@@ -68,6 +81,7 @@ export interface SeedKind {
 export interface SeedLibrary {
   kinds: SeedKind[];
   instruments: SeedInstrument[];
+  workcells: SeedWorkcell[];
 }
 
 /** Reads the library file, citing the research file's sources. Refuses a file that doesn't parse. */
@@ -113,7 +127,14 @@ export function readSeedInstruments(libraryYaml: string, researchYaml: string): 
       if (!keys.has(key)) throw new Error(`${instrument.key}: no kind "${key}" in the library`);
     }
   }
-  return { kinds, instruments: library.instruments };
+  const instrumentKeys = new Set(library.instruments.map((i) => i.key));
+  for (const w of library.workcells ?? []) {
+    for (const m of w.members) {
+      if (!instrumentKeys.has(m.instrument))
+        throw new Error(`${w.key}: no instrument "${m.instrument}" in the library`);
+    }
+  }
+  return { kinds, instruments: library.instruments, workcells: library.workcells ?? [] };
 }
 
 export interface InstrumentSeedReport {
@@ -207,6 +228,58 @@ export async function loadSeedInstruments(
       reason: `Seed lab (plan 006), instance ${research} in seed/instruments.yaml, loaded by plan 008`,
     });
     report.registered.push(`${record.name} ${seed.key}`);
+  }
+  return report;
+}
+
+/**
+ * Drafts the lab's workcells (plan 008d) that aren't there yet, matched by label, once their member
+ * instruments are registered. The twin mapping is marked assumed until the twin connection (015)
+ * checks it.
+ */
+export async function loadSeedWorkcells(
+  registry: OperationRegistry,
+  ctx: RecordContext,
+  { instruments, workcells }: Pick<SeedLibrary, 'instruments' | 'workcells'>,
+): Promise<{ created: string[]; existing: string[]; waiting: string[] }> {
+  const run = async <T>(operation: string, input: unknown): Promise<T> => {
+    const result = await registry.execute(ctx, operation, input);
+    if (result.status !== 'done') throw new Error(`${operation} was ${result.status}, not done`);
+    return result.output as T;
+  };
+  const list = (kind: string) =>
+    run<{ records: RecordEnvelope[] }>('records.list', { kind, limit: 200 }).then((r) => r.records);
+  const registered = new Map((await list('instrument')).map((r) => [r.label, r.id]));
+  const labelOf = new Map(instruments.map((i) => [i.key, i.label]));
+  const existing = new Set((await list('workcell')).map((w) => w.label));
+  const report = { created: [] as string[], existing: [] as string[], waiting: [] as string[] };
+  for (const { key, label, members, ...rest } of workcells) {
+    if (existing.has(label)) {
+      report.existing.push(key);
+      continue;
+    }
+    const ids = members.map((m) => registered.get(labelOf.get(m.instrument) as string));
+    if (ids.some((id) => !id)) {
+      report.waiting.push(key);
+      continue;
+    }
+    const record = await run<RecordEnvelope>('workcells.draft', {
+      label,
+      ...rest,
+      members: members.map((m, i) => ({ ...m, instrument: ids[i] })),
+      evidence: {
+        twin: {
+          source: 'assumed',
+          note: 'Device IDs from the echo650-twin catalog; not checked until the twin connection (plan 015)',
+        },
+        members: {
+          source: 'assumed',
+          note: 'Members as Wali listed them (plan 008 I10); twin devices and hand use are assumed',
+        },
+      },
+      reason: `Seed lab (plan 006), workcell ${key}, loaded by plan 008d`,
+    });
+    report.created.push(`${record.name} ${key}`);
   }
   return report;
 }
