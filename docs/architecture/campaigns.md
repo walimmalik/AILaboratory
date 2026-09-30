@@ -8,7 +8,7 @@ Plan [013](../plans/013-campaigns-and-experiments.md). The scientific frame ever
 | --- | --- | --- | --- |
 | `campaign` | `cam_`, `CAM-001` | goal, background, aims (`id`, text, success), owner and contributors, dates, `about` (entities), `references` (documents), `stage` | Goal, Aims, What it is about |
 | `experiment` | `exp_`, `EXP-0001` | campaign and aim, question, hypotheses (each with an optional prediction: readout, measure, comparison, threshold), `followsUp`, subjects, `protocol` (parts that each pin an SOP `{id, version}`), documents followed or cited, conditions, controls (each with an optional `subject`, e.g. the DMSO entity, linked as `control`), readouts, success criteria, `stage` | Question, What is tested, Protocol, Conditions and controls, Readouts |
-| `run` | `run_`, `RUN-0001` | `experiment` pinned `{id, version}`, status (scheduled, in progress, done, failed, aborted), date, operator | none yet (013c adds step actuals) |
+| `run` | `run_`, `RUN-0001` | `experiment` pinned `{id, version}`, status (scheduled, in progress, done, failed, aborted), date, operator, who started it, steps with planned values and actuals, deviations, data files | none; made only by `runs.start` |
 
 Code: `packages/schema/src/campaigns.ts`, `apps/api/src/campaigns/`.
 
@@ -42,8 +42,18 @@ Each protocol part carries `bindings` (the SOP's material roles bound to records
 | `experiments.calculate` (every part worked out as pinned) | read, calculator |
 | `experiments.adopt_versions` | direct on drafts, proposal on active |
 | `experiments.where_used` (campaigns, experiments and runs using a record, optionally one version) | read |
+| `runs.start` (an in-progress run of a planned experiment, as a checklist) | proposal |
+| `runs.record_step`, `runs.done_as_planned`, `runs.record_deviation`, `runs.attach_data`, `runs.finish` | direct in a run a person started, proposal otherwise |
 
 Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed documents, `references` cited ones, `tests` its subjects, links its control compounds as `control`, and `follows_up` or `repeats_with_changes` an earlier experiment. A run `runs` its experiment. A campaign is `about` entities and `references` documents.
+
+## Recording a run (013c)
+
+`runs.start` pins the experiment's current confirmed version and turns every step of each pinned SOP version into a checklist item with its planned values: fixed parameters, the calculated value of a parameter's variable (from `experiments.calculate`), and `times` for a repeated step. It needs the experiment planned (or already running or analysing) and its protocol to work out, and it moves the experiment to running. The run records who started it; agents record directly into a run a person started and propose into any other (010 V7, E11).
+
+Ticking a step (`runs.record_step`) records it done as planned, with the time and who ticked it. A value given in `changed` that differs from the plan is kept as an actual and makes a deviation on the step (what, planned value, why, impact); `skipped` does the same for a step not done. Both need `why`. `runs.done_as_planned` ticks every step still pending. `runs.record_deviation` records anything else that happened. `runs.attach_data` links a file record (011) to the run, optionally to a step and a container, so analysis (020) can join reads to wells. `runs.finish` ends the run as done (every step ticked or skipped), failed or aborted; a finished run takes no more records.
+
+`apps/api/src/campaigns/runs.ts` holds the run operations.
 
 ## The demo campaigns (013a)
 
@@ -51,4 +61,4 @@ Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed 
 
 ## Not yet
 
-Reservations (010 V8: confirmed plans soft-reserve stock) need to know how much of each material a run uses, which SOPs don't say yet; SOP defaults are read live rather than pinned when a role is left unbound; 013c run recording, conclusions and sets, 013d screens and the drafting skill in full.
+Reservations (010 V8: confirmed plans soft-reserve stock) need to know how much of each material a run uses, which SOPs don't say yet; SOP defaults are read live rather than pinned when a role is left unbound; scanning containers and lots during a run (inventory fill and consume); conclusions and sets (013c-2); 013d screens and the drafting skill in full.
