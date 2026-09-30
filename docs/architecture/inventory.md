@@ -17,6 +17,7 @@ What things are, and (from 010b) where they are and how much is left. Plan: [010
 | Locations, registering, moving, scanning | `apps/api/src/inventory/operations.ts` |
 | Well contents schema | `packages/schema/src/contents.ts` |
 | Mixing math | `packages/domain/src/contents.ts` |
+| Fill, transfer, consume, correct, wells, history; the ledger tables | `apps/api/src/inventory/contents.ts`, `well_contents`, `inventory_events`, `inventory_lines` |
 | Agent skills | `skills/entities/SKILL.md`, `skills/inventory/SKILL.md`, `skills/calculators/SKILL.md` |
 
 ## Entity kinds (010a, V1)
@@ -60,6 +61,14 @@ A container sits in a location or in a position of a rack or box (`{container, p
 
 A well holds a volume (or `"unknown"`) and components: samples (`smp_`) and lots (`lot_`), each with a concentration in the unit it came in, or an amount in a dry well. Mixing converts concentrations to amounts (concentration × volume), adds the same source in the same dimension, and divides by the new volume, in exact decimals. Molar, mass, activity, cell, colony, % v/v and % w/v concentrations mix; % w/w and anything without a concentration stay "present, concentration unknown". Taking more than a well holds is refused. Estimated contents are marked `assumed`, and the mark travels with the liquid. See ADR 0031.
 
+## Volume ledger (010c, V4 and V7)
+
+Every change to a well is an event in `inventory_events` (fill, transfer, consume, correct) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
+
+- Refused: taking more than a well holds (the whole event rolls back), filling past the labware type's `maxVolume`, a well the container doesn't have, a source that isn't a lot or sample in the lab, a discarded container.
+- Warned: a well left below the labware type's dead volume.
+- Agents' events are proposals (V7). Recording directly from an instrument run log comes with 022.
+
 ## Operations
 
 | Operation | Does | Agents |
@@ -70,6 +79,12 @@ A well holds a volume (or `"unknown"`) and components: samples (`smp_`) and lots
 | `inventory.scan` | Resolves a readable name (`plt000001`, `PLT-1` and `PLT-000001` all work) or an external code, with its place path | read |
 | `inventory.list_place` | What is directly in a location or box, or everything under it with `deep` | read |
 | `inventory.calculate_transfer` | Calculator: two wells after moving a volume between them | read |
+| `inventory.fill` | Liquid or a dried amount into wells from outside the inventory (a lot or sample at a concentration) | proposed |
+| `inventory.transfer` | Well-to-well moves, in order, mixed by the mixing math | proposed |
+| `inventory.consume` | Liquid used up or thrown away | proposed |
+| `inventory.correct` | Replace wells' contents with what was measured, with a reason | proposed |
+| `inventory.wells` | What a container's wells hold | read |
+| `inventory.history` | A container's or well's ledger, newest first | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |
 | `entities.draft` | Drafts an entity of a kind | direct (drafts) |
 | `entities.search` | By text (name, readable name, synonym, text fields), kind, base, a field value, or a stretch of sequence (either DNA strand, across the origin of a circular one) | read |
@@ -84,4 +99,4 @@ The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, the ledger with fill, transfer, stamp, consume and correct, samples (rest of 010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, stamping plate to plate, discarding, lineage, samples and the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).

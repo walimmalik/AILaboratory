@@ -104,6 +104,7 @@ export const inventoryOperations = [
   }),
   implement(inventoryRegisterContainers, {
     agentPolicy: 'propose',
+    touches: (_input, output) => output?.containers.map((c) => c.id) ?? [],
     run: async (ctx, input, deps) =>
       deps.db.transaction(async (tx) => {
         const service = new RecordService(tx as unknown as Db, deps.kinds);
@@ -131,6 +132,7 @@ export const inventoryOperations = [
   }),
   implement(inventoryMove, {
     agentPolicy: 'propose',
+    touches: (input) => [input.container],
     run: async (ctx, input, deps) => {
       const service = new RecordService(deps.db, deps.kinds);
       const record = await find(service, ctx, input.container);

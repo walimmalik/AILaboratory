@@ -147,3 +147,21 @@ describe('mix', () => {
     ]);
   });
 });
+
+describe('dry amounts', () => {
+  it('adds a dried spot to an empty well and keeps it as an amount', () => {
+    const spotted = mix(empty, {
+      volume: { value: '0', unit: 'uL' },
+      components: [{ source: STAURO, amount: { value: '10', unit: 'nmol' } }],
+    });
+    expect(spotted).toEqual({
+      volume: { value: '0', unit: 'uL' },
+      components: [{ source: STAURO, amount: { value: '10', unit: 'nmol' } }],
+    });
+    const twice = mix(spotted, {
+      volume: { value: '0', unit: 'uL' },
+      components: [{ source: STAURO, amount: { value: '0.00000001', unit: 'mol' } }],
+    });
+    expect(twice.components).toEqual([{ source: STAURO, amount: { value: '20', unit: 'nmol' } }]);
+  });
+});

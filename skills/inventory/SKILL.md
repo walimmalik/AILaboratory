@@ -26,3 +26,7 @@ Refused, with the reason: a position the box doesn't have, a position already ho
 ## Contents
 
 What a well holds is a `WellState` (see `skills/calculators`). To know what a transfer leaves behind, call `inventory.calculate_transfer`; don't work concentrations out yourself.
+
+- `inventory.wells` with `{container}` lists what each well holds; `inventory.history` with `{container, well?}` gives its ledger.
+- Recording what happened at the bench (all proposals from an agent): `inventory.fill` with `{container, fills: [{wells: ["A3:P22"], volume, components, assumed?}]}` for liquid from outside the inventory (components are lots or samples with their concentration); `inventory.transfer` with `{transfers: [{from: {container, well}, to: {container, well}, volume}]}`; `inventory.consume` with `{container, wells, volume}`; `inventory.correct` with `{container, wells, state, reason}` for a measurement.
+- A tube or trough is well `A1`. Mark estimates `assumed: true`. Read `warnings` in the result (a well below its dead volume) and tell the person.
