@@ -498,6 +498,146 @@ describe('stamping and lineage', () => {
   });
 });
 
+describe('effective handling rules', () => {
+  it('gives a plate the strictest rules of what its wells hold, each with its sources', async () => {
+    const { assay, tube, box, dmso } = await lab();
+    const convention = { from: 'lab_convention' };
+    const cellLine = await run<RecordEnvelope>(person, 'entities.draft_kind', {
+      label: 'Cell line',
+      attributes: {
+        base: 'cells',
+        prefix: 'CEL',
+        fields: [],
+        handlingRules: [
+          {
+            rule: 'max_time_out_of_storage',
+            text: 'At most 30 min out of the incubator',
+            source: convention,
+            enforced: true,
+            period: { value: '30', unit: 'min' },
+          },
+        ],
+      },
+    });
+    const hek = await run<RecordEnvelope>(person, 'entities.draft', {
+      label: 'HEK293',
+      entityKind: cellLine.id,
+      fields: {},
+      handlingRules: [
+        {
+          rule: 'max_time_out_of_storage',
+          text: 'HEK293 at most 20 min out',
+          source: convention,
+          enforced: true,
+          period: { value: '20', unit: 'min' },
+        },
+        { rule: 'advice', text: 'Dispense gently', source: convention, enforced: false },
+      ],
+    });
+    const cells = await run<RecordEnvelope>(person, 'samples.register', {
+      label: 'HEK293 P12',
+      entity: hek.id,
+      method: 'culture',
+    });
+    const { product: glo } = await run<{ product: RecordEnvelope }>(
+      person,
+      'reagents.draft_product',
+      {
+        label: 'CellTiter-Glo 2.0',
+        attributes: {
+          category: 'assay_kit',
+          origin: 'bought',
+          storage: { min: { value: '-30', unit: 'degC' }, max: { value: '-10', unit: 'degC' } },
+          handlingRules: [
+            {
+              rule: 'protect_from_light',
+              text: 'Light-sensitive',
+              source: { from: 'vendor' },
+              enforced: true,
+            },
+          ],
+        },
+      },
+    );
+    const gloLot = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: glo.id,
+      lotNumber: 'G1',
+    });
+    await run(person, 'inventory.fill', {
+      container: assay.id,
+      fills: [
+        {
+          wells: ['A1:B2'],
+          volume: { value: '25', unit: 'uL' },
+          components: [{ source: cells.id, concentration: { value: '200', unit: 'cells/uL' } }],
+        },
+        {
+          wells: ['C1'],
+          volume: { value: '25', unit: 'uL' },
+          components: [{ source: gloLot.id }, { source: dmso.id }],
+        },
+      ],
+    });
+
+    type Effective = {
+      rules: {
+        rule: { rule: string; text: string; enforced: boolean; period?: unknown };
+        from: { origin: { name: string; label: string }; via: string[]; wells: string[] }[];
+      }[];
+      storage?: { range: unknown; from: { origin: { label: string }; wells: string[] }[] };
+    };
+    const all = await run<Effective>(person, 'inventory.effective_rules', { container: assay.id });
+    expect(all.rules.map((r) => [r.rule.rule, r.rule.enforced])).toEqual([
+      ['max_time_out_of_storage', true],
+      ['protect_from_light', true],
+      ['advice', false],
+    ]);
+    expect(all.rules[0]?.rule).toMatchObject({
+      text: 'HEK293 at most 20 min out',
+      period: { value: '20', unit: 'min' },
+    });
+    expect(all.rules[0]?.from.map((f) => [f.origin.label, f.via, f.wells])).toEqual([
+      ['Cell line', [cells.id], ['A1:B2']],
+      ['HEK293', [cells.id], ['A1:B2']],
+    ]);
+    expect(all.rules[1]?.from[0]).toMatchObject({
+      origin: { label: 'CellTiter-Glo 2.0' },
+      wells: ['C1'],
+    });
+    expect(all.storage).toMatchObject({
+      range: { min: { value: '-30', unit: 'degC' }, max: { value: '-10', unit: 'degC' } },
+      from: [{ origin: { label: 'CellTiter-Glo 2.0' }, wells: ['C1'] }],
+    });
+
+    const cellsOnly = await run<Effective>(person, 'inventory.effective_rules', {
+      container: assay.id,
+      wells: ['A1:A2'],
+    });
+    expect(cellsOnly.rules.map((r) => r.rule.rule)).toEqual(['max_time_out_of_storage', 'advice']);
+    expect(cellsOnly.storage).toBeUndefined();
+    const empty = await run<Effective>(person, 'inventory.effective_rules', { container: tube.id });
+    expect(empty.rules).toEqual([]);
+
+    // Agents read it directly; wrong wells, racks and other labs are refused.
+    expect(
+      (await run<Effective>(agent, 'inventory.effective_rules', { container: assay.id })).rules,
+    ).toHaveLength(3);
+    expect(
+      (
+        await refused(
+          run(person, 'inventory.effective_rules', { container: assay.id, wells: ['Z99'] }),
+        )
+      ).code,
+    ).toBe('invalid_input');
+    expect(
+      (await refused(run(person, 'inventory.effective_rules', { container: box.id }))).message,
+    ).toContain('holds no liquid');
+    expect(
+      (await refused(run(otherLab, 'inventory.effective_rules', { container: assay.id }))).message,
+    ).toContain('is not a container in this lab');
+  });
+});
+
 describe('seed contents', () => {
   it('loads the demo lab layer by layer until every container holds what the seed says', async () => {
     const seedFile = (name: string) =>
