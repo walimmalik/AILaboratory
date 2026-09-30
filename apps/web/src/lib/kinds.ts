@@ -8,11 +8,19 @@ export interface KindPage {
   title: string;
   /** One record in words, e.g. "labware type". */
   noun: string;
-  path: '/labware' | '/vendors';
+  path: '/labware' | '/instruments' | '/instrument-models' | '/equipment' | '/vendors';
 }
 
 export const libraryPages: KindPage[] = [
   { kind: 'labware_type', title: 'Labware', noun: 'labware type', path: '/labware' },
+  { kind: 'instrument', title: 'Instruments', noun: 'instrument', path: '/instruments' },
+  {
+    kind: 'instrument_kind',
+    title: 'Instrument models',
+    noun: 'instrument model',
+    path: '/instrument-models',
+  },
+  { kind: 'equipment_kind', title: 'Equipment', noun: 'equipment kind', path: '/equipment' },
   { kind: 'vendor', title: 'Vendors', noun: 'vendor', path: '/vendors' },
 ];
 

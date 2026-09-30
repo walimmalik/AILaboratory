@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
+import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
 import { RecordPage } from './pages/Record.tsx';
 import { RecordsPage } from './pages/Records.tsx';
@@ -63,6 +64,21 @@ const labware = createRoute({
   path: '/labware',
   component: LabwarePage,
 });
+const instruments = createRoute({
+  getParentRoute: () => app,
+  path: '/instruments',
+  component: InstrumentsPage,
+});
+const instrumentModels = createRoute({
+  getParentRoute: () => app,
+  path: '/instrument-models',
+  component: InstrumentModelsPage,
+});
+const equipment = createRoute({
+  getParentRoute: () => app,
+  path: '/equipment',
+  component: EquipmentPage,
+});
 const vendors = createRoute({
   getParentRoute: () => app,
   path: '/vendors',
@@ -87,7 +103,20 @@ const wikiPage = createRoute({
 
 const routeTree = root.addChildren([
   signIn,
-  app.addChildren([index, activity, review, labware, vendors, records, record, wiki, wikiPage]),
+  app.addChildren([
+    index,
+    activity,
+    review,
+    labware,
+    instruments,
+    instrumentModels,
+    equipment,
+    vendors,
+    records,
+    record,
+    wiki,
+    wikiPage,
+  ]),
 ]);
 
 export function makeRouter(queryClient: QueryClient) {

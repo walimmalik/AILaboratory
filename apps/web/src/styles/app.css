@@ -1075,3 +1075,40 @@ table.checks td.mark {
 .block.wiki .body a {
   color: var(--accent);
 }
+
+/* Instrument decks (Instruments.tsx): each mount from above, not to scale. */
+.decks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  align-items: flex-start;
+}
+.drawing.deck-view {
+  max-width: 100%;
+}
+.drawing.deck-view svg {
+  max-width: 100%;
+}
+.drawing.deck-view .free {
+  fill: var(--field);
+  stroke: var(--rule);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+.drawing.deck-view .occupied {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+.drawing.deck-view text {
+  font-size: 11px;
+}
+.drawing.deck-view text.what {
+  fill: var(--ink);
+  font-family: var(--font-ui);
+}
+
+.nowrap {
+  white-space: nowrap;
+}

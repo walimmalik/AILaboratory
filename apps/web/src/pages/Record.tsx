@@ -14,6 +14,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
+import { InstrumentBlocks } from './Instruments.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
@@ -98,6 +99,8 @@ export function RecordPage() {
                 <LabwareDrawing attributes={r.attributes} />
                 <OpentronsBlock record={r} />
               </>
+            ) : r.kind === 'instrument' ? (
+              <InstrumentBlocks record={r} />
             ) : undefined
           }
         />
