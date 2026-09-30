@@ -11,6 +11,7 @@ Plan: [012](../plans/012-digital-sops.md). A lab SOP as a structured, versioned 
 | SOP kind: sections, reference checks, readiness | `apps/api/src/sops/kinds.ts` |
 | Operation contracts | `packages/schema/src/operations/sops.ts` |
 | Operations | `apps/api/src/sops/operations.ts` |
+| Seed loader for `seed/sops/own/` | `apps/api/src/sops/seed.ts`, run by `pnpm --filter @ailab/api seed` |
 | Agent skill | `skills/sops/SKILL.md`, and a row in `skills/calculators/SKILL.md` |
 
 ## Formulas (012a, ADR 0036)
@@ -33,6 +34,10 @@ Writes are refused when names repeat or a step, parameter, layout, timing rule o
 | `sops.draft` | Drafts an SOP | direct (drafts) |
 | `sops.calculate` | Works out an SOP's variables for a run (calculator) | read |
 
+## The lab's own SOPs (012a)
+
+The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
+
 ## Not yet
 
-The loader for `seed/sops/own/` (012a); binding roles and reading values from records (012b); the digitizer and review loop (012c); the SOP page (012d).
+Binding roles and reading values from records (012b); the digitizer and review loop (012c); the SOP page (012d).
