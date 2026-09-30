@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EvidenceInput } from '../design.ts';
 import { recordIdOf } from '../ids.ts';
 import { LocalId } from '../instruments.ts';
 import { ContainerId } from '../inventory.ts';
@@ -6,6 +7,8 @@ import { LiquidVolume, WellName } from '../labware.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { LiquidTypeId } from '../reagents.ts';
+import { RecordEnvelope } from '../record.ts';
+import { PlanPlate, TransferGroup, TransferPlanId } from '../transfers.ts';
 
 /**
  * The transfer calculators (plan 016, T2; ADR 0024): read operations over
@@ -168,7 +171,7 @@ export const transfersSourceVolumes = defineContract({
   id: 'transfers.source_volumes',
   calculator: true,
   summary:
-    'What each source well must hold for a set of draws: what is drawn, plus the dead volume of its labware type, plus an overage, against what inventory says the well holds now. Says which wells are short. Reservations by other plans come with transfer plans',
+    'What each source well must hold for a set of draws: what is drawn, plus the dead volume of its labware type, plus an overage, against what inventory says the well holds now less what confirmed transfer plans have reserved. Says which wells are short',
   effect: 'read',
   input: z.strictObject({
     draws: z
@@ -176,6 +179,7 @@ export const transfersSourceVolumes = defineContract({
       .min(1)
       .max(10000),
     overage: Fraction.optional().describe('Extra on top of what is drawn, e.g. "0.1" for 10%'),
+    plan: TransferPlanId.optional().describe("Leave this plan's own reservations out"),
   }),
   output: z.object({
     sources: z.array(
@@ -189,7 +193,10 @@ export const transfersSourceVolumes = defineContract({
         needed: Quantity,
         draws: z.number().int(),
         holds: Quantity.optional().describe('What the well holds now, when known'),
-        short: Quantity.optional().describe('How much is missing, when it holds too little'),
+        reserved: Quantity.optional().describe('What confirmed transfer plans have reserved'),
+        short: Quantity.optional().describe(
+          'How much is missing, when what it holds less what is reserved is too little',
+        ),
       }),
     ),
     notes: z.array(z.string()).describe('Assumptions, e.g. a labware type without a dead volume'),
@@ -236,5 +243,101 @@ export const transfersOptions = defineContract({
       }),
     ),
     notes: z.array(z.string()),
+  }),
+});
+
+const Reason = z.string().min(1).optional().describe('Why; kept in history');
+
+const Instrument = z.strictObject({ instrument: InstrumentId, node: LocalId.optional() });
+
+export const transfersDraft = defineContract({
+  id: 'transfers.draft',
+  summary:
+    "Draft a transfer plan: the plates it uses (sources, destinations, intermediates, each with its labware type version and optionally its container or plate map plate) and groups of transfers, each one method on one instrument (or by hand) with why it was chosen and the alternatives. Work volumes out with the transfer calculators first; code copies each instrument's limits into its group and checks every volume in readiness",
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('e.g. "Staurosporine dose-response into 4 assay plates"'),
+    experiment: recordIdOf('exp').optional(),
+    purpose: z.string().min(1).optional(),
+    plates: z.array(PlanPlate).min(1).max(200),
+    groups: z.array(TransferGroup.omit({ device: true })).max(100),
+    notes: z.string().min(1).optional(),
+    evidence: z.record(z.string(), EvidenceInput).optional(),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const transfersSetInstrument = defineContract({
+  id: 'transfers.set_instrument',
+  summary:
+    "Switch a group of a transfer plan to another instrument (or to by hand), with why. Code copies the new instrument's limits; readiness then says which volumes it can't move. Direct on drafts; proposed on a confirmed plan",
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    expectedVersion: z.number().int().positive(),
+    group: LocalId,
+    instrument: Instrument.optional().describe('Left out for by hand'),
+    why: z.string().min(1).describe('Why this instrument'),
+    liquidClass: recordIdOf('lqc').optional(),
+    tips: z.enum(['none', 'new_each', 'per_source', 'lab_default']).optional(),
+  }),
+  output: RecordEnvelope,
+});
+
+export const transfersPickSources = defineContract({
+  id: 'transfers.pick_sources',
+  summary:
+    "Say which container in inventory each source plate is (P5): usually on the day, once you know which tube or plate has enough (check with transfers.source_volumes). The container must be of the plate's labware type. Direct on drafts; proposed on a confirmed plan",
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    expectedVersion: z.number().int().positive(),
+    picks: z.array(z.strictObject({ plate: LocalId, container: ContainerId })).min(1),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+const Check = z.object({
+  id: z.string(),
+  label: z.string(),
+  severity: z.enum(['blocker', 'warning']),
+  passed: z.boolean(),
+  problems: z.array(z.string()),
+});
+
+export const transfersCheck = defineContract({
+  id: 'transfers.check',
+  calculator: true,
+  summary:
+    "Every rule on a transfer plan, with what is live on the day: each volume against its instrument's limits now, whether each instrument is ready and still has the limits the plan used, what each source well must hold (drawn, dead volume) against what it holds less other plans' reservations, destination wells against their capacity, and whether pinned plate maps and labware are current",
+  effect: 'read',
+  input: z.strictObject({ id: TransferPlanId }),
+  output: z.object({
+    ok: z.boolean().describe('No blocker fails'),
+    checks: z.array(Check),
+    totals: z.object({
+      transfers: z.number().int(),
+      tips: z.number().int().describe("Estimated from each group's tip rule"),
+      sources: z.number().int(),
+    }),
+  }),
+});
+
+export const transfersReserved = defineContract({
+  id: 'transfers.reserved',
+  summary:
+    'What confirmed transfer plans have reserved from a container, well by well, and by which plan (010 V8). Reservations end when a plan is archived or its run is recorded',
+  effect: 'read',
+  input: z.strictObject({ container: ContainerId }),
+  output: z.object({
+    wells: z.array(
+      z.object({
+        well: z.string(),
+        reserved: Quantity,
+        plans: z.array(z.object({ id: z.string(), name: z.string(), volume: Quantity })),
+      }),
+    ),
   }),
 });

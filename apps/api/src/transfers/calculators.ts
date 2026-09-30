@@ -1,5 +1,6 @@
 import {
   compare,
+  convert,
   type DeviceLimits,
   type DeviceOption,
   dilutionOptions,
@@ -30,6 +31,7 @@ import type { z } from 'zod';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { reservations, totalOf } from './reservations.ts';
 
 /**
  * The transfer calculators (plan 016a-2, T2): read operations over the transfer math in
@@ -51,7 +53,7 @@ async function calculating<T>(work: () => T | Promise<T>): Promise<T> {
   }
 }
 
-async function run<T>(deps: OperationDeps, ctx: RecordContext, id: string, input: unknown) {
+export async function run<T>(deps: OperationDeps, ctx: RecordContext, id: string, input: unknown) {
   const result = await deps.registry.execute(ctx, id, input, {}, deps.db);
   if (result.status !== 'done') throw new OperationError('invalid_state', `${id} did not run`);
   return result.output as T;
@@ -72,7 +74,7 @@ async function recordOf(
   return record;
 }
 
-interface Device {
+export interface Device {
   label: string;
   limits: DeviceLimits;
 }
@@ -90,7 +92,7 @@ const nodeLabel = (instrument: RecordEnvelope, node: string) => {
 };
 
 /** The device a calculation uses: an instrument's transfer or dispense limits, or limits given. */
-async function deviceOf(
+export async function deviceOf(
   deps: OperationDeps,
   ctx: RecordContext,
   device: z.infer<typeof TransferDevice>,
@@ -121,7 +123,7 @@ async function deviceOf(
   return { label: nodeLabel(instrument, c.node), limits: limitsOf(c) };
 }
 
-const deviceOut = (d: Device) => ({
+export const deviceOut = (d: Device) => ({
   label: d.label,
   ...(d.limits.min ? { min: d.limits.min } : {}),
   ...(d.limits.max ? { max: d.limits.max } : {}),
@@ -234,6 +236,7 @@ export const transferCalculators = [
         });
       }
       const key = (c: string, w: string) => `${c}|${w}`;
+      const reserved = await reservations(deps, ctx, input.plan);
       const needs = await calculating(() =>
         sourceVolumes(
           input.draws.map((d) => ({ source: key(d.container, d.well), volume: d.volume })),
@@ -256,8 +259,12 @@ export const transferCalculators = [
                 : volume;
           if (volume === 'unknown')
             notes.push(`${c.record.name} ${well}: how much it holds is not known`);
+          const taken = totalOf(reserved.get(n.source));
+          const available = holds && taken ? subtract(convert(holds, 'uL'), taken) : holds;
           const short =
-            holds && compare(holds, n.needed) < 0 ? subtract(n.needed, holds) : undefined;
+            available && compare(available, n.needed) < 0
+              ? subtract(n.needed, available)
+              : undefined;
           const { source: _s, ...rest } = n;
           return {
             container,
@@ -265,6 +272,7 @@ export const transferCalculators = [
             well,
             ...rest,
             ...(holds ? { holds } : {}),
+            ...(taken ? { reserved: taken } : {}),
             ...(short ? { short } : {}),
           };
         }),

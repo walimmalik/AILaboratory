@@ -1,4 +1,4 @@
-import type { Actor, RecordEnvelope } from '@ailab/schema';
+import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -16,6 +16,7 @@ import {
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { transferKinds } from './kinds.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -23,6 +24,7 @@ let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
 let otherLab: RecordContext;
+let kinds: KindRegistry;
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -36,13 +38,14 @@ beforeEach(async () => {
     orgId: other.orgId,
     labId: other.labId,
   };
-  const kinds = new KindRegistry();
+  kinds = new KindRegistry();
   for (const kind of [
     ...labwareKinds,
     ...instrumentKinds,
     ...reagentKinds,
     ...entityKinds,
     ...inventoryKinds,
+    ...transferKinds,
   ]) {
     kinds.register(kind);
   }
@@ -129,6 +132,12 @@ async function lab() {
   });
   const pp = await create('Echo 384PP', 'labware_type', {
     family: 'plate',
+    footprint: {
+      length: { value: '127.76', unit: 'mm' },
+      width: { value: '85.48', unit: 'mm' },
+      height: { value: '14.4', unit: 'mm' },
+      sbs: true,
+    },
     wells: { layout: 'grid', rows: 16, columns: 24 },
     maxVolume: uL('65'),
     workingVolume: { min: uL('15'), max: uL('65') },
@@ -366,5 +375,285 @@ describe('transfers.options', () => {
       volume: uL('5'),
     });
     expect(other.options).toEqual([]);
+  });
+});
+
+/** A person confirms every section of a draft, which activates it. */
+async function confirm(record: RecordEnvelope): Promise<RecordEnvelope> {
+  let current = record;
+  for (const section of kinds.get(record.kind).sections ?? []) {
+    current = await run(person, 'records.confirm_section', {
+      id: current.id,
+      expectedVersion: current.version,
+      section: section.id,
+    });
+  }
+  return current;
+}
+
+type Checked = {
+  ok: boolean;
+  checks: { id: string; passed: boolean; problems: string[] }[];
+  totals: { transfers: number; tips: number; sources: number };
+};
+
+describe('transfer plans', () => {
+  async function setup() {
+    const { echo, flex, pp } = await lab();
+    const assay = await create('Assay 384', 'labware_type', {
+      family: 'plate',
+      footprint: {
+        length: { value: '127.76', unit: 'mm' },
+        width: { value: '85.48', unit: 'mm' },
+        height: { value: '14.4', unit: 'mm' },
+        sbs: true,
+      },
+      wells: { layout: 'grid', rows: 16, columns: 24 },
+      maxVolume: uL('50'),
+    });
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: pp.id, containers: [{}, {}] },
+    );
+    const [src, other] = containers as [RecordEnvelope, RecordEnvelope];
+    const { product } = await run<{ product: RecordEnvelope }>(person, 'reagents.draft_product', {
+      label: 'Staurosporine',
+      attributes: { category: 'compound', origin: 'bought' },
+    });
+    const lot = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'S1',
+    });
+    await run(person, 'inventory.fill', {
+      container: src.id,
+      fills: [
+        {
+          wells: ['A1'],
+          volume: uL('30'),
+          components: [{ source: lot.id, concentration: { value: '10', unit: 'mM' } }],
+        },
+      ],
+    });
+    const draft = {
+      label: 'Staurosporine into the assay plate',
+      plates: [
+        { id: 'src', role: 'source', labwareType: { id: pp.id, version: pp.version } },
+        { id: 'assay', role: 'destination', labwareType: { id: assay.id, version: assay.version } },
+      ],
+      groups: [
+        {
+          id: 'compounds',
+          label: 'Echo: compound into the assay plate',
+          method: 'direct_dispense',
+          instrument: { instrument: echo.id },
+          reason: 'Nanolitre DMSO transfers, no tips',
+          tips: 'none',
+          transfers: ['A1', 'A2', 'A3', 'A4'].map((well) => ({
+            from: { plate: 'src', well: 'A1' },
+            to: { plate: 'assay', well },
+            volume: nL('2500'),
+          })),
+        },
+      ],
+    };
+    return { echo, flex, pp, assay, src, other, draft };
+  }
+
+  it('drafts a plan with its instrument limits, checks it, and reserves its sources once confirmed', async () => {
+    const { echo, pp, assay, src, draft } = await setup();
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', draft);
+    expect(plan).toMatchObject({ name: 'TFP-0001', status: 'draft' });
+    expect(plan.attributes).toMatchObject({
+      groups: [{ device: { label: 'Echo 1', step: nL('2.5') } }],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: plan.id });
+    const failing = ready.checks.filter((c) => !c.passed).map((c) => c.id);
+    expect(failing).toEqual(['sources_picked', 'inputs_confirmed']);
+
+    const picked = await run<RecordEnvelope>(agent, 'transfers.pick_sources', {
+      id: plan.id,
+      expectedVersion: plan.version,
+      picks: [{ plate: 'src', container: src.id }],
+    });
+    const checked = await run<Checked>(agent, 'transfers.check', { id: plan.id });
+    expect(checked.totals).toEqual({ transfers: 4, tips: 0, sources: 1 });
+    expect(checked.checks.find((c) => c.id === 'sources_enough')).toMatchObject({ passed: true });
+
+    const ppOk = await confirm(pp);
+    const assayOk = await confirm(assay);
+    expect([ppOk.status, assayOk.status]).toEqual(['active', 'active']);
+    const repinned = await run<RecordEnvelope>(person, 'records.update', {
+      id: picked.id,
+      expectedVersion: picked.version,
+      attributes: {
+        ...picked.attributes,
+        plates: (picked.attributes as typeof draft).plates.map((p) => ({
+          ...p,
+          labwareType: {
+            ...p.labwareType,
+            version: p.id === 'src' ? ppOk.version : assayOk.version,
+          },
+        })),
+      },
+    });
+    const active = await confirm(repinned);
+    const state = await run<Readiness>(person, 'records.readiness', { id: active.id });
+    expect(state.missing).toEqual([]);
+    expect(active.status).toBe('active');
+
+    const reserved = await run<{
+      wells: { well: string; reserved: unknown; plans: { name: string }[] }[];
+    }>(agent, 'transfers.reserved', { container: src.id });
+    expect(reserved.wells).toEqual([
+      {
+        well: 'A1',
+        reserved: uL('10'),
+        plans: [{ id: active.id, name: 'TFP-0001', volume: uL('10') }],
+      },
+    ]);
+    const needs = await run<{ sources: Record<string, unknown>[] }>(
+      agent,
+      'transfers.source_volumes',
+      {
+        draws: [{ container: src.id, well: 'A1', volume: uL('10') }],
+      },
+    );
+    // 30 µL held, 10 reserved: 20 available against 10 drawn + 15 dead.
+    expect(needs.sources[0]).toMatchObject({ reserved: uL('10'), short: uL('5') });
+    const own = await run<{ sources: Record<string, unknown>[] }>(
+      agent,
+      'transfers.source_volumes',
+      {
+        draws: [{ container: src.id, well: 'A1', volume: uL('10') }],
+        plan: active.id,
+      },
+    );
+    expect(own.sources[0]?.short).toBeUndefined();
+
+    // A second plan drawing the same well is warned, not blocked (V8).
+    const second = await run<RecordEnvelope>(agent, 'transfers.draft', {
+      ...draft,
+      plates: [{ ...draft.plates[0], container: src.id }, draft.plates[1]],
+    });
+    const warned = await run<Checked>(agent, 'transfers.check', { id: second.id });
+    expect(warned.checks.find((c) => c.id === 'sources_enough')?.problems[0]).toContain(
+      'after 10 µL reserved by other plans',
+    );
+
+    // Changes to the confirmed plan are proposals.
+    const proposed = await registry.execute(agent, 'transfers.set_instrument', {
+      id: active.id,
+      expectedVersion: active.version,
+      group: 'compounds',
+      why: 'Try by hand',
+    });
+    expect(proposed.status).toBe('proposed');
+    expect(echo.id).toBeDefined();
+  });
+
+  it('reports volumes its instrument cannot move, overfull wells and intermediates used too early', async () => {
+    const { flex, draft } = await setup();
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', {
+      ...draft,
+      plates: [
+        ...draft.plates,
+        { id: 'mid', role: 'intermediate', labwareType: draft.plates[0]?.labwareType },
+      ],
+      groups: [
+        {
+          ...draft.groups[0],
+          transfers: [
+            {
+              from: { plate: 'mid', well: 'A1' },
+              to: { plate: 'assay', well: 'B1' },
+              volume: nL('2.5'),
+            },
+            {
+              from: { plate: 'src', well: 'A1' },
+              to: { plate: 'assay', well: 'A1' },
+              volume: nL('1'),
+            },
+            {
+              from: { plate: 'src', well: 'A1' },
+              to: { plate: 'assay', well: 'A2' },
+              volume: uL('60'),
+            },
+          ],
+        },
+      ],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: plan.id });
+    const byId = new Map(ready.checks.map((c) => [c.id, c]));
+    expect(byId.get('volumes_fit')?.message).toContain('1 nL is less than one step of 2.5 nL');
+    expect(byId.get('wells_hold')?.message).toBe('assay A2 gets 60 µL; it holds 50 µL');
+    expect(byId.get('intermediates_first')?.message).toContain('draws from mid A1 before anything');
+
+    const switched = await run<RecordEnvelope>(agent, 'transfers.set_instrument', {
+      id: plan.id,
+      expectedVersion: plan.version,
+      group: 'compounds',
+      instrument: { instrument: flex.id },
+      why: 'Microlitre volumes',
+    });
+    expect(switched.attributes).toMatchObject({
+      groups: [{ device: { label: 'Flex 1 (left)', min: uL('5') }, reason: 'Microlitre volumes' }],
+    });
+    const after = await run<Readiness>(person, 'records.readiness', { id: plan.id });
+    expect(after.checks.find((c) => c.id === 'volumes_fit')?.message).toContain(
+      '2.5 nL is below the minimum of 5 µL',
+    );
+  });
+
+  it('refuses plates and wells that do not add up, and other labs', async () => {
+    const { draft, other } = await setup();
+    const bad = (groups: unknown, plates: unknown = draft.plates) =>
+      refused(run(agent, 'transfers.draft', { ...draft, plates, groups }));
+    const noWell = await bad([
+      {
+        ...draft.groups[0],
+        transfers: [
+          {
+            from: { plate: 'src', well: 'A1' },
+            to: { plate: 'assay', well: 'Q1' },
+            volume: nL('25'),
+          },
+        ],
+      },
+    ]);
+    expect(noWell.message).toContain('assay has no well Q1');
+    const wrongWay = await bad([
+      {
+        ...draft.groups[0],
+        transfers: [
+          {
+            from: { plate: 'assay', well: 'A1' },
+            to: { plate: 'src', well: 'A2' },
+            volume: nL('25'),
+          },
+        ],
+      },
+    ]);
+    expect(wrongWay.message).toContain("assay is a destination plate, so it can't be drawn from");
+    const wrongType = await bad(draft.groups, [
+      draft.plates[0],
+      { ...draft.plates[1], container: other.id },
+    ]);
+    expect(wrongType.message).toContain("can't be assay");
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', draft);
+    const pick = await refused(
+      run(agent, 'transfers.pick_sources', {
+        id: plan.id,
+        expectedVersion: plan.version,
+        picks: [{ plate: 'assay', container: other.id }],
+      }),
+    );
+    expect(pick.message).toBe('assay is a destination plate, not a source');
+    const hidden = await refused(run(otherLab, 'transfers.check', { id: plan.id }));
+    expect(hidden).toMatchObject({ code: 'not_found' });
+    const hiddenReserved = await refused(
+      run(otherLab, 'transfers.reserved', { container: other.id }),
+    );
+    expect(hiddenReserved).toMatchObject({ code: 'not_found' });
   });
 });

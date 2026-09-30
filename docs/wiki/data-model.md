@@ -87,8 +87,9 @@ Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and
 | Experiment | `exp_` | `EXP-0001` | 013, built |
 | Run | `run_` | `RUN-0001` | 013, built |
 | Set | `set_` | `SET-001` | 013 |
-| Layout template | `lyt_` | `LYT-0001` | 014 |
-| Plate map | `pmp_` | `PMP-0001` | 014 |
+| Layout template | `lyt_` | `LYT-0001` | 014, built |
+| Plate map | `pmp_` | `PMP-0001` | 014, built |
+| Transfer plan | `tfp_` | `TFP-0001` | 016, built (016a-3) |
 | Workflow template | `wft_` | `WFT-0001` | 018 |
 | Workflow | `wf_` | `WF-0001` | 018 |
 | Schedule | `sch_` | `SCH-0001` | 019 |

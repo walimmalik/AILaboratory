@@ -29,6 +29,7 @@ import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { loadSeedSops, readSeedSops } from './sops/seed.ts';
+import { transferKinds } from './transfers/kinds.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
@@ -95,6 +96,7 @@ for (const kind of [
   ...sopKinds,
   ...campaignKinds,
   ...plateMapKinds,
+  ...transferKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
