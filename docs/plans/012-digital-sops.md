@@ -75,6 +75,6 @@ Recommended option in bold. Asked 2026-09-29.
 ## Proposed split
 
 - **012a:** schema (sections, steps, roles, variables), expression language in `packages/domain` with tests, operations, loader for `seed/sops/own/`. The expression language and `sops.evaluate` (ADR 0036) the SOP record with `sops.draft` and `sops.calculate` (ADR 0037) and the `seed/sops/own` loader are built.
-- **012b:** binding and resolution (roles to records, lot and dead-volume values, recompute), readiness checks.
+- **012b:** binding and resolution (roles to records, lot and dead-volume values, recompute), readiness checks. Built in `sops.calculate`.
 - **012c:** digitizer (agent skill and operations), open questions, review cycle, benchmark.
 - **012d:** SOP page (read and design modes, printable view).

@@ -1,5 +1,6 @@
 import { evaluateVariables, getUnit, isUnit, type VariableDefinition } from '@ailab/domain';
 import { type CheckResult, defineKind, type Quantity, SopAttributes } from '@ailab/schema';
+import { bindRoles, readField } from './resolve.ts';
 
 const PLAN = 'Digital SOPs (plan 012)';
 
@@ -161,6 +162,17 @@ export const sop = defineKind({
     }
     if (invalid.length > 0) return { invalid };
 
+    const fetch = get;
+    const bindings = await bindRoles(a, new Map(), fetch);
+    const misfits = bindings.flatMap((b) => (b.problem ? [b.problem] : []));
+    const unreadable: string[] = [];
+    for (const v of a.variables) {
+      if (v.kind !== 'record' || !v.readFrom) continue;
+      const b = bindings.find((x) => x.role === v.readFrom?.role);
+      if (!b?.record || b.problem) continue;
+      const read = await readField(b.record, v.readFrom.field, fetch);
+      if (read.problem) unreadable.push(`${v.name}: ${read.problem}`);
+    }
     const outcomes = evaluateVariables(sopVariableDefinitions(a));
     const broken = a.variables.flatMap((v) => {
       if (v.expression === undefined) return [];
@@ -185,6 +197,22 @@ export const sop = defineKind({
           a.steps.length === 0 ? 'No steps yet' : undefined,
           'Add the procedure steps',
           'procedure',
+        ),
+        check(
+          'materials_fit',
+          'Default records fit their roles',
+          'blocker',
+          misfits.length ? misfits.join('; ') : undefined,
+          'Pick a default of the kind the role needs, or leave it empty',
+          'materials',
+        ),
+        check(
+          'record_values_readable',
+          'Record variables can be read from their defaults',
+          'warning',
+          unreadable.length ? unreadable.join('; ') : undefined,
+          'Point readFrom at a field the record has, or fill it on the record',
+          'variables',
         ),
         check(
           'formulas_work',

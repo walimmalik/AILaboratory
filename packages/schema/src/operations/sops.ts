@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { EvidenceInput } from '../design.ts';
+import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
@@ -87,10 +88,14 @@ export const sopsCalculate = defineContract({
   id: 'sops.calculate',
   calculator: true,
   summary:
-    "Work out an SOP's variables for a run: its defaults and typical values, with the run's inputs given here (number of samples, replicates) taking their place. Returns every variable, computed ones included, and what each still waits for",
+    "Work out an SOP's variables for a run: bind its material roles to records (each role's default unless one is given here), read record variables from them (a lot's certificate value, a plate type's dead volume), take the run's inputs (number of samples, replicates), and compute the formulas. Says where every value came from and what is still missing",
   effect: 'read',
   input: z.strictObject({
     sop: SopId,
+    bindings: z
+      .array(z.strictObject({ role: SopName, record: RecordId }))
+      .optional()
+      .describe('Records for material roles, e.g. the lot picked for capture_ab'),
     inputs: z
       .array(
         z.strictObject({
@@ -101,11 +106,28 @@ export const sopsCalculate = defineContract({
       .optional(),
   }),
   output: z.object({
+    bindings: z.array(
+      z.object({
+        role: z.string(),
+        record: z.string().optional(),
+        name: z.string().optional(),
+        label: z.string().optional(),
+        by: z.enum(['given', 'default']).optional(),
+        problem: z.string().optional().describe('Why the record does not fit the role'),
+      }),
+    ),
     variables: z.array(
       EvaluatedVariable.extend({
         from: z
-          .enum(['input', 'default', 'typical', 'computed', 'missing'])
-          .describe("input: given here; default or typical: the SOP's value; computed: a formula"),
+          .enum(['input', 'record', 'default', 'typical', 'computed', 'missing'])
+          .describe(
+            "input: given here; record: read from a bound record; default or typical: the SOP's value; computed: a formula",
+          ),
+        source: z
+          .object({ record: z.string(), name: z.string(), field: z.string() })
+          .optional()
+          .describe('The record and field a value was read from'),
+        problem: z.string().optional().describe('Why a record value could not be read'),
       }),
     ),
   }),
