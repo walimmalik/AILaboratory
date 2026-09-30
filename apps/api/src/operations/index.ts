@@ -8,6 +8,7 @@ import { contentsOperations } from '../inventory/contents.ts';
 import { inventoryOperations } from '../inventory/operations.ts';
 import { labwareOperations } from '../labware/operations.ts';
 import type { Converter } from '../library/convert.ts';
+import { mentionOperations } from '../library/mentions.ts';
 import { libraryOperations } from '../library/operations.ts';
 import { liquidOperations } from '../reagents/liquid-operations.ts';
 import { reagentOperations } from '../reagents/operations.ts';
@@ -57,6 +58,7 @@ export function createRegistry(
     ...contentsOperations,
     ...fileOperations,
     ...libraryOperations,
+    ...mentionOperations,
     ...assistantOperations,
   );
 }

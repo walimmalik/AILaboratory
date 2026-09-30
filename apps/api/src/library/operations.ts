@@ -15,7 +15,7 @@ import {
 } from '@ailab/schema';
 import { and, asc, desc, eq, gte, lte, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { libraryParses, libraryPassages, records } from '../db/schema.ts';
+import { libraryMentions, libraryParses, libraryPassages, records } from '../db/schema.ts';
 import { readBytes } from '../files/operations.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
@@ -144,6 +144,16 @@ export const libraryOperations = [
         eq(libraryPassages.fileId, fileId),
       );
       await deps.db.delete(libraryPassages).where(where);
+      // Proposals point at passages that are about to go; confirmed mentions keep their words.
+      await deps.db
+        .delete(libraryMentions)
+        .where(
+          and(
+            eq(libraryMentions.documentId, document.id),
+            eq(libraryMentions.fileId, fileId),
+            eq(libraryMentions.status, 'proposed'),
+          ),
+        );
       const rows = converted.sections.flatMap((section, index) =>
         section.passages.map((passage, seq) => ({
           id: newId('pas'),

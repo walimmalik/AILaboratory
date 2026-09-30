@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { Actor } from './actor.ts';
 import { FileId } from './files.ts';
-import { recordIdOf } from './ids.ts';
+import { RecordId, recordIdOf } from './ids.ts';
+import { Quantity } from './quantity.ts';
 
 /**
  * Library documents (plan 011a, S1): the source as published (an SOP, a vendor manual, a paper,
@@ -145,3 +147,40 @@ export const PassageText = z.object({
   text: z.string(),
 });
 export type PassageText = z.infer<typeof PassageText>;
+
+/** How a mention was found: the deterministic matcher, or an agent reading the passage. */
+export const MentionHow = z.enum(['catalog_number', 'name', 'synonym', 'model', 'agent']);
+
+export const MentionStatus = z.enum(['proposed', 'confirmed', 'rejected']);
+
+/**
+ * What a passage mentions (plan 011c, S6): a registry record, an assay type, or a stated
+ * parameter with its quantity. Proposed by the matcher or an agent, confirmed by a person.
+ */
+export const Mention = z.object({
+  id: z.string(),
+  document: DocumentId,
+  passage: z.string().describe('The passage it is in'),
+  section: z.number().int().min(0),
+  heading: z.array(z.string()),
+  page: z.number().int().positive().nullish(),
+  text: z.string().describe('As written in the passage'),
+  what: z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('record'),
+      record: RecordId,
+      kind: z.string(),
+      name: z.string(),
+      label: z.string(),
+    }),
+    z.object({ type: z.literal('assay'), assay: z.string() }),
+    z.object({ type: z.literal('parameter'), parameter: z.string(), value: Quantity }),
+  ]),
+  how: MentionHow,
+  status: MentionStatus,
+  proposedBy: Actor,
+  proposedAt: z.iso.datetime(),
+  reviewedBy: Actor.optional(),
+  reviewedAt: z.iso.datetime().optional(),
+});
+export type Mention = z.infer<typeof Mention>;

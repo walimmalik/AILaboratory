@@ -219,6 +219,7 @@ const library = {
   missing: [] as { key: string; reason: string }[],
   parsed: [] as string[],
   unparsed: [] as { key: string; reason: string }[],
+  mentions: 0,
 };
 for (const plan of [
   await readMarkdownFolder(fileURLToPath(new URL('../../../seed/sops/own/', import.meta.url)), {
@@ -238,6 +239,7 @@ for (const plan of [
   library.missing.push(...part.missing);
   library.parsed.push(...part.parsed);
   library.unparsed.push(...part.unparsed);
+  library.mentions += part.mentions;
 }
 console.log(
   `Library: ${library.added.length} documents drafted, ${library.existing.length} already there, ${library.missing.length} without their files here (import them from their folder with library:import).`,
@@ -245,7 +247,7 @@ console.log(
 for (const line of library.added) console.log(`  + ${line}`);
 for (const skip of library.missing) console.log(`  missing ${skip.key}: ${skip.reason}`);
 console.log(
-  `Library text: ${library.parsed.length} documents parsed for search, ${library.unparsed.length} not readable yet.`,
+  `Library text: ${library.parsed.length} documents parsed for search, ${library.unparsed.length} not readable yet, ${library.mentions} mentions of registry records proposed for review.`,
 );
 for (const skip of library.unparsed) console.log(`  not parsed ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
