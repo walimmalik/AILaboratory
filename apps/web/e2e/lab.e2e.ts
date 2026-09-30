@@ -327,6 +327,23 @@ test("an editor open while an agent changes the record doesn't write over the ag
   expect(saved.output.attributes.deadVolume).toEqual({ value: '20', unit: 'uL' });
 });
 
+test('a draft of a kind without sections is confirmed on its own page', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'vendor',
+    label: `Plates Inc ${Date.now()}`,
+    attributes: { website: 'https://example.org' },
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
+  await expect(page.getByText('active', { exact: true })).toBeVisible();
+  await expect(readiness).toHaveCount(0);
+});
+
 test('the wiki is readable in the app, with links between its pages', async ({ page }) => {
   await signIn(page);
   await page
