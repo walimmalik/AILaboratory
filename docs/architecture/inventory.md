@@ -99,6 +99,8 @@ Under **Inventory** in the Library (`apps/web/src/pages/Inventory.tsx`, helpers 
 
 - **Containers**, **Samples**, **Entities** and **Entity kinds**: record lists with their labware, place, kind or fields.
 - **Places**: the location tree; picking a place lists everything under it with its path.
+- **Scan** (under Lab, `apps/web/src/pages/Scan.tsx`): one field, focused on arrival, that takes any code a USB scanner types (readable names with or without the dash, printed codes) and shows the record and where it is. For a container it offers Move (scan the place or box, and a position for a box), Record use (wells and a volume per well) and Discard, each through its operation.
+- An entity's page lists its samples.
 - A container's page adds a **Wells** plate map shaded by volume in five steps against the fullest well (unknown volumes hatched, assumed contents outlined in agent ink; a well opens its components and concentrations), a **Handling** block with the rules and storage temperature it inherits and where each comes from, and its **Ledger**. A box or rack shows what is in it instead.
 
 ## Operations
@@ -139,4 +141,4 @@ The same run then registers the seed's samples (the two minipreps and the HEK293
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, the scan page, entity page extras and agent drafting with the readiness panel (the rest of 010e). Rules from a recipe's ingredients and a kit's components (only the product's own rules count), freeze-thaw counting from location history, and rules that turn on or off with a step (after thawing, after opening) wait for the scheduler (019).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, bulk import of an existing freezer list (V12). Entity kinds and entities are drafted and confirmed on the record page with its readiness panel. Rules from a recipe's ingredients and a kit's components (only the product's own rules count), freeze-thaw counting from location history, and rules that turn on or off with a step (after thawing, after opening) wait for the scheduler (019).

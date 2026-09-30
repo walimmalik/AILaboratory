@@ -471,3 +471,52 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await page.getByRole('button', { name: `Freezer ${stamp}` }).click();
   await expect(page.getByRole('row', { name: new RegExp(plate.name) })).toBeVisible();
 });
+
+test('scanning a tube opens it and moves it into a box position', async ({ page }) => {
+  await signIn(page);
+  const stamp = Date.now();
+  const fridge = await asPerson(page, 'locations.create', {
+    label: `Fridge ${stamp}`,
+    type: 'fridge',
+  });
+  const tubeType = await asPerson(page, 'records.create', {
+    kind: 'labware_type',
+    label: `Tube ${stamp}`,
+    attributes: { family: 'tube', maxVolume: { value: '1.5', unit: 'mL' } },
+  });
+  const boxType = await asPerson(page, 'records.create', {
+    kind: 'labware_type',
+    label: `Box ${stamp}`,
+    attributes: { family: 'rack', wells: { layout: 'grid', rows: 9, columns: 9 } },
+  });
+  const [box] = (
+    await asPerson(page, 'inventory.register_containers', {
+      labwareType: boxType.id,
+      containers: [{ place: { location: fridge.id } }],
+    })
+  ).containers;
+  const [tube] = (
+    await asPerson(page, 'inventory.register_containers', {
+      labwareType: tubeType.id,
+      containers: [{ label: `Primer tube ${stamp}` }],
+    })
+  ).containers;
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Scan' })
+    .click();
+  const code = page.getByLabel('Code');
+  await expect(code).toBeFocused();
+  await code.fill(tube.name.replace('-', '').toLowerCase());
+  await code.press('Enter');
+  const found = page.getByRole('region', { name: 'Found' });
+  await expect(found).toContainText(`Primer tube ${stamp}`);
+  await found.getByRole('button', { name: 'Move' }).click();
+  const move = found.getByRole('form', { name: 'Move' });
+  await move.getByLabel('To').fill(box.name);
+  await move.getByLabel('Position').fill('b3');
+  await move.getByRole('button', { name: 'Move' }).click();
+  await expect(page.getByText(`Moved ${tube.name} to`)).toBeVisible();
+  await expect(found).toContainText(`${box.name} B3`);
+});

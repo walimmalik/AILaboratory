@@ -93,6 +93,9 @@ function ShellLayout() {
                 <span className={`count num ${pending ? 'pending' : ''}`}>{pending}</span>
               </Link>
             </li>
+            <li>
+              <Link to="/scan">Scan</Link>
+            </li>
           </ul>
         </section>
         {libraryGroups.map(({ group, pages }) => (

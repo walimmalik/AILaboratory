@@ -20,6 +20,7 @@ import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pa
 import { RecordPage } from './pages/Record.tsx';
 import { RecordsPage } from './pages/Records.tsx';
 import { ReviewPage } from './pages/ReviewInbox.tsx';
+import { ScanPage } from './pages/Scan.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
 import { WikiPage } from './pages/Wiki.tsx';
@@ -61,6 +62,11 @@ const review = createRoute({
   getParentRoute: () => app,
   path: '/review',
   component: ReviewPage,
+});
+const scanPage = createRoute({
+  getParentRoute: () => app,
+  path: '/scan',
+  component: ScanPage,
 });
 const records = createRoute({
   getParentRoute: () => app,
@@ -160,6 +166,7 @@ const routeTree = root.addChildren([
     index,
     activity,
     review,
+    scanPage,
     labware,
     instruments,
     instrumentModels,
