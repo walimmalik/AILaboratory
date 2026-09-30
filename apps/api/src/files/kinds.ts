@@ -16,7 +16,11 @@ export const file = defineKind({
   createdBy: 'files.upload',
   attributes: FileAttributesSchema,
   links: (a) =>
-    a.source.from === 'derived' ? [{ toId: a.source.file, relation: 'derived_from' }] : [],
+    a.source.from === 'derived'
+      ? [{ toId: a.source.file, relation: 'derived_from' }]
+      : a.source.from === 'export'
+        ? [{ toId: a.source.record, relation: 'exported_from' }]
+        : [],
   related: async (a, { current }) => {
     const before = current?.attributes as FileAttributes | undefined;
     if (before && (before.sha256 !== a.sha256 || before.size !== a.size)) {

@@ -391,3 +391,28 @@ export const transfersDraftFromPlateMap = defineContract({
     }),
   }),
 });
+
+export const transfersExport = defineContract({
+  id: 'transfers.export',
+  summary:
+    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo. Each file is stored in the file store with the plan version it came from. Groups done by hand, or on instruments without a writer yet, are listed as skipped with why. Give `group` to write one group's file only",
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    group: LocalId.optional().describe('One group; left out, every group that has a writer'),
+    reason: Reason,
+  }),
+  output: z.object({
+    plan: z.object({ id: z.string(), name: z.string(), version: z.number().int() }),
+    files: z.array(
+      z.object({
+        group: z.string(),
+        format: z.enum(['echo_pick_list']),
+        file: RecordEnvelope,
+        filename: z.string(),
+        rows: z.number().int(),
+      }),
+    ),
+    skipped: z.array(z.object({ group: z.string(), why: z.string() })),
+  }),
+});
