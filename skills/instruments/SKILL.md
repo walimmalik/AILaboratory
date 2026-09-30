@@ -39,3 +39,12 @@ Say where values came from in `evidence` (a datasheet URL, `imported` from the s
 - Serial-bearing parts (Flex pipettes, gripper, modules) can have their own record, kind `equipment_item` (`EQP-0001`, `{kind, serial}`), named by `item` on the node. One item is on one instrument at a time.
 - `instruments.set_status` (`ready`, `in_use`, `maintenance`, `out_of_service`) and `instruments.log_service` (`{date, note, calibrationDue?}`) are always proposals from you.
 - `instruments.resolve` with `{instrument}` shows what a registered instrument can do now and any problem in its stored configuration.
+
+## Workcells
+
+A workcell (`WCL-0001`) is the instruments that work together, such as the FlexPod with its Echo, PreciseDrop, LidValet, Mantis, sealer, peeler and centrifuge. It holds no positions, robots or reach: the digital twin does. Never ask a person for them.
+
+- `workcells.draft` with `{label, twin, members: [{instrument, twinDevice, byHand}], notes?}`: `twin` is the echo650-twin workcell ID, `twinDevice` the device each member is in that twin, `byHand` whether people can also use it when the workcell isn't.
+- `workcells.change_members` with `{id, expectedVersion, set?, remove?}` adds or replaces members by instrument and takes them out. On a confirmed workcell your change is a proposal.
+- `workcells.of_instrument` with `{instrument}` says which confirmed workcell uses it and which drafts plan it; in none means it is used standalone.
+- A person confirms it with `records.confirm_section` (section `members`). It can't be confirmed while a member is unconfirmed or in another confirmed workcell, or without the twin workcell and every twin device named. The twin mapping is recorded as given until the twin connection (plan 015) checks it.

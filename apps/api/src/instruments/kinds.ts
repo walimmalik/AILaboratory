@@ -12,6 +12,7 @@ import {
   type SiteDefinition,
 } from '@ailab/schema';
 import { findOf, resolveWith } from './resolve.ts';
+import { workcell } from './workcell-kind.ts';
 
 const LIBRARY = 'Instrument library (plan 008)';
 
@@ -329,4 +330,4 @@ export const equipmentItem = defineKind({
   ],
 });
 
-export const instrumentKinds = [instrumentKind, equipmentKind, instrument, equipmentItem];
+export const instrumentKinds = [instrumentKind, equipmentKind, instrument, equipmentItem, workcell];

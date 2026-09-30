@@ -4,6 +4,7 @@ import { entityOperations } from '../entities/operations.ts';
 import { fileOperations } from '../files/operations.ts';
 import { type FileStore, MemoryFileStore } from '../files/store.ts';
 import { instrumentOperations } from '../instruments/operations.ts';
+import { workcellOperations } from '../instruments/workcells.ts';
 import { contentsOperations } from '../inventory/contents.ts';
 import { inventoryOperations } from '../inventory/operations.ts';
 import { labwareOperations } from '../labware/operations.ts';
@@ -61,6 +62,7 @@ export function createRegistry(
     ...reviewOperations,
     ...labwareOperations,
     ...instrumentOperations,
+    ...workcellOperations,
     ...reagentOperations,
     ...liquidOperations,
     ...entityOperations,
