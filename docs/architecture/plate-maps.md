@@ -17,6 +17,25 @@ Plan [014](../plans/014-plate-map-designer.md): what goes in which well. A layou
 
 Each planned well carries its role, subject, label, replicate, series point and concentration, which is what analysis (020) groups by and what a transfer plan (016) makes.
 
+## Layout templates (014a-2)
+
+A `layout` record (`lyt_`, `LYT-0001`, [ADR 0043](../decisions/0043-layout-templates.md)) is the lab's reusable plate pattern for one format. It holds what the placement rules read, in lab words:
+
+| Section | Fields |
+| --- | --- |
+| What goes where | `wells` (6 to 1536), `subjectRole`, `subjectRegion` (default every well not fixed), `subjectConcentration` or `subjectSeries`, `fixed` regions (id, role, label, region, optional standing control record, concentration or series, replicates) |
+| Replicates and placement | `replicates`, `arrangement`, `fillOrder`, `strategy`, `edge`, `leftover` |
+| Analysis and notes | `wellVolume`, `groups` (M6: which roles, grouped per subject, per subject and point, or per plate), `assays`, `notes` |
+
+Every write runs the rules with one subject (`apps/api/src/platemaps/spec.ts` turns the record into the rules' input), so a region off the plate, overlapping regions or a series that can't fit is refused with the reason. A layout without a control or standard region gets a warning. A standing control record in a fixed region is linked as `control`.
+
+| Operation | What it does | Agents |
+| --- | --- | --- |
+| `layouts.draft` | Drafts a layout | direct |
+| `layouts.preview` | Calculator: per plate, plates and every planned well for a saved layout (or attributes to try) and a number of subjects | read |
+
+Changes and confirmation use the record operations (`records.update`, `records.confirm_section`) like every design. The seed drafts five layouts from `seed/layouts.yaml`: IL-6 ELISA 96 (40 samples in duplicate), single-point 384 (320 compounds), dose-response 384 (16 compounds, 10 points in duplicate), pNPP 96 and Dual-Glo 384.
+
 ## Not yet
 
-The layout and plate map records, their operations and seed layouts (014a-2, 014a-3); the plate editor (014b).
+The plate map record and its operations with CSV export (014a-3); the plate editor and layout library (014b).
