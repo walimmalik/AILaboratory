@@ -57,6 +57,13 @@
       "when": 1790737831758,
       "tag": "0007_library_passages",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790738433325,
+      "tag": "0008_library_mentions",
+      "breakpoints": true
     }
   ]
 }

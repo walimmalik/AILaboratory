@@ -175,12 +175,15 @@ export interface ImportReport {
   parsed: string[];
   /** Documents whose text isn't readable yet, and why (a PDF before Docling, no science service). */
   unparsed: { key: string; reason: string }[];
+  /** Mentions of registry records proposed for review in the documents parsed this run. */
+  mentions: number;
 }
 
 /**
  * Uploads each item's files, adds it as a draft document and parses its text when a reader can. A
  * document the lab already has (same title) is left alone, except that it is parsed if it wasn't
- * yet, so the import can run again once the science service is up.
+ * yet, so the import can run again once the science service is up. Each document parsed is then
+ * mined for the registry records it names (plan 011c), proposed for a person to confirm.
  */
 export async function importIntoLibrary(
   registry: OperationRegistry,
@@ -199,6 +202,7 @@ export async function importIntoLibrary(
     missing: [...plan.missing],
     parsed: [],
     unparsed: [],
+    mentions: 0,
   };
   const parse = async (document: RecordEnvelope) => {
     const read = await run<{ parse?: unknown }>('library.read', { document: document.id });
@@ -211,7 +215,14 @@ export async function importIntoLibrary(
         key: `${document.name} ${document.label}`,
         reason: error instanceof Error ? error.message : String(error),
       });
+      return;
     }
+    const outline = await run<{ parse?: { passages: number } }>('library.read', {
+      document: document.id,
+    });
+    if (!outline.parse?.passages) return;
+    const mined = await run<{ added: number }>('library.mine', { document: document.id });
+    report.mentions += mined.added;
   };
   for (const item of plan.items) {
     const earlier = (

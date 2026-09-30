@@ -15,6 +15,7 @@ The lab's reading shelf (plan [011](../plans/011-sop-library.md)): stored files,
 | Operations | `apps/api/src/files/operations.ts`, `apps/api/src/library/operations.ts` |
 | Converting files to sections and passages | `apps/science/src/science/convert` (`POST /convert`), called through `apps/api/src/library/convert.ts` |
 | Parses and passages, full-text index | `library_parses`, `library_passages` |
+| Mentions: matcher, table, operations | `packages/domain/src/mentions.ts`, `library_mentions`, `apps/api/src/library/mentions.ts` |
 | Folder import (manifest or Markdown with front matter) | `apps/api/src/library/import.ts`, command `library:import` |
 | Download route | `GET /v1/files/:id` in `apps/api/src/app.ts` |
 | Agent skill | `skills/library/SKILL.md` |
@@ -63,9 +64,27 @@ The science service turns a file into sections (a heading path such as `Protocol
 | `library.search` | Passages matching words or phrases, with filters | read |
 | `library.read` | Outline, a section, or pages of a parsed document | read |
 
+## Mentions (011c, ADR 0035)
+
+What a passage mentions is a row in `library_mentions`: a registry record, the assay type, or a stated parameter as a quantity with its unit, with the words as written, its heading and page, how it was found and whether it is proposed, confirmed or rejected.
+
+- `library.mine` with `{document}` matches the lab's products (name, catalog number), labware types (name, catalog number), instrument kinds (name, model) and entities (name, synonyms) in the document's passages, at word boundaries with spaces and dashes interchangeable, and proposes what it finds. Deterministic, so it can run again; what is already there is skipped.
+- `library.propose_mentions` with `{document, mentions: [{passage, text, record | assay | parameter}]}` is for what matching can't find: the assay, parameters ("blocking time", 1 h), records named differently. The words must be in the passage.
+- `library.review_mentions` with `{confirm, reject}` settles them in bulk (people only).
+- `library.mentions` with `document`, `record` or `parameter` (words in its name) lists them, proposed and confirmed unless `status` says otherwise, with the documents' names.
+- Parsing again removes the document's proposed mentions and keeps reviewed ones; mining again doesn't repeat a reviewed mention with the same words under the same heading.
+- Record pages show "Mentioned in": each document and passage heading, the words, how it was found, and Confirm or Reject for proposed ones (agent ink).
+
+| Operation | Does | Agents |
+| --- | --- | --- |
+| `library.mine` | Proposes the registry records a document names | direct |
+| `library.propose_mentions` | Proposes records, assay and parameters by passage | direct |
+| `library.review_mentions` | Confirms or rejects mentions in bulk | people only |
+| `library.mentions` | Mentions of a document, record or parameter | read |
+
 ## Importing folders
 
-`importIntoLibrary` uploads each file (`files.upload`, source `folder` with its path), drafts each document (`library.add`, every value marked `imported` from its manifest entry or file) and parses it (`library.parse`), skipping documents the lab already has by title but parsing those not parsed yet, so it can run again once the science service is up. What couldn't be parsed is reported with the reason. Two folder formats:
+`importIntoLibrary` uploads each file (`files.upload`, source `folder` with its path), drafts each document (`library.add`, every value marked `imported` from its manifest entry or file) parses it (`library.parse`) and mines it (`library.mine`), skipping documents the lab already has by title but parsing those not parsed yet, so it can run again once the science service is up. What couldn't be parsed is reported with the reason. Two folder formats:
 
 - A `manifest.json` like `docs/sop-library`: `items` with `id`, `kind` (`sop`, `literature`, `automation`, `manual`, `web_page`, `note`), `title`, `authors`, `year`, `doi`, `source`, `license`, `assay` and `local_files` (the first is the original; images are supplements, other forms alternates). The share policy follows the license. Items whose files aren't in the folder are reported, not drafted.
 - Markdown SOPs with front matter (`key`, `title`, `version`) like `seed/sops/own`, with a license given for the whole folder.
@@ -74,4 +93,4 @@ The seed loads `seed/sops/own` (the lab's own, shareable) and `docs/sop-library`
 
 ## Not yet
 
-Docling for PDF and DOCX, embeddings and hybrid ranking (011b-2); fetching a document by URL or DOI;, sections and search (011b); mining (011c); screens (011d). Removing stored bytes nobody references.
+Docling for PDF and DOCX, embeddings and hybrid ranking (011b-2); fetching a document by URL or DOI; screens (011d). Removing stored bytes nobody references.

@@ -96,7 +96,7 @@ console.log(
 for (const line of report.added) console.log(`  + ${line}`);
 for (const skip of report.missing) console.log(`  missing ${skip.key}: ${skip.reason}`);
 console.log(
-  `Text: ${report.parsed.length} parsed for search, ${report.unparsed.length} not readable yet.`,
+  `Text: ${report.parsed.length} parsed for search, ${report.unparsed.length} not readable yet, ${report.mentions} mentions of registry records proposed for review.`,
 );
 for (const skip of report.unparsed) console.log(`  not parsed ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');

@@ -407,3 +407,52 @@ export const libraryPassages = pgTable(
     index('library_passages_search_idx').using('gin', t.search),
   ],
 );
+
+/**
+ * What library passages mention (plan 011c): a record, an assay type or a stated parameter,
+ * proposed by the matcher or an agent and confirmed by a person. Where it was (heading, page,
+ * words) is kept here, so a confirmed mention survives parsing the document again.
+ */
+export const libraryMentions = pgTable(
+  'library_mentions',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => records.id),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => records.id),
+    passageId: text('passage_id').notNull(),
+    section: integer('section').notNull(),
+    heading: jsonb('heading').$type<string[]>().notNull(),
+    page: integer('page'),
+    text: text('text').notNull(),
+    type: text('type').$type<'record' | 'assay' | 'parameter'>().notNull(),
+    recordId: text('record_id').references(() => records.id),
+    assay: text('assay'),
+    parameter: text('parameter'),
+    value: jsonb('value').$type<Quantity>(),
+    how: text('how').notNull(),
+    status: text('status').$type<'proposed' | 'confirmed' | 'rejected'>().notNull(),
+    proposedBy: jsonb('proposed_by').$type<Actor>().notNull(),
+    proposedAt: timestamp('proposed_at', { withTimezone: true }).notNull(),
+    reviewedBy: jsonb('reviewed_by').$type<Actor>(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('library_mentions_document_idx').on(t.labId, t.documentId),
+    index('library_mentions_record_idx').on(t.recordId),
+    check('library_mentions_type_check', sql`${t.type} in ('record', 'assay', 'parameter')`),
+    check(
+      'library_mentions_status_check',
+      sql`${t.status} in ('proposed', 'confirmed', 'rejected')`,
+    ),
+  ],
+);

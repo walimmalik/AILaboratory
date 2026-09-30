@@ -1,16 +1,20 @@
 import { z } from 'zod';
 import { EvidenceInput } from '../design.ts';
 import { FileId } from '../files.ts';
+import { RecordId } from '../ids.ts';
 import {
   DocumentAttributes,
   DocumentId,
   DocumentParse,
   DocumentType,
+  Mention,
+  MentionStatus,
   PassageText,
   PublishedDate,
   SectionOutline,
 } from '../library.ts';
 import { defineContract } from '../operation.ts';
+import { Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
 
 const Reason = z.string().min(1).optional().describe('Why; kept in history');
@@ -107,4 +111,74 @@ export const libraryRead = defineContract({
     outline: z.array(SectionOutline).optional(),
     passages: z.array(PassageText).optional(),
   }),
+});
+
+const Mentions = z.object({ mentions: z.array(Mention) });
+
+export const libraryMine = defineContract({
+  id: 'library.mine',
+  summary:
+    'Find the registry records a parsed document names (catalog numbers, product and labware names, instrument models, entity names and synonyms) and propose them as mentions for a person to confirm. Deterministic; then read the passages and add what it missed with library.propose_mentions',
+  effect: 'write',
+  input: z.strictObject({ document: DocumentId }),
+  output: Mentions.extend({ added: z.number().int().min(0) }),
+});
+
+export const libraryProposeMentions = defineContract({
+  id: 'library.propose_mentions',
+  summary:
+    'Propose what passages of a parsed document mention: a registry record, the assay type, or a stated parameter as a quantity with its unit (a volume, concentration, time, temperature, speed). Each cites the passage and the words as written. A person confirms them',
+  effect: 'write',
+  input: z.strictObject({
+    document: DocumentId,
+    mentions: z
+      .array(
+        z.strictObject({
+          passage: z.string().describe('A passage id from library.read or library.search'),
+          text: z.string().min(1).describe('The words as written in the passage'),
+          record: RecordId.optional().describe('The registry record it names'),
+          assay: z.string().min(1).optional().describe('The assay type, e.g. "ELISA"'),
+          parameter: z
+            .strictObject({
+              name: z
+                .string()
+                .min(1)
+                .describe('What it is, e.g. "blocking time", "coating volume"'),
+              value: Quantity,
+            })
+            .optional(),
+        }),
+      )
+      .min(1)
+      .max(200),
+  }),
+  output: Mentions.extend({ added: z.number().int().min(0) }),
+});
+
+export const libraryMentions = defineContract({
+  id: 'library.mentions',
+  summary:
+    'List mentions: of one document, or of one record across the library ("which SOPs use DY206?"), or a parameter by name across documents ("what blocking times do our ELISAs use?"), filtered by status',
+  effect: 'read',
+  input: z.strictObject({
+    document: DocumentId.optional(),
+    record: RecordId.optional(),
+    parameter: z.string().min(1).optional().describe('Words in the parameter name'),
+    status: MentionStatus.optional().describe('Default: proposed and confirmed'),
+    limit: z.number().int().min(1).max(500).optional().describe('Default 100'),
+  }),
+  output: Mentions.extend({
+    documents: z.array(z.object({ id: z.string(), name: z.string(), label: z.string() })),
+  }),
+});
+
+export const libraryReviewMentions = defineContract({
+  id: 'library.review_mentions',
+  summary: 'Confirm or reject proposed mentions, in bulk. People only',
+  effect: 'write',
+  input: z.strictObject({
+    confirm: z.array(z.string()).optional(),
+    reject: z.array(z.string()).optional(),
+  }),
+  output: z.object({ confirmed: z.number().int(), rejected: z.number().int() }),
 });

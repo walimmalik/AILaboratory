@@ -35,3 +35,10 @@ A **document** (`document`, `DOC-0001`) is a source as published, with its files
 - `library.search` with `{text}` finds passages containing all the words (stemmed: "blocking" finds "block"), best first. Quote a phrase (`"room temperature"`), exclude with `-word`, use `or` between alternatives. Filter with `type` (`sop`, `paper`…), `assay` or `document`. Each hit has the document, heading path, page and a snippet with matches in `[[ ]]`.
 - Search matches words, not meaning, for now: try the words the source would use (`"reagent diluent"`, `"1 hour"`) and synonyms with `or`.
 - `library.read` with `{document}` gives the outline; add `section` (an index from the outline) or `pages: {from, to}` to read the text. Read the passage before you quote it, and cite it as the document's name, heading and page.
+
+## Mentions
+
+- After `library.parse`, run `library.mine` with `{document}`: it proposes the products, labware, instruments and entities the text names, by catalog number, name, model or synonym. Imports and the seed do this already.
+- Then read the document (`library.read`) and add what matching missed with `library.propose_mentions`: the assay (`{passage, text: "sandwich ELISA", assay: "ELISA"}`), stated parameters as quantities (`{passage, text: "block for 1 hour", parameter: {name: "blocking time", value: {value: "1", unit: "h"}}}`), and records named differently (`{passage, text, record}`). `text` is the words exactly as written in that passage. Up to 200 per call.
+- A person confirms or rejects them (`library.review_mentions`); you can't. Say what you proposed and that it waits for review.
+- Answer "which SOPs use DY206?" with `library.mentions {record}` and "what blocking times do our ELISAs use?" with `library.mentions {parameter: "blocking time"}`. Proposed mentions are not confirmed yet: say so when you use them.
