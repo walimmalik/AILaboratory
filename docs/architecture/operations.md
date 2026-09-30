@@ -47,7 +47,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `liquids.record_verification` | proposed |
 | `entities.draft_kind`, `entities.draft` | direct (create drafts) |
 | `locations.create`, `inventory.register_containers`, `inventory.move` | proposed |
-| `inventory.fill`, `inventory.transfer`, `inventory.consume`, `inventory.correct`, `inventory.discard`, `samples.register` | proposed |
+| `inventory.fill`, `inventory.transfer`, `inventory.consume`, `inventory.correct`, `inventory.discard`, `inventory.stamp`, `samples.register` | proposed |
 | `records.confirm_section` | people only |
 | `assistant.ask` | people only |
 

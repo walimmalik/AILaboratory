@@ -120,6 +120,7 @@ export const LedgerLine = z.object({
   volume: Quantity.optional().describe('How much went in or out'),
   from: WellRef.optional().describe('Where liquid that came in came from'),
   to: WellRef.optional().describe('Where liquid that went out went'),
+  added: z.array(Component).optional().describe('A fill: what went in from outside the inventory'),
   after: WellState.describe('The well after this line'),
 });
 export type LedgerLine = z.infer<typeof LedgerLine>;

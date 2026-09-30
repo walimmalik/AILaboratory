@@ -1,6 +1,14 @@
 import type { WellState } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
-import { amountIn, ContentsError, concentrationOf, mix, take, transfer } from './contents.ts';
+import {
+  amountIn,
+  ContentsError,
+  concentrationOf,
+  mapPlates,
+  mix,
+  take,
+  transfer,
+} from './contents.ts';
 
 const STAURO = 'lot_01M3QZX866A5SB53SPYV40HA9G';
 const DMSO = 'lot_01M3QZX866A5SB53SPYV40HA9H';
@@ -163,5 +171,34 @@ describe('dry amounts', () => {
       components: [{ source: STAURO, amount: { value: '0.00000001', unit: 'mol' } }],
     });
     expect(twice.components).toEqual([{ source: STAURO, amount: { value: '20', unit: 'nmol' } }]);
+  });
+});
+
+describe('mapPlates', () => {
+  const p96 = { rows: 8, columns: 12 };
+  const p384 = { rows: 16, columns: 24 };
+  it('maps one to one, by quadrant and by offset', () => {
+    expect(mapPlates(p96, p96, { type: 'one_to_one' }, ['A1', 'H12'])).toEqual([
+      { from: 'A1', to: 'A1' },
+      { from: 'H12', to: 'H12' },
+    ]);
+    expect(mapPlates(p96, p384, { type: 'quadrant', quadrant: 1 })).toHaveLength(96);
+    expect(mapPlates(p96, p384, { type: 'quadrant', quadrant: 4 }, ['A1', 'H12'])).toEqual([
+      { from: 'A1', to: 'B2' },
+      { from: 'H12', to: 'P24' },
+    ]);
+    expect(mapPlates(p96, p384, { type: 'quadrant', quadrant: 2 }, ['B3'])).toEqual([
+      { from: 'B3', to: 'C6' },
+    ]);
+    expect(mapPlates(p96, p96, { type: 'offset', rows: 0, columns: 2 }, ['A1'])).toEqual([
+      { from: 'A1', to: 'A3' },
+    ]);
+  });
+  it('refuses grids that do not fit and wells that land off the plate', () => {
+    expect(() => mapPlates(p96, p384, { type: 'one_to_one' })).toThrow('same grid');
+    expect(() => mapPlates(p384, p96, { type: 'quadrant', quadrant: 1 })).toThrow('twice the rows');
+    expect(() => mapPlates(p96, p96, { type: 'offset', rows: 0, columns: 2 }, ['A11'])).toThrow(
+      'A11 would land off the destination plate',
+    );
   });
 });

@@ -1,5 +1,6 @@
 import type { Component, Quantity, WellState } from '@ailab/schema';
 import { LabDecimal, toDecimalString } from './decimal.ts';
+import { parseWellName, wellName } from './labware.ts';
 import { add, compare, convert, getUnit, subtract } from './units.ts';
 
 /**
@@ -222,4 +223,76 @@ export function transfer(
 ): { source: WellState; destination: WellState } {
   const { left, portion } = take(source, volume);
   return { source: left, destination: mix(destination, portion) };
+}
+
+/** How the wells of one plate land on another when stamped (plan 010c). */
+export type PlateMapping =
+  | { type: 'one_to_one' }
+  | { type: 'quadrant'; quadrant: 1 | 2 | 3 | 4 }
+  | { type: 'offset'; rows: number; columns: number };
+
+export interface Grid {
+  rows: number;
+  columns: number;
+}
+
+/**
+ * Source well to destination well for a stamp. `one_to_one` needs the same grid; `quadrant` puts
+ * a plate into every other well of one with twice the rows and columns (96 into 384, 384 into
+ * 1536; quadrant 1 starts at A1, 2 at A2, 3 at B1, 4 at B2); `offset` shifts rows and columns.
+ * Refuses any source well that would land off the destination.
+ */
+export function mapPlates(
+  from: Grid,
+  to: Grid,
+  mapping: PlateMapping,
+  wells?: readonly string[],
+): { from: string; to: string }[] {
+  const place = (row: number, column: number): [number, number] => {
+    switch (mapping.type) {
+      case 'one_to_one':
+        return [row, column];
+      case 'quadrant':
+        return [
+          2 * row + (mapping.quadrant > 2 ? 1 : 0),
+          2 * column + (mapping.quadrant % 2 === 0 ? 1 : 0),
+        ];
+      case 'offset':
+        return [row + mapping.rows, column + mapping.columns];
+    }
+  };
+  if (mapping.type === 'one_to_one' && (from.rows !== to.rows || from.columns !== to.columns)) {
+    throw new ContentsError(
+      'invalid',
+      `One-to-one needs the same grid; ${from.rows} × ${from.columns} doesn't match ${to.rows} × ${to.columns}`,
+    );
+  }
+  if (
+    mapping.type === 'quadrant' &&
+    (to.rows !== 2 * from.rows || to.columns !== 2 * from.columns)
+  ) {
+    throw new ContentsError(
+      'invalid',
+      `Quadrants need a destination with twice the rows and columns (${2 * from.rows} × ${2 * from.columns}), not ${to.rows} × ${to.columns}`,
+    );
+  }
+  const sources =
+    wells?.map((w) => parseWellName(w)) ??
+    Array.from({ length: from.rows * from.columns }, (_, i) => ({
+      row: Math.floor(i / from.columns),
+      column: i % from.columns,
+    }));
+  return sources.map(({ row, column }) => {
+    if (row >= from.rows || column >= from.columns) {
+      throw new ContentsError('invalid', `${wellName(row, column)} is not on the source plate`);
+    }
+    const [r, c] = place(row, column);
+    if (r < 0 || c < 0 || r >= to.rows || c >= to.columns) {
+      throw new ContentsError(
+        'invalid',
+        `${wellName(row, column)} would land off the destination plate`,
+      );
+    }
+    return { from: wellName(row, column), to: wellName(r, c) };
+  });
 }

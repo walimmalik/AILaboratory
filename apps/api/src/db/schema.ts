@@ -1,6 +1,7 @@
 import type {
   Actor,
   AssistantMessage,
+  Component,
   FieldEvidence,
   InventoryEventType,
   OperationErrorBody,
@@ -331,6 +332,7 @@ export const inventoryLines = pgTable(
     volume: jsonb('volume').$type<Quantity>(),
     from: jsonb('from').$type<WellRef>(),
     to: jsonb('to').$type<WellRef>(),
+    added: jsonb('added').$type<Component[]>(),
     after: jsonb('after').$type<WellState>().notNull(),
   },
   (t) => [

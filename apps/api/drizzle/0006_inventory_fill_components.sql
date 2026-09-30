@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_lines" ADD COLUMN "added" jsonb;

@@ -3,6 +3,7 @@ import { Component, InventoryEvent, SampleAttributes, WellRef, WellState } from 
 import { ContainerId } from '../inventory.ts';
 import { LiquidVolume, WellName } from '../labware.ts';
 import { defineContract } from '../operation.ts';
+import { Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
 
 /** Physical events on well contents (plan 010c, V4 and V7). An agent's event is a proposal. */
@@ -151,4 +152,92 @@ export const inventoryDiscard = defineContract({
     reason: Reason,
   }),
   output: z.object({ container: RecordEnvelope, event: InventoryEvent.optional() }),
+});
+
+export const PlateMapping = z
+  .discriminatedUnion('type', [
+    z.strictObject({ type: z.literal('one_to_one') }),
+    z.strictObject({
+      type: z.literal('quadrant'),
+      quadrant: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    }),
+    z.strictObject({
+      type: z.literal('offset'),
+      rows: z.number().int().min(-47).max(47),
+      columns: z.number().int().min(-47).max(47),
+    }),
+  ])
+  .describe(
+    'one_to_one (same grid); quadrant 1 to 4 (96 into 384 or 384 into 1536: 1 starts at A1, 2 at A2, 3 at B1, 4 at B2); offset by rows and columns',
+  );
+
+const Grid = z.strictObject({
+  rows: z.number().int().min(1).max(32),
+  columns: z.number().int().min(1).max(48),
+});
+
+export const inventoryMapPlates = defineContract({
+  id: 'inventory.map_plates',
+  calculator: true,
+  summary:
+    'Work out which source well lands on which destination well when a plate is stamped onto another: one to one, by quadrant (96 into 384) or by an offset. Give containers or grids. Changes nothing',
+  effect: 'read',
+  input: z.strictObject({
+    from: z.union([ContainerId, Grid]).describe('The source plate, or its rows and columns'),
+    to: z.union([ContainerId, Grid]).describe('The destination plate, or its rows and columns'),
+    mapping: PlateMapping,
+    wells: Wells.optional().describe('Only these source wells; every well if left out'),
+  }),
+  output: z.object({
+    pairs: z.array(z.object({ from: WellName, to: WellName })),
+    explanation: z.string(),
+  }),
+});
+
+export const inventoryStamp = defineContract({
+  id: 'inventory.stamp',
+  summary:
+    'Record a plate stamped onto another: the same volume from each source well into its mapped destination well (one to one, a quadrant, or an offset), e.g. 25 nL from an Echo source plate into an assay-ready plate. Only wells that hold something are stamped unless you list them',
+  effect: 'write',
+  input: z.strictObject({
+    from: ContainerId,
+    to: ContainerId,
+    mapping: PlateMapping,
+    volume: LiquidVolume.describe('Per well'),
+    wells: Wells.optional().describe('Only these source wells'),
+    reason: Reason,
+  }),
+  output: Changed,
+});
+
+export const inventoryLineage = defineContract({
+  id: 'inventory.lineage',
+  summary:
+    'Where the liquid in a well came from: each fill and each transfer or stamp into it, then back through the source wells, newest first',
+  effect: 'read',
+  input: z.strictObject({
+    container: ContainerId,
+    well: WellName,
+    depth: z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .optional()
+      .describe('How many steps back; 5 if left out'),
+  }),
+  output: z.object({
+    steps: z.array(
+      z.object({
+        to: WellRef,
+        from: WellRef.optional().describe('Left out for a fill from outside the inventory'),
+        volume: Quantity.optional(),
+        components: z.array(Component).optional().describe('A fill: what went in'),
+        eventId: z.string(),
+        type: z.string(),
+        at: z.string(),
+        depth: z.number().int(),
+      }),
+    ),
+  }),
 });

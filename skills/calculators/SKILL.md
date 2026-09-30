@@ -10,6 +10,7 @@ Volumes, concentrations, dilutions and amounts come from a calculator, never fro
 | Calculator | Use it for | Input |
 | --- | --- | --- |
 | `inventory.calculate_transfer` | What two wells hold after moving a volume: volumes left, every component's concentration after mixing, dry amounts dissolving | `{source: WellState, destination?: WellState, volume}` |
+| `inventory.map_plates` | Which source well lands on which destination well when stamping (one to one, quadrant, offset) | `{from, to, mapping, wells?}` |
 | `reagents.scale_recipe` | How much of each component a lab-made product needs for a batch | `{product, target}` |
 | `liquids.resolve_class` | Which liquid class a transfer uses, and why | `{liquid, instrumentKind, device?, tip?, sourceLabware?, mode?, volume}` |
 
