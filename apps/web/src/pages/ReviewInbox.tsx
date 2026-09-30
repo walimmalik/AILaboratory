@@ -281,12 +281,12 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
   });
   const [sure, setSure] = useState(false);
   const todo = item.sectionsToConfirm.length
-    ? `Confirm ${item.sectionsToConfirm.map((t) => t.toLowerCase()).join(', ')}`
+    ? `Confirm ${new Intl.ListFormat('en', { type: 'conjunction' }).format(item.sectionsToConfirm.map((t) => t.toLowerCase()))}`
     : item.missing.length
       ? item.missing.join('; ')
       : 'Confirm it';
   return (
-    <tr>
+    <tr aria-label={`Draft ${record.name}`}>
       <td>
         <Link to="/records/$id" params={{ id: record.id }} className="mono">
           {record.name}
@@ -310,7 +310,12 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
         </div>
       </td>
       <td className="row-actions">
-        <Link to="/records/$id" params={{ id: record.id }} className="btn small">
+        <Link
+          to="/records/$id"
+          params={{ id: record.id }}
+          className="btn small"
+          aria-label={`Review ${record.name}`}
+        >
           Review
         </Link>
         {item.byAgent &&

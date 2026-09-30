@@ -153,7 +153,7 @@ test('an agent drafts a record, a person reviews it section by section, and the 
 
   // The draft waits on the Review page, which opens it.
   await page.getByRole('link', { name: /^Review/ }).click();
-  const waiting = page.getByRole('article', { name: `Draft ${record.name}` });
+  const waiting = page.getByRole('row', { name: `Draft ${record.name}` });
   await expect(waiting).toContainText('Confirm appearance and volume');
   await waiting.getByRole('link', { name: `Review ${record.name}` }).click();
   await expect(page.getByText('needs your review').first()).toBeVisible();
@@ -235,7 +235,7 @@ test('labware has its own page in the library, and the Review page groups drafts
     .first()
     .click();
   await page.getByRole('button', { name: /^Labware \d+/ }).click();
-  await expect(page.getByRole('article', { name: `Draft ${name}` })).toBeVisible();
+  await expect(page.getByRole('row', { name: `Draft ${name}` })).toBeVisible();
 });
 
 test('a failing check links to its section, where a person fills in the value and says where it came from', async ({
