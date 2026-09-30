@@ -1,6 +1,6 @@
 # 021: Lab notebook
 
-- Status: in planning. Round 1 (N1 to N6) accepted by Wali 2026-09-30, all A. Round 2 (N7 to N12) asked 2026-09-30.
+- Status: accepted. Rounds 1 and 2 (N1 to N12) accepted by Wali 2026-09-30, all as recommended. Builds after 020 in plan order; 021a can start earlier, since 011 and 013 exist. Embedding analyses and graphs waits for 020.
 - Depends on: 002 (records, versions, links), 003 (operations, activity ledger, ADR 0018), 004 (saved conversations, draft and confirm, Review, 004e change sets and page context), 005 (lab memory: entries as evidence, memories proposed from entries), 010 (containers, lots, samples, the volume ledger), 011 (file store, text search, the deterministic mention matcher of ADR 0035), 013 (campaigns, experiments, runs with steps, deviations and data files, conclusions, sets), 014 (plate maps), 020 (analyses and Vega-Lite graphs to embed)
 - Feeds: 005 (entries are evidence for memories, and a person's "remember this" from an entry), 013 (values written in a note become run records), 020 (entries cite analyses and graphs)
 
@@ -37,28 +37,30 @@ The records below already hold the facts. The notebook points at them and shows 
 - The web app renders Markdown with `react-markdown` (`apps/web/src/lib/RichText.tsx`, the wiki and documents).
 - AGENTS.md: a module that owns outcome data ships detectors to `memory.observe`. The notebook owns free text, not outcome data; see "Detectors".
 
-## Proposed model (assuming the recommended answers)
+## Model
 
 | Layer | Record or table | Holds |
 | --- | --- | --- |
 | Instance | **Notebook entry** (`nbe_`, `NB-0001`) | Author, the day it is about, title, body (N2), what it is about (links to experiments, runs, campaigns and any other records), attachments (files through 011), status (draft, active, archived), who wrote it (person, or agent with the conversation) |
 | Computed | **Timeline** (no table) | Notable events for a day, a person, an experiment or a campaign, computed from the activity ledger and record history (N3) |
 
-## Operations (first cut)
+## Operations
 
 | Operation | Agents |
 | --- | --- |
 | `notebook.write` (a person's entry, active at once), `notebook.draft` (an agent's entry, a draft), `notebook.update`, `notebook.confirm` | people write; agents draft, a person confirms |
 | `notebook.summarize` (draft a day, run or experiment summary from the timeline) | direct: makes a draft |
 | `notebook.timeline` (by day, person, experiment, campaign, record) | read |
+| `notebook.lock`, `notebook.add_addendum` (N4) | people |
 | `notebook.get`, `notebook.search`, `notebook.for` (entries about a record) | read |
 | `notebook.export` (an experiment, a campaign or a date range as PDF or HTML) | read |
 
-## Screens (first cut)
+## Screens
 
 - **Notebook page:** today first, one column: your entries and the timeline for the day, summarized ("3 runs finished, 1 deviation, 2 analyses to confirm"), each expandable. Filters for person, experiment and campaign.
 - **Writing:** one box, type and go; `@` or `[[` to link a record; paste or drop a photo; nothing else required.
 - **On record pages:** a "Notes" line on experiments, runs, campaigns, containers and lots, with the count and the latest note.
+- **Run view:** a note box per step and for the whole run, with the tablet camera for photos and the device's own dictation (N10).
 
 ## Detectors
 
@@ -107,7 +109,11 @@ Recommended option in bold. Asked 2026-09-30.
 | N11 | How does the notebook leave the app? | A) **`notebook.export` turns an experiment, a campaign, a person or a date range into PDF and HTML: entries in order with the computed timeline, embeds drawn at their pinned version (plate maps as images, graphs through vl-convert, record cards as tables), marks for late edits, locks and addenda, and readable names instead of links. On request only** · B) A zip of the Markdown and files · C) A, plus an automatic yearly archive per person | **A.** A thesis chapter, a paper's methods or a hand-over needs something readable outside the app; Markdown alone loses the plate maps and graphs. A yearly archive can come with hosting, when backups are decided. |
 | N12 | Are there entry templates (meeting, troubleshooting, literature note)? | A) **No. An entry is one box. The notebook skill describes a few useful shapes, so an agent asked to "write up this troubleshooting" structures it, and a person just writes** · B) A few built-in templates to pick when writing · C) Lab-defined templates as records | **A.** Templates are forms, and a form is what stops people from writing anything. The shape matters most when an agent writes, and the skill covers that. |
 
-## Defaults I'm assuming (say if any is wrong)
+## Round 2 answers
+
+Wali chose A for N7 to N12 on 2026-09-30.
+
+## Defaults (not questioned)
 
 - Readable name `NB-0001`; an entry's day defaults to today and can be set back (writing up yesterday).
 - Attachments go through the 011 file store and show inline; images are shown, other files as a line with Download.
@@ -115,9 +121,9 @@ Recommended option in bold. Asked 2026-09-30.
 - Entries by a person are active as soon as they are written (like `memory.remember`); they don't go through Review.
 - Built after 020 in plan order; 021a (entries and links) could start earlier since 011 and 013 exist.
 
-## Proposed split (after decisions)
+## Split
 
-- **021a:** the entry record, write, draft, confirm, update, lock and addenda, links and mention suggestions, attachments, skill.
-- **021b:** the computed timeline and `notebook.summarize`.
-- **021c:** screens: notebook page, the editor, "Notes" on record pages, embeds.
-- **021d:** search and export.
+- **021a:** the entry record, write, draft, confirm, update, lock and addenda, links and mention suggestions, attachments, `notebook.for`, the notebook skill (including the write-up shapes of N12).
+- **021b:** the `timeline` declarations on operations, the ledger index, `notebook.timeline` with grouping in `packages/domain/notebook`, `notebook.summarize`, and proposing run records from a note (N7).
+- **021c:** screens: the notebook page, the editor, "Notes" on record pages, the note box on the run view, embeds pinned by version.
+- **021d:** entries in the library search and the page context bundle (N8, after 005b), and `notebook.export` to PDF and HTML (N11).

@@ -42,12 +42,12 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [018 Workflow creator](../plans/018-workflow-creator.md) | Workflows as one-work-unit graphs chaining SOPs and transfer plans, labware paths, timing windows and handling rules with sources, the schedule request for 019 | Locked; after 012, 014a and 016a | 018a to 018c |
 | [019 Scheduler and orchestrator](../plans/019-scheduler-and-orchestrator.md) | Schedules for one or more workflows across the workcell (planned in detail, run by Cellario), standalone instruments and people; carries, calendars and bookings, science-aware margins with stress cases, Gantt and simulation, prep lists, live re-planning | Locked; after 018a (019b's calendar after 008b) | 019a to 019e |
 | [020 Analysis](../plans/020-analysis.md) | Reader imports, analysis templates and a vetted method catalog (4PL, Z', initial rates, tests), Vega-Lite graphs with a format panel, exclusions, hits to sets and verdicts, exploration across runs, power and drift | Locked; after 013c and 014a | 020a to 020g |
+| [021 Lab notebook](../plans/021-lab-notebook.md) | Dated entries linked to any records, Markdown with pinned embeds, a timeline computed from the activity ledger, agent drafts on request, notes that propose run records, search and PDF export | Locked 2026-09-30 (N1 to N12 all as recommended); after 020 (021a can start earlier) | 021a to 021d |
 
 ## Later
 
 | Plan | Delivers |
 | --- | --- |
-| 021 Lab notebook | Entries on top of the event log plus free writing |
 | 022 Device gateway | Python gateway implementing capability contracts on real hardware; Cellario hand-off |
 
 ## Build order
