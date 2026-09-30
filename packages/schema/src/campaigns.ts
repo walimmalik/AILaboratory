@@ -141,6 +141,9 @@ export const ExperimentAttributes = z.strictObject({
         id: LocalName,
         label: z.string().min(1),
         role: z.enum(['positive', 'negative', 'neutral', 'vehicle', 'blank', 'standard']),
+        subject: RecordId.optional().describe(
+          'The compound, sample or construct used as the control',
+        ),
         text: z.string().min(1).optional(),
       }),
     )

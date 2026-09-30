@@ -1,0 +1,94 @@
+# Demo campaigns for the demo lab (plan 013). Each experiment follows the SOPs of an assay template
+# in assays.yaml, pinned to the version the lab has. Drafted by an agent for a person to confirm;
+# everything here is made up for the demo lab.
+
+campaigns:
+  - key: cam-brd4-degraders
+    label: BRD4 degrader screen
+    goal: Find compounds that lower BRD4 levels in HEK293 cells without killing them.
+    background: >-
+      BRD4 is a bromodomain protein that drives oncogene expression. A HiBiT tag on BRD4 lets the lab
+      read its level by luminescence, so degraders can be ranked by potency in 384-well plates.
+    aims:
+      - id: aim_hits
+        text: Find hits in the compound library at a single dose
+        success: Hits below 3 SD of the DMSO controls on plates with Z' of 0.5 or more
+      - id: aim_potency
+        text: Rank the hits by how potently they lower HiBiT-BRD4
+        success: Two compounds with a DC50 below 1 µM
+    about: [demo-hibit-brd4, atcc-crl-1573]
+    experiments:
+      - key: exp-brd4-single-point
+        label: Single-point viability screen at 10 µM
+        template: assay-compound-single-point
+        aim: aim_hits
+        question: Which library compounds change HEK293 viability at 10 µM?
+        subjects: [atcc-crl-1573]
+        conditions:
+          - { id: single_dose, label: Library compounds, text: "One compound per well at 10 µM, 0.1% DMSO" }
+        controls:
+          - { id: dmso, label: DMSO, role: neutral, text: "Columns 1-2, 0.1% DMSO", subject: cmpd-dmso }
+          - { id: staurosporine, label: Staurosporine 1 µM, role: positive, text: "Columns 23-24", subject: cmpd-staurosporine }
+        readouts:
+          - { id: viability, label: Viability (CellTiter-Glo luminescence) }
+        success:
+          - "Z' of 0.5 or more on every plate"
+          - Hits are wells below 3 SD of the DMSO controls
+      - key: exp-brd4-dose-response
+        label: HiBiT-BRD4 dose-response of the hits
+        template: assay-compound-dose-response
+        aim: aim_potency
+        follows_up: exp-brd4-single-point
+        question: How potently do the hits lower HiBiT-BRD4?
+        subjects: [atcc-crl-1573, demo-hibit-brd4]
+        hypotheses:
+          - id: potent
+            statement: At least two hits lower HiBiT-BRD4 with a DC50 below 1 µM
+            prediction: { readout: hibit, measure: DC50, comparison: "<", threshold: { value: "1", unit: uM } }
+        conditions:
+          - { id: dose_response, label: Hits, text: "10-point 3-fold from 10 µM, duplicate, 16 compounds per plate" }
+        controls:
+          - { id: dmso, label: DMSO, role: neutral, text: "Columns 1-2", subject: cmpd-dmso }
+        readouts:
+          - { id: hibit, label: HiBiT-BRD4 level (lytic luminescence) }
+          - { id: viability, label: Viability (CellTiter-Glo luminescence) }
+        success:
+          - 4PL fits with a DC50 confidence interval narrower than 3-fold
+
+  - key: cam-il6-panel
+    label: IL-6 reporter panel
+    goal: Find which stimuli switch on the IL-6 promoter, and check that secreted IL-6 follows.
+    aims:
+      - id: aim_promoter
+        text: Rank stimuli by IL-6 promoter activity in HEK293
+        success: Three stimuli with a fold change above 2 over untreated
+      - id: aim_secreted
+        text: Confirm the top stimuli by measuring secreted IL-6
+        success: Secreted IL-6 above the lowest standard for the top three
+    about: [demo-pil6p-luc2]
+    experiments:
+      - key: exp-il6-dual-glo
+        label: IL-6 promoter reporter, ten stimuli
+        template: assay-dual-glo
+        aim: aim_promoter
+        question: Which stimuli raise IL-6 promoter activity?
+        subjects: [demo-pil6p-luc2, promega-pgl4-75, atcc-crl-1573]
+        hypotheses:
+          - id: three_up
+            statement: At least three stimuli raise the firefly/Renilla ratio more than twofold
+            prediction: { readout: ratio, measure: fold change, comparison: ">", threshold: "2" }
+        controls:
+          - { id: untreated, label: Untreated, role: negative, text: "Columns 1-2" }
+          - { id: empty_vector, label: Empty vector, role: negative, text: "Columns 23-24" }
+        readouts:
+          - { id: ratio, label: Firefly/Renilla ratio (Dual-Glo) }
+      - key: exp-il6-elisa
+        label: Secreted IL-6 from the top stimuli
+        template: assay-elisa-il6
+        aim: aim_secreted
+        follows_up: exp-il6-dual-glo
+        question: Do the top stimuli raise secreted IL-6?
+        readouts:
+          - { id: il6, label: "IL-6 (pg/mL, sandwich ELISA)" }
+        success:
+          - Standards fit a 4PL with R² of 0.98 or more

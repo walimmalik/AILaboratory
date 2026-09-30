@@ -104,6 +104,9 @@ export const experiment = defineKind({
       toId,
       relation: 'tests',
     })),
+    ...[...new Set((a.controls ?? []).flatMap((c) => (c.subject ? [c.subject] : [])))].map(
+      (toId) => ({ toId, relation: 'control' }),
+    ),
     ...[...new Set(a.protocol.map((p) => p.sop.id))].map((toId) => ({ toId, relation: 'follows' })),
     ...(a.documents ?? []).map((d) => ({
       toId: d.document,
@@ -135,7 +138,10 @@ export const experiment = defineKind({
       else if ((await get(a.followsUp.experiment))?.kind !== 'experiment')
         invalid.push(`${a.followsUp.experiment} is not an experiment in this lab`);
     }
-    for (const id of new Set((a.subjects ?? []).map((s) => s.record))) {
+    for (const id of new Set([
+      ...(a.subjects ?? []).map((s) => s.record),
+      ...(a.controls ?? []).flatMap((c) => (c.subject ? [c.subject] : [])),
+    ])) {
       if (!(await get(id))) invalid.push(`${id} is not a record in this lab`);
     }
     for (const d of a.documents ?? []) {

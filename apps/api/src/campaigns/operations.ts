@@ -210,6 +210,8 @@ export const campaignOperations = [
         if (a.campaign === target.id) return 'part of it';
         if (a.followsUp?.experiment === target.id) return a.followsUp.relation.replaceAll('_', ' ');
         if (a.subjects?.some((s) => s.record === target.id)) return 'tests it';
+        const control = a.controls?.find((c) => c.subject === target.id);
+        if (control) return `${control.role} control`;
         const doc = a.documents?.find((d) => d.document === target.id);
         if (doc) return doc.use === 'follows' ? 'follows it' : 'cites it';
         return undefined;

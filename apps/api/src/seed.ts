@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { contextFor } from './auth.ts';
 import { campaignKinds } from './campaigns/kinds.ts';
+import { loadSeedCampaigns, readSeedCampaigns } from './campaigns/seed.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { entityKinds } from './entities/kinds.ts';
@@ -262,20 +263,39 @@ const sopFiles = await Promise.all(
     .sort()
     .map(async (name) => ({ name, text: await readFile(new URL(name, sopFolder), 'utf8') })),
 );
+const seedSops = readSeedSops(sopFiles, {
+  labware: await seedFile('labware.yaml'),
+  reagentLibrary: await seedFile('reagent-library.yaml'),
+  entityLibrary: await seedFile('entity-library.yaml'),
+  instrumentLibrary: await seedFile('instrument-library.yaml'),
+});
 const sops = await loadSeedSops(
   registry,
   ctx,
-  readSeedSops(sopFiles, {
-    labware: await seedFile('labware.yaml'),
-    reagentLibrary: await seedFile('reagent-library.yaml'),
-    entityLibrary: await seedFile('entity-library.yaml'),
-    instrumentLibrary: await seedFile('instrument-library.yaml'),
-  }),
+  seedSops,
   'Seed lab (plan 006), loaded by plan 012a',
 );
 console.log(
   `Digital SOPs: ${sops.created.length} drafted, ${sops.existing.length} already there, ${sops.unbound.length} materials without their record in the lab yet (bind them when the record is there).`,
 );
 for (const line of sops.created) console.log(`  + ${line}`);
+const campaigns = await loadSeedCampaigns(
+  registry,
+  ctx,
+  readSeedCampaigns(
+    {
+      campaigns: await seedFile('campaigns.yaml'),
+      assays: await seedFile('assays.yaml'),
+      entityLibrary: await seedFile('entity-library.yaml'),
+    },
+    new Map(seedSops.map((s) => [s.key, s.label])),
+  ),
+  'Seed lab (plan 006), loaded by plan 013a',
+);
+console.log(
+  `Campaigns and experiments: ${campaigns.created.length} drafted, ${campaigns.existing.length} campaigns already there, ${campaigns.missing.length} SOPs or entities left out because the lab doesn't have them yet.`,
+);
+for (const line of campaigns.created) console.log(`  + ${line}`);
+for (const line of campaigns.missing) console.log(`  missing ${line}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
