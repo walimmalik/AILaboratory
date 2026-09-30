@@ -26,6 +26,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -314,8 +315,13 @@ export const inventoryEvents = pgTable(
     actor: jsonb('actor').$type<Actor>().notNull(),
     operationId: text('operation_id').notNull(),
     reason: text('reason'),
+    /** The instrument report (a file) the event was recorded from, at most once per lab (016b). */
+    runLog: text('run_log'),
   },
-  (t) => [index('inventory_events_lab_at_idx').on(t.labId, t.at)],
+  (t) => [
+    index('inventory_events_lab_at_idx').on(t.labId, t.at),
+    uniqueIndex('inventory_events_run_log_idx').on(t.labId, t.runLog),
+  ],
 );
 
 /** Each well an event changed, with what it held after (lineage reads `from`). */

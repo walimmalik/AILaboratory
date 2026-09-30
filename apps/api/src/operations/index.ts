@@ -31,6 +31,7 @@ import { transferCalculators } from '../transfers/calculators.ts';
 import { exportOperations } from '../transfers/export.ts';
 import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
+import { reportOperations } from '../transfers/reports.ts';
 import { OperationError } from './errors.ts';
 
 export { OperationError } from './errors.ts';
@@ -77,6 +78,7 @@ export function createRegistry(
     ...transferPlanOperations,
     draftFromPlateMap,
     ...exportOperations,
+    ...reportOperations,
     ...assistantOperations,
   );
 }

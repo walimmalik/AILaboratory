@@ -71,6 +71,13 @@
       "when": 1790792387143,
       "tag": "0009_sop_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790805060449,
+      "tag": "0010_inventory_run_log",
+      "breakpoints": true
     }
   ]
 }

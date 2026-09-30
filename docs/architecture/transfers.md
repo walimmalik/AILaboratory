@@ -52,6 +52,14 @@ A `transfer_plan` (`tfp_`, `TFP-0001`) has two sections a person confirms: **pla
 
 The Echo pick list (`echo.ts`) is code because the vendor fixes it: Source Plate Name, Barcode, Type, Source Well, Transfer Volume (nL), Destination Plate Name, Barcode, Type, Destination Well, one row per transfer in plan order. A group is written as an Echo pick list when its instrument's kind is an `acoustic_dispenser`. Plate names are the plan's labels (or ids), barcodes are the container names (blank for plates not yet made). The source plate type is the group's liquid class `platformName` (`384PP_DMSO2`), which must be among the source labware's `echoPlateTypes`, or that list's only entry; the destination type is the first of its `echoPlateTypes`. Anything missing is refused with what to set. A golden-file test writes `seed/worklists/echo-pick-list-single-point.csv` byte for byte.
 
+## Instrument reports (016b-2)
+
+`transfers.import_report` (`reports.ts`) reads an uploaded Echo report against a confirmed plan. `readEchoReport` (`echo.ts`) finds the column block at the row naming "Source Plate Name", so the run header and footer the instrument writes around it are skipped, and tells a transfer report (Actual Volume) from a survey (Survey Fluid Volume). Report plates are matched to plan plates by barcode (the plan's container, or `containers` given for the day), then by the name the export wrote; a barcode that contradicts the plan's container is refused.
+
+A transfer report is matched row by row, in order, to the plan's Echo transfers: each is done, short (less than planned) or failed (nothing moved); planned transfers missing from the report and rows the plan doesn't have are listed too. What really moved is written to the ledger through `inventory.transfer` with `runLog` set to the report file: a run log is evidence, so an agent records it directly (010 V7), and the ledger refuses a report already recorded (`inventory_events.run_log`, unique per lab). When a plate has no container, nothing is recorded and the note says which. A survey changes nothing: it lists wells with a status or a volume more than 10% off the inventory.
+
+Detectors for lab memory (`memory.observe`, plan 005) are not built: lab memory comes before 017, and the report outcomes above are what they will read (repeat failures per source plate type, liquid class or well).
+
 ## Not yet
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, Echo report import, Opentrons protocols and deck layouts (016b), the lab's CSV formats (016c), screens (016d).
+Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, Opentrons protocols and deck layouts (016b), the lab's CSV formats (016c), screens (016d).

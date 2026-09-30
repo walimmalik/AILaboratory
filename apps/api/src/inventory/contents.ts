@@ -136,6 +136,8 @@ class Ledger {
   readonly lines: LedgerLine[] = [];
   readonly warnings: string[] = [];
   readonly service: RecordService;
+  /** The instrument report this event is read from, if any. */
+  runLog: string | undefined;
 
   constructor(
     readonly db: Db,
@@ -240,6 +242,7 @@ class Ledger {
       actor: this.ctx.actor,
       operationId: this.operationId,
       reason: this.reason ?? null,
+      runLog: this.runLog ?? null,
     });
     await this.db.insert(inventoryLines).values(
       this.lines.map((l, seq) => ({
@@ -287,6 +290,7 @@ class Ledger {
         actor: this.ctx.actor,
         operationId: this.operationId,
         ...(this.reason ? { reason: this.reason } : {}),
+        ...(this.runLog ? { runLog: this.runLog } : {}),
         lines: this.lines,
       },
       warnings: this.warnings,
@@ -445,7 +449,7 @@ export const contentsOperations = [
     },
   }),
   implement(inventoryTransfer, {
-    agentPolicy: 'propose',
+    agentPolicy: (_ctx, input) => (input.runLog ? 'direct' : 'propose'),
     touches: (input) => [
       ...new Set(input.transfers.flatMap((t) => [t.from.container, t.to.container])),
     ],
@@ -458,6 +462,22 @@ export const contentsOperations = [
         input.reason,
         new RecordService(deps.db, deps.kinds),
       );
+      if (input.runLog) {
+        const file = await ledger.service.get(ctx, input.runLog).catch(() => undefined);
+        if (file?.kind !== 'file')
+          throw new OperationError('invalid_input', `${input.runLog} is not a file in this lab`);
+        const [seen] = await deps.db
+          .select({ id: inventoryEvents.id })
+          .from(inventoryEvents)
+          .where(and(eq(inventoryEvents.labId, ctx.labId), eq(inventoryEvents.runLog, file.id)))
+          .limit(1);
+        if (seen)
+          throw new OperationError(
+            'invalid_state',
+            `${file.name} (${file.label}) is already recorded in the inventory`,
+          );
+        ledger.runLog = file.id;
+      }
       for (const t of input.transfers) {
         const from = await ledger.vessel(t.from.container);
         const to = await ledger.vessel(t.to.container);
@@ -793,6 +813,7 @@ export const contentsOperations = [
           actor: e.actor,
           operationId: e.operationId,
           ...(e.reason ? { reason: e.reason } : {}),
+          ...(e.runLog ? { runLog: e.runLog } : {}),
           lines: lines
             .filter((l) => l.eventId === e.id)
             .map((l) => ({

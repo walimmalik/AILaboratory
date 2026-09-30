@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import type { Actor, Readiness, RecordEnvelope, WellState } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -20,7 +20,7 @@ import { plateMapKinds } from '../platemaps/kinds.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
-import { type EchoRow, echoPickList } from './echo.ts';
+import { type EchoRow, echoPickList, readEchoReport } from './echo.ts';
 import { transferKinds } from './kinds.ts';
 
 let db: Db;
@@ -764,6 +764,159 @@ describe('transfer plans', () => {
     const hidden = await refused(run(otherLab, 'transfers.export', { id: active.id }));
     expect(hidden).toMatchObject({ code: 'not_found' });
   });
+
+  it('reads an Echo transfer report into the ledger once, and compares a survey with the inventory', async () => {
+    const { pp, assay, src, draft } = await setup();
+    const ppOk = await confirm(pp);
+    const assayOk = await confirm(assay);
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: assayOk.id, containers: [{}] },
+    );
+    const dest = containers[0] as RecordEnvelope;
+    const drafted = await run<RecordEnvelope>(agent, 'transfers.draft', {
+      ...draft,
+      plates: [
+        {
+          id: 'src',
+          label: 'Compound source 1',
+          role: 'source',
+          labwareType: { id: ppOk.id, version: ppOk.version },
+          container: src.id,
+        },
+        {
+          id: 'assay',
+          label: 'Assay plate 1',
+          role: 'destination',
+          labwareType: { id: assayOk.id, version: assayOk.version },
+        },
+      ],
+      groups: [{ ...draft.groups[0], transfers: draft.groups[0]?.transfers.slice(0, 3) }],
+    });
+    const upload = async (name: string, text: string) =>
+      (
+        await run<{ file: RecordEnvelope }>(agent, 'files.upload', {
+          name,
+          mediaType: 'text/csv',
+          text,
+        })
+      ).file;
+    const head =
+      'Source Plate Name,Source Plate Barcode,Source Plate Type,Source Well,Destination Plate Name,Destination Plate Barcode,Destination Plate Type,Destination Well,Transfer Volume,Actual Volume,Transfer Status';
+    const report = await upload(
+      'transfer report.csv',
+      [
+        'Run ID,1234',
+        '[DETAILS]',
+        head,
+        `Compound source 1,${src.name},384PP_DMSO2,A1,Assay plate 1,${dest.name},Corning_384_3570,A1,2500,2500,`,
+        `Compound source 1,${src.name},384PP_DMSO2,A1,Assay plate 1,${dest.name},Corning_384_3570,A2,2500,1000,Insufficient volume`,
+        `Compound source 1,${src.name},384PP_DMSO2,A1,Assay plate 1,${dest.name},Corning_384_3570,B9,2500,0,`,
+        '',
+      ].join('\n'),
+    );
+    const early = await refused(
+      run(agent, 'transfers.import_report', { id: drafted.id, file: report.id }),
+    );
+    expect(early.message).toContain('not confirmed');
+    const plan = await confirm(drafted);
+
+    type Imported = {
+      report: string;
+      counts: Record<string, number>;
+      problems: { kind: string; message: string }[];
+      recorded: number;
+      event?: string;
+      notes: string[];
+    };
+    const unmatched = await run<Imported>(agent, 'transfers.import_report', {
+      id: plan.id,
+      file: report.id,
+    });
+    // Plates match by name, but the assay plate has no container in the plan, so nothing is recorded.
+    expect(unmatched.recorded).toBe(0);
+    expect(unmatched.counts).toMatchObject({ done: 1, short: 1, notInPlan: 1 });
+    expect(unmatched.notes[0]).toBe(
+      'Nothing was recorded in the inventory: assay has no container; give them as containers and import again',
+    );
+
+    const read = await run<Imported>(agent, 'transfers.import_report', {
+      id: plan.id,
+      file: report.id,
+      containers: [{ plate: 'assay', container: dest.id }],
+    });
+    expect(read.report).toBe('echo_transfer');
+    expect(read.counts).toEqual({
+      rows: 3,
+      done: 1,
+      short: 1,
+      failed: 0,
+      notInReport: 1,
+      notInPlan: 1,
+      flagged: 0,
+    });
+    expect(read.problems.map((p) => p.message)).toEqual([
+      'assay A2 got 1000 nL of 2500 nL: Insufficient volume',
+      'src A1 to assay B9 is not a planned transfer',
+      'assay A3 from src A1 is not in the report',
+    ]);
+    expect(read.recorded).toBe(2);
+    const held = await run<{ wells: { well: string; state: WellState }[] }>(
+      person,
+      'inventory.wells',
+      { container: dest.id },
+    );
+    expect(held.wells.map((w) => [w.well, w.state.volume])).toEqual([
+      ['A1', nL('2500')],
+      ['A2', nL('1000')],
+    ]);
+    const history = await run<{ events: { runLog?: string }[] }>(person, 'inventory.history', {
+      container: dest.id,
+    });
+    expect(history.events[0]?.runLog).toBe(report.id);
+    const twice = await refused(
+      run(agent, 'transfers.import_report', {
+        id: plan.id,
+        file: report.id,
+        containers: [{ plate: 'assay', container: dest.id }],
+      }),
+    );
+    expect(twice.message).toContain('is already recorded in the inventory');
+
+    // 30 µL less 3.5 µL moved: 26.5 µL. The survey says 20 µL.
+    const survey = await upload(
+      'survey.csv',
+      [
+        'Source Plate Name,Source Plate Barcode,Source Plate Type,Source Well,Survey Fluid Volume,Current Fluid Volume,Fluid Composition,Fluid Units,Fluid Type,Survey Status',
+        `Compound source 1,${src.name},384PP_DMSO2,A1,20,20,99.1,%,DMSO,`,
+        `Compound source 1,${src.name},384PP_DMSO2,B1,0,0,0,%,DMSO,No fluid`,
+        `Compound source 1,${src.name},384PP_DMSO2,C1,0,0,0,%,DMSO,`,
+      ].join('\n'),
+    );
+    const surveyed = await run<Imported>(agent, 'transfers.import_report', {
+      id: plan.id,
+      file: survey.id,
+    });
+    expect(surveyed).toMatchObject({ report: 'echo_survey', recorded: 0 });
+    expect(surveyed.counts.flagged).toBe(2);
+    expect(surveyed.problems.map((p) => p.message)).toEqual([
+      'src A1: measured 20 µL, the inventory has 26.5 µL',
+      'src B1: No fluid',
+    ]);
+
+    const notEcho = await upload('notes.csv', 'Well,Value\nA1,3\n');
+    const wrong = await refused(
+      run(agent, 'transfers.import_report', { id: plan.id, file: notEcho.id }),
+    );
+    expect(wrong.message).toBe(
+      'notes.csv: This is not an Echo report: no Source Plate Name column',
+    );
+    const hidden = await refused(
+      run(otherLab, 'transfers.import_report', { id: plan.id, file: report.id }),
+    );
+    expect(hidden).toMatchObject({ code: 'not_found' });
+  });
 });
 
 describe('Echo pick list', () => {
@@ -937,5 +1090,45 @@ describe('transfers.draft_from_plate_map', () => {
     expect(low.message).toContain('No route reaches');
     const hidden = await refused(run(otherLab, 'transfers.draft_from_plate_map', input));
     expect(hidden).toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('Echo reports', () => {
+  const example = (name: string) =>
+    readFileSync(
+      fileURLToPath(new URL(`../../../../seed/worklists/${name}`, import.meta.url)),
+      'utf8',
+    );
+
+  it('reads the lab example transfer report and survey', () => {
+    const transfer = readEchoReport(example('echo-transfer-report.csv'));
+    expect(transfer.report).toBe('echo_transfer');
+    expect(transfer.rows).toHaveLength(9);
+    expect(transfer.rows[4]).toEqual({
+      source: { name: 'Compound source 1', barcode: 'PLT-000101' },
+      sourceWell: 'C3',
+      destination: { name: 'Assay plate 1', barcode: 'PLT-000201' },
+      destinationWell: 'C3',
+      requested: '25',
+      actual: '0',
+      status: 'Insufficient volume',
+    });
+    const survey = readEchoReport(example('echo-survey-report.csv'));
+    expect(survey.report).toBe('echo_survey');
+    expect(survey.rows[2]).toEqual({
+      plate: { name: 'Compound source 1', barcode: 'PLT-000101' },
+      well: 'C3',
+      volume: '14.1',
+      status: 'Below minimum working volume',
+    });
+  });
+
+  it('refuses files that are not Echo reports, or hold values that are not numbers', () => {
+    expect(() => readEchoReport('a,b\n1,2\n')).toThrow('no Source Plate Name column');
+    expect(() =>
+      readEchoReport(
+        'Source Plate Name,Source Plate Barcode,Source Well,Destination Plate Name,Destination Plate Barcode,Destination Well,Transfer Volume,Actual Volume\nS,,A1,D,,A1,25,lots\n',
+      ),
+    ).toThrow('Row 1: Actual Volume is "lots", not a number');
   });
 });
