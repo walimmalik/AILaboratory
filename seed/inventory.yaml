@@ -29,6 +29,34 @@ lots:
   - { key: lot-27104-a, product: qiagen-27104, lot_number: DEMO-176012345, expiry: 2027-12-31, received: 2026-08-01, location: shelf-rt-01 }
   - { key: lot-q32851-a, product: thermo-q32851, lot_number: DEMO-2911876, expiry: 2027-04-30, received: 2026-08-01, location: fridge-01 }
 
+# Samples the lab made (plan 010c): minipreps and the culture in the HEK293 flask.
+samples:
+  - key: smp-hek293-p12
+    entity: atcc-crl-1573
+    label: HEK293 culture, passage 12
+    method: culture
+    made: 2026-09-27
+    qc:
+      - { key: passage, value: "12" }
+      - { key: confluence, value: "70%", measured: 2026-09-29 }
+  - key: smp-pil6p-luc2-mp1
+    entity: demo-pil6p-luc2
+    label: pGL4.10-IL6p-luc2 miniprep, colony 1
+    method: miniprep
+    qc:
+      - { key: concentration, value: { value: "185", unit: "ng/uL" } }
+      - { key: sequence_verified, value: true }
+  - key: smp-hibit-brd4-mp2
+    entity: demo-hibit-brd4
+    label: pHiBiT-BRD4 miniprep, colony 2
+    method: miniprep
+    qc:
+      - { key: concentration, value: { value: "142", unit: "ng/uL" } }
+      - { key: sequence_verified, value: pending }
+
+# Containers and what is in them. Fills name lots (above) or samples by key, with a concentration
+# per component; wells default to A1 (a tube). A stamp copies from another container once it is
+# filled.
 containers:
   # Cells
   - key: flask-hek293-01
@@ -36,34 +64,51 @@ containers:
     labware: null
     container_type: T75 flask (catalog item not in the labware seed yet)
     location: tc-incubator-01
-    contents:
-      - { entity: atcc-crl-1573, passage: 12, confluence: "70%", seeded: 2026-09-27 }
-      - { product: gibco-11965092, volume: { value: "15", unit: mL }, note: "complete medium: +10% FBS, +1% Pen-Strep" }
+    description: HEK293 at passage 12, seeded 2026-09-27, about 70% confluent, in 15 mL complete medium (+10% FBS, +1% Pen-Strep).
+    fills:
+      - volume: { value: "15", unit: mL }
+        components:
+          - { sample: smp-hek293-p12 }
+          - { lot: lot-11965092-a, concentration: { value: "100", unit: "%v/v" } }
   # Compound stocks and plates
   - key: tube-stauro-1mm
     label: Staurosporine 1 mM in DMSO
     labware: eppendorf-0030120086
     location: freezer-20-01
-    contents:
-      - { entity: cmpd-staurosporine, lot: lot-81590-a, concentration: { value: "1", unit: mM }, volume: { value: "200", unit: "uL" }, solvent: DMSO }
-    freeze_thaw_count: 2
+    description: Staurosporine 1 mM in DMSO, thawed twice.
+    fills:
+      - volume: { value: "200", unit: uL }
+        components:
+          - { lot: lot-81590-a, concentration: { value: "1", unit: mM } }
+          - { lot: lot-d2650-a, concentration: { value: "100", unit: "%v/v" } }
   - key: echo-src-lib-01
     label: FDA library source plate 1
     labware: beckman-001-14555
     location: freezer-80-01
     sealed: true
     description: First 320 compounds of the FDA library, 10 mM in DMSO, wells A3 to P22 (columns 1-2 and 23-24 left for controls).
-    contents:
-      - { entity: cmpd-library-fda, lot: lot-l1300-a, wells: "A3:P22", concentration: { value: "10", unit: mM }, volume_per_well: { value: "40", unit: "uL" } }
-      - { entity: cmpd-dmso, wells: "A1:P2", volume_per_well: { value: "40", unit: "uL" } }
-      - { entity: cmpd-staurosporine, wells: "A23:P24", concentration: { value: "1", unit: mM }, volume_per_well: { value: "40", unit: "uL" } }
+    fills:
+      - wells: ["A3:P22"]
+        volume: { value: "40", unit: uL }
+        components:
+          - { lot: lot-l1300-a, concentration: { value: "10", unit: mM } }
+          - { lot: lot-d2650-a, concentration: { value: "100", unit: "%v/v" } }
+      - wells: ["A1:P2"]
+        volume: { value: "40", unit: uL }
+        components:
+          - { lot: lot-d2650-a, concentration: { value: "100", unit: "%v/v" } }
+      - wells: ["A23:P24"]
+        volume: { value: "40", unit: uL }
+        components:
+          - { lot: lot-81590-a, concentration: { value: "1", unit: mM } }
+          - { lot: lot-d2650-a, concentration: { value: "100", unit: "%v/v" } }
   - key: arp-cells-01
     label: Assay-ready plate for HEK293
     labware: corning-3570
     location: freezer-20-01
     sealed: true
     description: Assay-ready plate stamped from echo-src-lib-01, 25 nL per well, ready for HEK293 seeding.
-    derived_from: echo-src-lib-01
+    stamp: { from: echo-src-lib-01, mapping: { type: one_to_one }, volume: { value: "25", unit: nL } }
   # ELISA
   - key: elisa-plate-coated-01
     label: IL-6 ELISA plate, coated
@@ -76,25 +121,26 @@ containers:
     label: pGL4.10 stock
     labware: eppendorf-0030120086
     location: freezer-20-01
-    contents:
-      - { entity: promega-pgl4-10, concentration: { value: "100", unit: "ng/uL" }, volume: { value: "20", unit: "uL" } }
+    description: pGL4.10[luc2] from Promega, 100 ng/uL, 20 uL (no product or lot in the seed yet, so no contents).
   - key: tube-pil6p-luc2-mp1
     label: pIL6p-luc2 miniprep 1
     labware: eppendorf-0030120086
     location: freezer-20-01
-    contents:
-      - { entity: demo-pil6p-luc2, concentration: { value: "185", unit: "ng/uL" }, volume: { value: "48", unit: "uL" }, note: "miniprep of colony 1, sequence-verified" }
+    fills:
+      - volume: { value: "48", unit: uL }
+        components:
+          - { sample: smp-pil6p-luc2-mp1, concentration: { value: "185", unit: "ng/uL" } }
   - key: tube-hibit-brd4-mp2
     label: HiBiT-BRD4 miniprep 2
     labware: eppendorf-0030120086
     location: freezer-20-01
-    contents:
-      - { entity: demo-hibit-brd4, concentration: { value: "142", unit: "ng/uL" }, volume: { value: "50", unit: "uL" }, note: "miniprep of colony 2, sequencing pending" }
+    fills:
+      - volume: { value: "50", unit: uL }
+        components:
+          - { sample: smp-hibit-brd4-mp2, concentration: { value: "142", unit: "ng/uL" } }
   # Enzyme
   - key: tube-rsap
     label: rSAP
     labware: eppendorf-0030120086
     location: freezer-20-01
-    contents:
-      - { entity: enz-rsap, activity_concentration: { value: "1", unit: U/uL }, volume: { value: "500", unit: "uL" } }
-    status: { contents: estimated }
+    description: Shrimp Alkaline Phosphatase (rSAP), about 1 U/uL, 500 uL (estimated; no product or lot in the seed yet, so no contents).

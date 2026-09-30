@@ -1,11 +1,14 @@
-import type { Actor, InventoryEvent, RecordEnvelope, WellState } from '@ailab/schema';
+import { readFile } from 'node:fs/promises';
+import type { Actor, InventoryEvent, Proposal, RecordEnvelope, WellState } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
+import { loadSeedEntities, readSeedEntities } from '../entities/seed.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import { loadSeedLabware } from '../labware/seed.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -13,9 +16,12 @@ import {
   type OperationRegistry,
 } from '../operations/index.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
+import { loadSeedReagents, readSeedReagents } from '../reagents/seed.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { loadSeedContents, readSeedContents } from './contents-seed.ts';
 import { inventoryKinds } from './kinds.ts';
+import { loadSeedInventory, readSeedInventory } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -490,4 +496,73 @@ describe('stamping and lineage', () => {
     ]);
     expect(lineage.steps[1]?.components).toEqual(stock(compound, dmso));
   });
+});
+
+describe('seed contents', () => {
+  it('loads the demo lab layer by layer until every container holds what the seed says', async () => {
+    const seedFile = (name: string) =>
+      readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const [labware, reagentLibrary, entityLibrary, lab, inventory] = (await Promise.all(
+      [
+        'labware.yaml',
+        'reagent-library.yaml',
+        'entity-library.yaml',
+        'lab.yaml',
+        'inventory.yaml',
+      ].map(seedFile),
+    )) as [string, string, string, string, string];
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    const contents = readSeedContents({ inventory, reagentLibrary, entityLibrary });
+    const places = readSeedInventory({ lab, inventory, labware });
+    let report: Awaited<ReturnType<typeof loadSeedContents>> | undefined;
+    for (let round = 0; round < 8; round++) {
+      if (round === 0) {
+        await loadSeedLabware(registry, seeder, labware);
+        await loadSeedReagents(registry, seeder, readSeedReagents(reagentLibrary));
+        await loadSeedEntities(registry, seeder, readSeedEntities(entityLibrary, reagentLibrary));
+      }
+      await loadSeedInventory(registry, seeder, places);
+      report = await loadSeedContents(registry, seeder, contents);
+      const { proposals } = await run<{ proposals: Proposal[] }>(person, 'proposals.list', {
+        status: 'pending',
+      });
+      if (proposals.length === 0) break;
+      for (const p of proposals) await run(person, 'proposals.approve', { id: p.id });
+    }
+    expect(report?.samples.existing).toHaveLength(3);
+    expect(report?.contents.existing.sort()).toEqual([
+      'arp-cells-01',
+      'echo-src-lib-01',
+      'tube-hibit-brd4-mp2',
+      'tube-pil6p-luc2-mp1',
+      'tube-stauro-1mm',
+    ]);
+    const find = async (label: string) =>
+      (
+        await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+          kind: 'container',
+          search: label,
+        })
+      ).records.find((r) => r.label === label) as RecordEnvelope;
+    const source = await find('FDA library source plate 1');
+    const arp = await find('Assay-ready plate for HEK293');
+    expect(
+      (await run<Wells>(person, 'inventory.wells', { container: source.id })).wells,
+    ).toHaveLength(384);
+    const arpWells = await run<Wells>(person, 'inventory.wells', { container: arp.id });
+    expect(arpWells.wells).toHaveLength(384);
+    expect(arpWells.wells[0]?.state.volume).toEqual({ value: '25', unit: 'nL' });
+    const lineage = await run<{ steps: { type: string }[] }>(person, 'inventory.lineage', {
+      container: arp.id,
+      well: 'C5',
+    });
+    expect(lineage.steps.map((s) => s.type)).toEqual(['stamp', 'fill']);
+  }, 120_000);
 });
