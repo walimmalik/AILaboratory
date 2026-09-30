@@ -1,4 +1,5 @@
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import { readFile } from 'node:fs/promises';
+import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -14,6 +15,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { reagentKinds } from './kinds.ts';
+import { loadSeedReagents, readSeedReagents } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -344,5 +346,73 @@ describe('lots', () => {
       }),
     );
     expect(dated.message).toBe('A date goes with status opened only');
+  });
+});
+
+describe('seed reagent library', () => {
+  it('drafts every product once with sources, kits linked, and proposes the lots', async () => {
+    const library = readSeedReagents(
+      await readFile(new URL('../../../../seed/reagent-library.yaml', import.meta.url), 'utf8'),
+    );
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    const report = await loadSeedReagents(registry, seeder, library);
+    expect(report.liquidTypes.created).toHaveLength(library.liquid_types.length);
+    expect(report.products.created).toHaveLength(library.products.length);
+    expect(report.lots.proposed).toHaveLength(library.lots.length);
+    const again = await loadSeedReagents(registry, seeder, library);
+    expect(again.products.existing).toHaveLength(library.products.length);
+    expect(again.lots.existing).toHaveLength(library.lots.length);
+    expect(again.lots.proposed).toEqual([]);
+
+    const { records } = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+      kind: 'product',
+      limit: 200,
+    });
+    // No seed product fails a blocker; what is left is for a person to confirm.
+    for (const record of records) {
+      const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+      const blockers = state.checks.filter((c) => !c.passed && c.severity === 'blocker');
+      expect([record.label, blockers.map((c) => c.message)]).toEqual([record.label, []]);
+    }
+    const byLabel = new Map(records.map((r) => [r.label, r]));
+    const duoset = byLabel.get('Human IL-6 DuoSet ELISA') as RecordEnvelope;
+    expect(duoset.evidence.storage).toMatchObject({ source: 'datasheet' });
+    expect(duoset.evidence.components).toMatchObject({ source: 'datasheet' });
+    expect((duoset.attributes as { components: unknown[] }).components).toHaveLength(4);
+    const diluent = byLabel.get('Reagent Diluent (1% BSA in PBS)') as RecordEnvelope;
+    expect(diluent.evidence.recipe).toMatchObject({ source: 'assumed' });
+    const scaled = await run<{ components: { amount: unknown }[] }>(
+      agent,
+      'reagents.scale_recipe',
+      {
+        product: diluent.id,
+        target: { value: '100', unit: 'mL' },
+      },
+    );
+    expect(scaled.components[0]?.amount).toEqual({ value: '1', unit: 'g' });
+
+    // A person approves the DuoSet lot; its certificate values arrive with it.
+    const { proposals } = await run<{ proposals: Proposal[] }>(person, 'proposals.list', {
+      status: 'pending',
+    });
+    const duosetLot = proposals.find(
+      (p) => (p.input as { lotNumber: string }).lotNumber === 'DEMO-P123456',
+    ) as Proposal;
+    const approved = await run<Proposal>(person, 'proposals.approve', { id: duosetLot.id });
+    expect(approved.status).toBe('approved');
+    const lots = await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'lot' });
+    expect(lots.records[0]?.attributes).toMatchObject({
+      product: duoset.id,
+      values: expect.arrayContaining([
+        { field: 'captureWorkingConcentration', value: { value: '2', unit: 'ug/mL' } },
+      ]),
+    });
   });
 });

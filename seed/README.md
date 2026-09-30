@@ -12,9 +12,10 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | `labware.yaml` | Labware types (plates, tubes, reservoirs, tip racks) | 007 (`pnpm --filter @ailab/api seed`) |
 | `instruments.yaml` | Research on the instrument models (sources, verified, estimated, unknown), then the demo lab's registered instruments and their configurations | 008 |
 | `instrument-library.yaml` | Instrument and equipment kinds in the library's shape (mounts, sites, capabilities with limits), citing their `instruments.yaml` entries, and the demo lab's registered instruments with their configurations | 008a, 008b (`pnpm --filter @ailab/api seed`) |
-| `reagents.yaml` | Reagent products and kits | 009 |
+| `reagents.yaml` | Research on reagent products and kits (sources, verified, estimated, unknown) | 009 |
+| `reagent-library.yaml` | Products, kits and two lab-made buffers in the library's shape (typed handling rules, lot fields, recipes), the liquid types, and the demo lab's lots from `inventory.yaml` | 009a (`pnpm --filter @ailab/api seed`; lots arrive as proposals) |
 | `entities.yaml` | Cell lines, plasmids, compounds, enzymes | 010 |
-| `inventory.yaml` | Lots, and containers with what is in them and where they are | 009 / 010 |
+| `inventory.yaml` | Lots, and containers with what is in them and where they are | 009a (lots, via `reagent-library.yaml`) / 010 |
 | `sops/own/` | Short SOPs written for this lab, with their variables in front matter | 011 |
 | `assays.yaml` | Assay templates that tie SOPs, labware, reagents and instruments together | 012 onward |
 | `opentrons/` | Opentrons labware definitions the labware entries name, so well positions load offline | 007 |

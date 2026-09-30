@@ -30,3 +30,9 @@ A closed list; each rule has plain words (`text`), a `source` (`vendor` with a r
 | `reagents.set_lot_status` | Opened (with the date), quarantined, expired, used up, unopened | proposed |
 
 Editing and confirming products use `records.update` and review. Liquid classes and the class resolver arrive in 009b, the library screens and search in 009c.
+
+## Seed
+
+`seed/reagent-library.yaml` holds the lab's products in the library's shape, made from the research in `seed/reagents.yaml`: 28 products, the reagent components of their kits (consumables such as plates, sealers and columns are left to labware and inventory), two lab-made buffers from the DuoSet datasheet (Reagent Diluent, Wash Buffer) with recipes, and the eight liquid types. A product's first datasheet is the evidence for every attribute except those it lists under `assumed` (liquid types picked from pipetting hints, estimated hazards, guessed forms), which load as assumed. The research's handling rules are mapped onto the typed list; what doesn't fit a typed rule is `advice`. Shelf lives in months stay in the notes, since periods run to days.
+
+The demo lab's lots (from `seed/inventory.yaml`) go through `reagents.receive_lot`. The seed runs as an agent, so they wait on the Review page as proposals; a second run skips lots already recorded or waiting.
