@@ -3,7 +3,7 @@ import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
-import { libraryPages } from '../lib/kinds.ts';
+import { libraryGroups } from '../lib/kinds.ts';
 import { LiveProvider, useLive } from '../live.tsx';
 import { reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
@@ -95,26 +95,28 @@ function ShellLayout() {
             </li>
           </ul>
         </section>
-        <section>
-          <h2>Library</h2>
-          <ul>
-            {libraryPages.map((p) => {
-              const drafts = draftsOf(p.kind);
-              return (
-                <li key={p.kind}>
-                  <Link to={p.path}>
-                    {p.title}
-                    {drafts > 0 && (
-                      <span className="count num pending" title={`${drafts} drafts to review`}>
-                        {drafts}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        {libraryGroups.map(({ group, pages }) => (
+          <section key={group}>
+            <h2>{group}</h2>
+            <ul>
+              {pages.map((p) => {
+                const drafts = draftsOf(p.kind);
+                return (
+                  <li key={p.kind}>
+                    <Link to={p.path}>
+                      {p.title}
+                      {drafts > 0 && (
+                        <span className="count num pending" title={`${drafts} drafts to review`}>
+                          {drafts}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
         <section className="nav-foot">
           <ul>
             <li>

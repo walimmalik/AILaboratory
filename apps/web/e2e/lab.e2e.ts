@@ -345,3 +345,52 @@ test('a file attached in the assistant goes to the tool whole, not through the c
   await expect(panel.getByRole('link', { name: /^LWT-\d+$/ }).first()).toBeVisible();
   await expect(panel.getByText(/^Done:/)).toBeVisible();
 });
+
+test('the reagent library shows lots in date and the next expiry, and a product lists its lots', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const label = `Tris buffer ${Date.now()}`;
+  const drafted = await asAgent(request, 'reagents.draft_product', {
+    label,
+    attributes: {
+      category: 'buffer',
+      origin: 'bought',
+      form: 'liquid',
+      storage: { min: { value: '2', unit: 'degC' }, max: { value: '8', unit: 'degC' } },
+    },
+  });
+  const product = drafted.output.product;
+  await asPerson(page, 'reagents.receive_lot', {
+    product: product.id,
+    lotNumber: 'T-001',
+    expiry: '2099-01-31',
+  });
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Reagents/ })
+    .click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reagents');
+  await page.getByRole('button', { name: 'Fridge' }).click();
+  const row = page.getByRole('row', { name: new RegExp(product.name) });
+  await expect(row).toContainText('fridge');
+  await expect(row).toContainText('1 of 1');
+  await expect(row).toContainText('2099-01-31');
+  await page.getByRole('button', { name: 'Freezer' }).click();
+  await expect(page.getByRole('row', { name: new RegExp(product.name) })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Fridge' }).click();
+  await page.getByRole('row', { name: new RegExp(product.name) }).click();
+  const lots = page.getByRole('region', { name: 'Lots' });
+  await expect(lots).toContainText('T-001');
+  await expect(lots).toContainText('unopened');
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Liquid classes/ })
+    .click();
+  await expect(
+    page.getByRole('region', { name: 'Classes by device and liquid type' }),
+  ).toBeVisible();
+});

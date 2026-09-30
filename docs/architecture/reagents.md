@@ -63,3 +63,10 @@ A product can name `liquidClasses` to use instead of the lab default for its liq
 `seed/liquid-classes.yaml` names what to load; items refer to keys in the instrument library, labware and reagent library. Opentrons classes come from Opentrons' own files (`seed/liquid-classes/opentrons/`, unchanged, Apache-2.0): one class per liquid, per Flex pipette and per filter tip rack the lab has. Hamilton's defaults (`seed/liquid-classes/hamilton-defaults.yaml`) were generated once from PyLabRobot's mappings (MIT) for the lab's CO-RE II 50, 300 and 1000 µL filter tips on the STAR and VANTAGE channels and 96 heads, for water, DMSO, serum, ethanol and 80% glycerol. Their volume range runs over the calibrated points. The four Echo classes are the names Wali confirmed. Every class loads as a vendor default and lab default for its liquid type. The mapping from a vendor class to our liquid types is marked assumed. A class whose instrument, device, tips or liquid type the lab lacks is skipped and counted.
 
 When several default classes fit and differ in dispense mode (Hamilton's jet or surface, empty or part), the resolver asks for the mode rather than picking one.
+
+## Screens (009c)
+
+The menu has a Reagents group: **Reagents** (every product with its type, vendor, storage band, lots in date and next expiry; filters for storage and "has a lot in date"), **Lots**, **Liquid classes** and **Liquid types**. Liquid classes opens with a matrix: one row per instrument model and device (or source plate type, for the Echo), one column per liquid type, each cell counting the classes that serve it and how many are verified. Drafts and a missing default are in agent ink; a cell with no class at all is a dash. Pointing at a cell lists its classes. A product's page lists its lots, soonest expiry first; a liquid class's page lists its checks, with demo runs marked as not counting.
+
+Not yet: the class each instrument would use for a product (needs a volume and a device, so it waits for transfers, 016), and where a product is used (SOPs and plates, 010 and 011).
+

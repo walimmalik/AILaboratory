@@ -23,7 +23,7 @@ import { RecordList } from './Records.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 
-function Head({ page, lede }: { page: KindPage; lede: string }) {
+export function Head({ page, lede }: { page: KindPage; lede: string }) {
   return (
     <div className="page-head">
       <div>
@@ -44,7 +44,7 @@ const capabilityList = (providers: CapabilityProvider[] | undefined) =>
     : '—';
 
 /** Labels of records by ID, for list columns. */
-function useLabels(kind: string) {
+export function useLabels(kind: string) {
   const records = useQuery(recordsQuery({ kind })).data ?? [];
   return new Map(records.map((r) => [r.id, r.label]));
 }

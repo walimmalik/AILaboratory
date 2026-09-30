@@ -9,6 +9,7 @@ import {
 import { ActivityPage } from './pages/Activity.tsx';
 import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
+import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pages/Reagents.tsx';
 import { RecordPage } from './pages/Record.tsx';
 import { RecordsPage } from './pages/Records.tsx';
 import { ReviewPage } from './pages/ReviewInbox.tsx';
@@ -79,6 +80,26 @@ const equipment = createRoute({
   path: '/equipment',
   component: EquipmentPage,
 });
+const reagents = createRoute({
+  getParentRoute: () => app,
+  path: '/reagents',
+  component: ReagentsPage,
+});
+const lots = createRoute({
+  getParentRoute: () => app,
+  path: '/lots',
+  component: LotsPage,
+});
+const liquidClasses = createRoute({
+  getParentRoute: () => app,
+  path: '/liquid-classes',
+  component: LiquidClassesPage,
+});
+const liquidTypes = createRoute({
+  getParentRoute: () => app,
+  path: '/liquid-types',
+  component: LiquidTypesPage,
+});
 const vendors = createRoute({
   getParentRoute: () => app,
   path: '/vendors',
@@ -111,6 +132,10 @@ const routeTree = root.addChildren([
     instruments,
     instrumentModels,
     equipment,
+    reagents,
+    lots,
+    liquidClasses,
+    liquidTypes,
     vendors,
     records,
     record,

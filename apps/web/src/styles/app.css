@@ -1112,3 +1112,9 @@ table.checks td.mark {
 .nowrap {
   white-space: nowrap;
 }
+
+/* Liquid class matrix (plan 009c): device names wrap in a column of their own width. */
+.class-matrix .device {
+  min-width: 14em;
+  max-width: 22em;
+}
