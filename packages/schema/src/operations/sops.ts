@@ -11,6 +11,8 @@ import {
   SopName,
   SopReviewRound,
   SopScore,
+  SopStep,
+  SopVariable,
 } from '../sops.ts';
 
 /** A variable name in a digital SOP formula: letters, digits and _, dotted for values read from records. */
@@ -229,6 +231,38 @@ export const sopsReview = defineContract({
         'clean: the last round found nothing; rounds: the limit was reached; failed: the model call failed',
       ),
     problem: z.string().optional().describe('Why it failed, in words'),
+  }),
+});
+
+export const sopsSuggest = defineContract({
+  id: 'sops.suggest',
+  summary:
+    "Ask the assistant to fill in part of an SOP while it is edited: one value (a formula over the SOP's values, a number, or a material's field), one step's settings and what it uses, a new step from a sentence, or every step drafted from the source document. Give exactly one of value, step, newStep or steps. The answer is checked (formulas with the calculator, steps against the SOP's materials and values) and returned as a suggestion marked as assumed; it changes nothing",
+  effect: 'read',
+  input: z
+    .strictObject({
+      sop: SopId,
+      attributes: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe('The SOP as edited so far, when it differs from the stored version'),
+      value: SopName.optional().describe('Fill in this value, by its technical name'),
+      step: z.string().min(1).optional().describe("Fill in this step's settings and uses, by id"),
+      newStep: z.string().min(1).optional().describe('Write a new step from this sentence'),
+      steps: z.literal(true).optional().describe('Draft every step from the source document'),
+    })
+    .refine(
+      (i) => [i.value, i.step, i.newStep, i.steps].filter((x) => x !== undefined).length === 1,
+      'Give exactly one of value, step, newStep or steps',
+    ),
+  output: z.object({
+    variable: SopVariable.optional().describe('The value as suggested, when one was asked for'),
+    steps: z
+      .array(SopStep)
+      .optional()
+      .describe('The step or steps as suggested, when steps were asked for'),
+    reason: z.string().describe('In a line, what the suggestion rests on'),
+    model: z.string(),
   }),
 });
 

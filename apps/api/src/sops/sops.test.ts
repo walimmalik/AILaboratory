@@ -955,6 +955,117 @@ describe('sops.review', () => {
   });
 });
 
+describe('sops.suggest', () => {
+  const suggest = (model: ChatModel | undefined, ctx: RecordContext, input: unknown) =>
+    withReviewer(model)
+      .execute(ctx, 'sops.suggest', input)
+      .then((r) => (r as { output: Record<string, unknown> }).output);
+
+  it('fills in a value, checked with the calculator, and sends a broken formula back', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const model = new PlaybackModel([
+      call('sop_value', { kind: 'computed', expression: 'n_samples * nope', reason: 'guess' }),
+      call('sop_value', {
+        kind: 'computed',
+        expression: 'n_samples * replicates * well_volume * 1.1 + dead_volume',
+        unit: 'mL',
+        reason: 'Every sample in replicate, 10% extra, plus the reservoir',
+      }),
+    ]);
+    const out = await suggest(model, person, { sop: sop.id, value: 'diluent' });
+    expect(out).toMatchObject({
+      variable: {
+        name: 'diluent',
+        label: 'Coating solution',
+        kind: 'computed',
+        expression: 'n_samples * replicates * well_volume * 1.1 + dead_volume',
+      },
+      model: 'test/reviewer',
+    });
+    // The refused answer went back with its reason; the record is unchanged.
+    expect(JSON.stringify(model.requests[1]?.messages.at(-1))).toContain('nope');
+    const after = await run<RecordEnvelope>(person, 'records.get', { id: sop.id });
+    expect(after.version).toBe(1);
+  });
+
+  it('fills a step from the SOP as edited, and writes a new step with a fresh id', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const edited = {
+      ...sop.attributes,
+      steps: [
+        {
+          id: 'coat',
+          action: 'add',
+          text: 'Add `well_volume` of capture antibody to the `coating_plate`.',
+        },
+      ],
+    };
+    const filled = await suggest(
+      new PlaybackModel([
+        call('sop_steps', {
+          steps: [
+            {
+              id: 'other',
+              action: 'add',
+              text: 'Add `well_volume` of capture antibody to the `coating_plate`.',
+              uses: ['coating_plate', 'capture_ab'],
+              parameters: [{ name: 'volume', variable: 'well_volume' }],
+            },
+          ],
+          reason: 'From the words',
+        }),
+      ]),
+      agent,
+      { sop: sop.id, attributes: edited, step: 'coat' },
+    );
+    expect(filled).toMatchObject({
+      steps: [{ id: 'coat', parameters: [{ name: 'volume', variable: 'well_volume' }] }],
+    });
+    const added = await suggest(
+      new PlaybackModel([
+        call('sop_steps', {
+          steps: [{ id: 'x', action: 'wash', text: 'Wash with `plate_washer`.' }],
+          reason: 'x',
+        }),
+        call('sop_steps', {
+          steps: [{ id: 'coat', action: 'wash', text: 'Wash 3 times with `wash_buffer`.' }],
+          reason: 'The sentence',
+        }),
+      ]),
+      person,
+      { sop: sop.id, attributes: edited, newStep: 'wash three times' },
+    );
+    expect(added).toMatchObject({ steps: [{ id: 's2', action: 'wash' }] });
+  });
+
+  it('refuses without a model, a missing target, a source to draft from, or another lab', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    await expect(
+      suggest(undefined, person, { sop: sop.id, value: 'diluent' }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    const model = new PlaybackModel([]);
+    await expect(
+      suggest(model, person, { sop: sop.id, value: 'diluent', step: 'coat' }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(suggest(model, person, { sop: sop.id, value: 'nothing' })).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    await expect(suggest(model, person, { sop: sop.id, steps: true })).rejects.toMatchObject({
+      code: 'invalid_state',
+    });
+    await expect(suggest(model, otherLab, { sop: sop.id, value: 'diluent' })).rejects.toMatchObject(
+      { code: 'not_found' },
+    );
+    // A model that never answers usefully is reported, not guessed around.
+    await expect(
+      suggest(new PlaybackModel([]), person, { sop: sop.id, value: 'diluent' }),
+    ).rejects.toMatchObject({
+      code: 'invalid_state',
+      message: expect.stringContaining('No usable'),
+    });
+  });
+});
+
 describe('the digitizing benchmark (sops.score)', () => {
   const expected = {
     key: 'elisa',

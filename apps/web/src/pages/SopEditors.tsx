@@ -1,5 +1,13 @@
-import { type SopStep, type SopVariable, type StepParameter, sopsEvaluate } from '@ailab/schema';
-import { useQuery } from '@tanstack/react-query';
+import {
+  MATERIAL_KINDS,
+  type SopMaterial,
+  type SopStep,
+  type SopVariable,
+  type StepParameter,
+  sopsEvaluate,
+  sopsSuggest,
+} from '@ailab/schema';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
@@ -17,9 +25,9 @@ import {
   withWords,
   wordsText,
 } from '../lib/sop-text.ts';
+import { recordsQuery } from '../queries.ts';
 import {
   FormRow,
-  type ItemEditor,
   type ItemEditorProps,
   type ListEditorProps,
   useEditorScope,
@@ -50,6 +58,21 @@ function useSop() {
     steps: list<Partial<SopStep>>('steps'),
   };
   return { root, doc, variables, steps: doc.steps };
+}
+
+type Target = { value: string } | { step: string } | { newStep: string } | { steps: true };
+
+/**
+ * The assistant's fill-in (`sops.suggest`) for part of the SOP as edited so far. It writes nothing;
+ * the editor shows what comes back in agent ink until a person changes or saves it.
+ */
+function useSuggest() {
+  const { document = {}, recordId } = useEditorScope();
+  const ask = useMutation({
+    mutationFn: (target: Target) =>
+      api.run(sopsSuggest, { sop: recordId ?? '', attributes: document, ...target }),
+  });
+  return { ...ask, available: !!recordId };
 }
 
 const without = (item: Item) => {
@@ -239,6 +262,34 @@ function ValueRow({
   const plain = v.kind === 'input' || v.kind === 'default';
   const shown = resultWords(result, terms);
   const called = v.label || 'This value';
+  const suggest = useSuggest();
+  // The assistant's reason while its suggestion stands; typing over it makes it the person's.
+  const [suggested, setSuggested] = useState<string>();
+  const fillIn = () =>
+    v.name &&
+    suggest.mutate(
+      { value: v.name },
+      {
+        onSuccess: (out) => {
+          if (!out.variable) return;
+          setDraft(undefined);
+          // The whole value as suggested: its kind decides which fields it has.
+          onChange({ ...out.variable });
+          setSuggested(out.reason);
+        },
+      },
+    );
+  const canFill = suggest.available && !!v.name;
+  const fillButton = (words: string) => (
+    <button
+      type="button"
+      className="link-btn agent-ink"
+      disabled={suggest.isPending}
+      onClick={fillIn}
+    >
+      {suggest.isPending ? 'Asking the assistant…' : words}
+    </button>
+  );
   return (
     <div className="value-row">
       <input
@@ -269,12 +320,14 @@ function ValueRow({
           mode="formula"
           label={`${called}: value or formula`}
           placeholder="100 µL, a formula, or Material.field"
+          assumed={!!suggested}
           check={(t) => {
             const r = readValue(t, terms, perRun);
             return r.ok ? {} : { problem: r.problem, fix: r.fix };
           }}
           onChange={(t) => {
             setDraft(t);
+            setSuggested(undefined);
             const r = readValue(t, terms, perRun);
             if (r.ok) onChange(withFields(v, r.value));
           }}
@@ -304,6 +357,8 @@ function ValueRow({
               {v.max === undefined ? '…' : formatValue(v.max)}
             </span>
           )}
+          {suggested && <span className="agent-ink">assistant: {suggested}</span>}
+          {canFill && (!text.trim() || !read.ok) && fillButton('Fill in with the assistant')}
           <button
             type="button"
             className="link-btn"
@@ -314,6 +369,7 @@ function ValueRow({
             More
           </button>
         </div>
+        {suggest.error && <p className="error-text">{suggest.error.message}</p>}
         {open && (
           <div className="value-more">
             {v.kind === 'computed' && (
@@ -387,6 +443,7 @@ function ValueRow({
                 ? `${v.cite.length} source passage${v.cite.length > 1 ? 's' : ''}`
                 : 'no source passage'}
             </span>
+            {canFill && text.trim() && read.ok && fillButton('Ask the assistant for this value')}
             <button type="button" className="btn small danger" onClick={onRemove}>
               Remove value
             </button>
@@ -462,6 +519,10 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
   const [draft, setDraft] = useState<string>();
   const text = draft ?? wordsText(step.text ?? '', terms);
   const set = (patch: Item) => onChange(without({ ...value, ...patch }));
+  const suggest = useSuggest();
+  const [suggested, setSuggested] = useState<string>();
+  // Counts suggestions taken, so the setting rows start again from what came back.
+  const [round, setRound] = useState(0);
   const parameters = step.parameters ?? [];
   const setParameters = (next: Partial<StepParameter>[]) =>
     set({ parameters: next.length ? next : undefined });
@@ -530,8 +591,10 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
               label={`Step ${index + 1}: what to do`}
               placeholder="In lab words, close to the source: Add Well volume of Wash buffer…"
               check={(t) => (t.trim() ? {} : { problem: 'Say what to do' })}
+              assumed={!!suggested}
               onChange={(t) => {
                 setDraft(t);
+                setSuggested(undefined);
                 if (t.trim()) onChange(without({ ...value, ...withWords(step, t, terms) }));
               }}
               onBlur={() => setDraft(undefined)}
@@ -578,11 +641,33 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                   ))}
                 </span>
               )}
+              {suggest.available && step.id && text.trim() && (
+                <button
+                  type="button"
+                  className="link-btn agent-ink"
+                  disabled={suggest.isPending}
+                  onClick={() =>
+                    suggest.mutate(
+                      { step: step.id as string },
+                      {
+                        onSuccess: (out) => {
+                          const next = out.steps?.[0];
+                          if (!next) return;
+                          setDraft(undefined);
+                          setRound(round + 1);
+                          onChange(without({ ...value, ...next }));
+                          setSuggested(out.reason);
+                        },
+                      },
+                    )
+                  }
+                >
+                  {suggest.isPending ? 'Asking the assistant…' : 'Fill in with the assistant'}
+                </button>
+              )}
             </p>
-            <p className="muted hint">
-              What the step uses and its settings are read from the words: a material named, a value
-              (Add Well volume) or an amount (2 h, 37 °C). Anything else goes under More.
-            </p>
+            {suggested && <p className="agent-ink step-note">assistant: {suggested}</p>}
+            {suggest.error && <p className="error-text">{suggest.error.message}</p>}
           </div>
         </FormRow>
         <details className="more">
@@ -598,7 +683,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                 {parameters.map((p, i) => (
                   <SettingRow
                     // biome-ignore lint/suspicious/noArrayIndexKey: rows are edited in place, not moved
-                    key={`${i}-${p.name}`}
+                    key={`${round}-${i}-${p.name}`}
                     parameter={p}
                     values={terms.values}
                     onChange={(next) =>
@@ -706,20 +791,380 @@ function freshStepId(items: unknown[]): string {
   return `s${n}`;
 }
 
-/** The SOP lists with editors of their own for each item. */
-export const sopItemEditors: Record<string, ItemEditor> = {
-  steps: {
-    Edit: StepEditor,
-    create: (items) => ({ id: freshStepId(items), action: 'manual' }),
-    title: (item) => {
-      const s = item as Partial<SopStep>;
-      const words = s.title ?? s.text;
-      if (!words) return '';
-      const action = s.action ? actionWords[s.action] : '';
-      return `${[action, words].filter(Boolean).join(' · ')}${s.repeat ? ` × ${s.repeat}` : ''}`;
-    },
-  },
+/** The SOP's steps in order, each open, numbered, with its own words and settings. */
+function StepsEditor({ schema, value, onChange }: ListEditorProps) {
+  const items = (Array.isArray(value) ? value : []) as Item[];
+  const [keys, setKeys] = useState(() => items.map((_, i) => i));
+  const [next, setNext] = useState(items.length);
+  const update = (nextItems: Item[], nextKeys: number[]) => {
+    setKeys(nextKeys);
+    onChange(nextItems.length ? nextItems : undefined);
+  };
+  const { document = {} } = useEditorScope();
+  const suggest = useSuggest();
+  const [sentence, setSentence] = useState('');
+  // Steps the assistant wrote, by id, with its reason, until a person saves.
+  const [drafted, setDrafted] = useState<string>();
+  const take = (steps: Item[], reason: string, replace: boolean) => {
+    const base = replace ? [] : items;
+    const fresh = steps.map((_, i) => next + i);
+    setNext(next + steps.length);
+    update([...base, ...steps], [...(replace ? [] : keys), ...fresh]);
+    setDrafted(reason);
+  };
+  const move = (from: number, to: number) => {
+    const order = items.map((_, i) => i);
+    order.splice(to, 0, ...order.splice(from, 1));
+    update(
+      order.map((i) => items[i] as Item),
+      order.map((i) => keys[i] as number),
+    );
+  };
+  return (
+    <ol className="steps-edit">
+      {items.length === 0 && <p className="muted">No steps yet.</p>}
+      {items.map((step, i) => (
+        <li key={keys[i]} className="step-edit" aria-label={`Step ${i + 1}`}>
+          <div className="step-edit-head">
+            <span className="step-no num">{i + 1}</span>
+            <span className="step-gap" />
+            <button
+              type="button"
+              className="btn small"
+              aria-label={`Move step ${i + 1} up`}
+              disabled={i === 0}
+              onClick={() => move(i, i - 1)}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="btn small"
+              aria-label={`Move step ${i + 1} down`}
+              disabled={i === items.length - 1}
+              onClick={() => move(i, i + 1)}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="btn small danger"
+              aria-label={`Remove step ${i + 1}`}
+              onClick={() =>
+                update(
+                  items.filter((_, j) => j !== i),
+                  keys.filter((_, j) => j !== i),
+                )
+              }
+            >
+              Remove
+            </button>
+          </div>
+          <StepEditor
+            schema={schema}
+            value={step}
+            index={i}
+            label={`Step ${i + 1}`}
+            path="steps"
+            onChange={(changed) =>
+              update(
+                items.map((x, j) => (j === i ? changed : x)),
+                keys,
+              )
+            }
+          />
+        </li>
+      ))}
+      <li className="steps-foot">
+        <p className="muted hint">
+          What a step uses and its settings are read from its words: a material named, a value (Add
+          Well volume) or an amount (2 h, 37 °C). Anything else goes under More.
+        </p>
+        {drafted && <p className="agent-ink step-note">assistant: {drafted}</p>}
+        <div className="step-line">
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => {
+              setNext(next + 1);
+              update([...items, { id: freshStepId(items), action: 'manual' }], [...keys, next]);
+            }}
+          >
+            Add step
+          </button>
+          {suggest.available && (
+            <>
+              <input
+                className="field grow"
+                type="text"
+                aria-label="A new step in a sentence"
+                placeholder="Or say it, e.g. wash three times with wash buffer"
+                value={sentence}
+                onChange={(e) => setSentence(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter here asks for the step; it never saves the SOP.
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
+              />
+              <button
+                type="button"
+                className="btn small agent-ink"
+                disabled={!sentence.trim() || suggest.isPending}
+                onClick={() =>
+                  suggest.mutate(
+                    { newStep: sentence.trim() },
+                    {
+                      onSuccess: (out) => {
+                        take((out.steps ?? []) as Item[], out.reason, false);
+                        setSentence('');
+                      },
+                    },
+                  )
+                }
+              >
+                {suggest.isPending ? 'Asking the assistant…' : 'Write it with the assistant'}
+              </button>
+              {items.length === 0 && !!document.source && (
+                <button
+                  type="button"
+                  className="btn small agent-ink"
+                  disabled={suggest.isPending}
+                  onClick={() =>
+                    suggest.mutate(
+                      { steps: true },
+                      { onSuccess: (out) => take((out.steps ?? []) as Item[], out.reason, true) },
+                    )
+                  }
+                >
+                  Draft the steps from the source
+                </button>
+              )}
+            </>
+          )}
+        </div>
+        {suggest.error && <p className="error-text">{suggest.error.message}</p>}
+      </li>
+    </ol>
+  );
+}
+
+// ---- Materials ----
+
+const materialTypeWords: Record<SopMaterial['type'], string> = {
+  reagent: 'Reagent',
+  entity: 'Sample or strain',
+  labware: 'Labware',
+  instrument: 'Instrument',
+  consumable: 'Consumable',
+  solution: 'Solution',
 };
 
-/** The SOP lists edited whole: its values, one line each. */
-export const sopListEditors = { variables: ValuesEditor };
+/** The SOP's materials, one line each: what it is called, what type, what it must meet, usually what. */
+function MaterialsEditor({ value, onChange }: ListEditorProps) {
+  const { doc, variables } = useSop();
+  const { results } = useResults(variables);
+  const items = (Array.isArray(value) ? value : []) as Partial<SopMaterial>[];
+  const [keys, setKeys] = useState(() => items.map((_, i) => i));
+  const [next, setNext] = useState(items.length);
+  const update = (nextItems: Partial<SopMaterial>[], nextKeys = keys) => {
+    setKeys(nextKeys);
+    onChange(nextItems.length ? nextItems : undefined);
+  };
+  return (
+    <EditorCards doc={{ ...doc, materials: items as never[] }} results={results}>
+      <div className="materials-edit">
+        {items.length === 0 && <p className="muted">No materials yet.</p>}
+        {items.map((m, i) => (
+          <MaterialRow
+            key={keys[i]}
+            material={m}
+            taken={
+              new Set([
+                ...items.flatMap((o, j) => (j !== i && o.role ? [o.role] : [])),
+                ...(doc.solutions as { role?: string }[]).flatMap((s) => (s.role ? [s.role] : [])),
+              ])
+            }
+            gives={variables.filter((v) => v.readFrom?.role && v.readFrom.role === m.role)}
+            onChange={(changed) => update(items.map((x, j) => (j === i ? changed : x)))}
+            onRemove={() =>
+              update(
+                items.filter((_, j) => j !== i),
+                keys.filter((_, j) => j !== i),
+              )
+            }
+          />
+        ))}
+        <div className="values-foot">
+          <button
+            type="button"
+            className="btn small"
+            onClick={() => {
+              setNext(next + 1);
+              update([...items, { type: 'reagent' }], [...keys, next]);
+            }}
+          >
+            Add material
+          </button>
+        </div>
+      </div>
+    </EditorCards>
+  );
+}
+
+function MaterialRow({
+  material: m,
+  taken,
+  gives,
+  onChange,
+  onRemove,
+}: {
+  material: Partial<SopMaterial>;
+  taken: ReadonlySet<string>;
+  gives: readonly Partial<SopVariable>[];
+  onChange: (next: Partial<SopMaterial>) => void;
+  onRemove: () => void;
+}) {
+  const [fresh] = useState(() => !m.role);
+  const [open, setOpen] = useState(false);
+  const set = (patch: Item) => onChange(without({ ...m, ...patch }) as Partial<SopMaterial>);
+  const called = m.label || 'This material';
+  return (
+    <div className="material-row">
+      <div className="material-line">
+        <input
+          className="field material-name"
+          type="text"
+          aria-label="Material"
+          placeholder="Name in lab words"
+          required
+          value={m.label ?? ''}
+          onChange={(e) => {
+            const label = e.target.value;
+            // Like a value, a new material's name follows its lab words; an existing one keeps it.
+            const follows = fresh && (!m.role || m.role === nameFor(m.label ?? '', taken));
+            set({
+              label: label || undefined,
+              ...(follows && label ? { role: nameFor(label, taken) } : {}),
+            });
+          }}
+        />
+        <select
+          className="field"
+          aria-label={`${called}: type`}
+          value={m.type ?? 'reagent'}
+          onChange={(e) => set({ type: e.target.value, default: undefined })}
+        >
+          {Object.entries(materialTypeWords).map(([type, words]) => (
+            <option key={type} value={type}>
+              {words}
+            </option>
+          ))}
+        </select>
+        <input
+          className="field grow"
+          type="text"
+          aria-label={`${called}: must be`}
+          placeholder="What any choice must meet, e.g. 96-well, high binding"
+          value={m.requirements ?? ''}
+          onChange={(e) => set({ requirements: e.target.value || undefined })}
+        />
+        <span className="muted">usually</span>
+        <MaterialPicker
+          type={m.type ?? 'reagent'}
+          value={m.default}
+          label={`${called}: usually`}
+          onChange={(id) => set({ default: id })}
+        />
+      </div>
+      <div className="value-after">
+        {gives.length > 0 && (
+          <span className="kind-words">
+            gives{' '}
+            {gives.map((v, i) => (
+              <span key={v.name}>
+                {i > 0 && ', '}
+                <TermAnchor type="value" name={v.name ?? ''}>
+                  {v.label ?? v.name}
+                </TermAnchor>
+              </span>
+            ))}
+          </span>
+        )}
+        <button
+          type="button"
+          className="link-btn"
+          aria-expanded={open}
+          aria-label={`More about ${called}`}
+          onClick={() => setOpen(!open)}
+        >
+          More
+        </button>
+      </div>
+      {open && (
+        <div className="value-more">
+          <label>
+            Technical name{' '}
+            <input
+              className="field"
+              type="text"
+              aria-label="Technical name"
+              pattern="[A-Za-z_][A-Za-z0-9_]*"
+              value={m.role ?? ''}
+              onChange={(e) => set({ role: e.target.value || undefined })}
+            />
+          </label>
+          <span className="muted">
+            {m.cite?.length
+              ? `${m.cite.length} source passage${m.cite.length > 1 ? 's' : ''}`
+              : 'no source passage'}
+          </span>
+          <button type="button" className="btn small danger" onClick={onRemove}>
+            Remove material
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The usual record for a material, from the kinds that can fill its type. */
+function MaterialPicker({
+  type,
+  value,
+  label,
+  onChange,
+}: {
+  type: SopMaterial['type'];
+  value: string | undefined;
+  label: string;
+  onChange: (id: string | undefined) => void;
+}) {
+  const kinds = MATERIAL_KINDS[type];
+  const lists = useQueries({ queries: kinds.map((kind) => recordsQuery({ kind })) });
+  const records = lists
+    .flatMap((q) => q.data ?? [])
+    .filter((r) => r.status !== 'archived' || r.id === value);
+  return (
+    <select
+      className="field"
+      aria-label={label}
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value || undefined)}
+    >
+      <option value="">any that fits</option>
+      {value && !records.some((r) => r.id === value) && <option value={value}>{value}</option>}
+      {records.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.label} ({r.name})
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** The SOP lists edited whole: its materials, values and steps. */
+export const sopListEditors = {
+  materials: MaterialsEditor,
+  variables: ValuesEditor,
+  steps: StepsEditor,
+};

@@ -1,28 +1,18 @@
 import { isUnit } from '@ailab/domain';
-import type {
-  ContainerAttributes,
-  LotAttributes,
-  ProductAttributes,
-  Quantity,
-  RecordEnvelope,
-  SopAttributes,
-  SopMaterial,
+import {
+  type ContainerAttributes,
+  type LotAttributes,
+  MATERIAL_KINDS,
+  type ProductAttributes,
+  type Quantity,
+  type RecordEnvelope,
+  type SopAttributes,
 } from '@ailab/schema';
 
 /**
  * Binding an SOP's roles to records and reading its record variables from them (plan 012b, G4).
  * Pure over records fetched by the caller, so the kind's readiness and the calculator share it.
  */
-
-/** Record kinds that can fill a role of each material type. */
-export const KINDS_FOR: Record<SopMaterial['type'], readonly string[]> = {
-  labware: ['labware_type', 'container'],
-  reagent: ['product', 'lot'],
-  entity: ['entity', 'sample'],
-  instrument: ['instrument_kind', 'instrument', 'equipment_kind'],
-  consumable: ['labware_type', 'product', 'lot'],
-  solution: ['product', 'lot'],
-};
 
 export type Fetch = (id: string) => Promise<RecordEnvelope | undefined>;
 
@@ -146,7 +136,7 @@ export async function bindRoles(
       out.push({ role: m.role, by, problem: `${id} is not a record in this lab` });
       continue;
     }
-    const kinds = KINDS_FOR[m.type];
+    const kinds = MATERIAL_KINDS[m.type];
     out.push(
       kinds.includes(record.kind)
         ? { role: m.role, record, by }

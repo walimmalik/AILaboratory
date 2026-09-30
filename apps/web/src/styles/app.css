@@ -1376,6 +1376,91 @@ kbd {
   justify-self: start;
   width: fit-content;
 }
+
+/* The whole SOP as one form (ADR 0046): its parts as blocks, one Save kept in view at the bottom. */
+.sop-edit {
+  gap: 16px;
+}
+.sop-edit > .block > .body {
+  display: grid;
+  gap: 12px;
+}
+.save-bar {
+  position: sticky;
+  /* Into the page's bottom padding, so the bar sits on the window's edge. */
+  bottom: -40px;
+  z-index: 2;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.save-bar .actions {
+  margin: 0;
+}
+.steps-edit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.step-edit {
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--rule);
+}
+.step-edit:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.step-edit-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.step-gap {
+  flex: 1;
+}
+.step-no {
+  font: 500 13px / 1 var(--font-mono);
+  color: var(--ink-2);
+}
+.steps-foot {
+  padding-top: 8px;
+}
+.step-note {
+  margin: 0;
+  font-size: 12px;
+}
+.steps-foot .hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.materials-edit {
+  display: grid;
+  width: 100%;
+}
+.material-row {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+}
+.material-row:first-child {
+  border-top: 0;
+}
+.material-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.material-line .field.grow {
+  flex: 1 1 16em;
+}
+.material-name {
+  flex: 0 1 14em;
+}
 @media (max-width: 560px) {
   .value-row {
     grid-template-columns: minmax(0, 1fr);

@@ -17,6 +17,7 @@ import {
   sopsReview,
   sopsReviews,
   sopsScore,
+  sopsSuggest,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
@@ -26,6 +27,7 @@ import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 import { bindRoles, type ReadValue, readField } from './resolve.ts';
 import { reviewSop, roundsOf } from './review.ts';
+import { suggestSop } from './suggest.ts';
 
 /** Digital SOP operations (plan 012). */
 export const sopOperations = [
@@ -235,6 +237,19 @@ export const sopOperations = [
         );
       }
       return reviewSop(deps, ctx, input, model, `${deps.assistant.agentName} (reviewer)`);
+    },
+  }),
+  implement(sopsSuggest, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const model = deps.assistant.model;
+      if (!model) {
+        throw new OperationError(
+          'invalid_state',
+          'No model is set up for the assistant; set AGENT_PROVIDER and its key in .env',
+        );
+      }
+      return suggestSop(deps, ctx, input, model);
     },
   }),
   implement(sopsReviews, {

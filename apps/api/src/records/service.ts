@@ -272,6 +272,73 @@ export class RecordService {
     );
   }
 
+  /**
+   * A person confirms every section that waits for review in one version (ADR 0046): the SOP page's
+   * one Confirm. A section with a failing blocker check of its own stays unconfirmed; the rest are
+   * confirmed as they stand, each with its own review, and a draft left with nothing to do is active.
+   */
+  async confirmAll(
+    ctx: RecordContext,
+    id: string,
+    input: TransitionInput,
+  ): Promise<RecordEnvelope> {
+    return this.#change(
+      ctx,
+      id,
+      input.expectedVersion,
+      'confirm_section',
+      input.reason,
+      async (record, kind, tx) => {
+        if (record.status === 'archived') {
+          throw new RecordError('invalid_state', `${record.name} is archived`);
+        }
+        if (!kind.sections?.length) {
+          throw new RecordError(
+            'invalid_input',
+            `A ${kind.kind} has no sections to confirm; confirm it with records.activate`,
+          );
+        }
+        const related = await this.#related(tx, ctx, kind, record.attributes, record);
+        const before = readiness(toEnvelope(record), kind, related.checks);
+        const blocked = new Set(
+          before.checks.flatMap((c) =>
+            !c.passed && c.severity === 'blocker' && c.section ? [c.section] : [],
+          ),
+        );
+        const reviews = { ...record.reviews };
+        const held: string[] = [];
+        let confirmed = 0;
+        for (const section of kind.sections) {
+          const values = sectionValues(section, record.attributes);
+          const previous = record.reviews[section.id];
+          if (previous && sameValue(previous.values, values)) continue;
+          if (blocked.has(section.id)) {
+            held.push(section.title);
+            continue;
+          }
+          reviews[section.id] = {
+            confirmedBy: ctx.actor,
+            confirmedAt: this.now().toISOString(),
+            version: record.version,
+            values,
+          };
+          confirmed++;
+        }
+        const after = readiness({ ...toEnvelope(record), reviews }, kind, related.checks);
+        const activates = record.status === 'draft' && after.ready;
+        if (confirmed === 0 && !activates) {
+          throw new RecordError(
+            'invalid_state',
+            held.length
+              ? `Nothing on ${record.name} can be confirmed yet: fix what blocks ${held.join(', ')} first`
+              : `Everything on ${record.name} is already confirmed`,
+          );
+        }
+        return activates ? { reviews, status: 'active' as const } : { reviews };
+      },
+    );
+  }
+
   /** What is confirmed, what changed, what was assumed, and which checks pass. */
   async readiness(ctx: RecordContext, id: string): Promise<Readiness> {
     const row = await findRecord(this.db, ctx, id);
