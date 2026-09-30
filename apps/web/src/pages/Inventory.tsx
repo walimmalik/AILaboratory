@@ -14,7 +14,7 @@ import {
 } from '@ailab/schema';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useState } from 'react';
+import { type CSSProperties, Fragment, type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
 import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
@@ -346,6 +346,7 @@ function WellsBlock({
   const fullest = fullestWell(wells.map((w) => w.state));
   const labels = useSourceLabels(wells);
   const [picked, setPicked] = useState<string | undefined>(grid ? undefined : 'A1');
+  const [pointed, setPointed] = useState<string>();
   const state = picked ? byWell.get(picked) : undefined;
   const describe = (well: string) => {
     const s = byWell.get(well);
@@ -363,50 +364,71 @@ function WellsBlock({
       </header>
       <div className="body">
         {grid && (
-          <div className="well-grid-wrap">
-            <table className="well-grid" aria-label="Plate map, shaded by volume">
-              <thead>
-                <tr>
-                  <th />
-                  {Array.from({ length: grid.columns }, (_, c) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
-                    <th key={c} scope="col">
-                      {c + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {grid.rowLabels.map((row) => (
-                  <tr key={row}>
-                    <th scope="row">{row}</th>
-                    {Array.from({ length: grid.columns }, (_, c) => {
-                      const well = `${row}${c + 1}`;
-                      const s = byWell.get(well);
-                      const level = heatLevel(s, fullest);
-                      return (
-                        <td key={well} className="cell">
-                          <button
-                            type="button"
-                            className={`well heat-${level}${s?.assumed ? ' assumed' : ''}`}
-                            aria-pressed={picked === well}
-                            title={describe(well)}
-                            aria-label={describe(well)}
-                            onClick={() => setPicked(well)}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {fullest && (
-              <p className="muted">
-                Shaded by volume, darkest at {formatQuantity(fullest)}. Hatched: volume unknown.
-                Agent ink: estimated.
-              </p>
-            )}
+          <div className="plate-wrap">
+            <ul className="legend" aria-label="Key">
+              <li>
+                <i />
+                Empty
+              </li>
+              <li>
+                <i className="heat-2" />
+                Less
+              </li>
+              <li>
+                <i className="heat-4" />
+                {fullest ? `Fullest, ${formatQuantity(fullest)}` : 'Fullest'}
+              </li>
+              <li>
+                <i className="heat-unknown" />
+                Volume unknown
+              </li>
+              <li>
+                <i className="assumed" />
+                Estimated
+              </li>
+            </ul>
+            <fieldset
+              className={`plate${grid.columns > 12 ? ' dense' : ''}`}
+              aria-label="Plate map, shaded by volume"
+              style={{ '--cols': grid.columns } as CSSProperties}
+            >
+              <span className="axis" />
+              {Array.from({ length: grid.columns }, (_, c) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+                <span key={c} className="axis">
+                  {c + 1}
+                </span>
+              ))}
+              {grid.rowLabels.map((row) => (
+                <Fragment key={row}>
+                  <span className="axis">{row}</span>
+                  {Array.from({ length: grid.columns }, (_, c) => {
+                    const well = `${row}${c + 1}`;
+                    const s = byWell.get(well);
+                    const level = heatLevel(s, fullest);
+                    return (
+                      <button
+                        key={well}
+                        type="button"
+                        className={`well heat-${level}${s?.assumed ? ' assumed' : ''}`}
+                        aria-pressed={picked === well}
+                        aria-label={describe(well)}
+                        onClick={() => setPicked(well)}
+                        onMouseEnter={() => setPointed(well)}
+                        onFocus={() => setPointed(well)}
+                        onMouseLeave={() => setPointed(undefined)}
+                        onBlur={() => setPointed(undefined)}
+                      />
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </fieldset>
+            <p className="hover-info" aria-live="polite">
+              {pointed
+                ? describe(pointed)
+                : 'Point at a well to see what it holds; select it for details.'}
+            </p>
           </div>
         )}
         {picked &&

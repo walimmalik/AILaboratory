@@ -20,6 +20,7 @@
   --crit-soft: rgba(179, 64, 47, 0.1);
   --grid: rgba(14, 111, 104, 0.05);
   --lamp-off: #c3cbc6;
+  --well-empty: #e3e7e2;
   --font-display: "Martian Mono Variable", "IBM Plex Mono", Consolas, monospace;
   --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
@@ -47,6 +48,7 @@
     --crit-soft: rgba(239, 134, 118, 0.13);
     --grid: rgba(92, 194, 179, 0.045);
     --lamp-off: #36423e;
+    --well-empty: #232c2a;
     color-scheme: dark;
   }
 }
@@ -70,5 +72,6 @@
   --crit-soft: rgba(239, 134, 118, 0.13);
   --grid: rgba(92, 194, 179, 0.045);
   --lamp-off: #36423e;
+  --well-empty: #232c2a;
   color-scheme: dark;
 }

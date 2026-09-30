@@ -1147,59 +1147,110 @@ ul.rules {
   color: var(--accent);
   font-weight: 600;
 }
-.well-grid-wrap {
+/* Plate map (as in the bench console mockup): a bounded grid of round wells at one pitch, labels
+   centred over their columns and rows. Wells grow with the width up to the cap and keep a usable
+   size; a plate too wide for the page scrolls on its own. */
+.plate-wrap {
   overflow-x: auto;
   display: grid;
   gap: 8px;
 }
-.well-grid {
-  border-collapse: separate;
-  border-spacing: 2px;
-  width: auto;
+.plate {
+  --well-min: 28px;
+  --well-max: 44px;
+  display: grid;
+  grid-template-columns: 22px repeat(var(--cols), minmax(var(--well-min), 1fr));
+  gap: 4px;
+  width: 100%;
+  min-width: calc(22px + var(--cols) * (var(--well-min) + 4px));
+  max-width: calc(22px + var(--cols) * (var(--well-max) + 4px));
+  margin: 0;
+  padding: 0;
+  border: 0;
   font: 11px / 1 var(--font-mono);
 }
-.well-grid-wrap .well-grid th {
+.plate.dense {
+  --well-min: 16px;
+  --well-max: 30px;
+  gap: 3px;
+  font-size: 10px;
+}
+.plate .axis {
   color: var(--ink-3);
-  font-weight: 400;
-  padding: 0 3px;
-  text-align: center;
-  border: 0;
+  display: grid;
+  place-items: center;
 }
-.well-grid-wrap .cell {
+.plate .well {
+  aspect-ratio: 1;
+  width: 100%;
   padding: 0;
-  border: 0;
-}
-.well-grid-wrap .well {
-  display: block;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--rule);
+  border: 1px solid transparent;
   border-radius: 50%;
-  background: var(--field);
+  background: var(--well-empty);
   cursor: pointer;
 }
-.well-grid-wrap .well.heat-1 {
-  background: color-mix(in srgb, var(--accent) 25%, var(--field));
+.plate .well.heat-1 {
+  background: color-mix(in srgb, var(--accent) 25%, var(--well-empty));
 }
-.well-grid-wrap .well.heat-2 {
-  background: color-mix(in srgb, var(--accent) 45%, var(--field));
+.plate .well.heat-2 {
+  background: color-mix(in srgb, var(--accent) 45%, var(--well-empty));
 }
-.well-grid-wrap .well.heat-3 {
-  background: color-mix(in srgb, var(--accent) 70%, var(--field));
+.plate .well.heat-3 {
+  background: color-mix(in srgb, var(--accent) 70%, var(--well-empty));
 }
-.well-grid-wrap .well.heat-4 {
+.plate .well.heat-4 {
   background: var(--accent);
 }
-.well-grid-wrap .well.heat-unknown {
-  background: repeating-linear-gradient(45deg, var(--field) 0 3px, var(--accent-soft) 3px 6px);
+.plate .well.heat-unknown {
+  background: repeating-linear-gradient(45deg, var(--well-empty) 0 3px, var(--accent-soft) 3px 6px);
+  border-color: var(--rule);
 }
-.well-grid-wrap .well.assumed {
-  border-color: var(--agent);
+.plate .well.assumed {
+  border: 2px dashed var(--agent);
 }
-.well-grid-wrap .well[aria-pressed="true"] {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
+.plate .well:hover {
+  box-shadow: 0 0 0 2px var(--ink-3);
+}
+.plate .well[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: var(--well-empty);
+}
+.legend i.heat-2 {
+  background: color-mix(in srgb, var(--accent) 45%, var(--well-empty));
+}
+.legend i.heat-4 {
+  background: var(--accent);
+}
+.legend i.heat-unknown {
+  background: repeating-linear-gradient(45deg, var(--well-empty) 0 2px, var(--accent-soft) 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.legend i.assumed {
+  box-shadow: inset 0 0 0 2px var(--agent);
+}
+.hover-info {
+  font: 12px / 1.5 var(--font-mono);
+  color: var(--ink-2);
+  min-height: 1.5em;
+  margin: 0;
 }
 .block .body .well-detail h3 {
   margin: 0 0 6px;
