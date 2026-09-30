@@ -83,9 +83,9 @@ Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and
 | Library document | `doc_` | `DOC-0001` | 011 |
 | File | `fil_` | `FIL-0001` | 011 |
 | Digital SOP | `sop_` | `SOP-0001` | 012 |
-| Campaign | `cam_` | `CAM-001` | 013 |
-| Experiment | `exp_` | `EXP-0001` | 013 |
-| Run | `run_` | `RUN-0001` | 013 |
+| Campaign | `cam_` | `CAM-001` | 013, built |
+| Experiment | `exp_` | `EXP-0001` | 013, built |
+| Run | `run_` | `RUN-0001` | 013, built |
 | Set | `set_` | `SET-001` | 013 |
 | Layout template | `lyt_` | `LYT-0001` | 014 |
 | Plate map | `pmp_` | `PMP-0001` | 014 |

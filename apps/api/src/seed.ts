@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { contextFor } from './auth.ts';
+import { campaignKinds } from './campaigns/kinds.ts';
 import { connect } from './db/client.ts';
 import { users } from './db/schema.ts';
 import { entityKinds } from './entities/kinds.ts';
@@ -89,6 +90,7 @@ for (const kind of [
   ...fileKinds,
   ...libraryKinds,
   ...sopKinds,
+  ...campaignKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {

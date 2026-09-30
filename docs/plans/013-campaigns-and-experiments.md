@@ -102,7 +102,7 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split (after decisions)
 
-- **013a:** campaign, experiment and run kinds with sections and checks, stages, operations, seed demo campaign.
+- **013a:** campaign, experiment and run kinds with sections and checks, stages, operations, seed demo campaign. Built: the kinds, stages, pinned SOP versions (ADR 0039), `experiments.adopt_versions` and `experiments.where_used`; the seed demo campaign is next.
 - **013b:** protocol binding against 012 (pin, bind roles and inputs, recompute, flags on new SOP versions), reservations.
 - **013c:** run recording (bench view, deviations, data files), conclusions, sets.
 - **013d:** campaign and experiment screens, agent drafting from a question, skill.

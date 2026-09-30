@@ -3,6 +3,7 @@ import { createApp } from './app.ts';
 import { Assistant } from './assistant/assistant.ts';
 import { modelFromEnv } from './assistant/config.ts';
 import { markInterrupted } from './assistant/store.ts';
+import { campaignKinds } from './campaigns/kinds.ts';
 import { connect } from './db/client.ts';
 import { entityKinds } from './entities/kinds.ts';
 import { fileKinds } from './files/kinds.ts';
@@ -38,6 +39,7 @@ for (const kind of [
   ...fileKinds,
   ...libraryKinds,
   ...sopKinds,
+  ...campaignKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);

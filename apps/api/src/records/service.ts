@@ -464,6 +464,15 @@ export class RecordService {
           throw error;
         }
       },
+      getVersion: async (id, version) => {
+        try {
+          const record = await findRecord(db, ctx, id);
+          return (await findVersion(db, record.id, version)).snapshot;
+        } catch (error) {
+          if (error instanceof RecordError && error.code === 'not_found') return undefined;
+          throw error;
+        }
+      },
       list: async (listKind) => {
         const rows = await db
           .select()
