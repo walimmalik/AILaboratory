@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { EvidenceInput } from '../design.ts';
 import { recordIdOf } from '../ids.ts';
 import {
   CalendarDate,
@@ -14,6 +15,7 @@ import {
 } from '../instruments.ts';
 import { defineContract } from '../operation.ts';
 import { RecordEnvelope } from '../record.ts';
+import { WorkcellAttributes, WorkcellId, WorkcellMember } from '../workcells.ts';
 
 const InstrumentId = recordIdOf('ins');
 const ExpectedVersion = z
@@ -135,4 +137,57 @@ export const instrumentsLogService = defineContract({
     calibrationDue: CalendarDate.optional(),
   }),
   output: RecordEnvelope,
+});
+
+// ---------------------------------------------------------------------------------------------
+// Workcells (008d): member instruments mapped to the digital twin.
+
+export const workcellsDraft = defineContract({
+  id: 'workcells.draft',
+  summary:
+    'Draft a workcell: the registered instruments that work together (e.g. the FlexPod with its Echo, PreciseDrop and sealer), for each the device it maps to in the digital twin and whether people can also use it by hand, and the twin workcell ID. No positions or reach: those live in the twin. A person confirms it with records.confirm_section',
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('E.g. "FlexPod workcell"'),
+    ...WorkcellAttributes.shape,
+    evidence: z.record(z.string(), EvidenceInput).optional(),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const workcellsChangeMembers = defineContract({
+  id: 'workcells.change_members',
+  summary:
+    "Add, remove or change members of a workcell (their twin device or hand use). On a confirmed workcell an agent's change is a proposal; the change is a new version",
+  effect: 'write',
+  input: z
+    .strictObject({
+      id: WorkcellId,
+      expectedVersion: ExpectedVersion,
+      set: z
+        .array(WorkcellMember)
+        .optional()
+        .describe('Members to add, or to replace by instrument'),
+      remove: z.array(InstrumentId).optional().describe('Instruments to take out'),
+      reason: Reason,
+    })
+    .refine((i) => !!(i.set?.length || i.remove?.length), {
+      message: 'Give members to set or remove',
+    }),
+  output: RecordEnvelope,
+});
+
+export const workcellsOfInstrument = defineContract({
+  id: 'workcells.of_instrument',
+  summary:
+    'Which workcell an instrument is in: the confirmed workcell using it (at most one, I9), and draft workcells that plan it. Not in a confirmed workcell means it is used standalone',
+  effect: 'read',
+  input: z.strictObject({ instrument: InstrumentId }),
+  output: z.object({
+    active: z
+      .object({ id: z.string(), name: z.string(), label: z.string(), member: WorkcellMember })
+      .optional(),
+    drafts: z.array(z.object({ id: z.string(), name: z.string(), label: z.string() })),
+  }),
 });

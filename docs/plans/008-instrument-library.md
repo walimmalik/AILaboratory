@@ -1,6 +1,6 @@
 # 008: Instrument library
 
-- Status: round 1 accepted by Wali 2026-09-29 (I1 to I6 as recommended; I7 to I9 answered in the table). 008a to 008c built. Round 2 (workcells, I10 to I15) answered by Wali 2026-09-30; 008d is ready to build.
+- Status: round 1 accepted by Wali 2026-09-29 (I1 to I6 as recommended; I7 to I9 answered in the table). 008a to 008c built. Round 2 (workcells, I10 to I15) answered by Wali 2026-09-30. 008d-1 built (workcell record and operations, ADR 0047); the seed correction and workcell page are next.
 - Depends on: 002 (records), 003 (operations), 004c (draft-and-confirm), 007 (labware types, for site compatibility)
 - Feeds: 009 (liquid classes per instrument kind), 015 (twin port binds twins to these records), 016 (transfer binding and worklists), 019 (scheduler resources), 022 (device gateway implements the same capabilities)
 
