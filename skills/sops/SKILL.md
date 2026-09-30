@@ -22,7 +22,8 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 2. Draft with `sops.draft` and `source: {document}`. Cite every step and value with the passage `id` and the exact words (`quote`), copied, not paraphrased.
 3. Where the source is unclear (it contradicts itself, says "about", leaves a speed or time out), add an open question with the `passages` involved and your `suggestion`. Don't pick silently.
 4. Run `sops.check_citations`. Fix every `not_found` quote (copy the source's words) and every `found_elsewhere` one (cite the passage it names in `foundIn`), then check again.
-5. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms sections.
+5. Run `sops.review` (`{sop, expectedVersion}`) to have the reviewer check the draft against the source, then read what it changed with `sops.reviews` and tell the person.
+6. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms sections.
 
 `library.read` with `passages: [id, …]` reads cited passages back by id.
 

@@ -5,8 +5,6 @@ import {
   type VariableOutcome,
 } from '@ailab/domain';
 import {
-  type Citation,
-  type CitationCheck,
   type OpenQuestion,
   type Quantity,
   type SopAttributes,
@@ -15,13 +13,16 @@ import {
   sopsCheckCitations,
   sopsDraft,
   sopsEvaluate,
+  sopsReview,
+  sopsReviews,
 } from '@ailab/schema';
-import type { z } from 'zod';
 import { OperationError } from '../operations/errors.ts';
-import { implement, type OperationRegistry } from '../operations/registry.ts';
-import { type RecordContext, RecordService } from '../records/service.ts';
+import { implement } from '../operations/registry.ts';
+import { RecordService } from '../records/service.ts';
+import { checkCitations } from './citations.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 import { bindRoles, type ReadValue, readField } from './resolve.ts';
+import { reviewSop, roundsOf } from './review.ts';
 
 /** Digital SOP operations (plan 012). */
 export const sopOperations = [
@@ -191,76 +192,39 @@ export const sopOperations = [
       if (record.kind !== 'sop') {
         throw new OperationError('invalid_input', `${record.name} is not an SOP`);
       }
-      const cited = citationsOf(record.attributes as SopAttributes);
-      const texts = new Map<string, { id: string; text: string }[] | undefined>();
-      for (const document of new Set(cited.map((c) => c.cite.document))) {
-        texts.set(document, await passagesOf(deps, ctx, document));
-      }
-      const citations = cited.map(({ where, cite }): z.infer<typeof CitationCheck> => {
-        const base = {
-          where,
-          document: cite.document,
-          ...(cite.passage ? { passage: cite.passage } : {}),
-          quote: cite.quote,
-        };
-        const passages = texts.get(cite.document);
-        if (!passages) return { ...base, result: 'unparsed' };
-        const quote = normalized(cite.quote);
-        const own = passages.find((p) => p.id === cite.passage);
-        if (own && normalized(own.text).includes(quote)) return { ...base, result: 'matches' };
-        const elsewhere = passages.find((p) => normalized(p.text).includes(quote));
-        if (!elsewhere) return { ...base, result: 'not_found' };
-        return cite.passage
-          ? { ...base, result: 'found_elsewhere', foundIn: elsewhere.id }
-          : { ...base, result: 'matches', foundIn: elsewhere.id };
-      });
-      const matches = citations.filter((c) => c.result === 'matches').length;
+      const { citations } = await checkCitations(deps, ctx, record.attributes as SopAttributes);
       return {
         citations,
-        matches,
+        matches: citations.filter((c) => c.result === 'matches').length,
         problems: citations.filter(
           (c) => c.result === 'not_found' || c.result === 'found_elsewhere',
         ).length,
       };
     },
   }),
+  implement(sopsReview, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const model = deps.assistant.model;
+      if (!model) {
+        throw new OperationError(
+          'invalid_state',
+          'No model is set up for the reviewer; set AGENT_PROVIDER and its key in .env',
+        );
+      }
+      return reviewSop(deps, ctx, input, model, `${deps.assistant.agentName} (reviewer)`);
+    },
+  }),
+  implement(sopsReviews, {
+    run: async (ctx, input, deps) => {
+      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
+      if (record.kind !== 'sop') {
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      }
+      return { rounds: await roundsOf(deps, ctx, record.id) };
+    },
+  }),
 ];
-
-const normalized = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
-
-/** Every citation in an SOP, with what cites it. */
-function citationsOf(a: SopAttributes): { where: string; cite: Citation }[] {
-  const out: { where: string; cite: Citation }[] = [];
-  const add = (where: string, cites: Citation[] | undefined) => {
-    for (const cite of cites ?? []) out.push({ where, cite });
-  };
-  for (const m of a.materials) add(`material ${m.role}`, m.cite);
-  for (const s of a.solutions ?? []) add(`solution ${s.role}`, s.cite);
-  for (const v of a.variables) add(`variable ${v.name}`, v.cite);
-  for (const s of a.steps) add(`step ${s.id}`, s.cite);
-  for (const l of a.layout ?? []) add(`layout ${l.label}`, l.cite);
-  for (const t of a.timing ?? []) add(`timing of step ${t.step}`, t.cite);
-  for (const q of a.questions ?? []) add(`question ${q.id}`, q.passages);
-  return out;
-}
-
-/** A document's passages through library.read, section by section; undefined until it is parsed. */
-async function passagesOf(
-  deps: { registry: OperationRegistry },
-  ctx: RecordContext,
-  document: string,
-): Promise<{ id: string; text: string }[] | undefined> {
-  type Read = { outline?: { index: number }[]; passages?: { id: string; text: string }[] };
-  const read = async (input: object) => {
-    const result = await deps.registry.execute(ctx, 'library.read', { document, ...input });
-    return (result.status === 'done' ? result.output : {}) as Read;
-  };
-  const { outline } = await read({});
-  if (!outline) return undefined;
-  const out: { id: string; text: string }[] = [];
-  for (const s of outline) out.push(...((await read({ section: s.index })).passages ?? []));
-  return out;
-}
 
 function outcomeWords(name: string, outcome: VariableOutcome | undefined) {
   if (!outcome) return { name, ok: false, error: 'Not evaluated' };
