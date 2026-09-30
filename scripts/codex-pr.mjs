@@ -26,6 +26,8 @@ const { values, positionals } = parseArgs({
 
 const isWindows = process.platform === 'win32';
 const repoRoot = git(['rev-parse', '--show-toplevel'], process.cwd()).trim();
+/** Prompts and the QA compose override come from the runner's checkout, so PRs that predate them work. */
+const codexDir = join(repoRoot, '.github', 'codex');
 const workRoot = resolve(process.env.CODEX_PR_DIR || join(homedir(), 'ailab-review'));
 const model = process.env.CODEX_MODEL || 'gpt-6.1-sol';
 const reviewEffort = process.env.CODEX_REVIEW_EFFORT || 'high';
@@ -104,7 +106,7 @@ async function runPr(number, only) {
     const report = await codexExec(
       dir,
       'review',
-      readFileSync(join(dir, '.github/codex/review.md'), 'utf8'),
+      readFileSync(join(codexDir, 'review.md'), 'utf8'),
       ['-c', `model_reasoning_effort=${reviewEffort}`],
     );
     await post(number, 'codex-review', 'Codex review', report, `Reviewed ${sha}`);
@@ -152,7 +154,7 @@ async function uiQa(number, dir) {
     '-f',
     'compose.yaml',
     '-f',
-    '.github/codex/compose.qa.yaml',
+    join(codexDir, 'compose.qa.yaml'),
   ];
   const web = `http://localhost:${ports.QA_WEB_PORT}`;
   try {
@@ -166,7 +168,7 @@ async function uiQa(number, dir) {
     run('pnpm', ['--filter', '@ailab/api', 'bootstrap'], { cwd: dir, env });
     run('pnpm', ['--filter', '@ailab/api', 'seed'], { cwd: dir, env, inherit: true });
 
-    const prompt = readFileSync(join(dir, '.github/codex/ui-qa.md'), 'utf8')
+    const prompt = readFileSync(join(codexDir, 'ui-qa.md'), 'utf8')
       .replaceAll('{{WEB_URL}}', web)
       .replaceAll('{{EMAIL}}', QA_USER.email)
       .replaceAll('{{PASSWORD}}', QA_USER.password);
