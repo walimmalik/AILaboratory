@@ -6,15 +6,20 @@ import {
   type ExperimentAttributes,
   type ExperimentStage,
   experimentsAdoptVersions,
+  experimentsBindProtocol,
+  experimentsCalculate,
   experimentsDraft,
   experimentsSetStage,
   experimentsWhereUsed,
+  type ProtocolStep,
   type RecordEnvelope,
   type RunAttributes,
+  type SopAttributes,
 } from '@ailab/schema';
+import type { z } from 'zod';
 import { OperationError } from '../operations/errors.ts';
 import { proposeIfActive } from '../operations/record-operations.ts';
-import { implement } from '../operations/registry.ts';
+import { implement, type OperationDeps } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
@@ -33,7 +38,7 @@ const NEXT: Record<ExperimentStage, ExperimentStage[]> = {
 const STAGE_WORDS: Record<string, string> = { on_hold: 'on hold' };
 const words = (stage: string) => STAGE_WORDS[stage] ?? stage;
 
-async function recordOf(
+export async function recordOf(
   service: RecordService,
   ctx: RecordContext,
   id: string,
@@ -48,7 +53,48 @@ async function recordOf(
   return record;
 }
 
-/** Campaign and experiment operations (plan 013a). */
+type Calculated = z.infer<typeof experimentsCalculate.output>;
+
+/** Each protocol part worked out at its pinned SOP version with the pinned bindings (013b). */
+export async function calculateExperiment(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  record: RecordEnvelope,
+): Promise<Calculated> {
+  const a = record.attributes as ExperimentAttributes;
+  const parts: Calculated['parts'] = [];
+  for (const p of a.protocol) {
+    const result = await deps.registry.execute(
+      ctx,
+      'sops.calculate',
+      {
+        sop: p.sop.id,
+        version: p.sop.version,
+        ...(p.bindings ? { bindings: p.bindings } : {}),
+        ...(p.inputs ? { inputs: p.inputs } : {}),
+      },
+      {},
+      deps.db,
+    );
+    if (result.status !== 'done') throw new Error(`sops.calculate was ${result.status}`);
+    const out = result.output as Omit<Calculated['parts'][number], 'part' | 'sop' | 'problems'>;
+    const sop = await new RecordService(deps.db, deps.kinds).get(ctx, p.sop.id);
+    parts.push({
+      part: p.id,
+      sop: { id: sop.id, name: sop.name, version: p.sop.version },
+      ...out,
+      problems: [
+        ...out.bindings.flatMap((b) => (b.problem ? [`${p.id}: ${b.problem}`] : [])),
+        ...out.variables.flatMap((v) =>
+          v.ok ? [] : [`${p.id}: ${v.name} ${v.problem ?? v.error ?? 'has no value'}`],
+        ),
+      ],
+    });
+  }
+  return { parts, ready: parts.every((p) => p.problems.length === 0) };
+}
+
+/** Campaign and experiment operations (plan 013a, 013b). */
 export const campaignOperations = [
   implement(campaignsDraft, {
     agentPolicy: 'direct',
@@ -100,6 +146,12 @@ export const campaignOperations = [
       const service = new RecordService(deps.db, deps.kinds);
       const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
       const a = record.attributes as ExperimentAttributes;
+      if (input.stage === 'concluded' && NEXT[a.stage].includes('concluded')) {
+        throw new OperationError(
+          'invalid_input',
+          `Conclude ${record.name} with experiments.conclude, which records a verdict per hypothesis`,
+        );
+      }
       if (!NEXT[a.stage].includes(input.stage)) {
         const allowed = NEXT[a.stage].map(words);
         throw new OperationError(
@@ -125,6 +177,13 @@ export const campaignOperations = [
             `${record.name} is not ready to plan: ${readiness.missing.join('; ')}`,
           );
         }
+        const calculated = await calculateExperiment(deps, ctx, record);
+        if (!calculated.ready) {
+          throw new OperationError(
+            'not_ready',
+            `${record.name}'s protocol doesn't work out yet: ${calculated.parts.flatMap((p) => p.problems).join('; ')}`,
+          );
+        }
       }
       return service.update(ctx, record.id, {
         expectedVersion: input.expectedVersion,
@@ -134,6 +193,56 @@ export const campaignOperations = [
       });
     },
   }),
+  implement(experimentsBindProtocol, {
+    agentPolicy: proposeIfActive,
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
+      const a = record.attributes as ExperimentAttributes;
+      const part = a.protocol.find((p) => p.id === input.part);
+      if (!part) {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} has no protocol part ${input.part}; it has ${a.protocol.map((p) => p.id).join(', ') || 'none'}`,
+        );
+      }
+      const given = new Set((input.bindings ?? []).map((b) => b.role));
+      const drop = new Set(input.unbind ?? []);
+      const bindings = [
+        ...(part.bindings ?? []).filter((b) => !given.has(b.role) && !drop.has(b.role)),
+        ...(input.bindings ?? []),
+      ];
+      const named = new Set((input.inputs ?? []).map((i) => i.name));
+      const clear = new Set(input.clear ?? []);
+      const inputs = [
+        ...(part.inputs ?? []).filter((i) => !named.has(i.name) && !clear.has(i.name)),
+        ...(input.inputs ?? []),
+      ];
+      const { bindings: _b, inputs: _i, ...rest } = part;
+      const next = {
+        ...rest,
+        ...(bindings.length ? { bindings } : {}),
+        ...(inputs.length ? { inputs } : {}),
+      };
+      return service.update(ctx, record.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: { ...a, protocol: a.protocol.map((p) => (p.id === part.id ? next : p)) },
+        reason: input.reason ?? `Bound the ${part.id} part of ${record.name}`,
+      });
+    },
+  }),
+  implement(experimentsCalculate, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
+      if (input.version === undefined) return calculateExperiment(deps, ctx, record);
+      const at = (await service.history(ctx, record.id)).find((v) => v.version === input.version);
+      if (!at) {
+        throw new OperationError('invalid_input', `${record.name} has no version ${input.version}`);
+      }
+      return calculateExperiment(deps, ctx, at.snapshot);
+    },
+  }),
   implement(experimentsAdoptVersions, {
     agentPolicy: proposeIfActive,
     run: async (ctx, input, deps) => {
@@ -141,18 +250,47 @@ export const campaignOperations = [
       const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
       const a = record.attributes as ExperimentAttributes;
       const moved: string[] = [];
-      const protocol = [];
+      const dropped: string[] = [];
+      /** The latest confirmed version, when it changed something since the pinned one. */
+      const newer = async (id: string, version: number) => {
+        const now = await service.get(ctx, id);
+        if (now.status !== 'active' || now.version <= version) return undefined;
+        const [pinned] = (await service.history(ctx, id)).filter((v) => v.version === version);
+        if (stable(now.attributes) === stable(pinned?.snapshot.attributes)) return undefined;
+        moved.push(`${now.name} v${version} → v${now.version}`);
+        return now;
+      };
+      const protocol: ProtocolStep[] = [];
       for (const p of a.protocol) {
-        const sop = await service.get(ctx, p.sop.id);
-        const [pinned] = (await service.history(ctx, p.sop.id)).filter(
-          (v) => v.version === p.sop.version,
-        );
-        const changed =
-          sop.status === 'active' &&
-          sop.version > p.sop.version &&
-          stable(sop.attributes) !== stable(pinned?.snapshot.attributes);
-        if (changed) moved.push(`${sop.name} v${p.sop.version} → v${sop.version}`);
-        protocol.push(changed ? { ...p, sop: { id: sop.id, version: sop.version } } : p);
+        const sop = await newer(p.sop.id, p.sop.version);
+        const next: ProtocolStep = {
+          ...p,
+          ...(sop ? { sop: { id: sop.id, version: sop.version } } : {}),
+        };
+        if (sop) {
+          const s = sop.attributes as SopAttributes;
+          const keep = next.bindings?.filter((b) => s.materials.some((m) => m.role === b.role));
+          const inputs = next.inputs?.filter((i) =>
+            s.variables.some((v) => v.name === i.name && v.kind !== 'computed'),
+          );
+          for (const b of next.bindings ?? [])
+            if (!keep?.includes(b)) dropped.push(`${p.id}: role ${b.role}`);
+          for (const i of next.inputs ?? [])
+            if (!inputs?.includes(i)) dropped.push(`${p.id}: input ${i.name}`);
+          delete next.bindings;
+          delete next.inputs;
+          if (keep?.length) next.bindings = keep;
+          if (inputs?.length) next.inputs = inputs;
+        }
+        if (next.bindings) {
+          const bindings = [];
+          for (const b of next.bindings) {
+            const now = b.version === undefined ? undefined : await newer(b.record, b.version);
+            bindings.push(now ? { ...b, version: now.version } : b);
+          }
+          next.bindings = bindings;
+        }
+        protocol.push(next);
       }
       if (moved.length === 0) {
         throw new OperationError(
@@ -163,7 +301,9 @@ export const campaignOperations = [
       return service.update(ctx, record.id, {
         expectedVersion: input.expectedVersion,
         attributes: { ...a, protocol },
-        reason: input.reason ?? `Adopted ${moved.join(', ')}`,
+        reason:
+          input.reason ??
+          `Adopted ${moved.join(', ')}${dropped.length ? `; dropped what the new SOP versions no longer have (${dropped.join(', ')})` : ''}`,
       });
     },
   }),

@@ -7,8 +7,22 @@ import {
   ExperimentAttributes as ExperimentSchema,
   type RunAttributes,
   RunAttributes as RunSchema,
+  type SetAttributes,
+  SetAttributes as SetSchema,
+  type SopAttributes,
 } from '@ailab/schema';
 import { checkPin } from '../records/pins.ts';
+import { KINDS_FOR } from '../sops/resolve.ts';
+
+/** Kinds that are definitions, so bindings pin their version (ADR 0039). */
+export const PINNED_KINDS: readonly string[] = [
+  'labware_type',
+  'product',
+  'lot',
+  'instrument_kind',
+  'equipment_kind',
+  'entity',
+];
 
 const PLAN = 'Campaigns and experiments (plan 013)';
 
@@ -112,6 +126,12 @@ export const experiment = defineKind({
       toId: d.document,
       relation: d.use === 'follows' ? 'follows' : 'references',
     })),
+    ...[
+      ...new Set([
+        ...(a.conclusion?.runs ?? []),
+        ...(a.conclusion?.verdicts ?? []).flatMap((v) => (v.evidence ?? []).map((e) => e.record)),
+      ]),
+    ].map((toId) => ({ toId, relation: 'evidence' })),
   ],
   sections: [
     {
@@ -161,14 +181,82 @@ export const experiment = defineKind({
       if (h.prediction && !readouts.has(h.prediction.readout))
         invalid.push(`Hypothesis ${h.id} is measured on ${h.prediction.readout}, not a readout`);
     }
+    if (a.conclusion) {
+      const hypotheses = new Set((a.hypotheses ?? []).map((h) => h.id));
+      for (const v of a.conclusion.verdicts ?? []) {
+        if (!hypotheses.has(v.hypothesis)) invalid.push(`There is no hypothesis ${v.hypothesis}`);
+        for (const e of v.evidence ?? [])
+          if (!(await get(e.record))) invalid.push(`${e.record} is not a record in this lab`);
+      }
+      for (const d of duplicates((a.conclusion.verdicts ?? []).map((v) => v.hypothesis)))
+        invalid.push(`Hypothesis ${d} has two verdicts`);
+      for (const id of a.conclusion.runs ?? []) {
+        const run = await get(id);
+        if (run?.kind !== 'run' || (run.attributes as RunAttributes).experiment.id !== current?.id)
+          invalid.push(`${id} is not a run of this experiment`);
+      }
+    }
     const unconfirmed: string[] = [];
     const newer: string[] = [];
+    const misfits: string[] = [];
     for (const p of a.protocol) {
       const pin = await checkPin(context, p.sop, 'sop', 'an SOP');
       if (pin.invalid) invalid.push(pin.invalid);
       if (pin.unconfirmed) unconfirmed.push(pin.unconfirmed);
       if (pin.newer && pin.record)
         newer.push(`${pin.record.name} v${pin.newer} (this uses v${p.sop.version})`);
+      if (!pin.pinned) continue;
+      const sop = pin.pinned.attributes as SopAttributes;
+      const where = `${p.id} (${pin.pinned.name} v${p.sop.version})`;
+      for (const d of duplicates((p.bindings ?? []).map((b) => b.role)))
+        invalid.push(`${where}: the role ${d} is bound twice`);
+      for (const d of duplicates((p.inputs ?? []).map((i) => i.name)))
+        invalid.push(`${where}: ${d} is given twice`);
+      for (const b of p.bindings ?? []) {
+        const material = sop.materials.find((m) => m.role === b.role);
+        if (!material) {
+          invalid.push(`${where} has no material ${b.role}`);
+          continue;
+        }
+        const record = await get(b.record);
+        if (!record) {
+          invalid.push(`${where}: ${b.record} is not a record in this lab`);
+          continue;
+        }
+        const definition = PINNED_KINDS.includes(record.kind);
+        if (definition && b.version === undefined) {
+          invalid.push(`${where}: pin ${record.name} by version, as it is a definition (ADR 0039)`);
+          continue;
+        }
+        if (!definition && b.version !== undefined) {
+          invalid.push(
+            `${where}: ${record.name} is bound by id and checked live; leave out its version`,
+          );
+          continue;
+        }
+        const kinds = KINDS_FOR[material.type];
+        if (!kinds.includes(record.kind)) {
+          misfits.push(
+            `${where}: ${record.name} is a ${record.kind.replaceAll('_', ' ')}; ${material.label} needs a ${kinds.map((k) => k.replaceAll('_', ' ')).join(' or ')}`,
+          );
+        }
+        if (b.version === undefined) continue;
+        const bound = await checkPin(
+          context,
+          { id: b.record, version: b.version },
+          record.kind,
+          'a record',
+        );
+        if (bound.invalid) invalid.push(`${where}: ${bound.invalid}`);
+        if (bound.unconfirmed) unconfirmed.push(bound.unconfirmed);
+        if (bound.newer) newer.push(`${record.name} v${bound.newer} (this uses v${b.version})`);
+      }
+      for (const i of p.inputs ?? []) {
+        const variable = sop.variables.find((v) => v.name === i.name);
+        if (!variable) invalid.push(`${where} has no variable ${i.name}`);
+        else if (variable.kind === 'computed')
+          invalid.push(`${where}: ${i.name} is worked out by a formula; give the values it uses`);
+      }
     }
     if (invalid.length) return { invalid };
 
@@ -187,15 +275,23 @@ export const experiment = defineKind({
         ),
         check(
           'protocol_confirmed',
-          'The SOP versions it follows are confirmed',
+          'The SOP and record versions it follows are confirmed',
           'blocker',
           unconfirmed.length ? `${unconfirmed.join('; ')}; pin a confirmed version` : undefined,
           'Confirm the SOP, then pin the version a person confirmed',
           'protocol',
         ),
         check(
+          'bindings_fit',
+          'Bound records fit their roles',
+          'blocker',
+          misfits.length ? misfits.join('; ') : undefined,
+          'Bind each role to a record of the kind the SOP asks for',
+          'protocol',
+        ),
+        check(
           'protocol_current',
-          'It follows the latest confirmed SOP versions',
+          'It follows the latest confirmed versions',
           'warning',
           newer.length ? `Newer confirmed versions: ${newer.join('; ')}` : undefined,
           'Look at what changed, then adopt the newer versions or keep these',
@@ -227,7 +323,7 @@ export const experiment = defineKind({
 
 /**
  * A run (plan 013, E2): one execution of an experiment's confirmed design, pinned to the design
- * version it followed. Step actuals, deviations and data files come with 013c.
+ * version it followed, with its steps as a checklist, deviations and data files (013c).
  */
 export const run = defineKind({
   kind: 'run',
@@ -235,14 +331,69 @@ export const run = defineKind({
   namePrefix: 'RUN',
   nameWidth: 4,
   attributes: RunSchema,
-  links: (a: RunAttributes) => [{ toId: a.experiment.id, relation: 'runs' }],
+  createdBy: 'runs.start',
+  links: (a: RunAttributes) => [
+    { toId: a.experiment.id, relation: 'runs' },
+    ...[...new Set((a.data ?? []).map((d) => d.file))].map((toId) => ({ toId, relation: 'data' })),
+  ],
   related: async (a, context) => {
     const pin = await checkPin(context, a.experiment, 'experiment', 'an experiment');
     if (pin.invalid) return { invalid: [pin.invalid] };
     if (pin.unconfirmed)
       return { invalid: [`${pin.unconfirmed}; a run follows a confirmed experiment design`] };
-    return {};
+    const invalid: string[] = [];
+    for (const d of a.data ?? []) {
+      if ((await context.get(d.file))?.kind !== 'file')
+        invalid.push(`${d.file} is not a file in this lab`);
+      if (d.container && (await context.get(d.container))?.kind !== 'container')
+        invalid.push(`${d.container} is not a container in this lab`);
+    }
+    return invalid.length ? { invalid } : {};
   },
 });
 
-export const campaignKinds = [campaign, experiment, run];
+/** Kinds a set's members may be (E10). */
+const MEMBER_KINDS = ['entity', 'sample', 'container'];
+
+/**
+ * A set (plan 013, E10): a named list of entities, samples or containers one experiment hands to
+ * the next, with the criterion that picked them.
+ */
+export const set = defineKind({
+  kind: 'set',
+  idPrefix: 'set',
+  namePrefix: 'SET',
+  nameWidth: 3,
+  attributes: SetSchema,
+  createdBy: 'sets.create',
+  links: (a: SetAttributes) => [
+    ...[...new Set(a.members.map((m) => m.record))].map((toId) => ({ toId, relation: 'contains' })),
+    ...(a.from ? [{ toId: a.from.experiment, relation: 'picked_by' }] : []),
+  ],
+  related: async (a, { get }) => {
+    const invalid: string[] = [];
+    for (const d of duplicates(a.members.map((m) => m.record)))
+      invalid.push(`${d} is in the set twice`);
+    for (const m of a.members) {
+      const record = await get(m.record);
+      if (!record) invalid.push(`${m.record} is not a record in this lab`);
+      else if (!MEMBER_KINDS.includes(record.kind))
+        invalid.push(`${record.name} is not an entity, sample or container, which a set holds`);
+    }
+    if (a.from) {
+      if ((await get(a.from.experiment))?.kind !== 'experiment')
+        invalid.push(`${a.from.experiment} is not an experiment in this lab`);
+      if (a.from.run) {
+        const run = await get(a.from.run);
+        if (
+          run?.kind !== 'run' ||
+          (run.attributes as RunAttributes).experiment.id !== a.from.experiment
+        )
+          invalid.push(`${a.from.run} is not a run of ${a.from.experiment}`);
+      }
+    }
+    return invalid.length ? { invalid } : {};
+  },
+});
+
+export const campaignKinds = [campaign, experiment, run, set];

@@ -71,6 +71,8 @@ An open question (G6) blocks confirming until a person settles it with `sops.ans
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
 
+`sops.calculate` can also work out an earlier `version` of the SOP and read a binding's record at its `version`, which is how an experiment computes what it pinned (ADR 0039, `experiments.calculate`).
+
 ## Screens (012d)
 
 `apps/web/src/pages/Sops.tsx`: the SOPs page (`/sops`, in the Library menu) lists SOPs with their assay, step count and open questions. An SOP's record page shows three blocks between readiness and the editable sections:
