@@ -7,6 +7,7 @@ import {
   type LabwareTypeAttributes,
   LocationAttributes,
   type RecordEnvelope,
+  SampleAttributes,
 } from '@ailab/schema';
 
 const PLAN = 'Inventory (plan 010), V5 and V6';
@@ -151,4 +152,36 @@ async function holderProblems(
   return taken ? [`${place.position} in ${holder.name} already holds ${taken.name}`] : [];
 }
 
-export const inventoryKinds = [location, container];
+/** A batch the lab made of an entity (V2): a miniprep, a PCR product, a cell bank, with its QC. */
+export const sample = defineKind({
+  kind: 'sample',
+  idPrefix: 'smp',
+  namePrefix: 'SMP',
+  nameWidth: 4,
+  attributes: SampleAttributes,
+  links: (a) => [
+    { toId: a.entity, relation: 'is_a' },
+    ...(a.derivedFrom ?? []).map((id) => ({ toId: id, relation: 'derived_from' })),
+  ],
+  related: async (a, { get, current }) => {
+    const invalid: string[] = [];
+    if ((await get(a.entity))?.kind !== 'entity') {
+      invalid.push(`${a.entity} is not an entity in this lab`);
+    }
+    if (current && (current.attributes as SampleAttributes).entity !== a.entity) {
+      invalid.push(`${current.name} is a sample of one entity; register a new sample instead`);
+    }
+    for (const id of a.derivedFrom ?? []) {
+      if (id === current?.id) invalid.push('A sample can’t be derived from itself');
+      const kind = (await get(id))?.kind;
+      if (kind !== 'sample' && kind !== 'lot')
+        invalid.push(`${id} is not a sample or lot in this lab`);
+    }
+    const keys = (a.qc ?? []).map((q) => q.key);
+    const twice = keys.find((k, i) => keys.indexOf(k) !== i);
+    if (twice) invalid.push(`QC ${twice} is listed twice; keep the latest`);
+    return { invalid };
+  },
+});
+
+export const inventoryKinds = [location, container, sample];

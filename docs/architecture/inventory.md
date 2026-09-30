@@ -61,9 +61,13 @@ A container sits in a location or in a position of a rack or box (`{container, p
 
 A well holds a volume (or `"unknown"`) and components: samples (`smp_`) and lots (`lot_`), each with a concentration in the unit it came in, or an amount in a dry well. Mixing converts concentrations to amounts (concentration × volume), adds the same source in the same dimension, and divides by the new volume, in exact decimals. Molar, mass, activity, cell, colony, % v/v and % w/v concentrations mix; % w/w and anything without a concentration stay "present, concentration unknown". Taking more than a well holds is refused. Estimated contents are marked `assumed`, and the mark travels with the liquid. See ADR 0031.
 
+## Samples (010c, V2)
+
+A `sample` (`smp_`, `SMP-0001`) is a batch the lab made of an entity: a miniprep, midi or maxiprep, PCR product, digest, assembly, purification, culture, cell bank, extraction or synthesis. It carries when and by whom it was made, the samples or lots it was derived from, and its QC (`{key, value, measured?, method?}`, where the value is a quantity, yes/no or a short text; one entry per key). The QC belongs to the prep and is shared by all its aliquots. Bought things and recipe batches stay lots (009). Links: `is_a` the entity, `derived_from`. The entity can't change. `samples.register` creates it active; an agent's registration is a proposal.
+
 ## Volume ledger (010c, V4 and V7)
 
-Every change to a well is an event in `inventory_events` (fill, transfer, consume, correct) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
+Every change to a well is an event in `inventory_events` (fill, transfer, stamp, consume, correct, discard) with its actor, operation and reason, and one line per well in `inventory_lines`: liquid `in` (with where it came from), `out` (with where it went) or `set` by a correction, with the well's state after. `well_contents` keeps each well's current state in the same transaction; empty wells have no row. A tube or trough is well `A1`; racks, tip racks and lids hold no liquid.
 
 - Refused: taking more than a well holds (the whole event rolls back), filling past the labware type's `maxVolume`, a well the container doesn't have, a source that isn't a lot or sample in the lab, a discarded container.
 - Warned: a well left below the labware type's dead volume.
@@ -83,6 +87,8 @@ Every change to a well is an event in `inventory_events` (fill, transfer, consum
 | `inventory.transfer` | Well-to-well moves, in order, mixed by the mixing math | proposed |
 | `inventory.consume` | Liquid used up or thrown away | proposed |
 | `inventory.correct` | Replace wells' contents with what was measured, with a reason | proposed |
+| `inventory.discard` | Empties the wells in the ledger and marks the container discarded; a box must be emptied first | proposed |
+| `samples.register` | A batch the lab made of an entity, with its QC | proposed |
 | `inventory.wells` | What a container's wells hold | read |
 | `inventory.history` | A container's or well's ledger, newest first | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |
@@ -99,4 +105,4 @@ The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, stamping plate to plate, discarding, lineage, samples and the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, stamping plate to plate, lineage and the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).

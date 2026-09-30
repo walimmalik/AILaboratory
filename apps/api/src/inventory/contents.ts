@@ -16,6 +16,7 @@ import {
   type InventoryEventType,
   inventoryConsume,
   inventoryCorrect,
+  inventoryDiscard,
   inventoryFill,
   inventoryHistory,
   inventoryTransfer,
@@ -24,6 +25,7 @@ import {
   type LedgerLine,
   type Quantity,
   type RecordEnvelope,
+  samplesRegister,
   type WellState,
 } from '@ailab/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -255,6 +257,77 @@ function contentsProblem(name: string, error: unknown): never {
 const touchesContainer = (input: { container: string }) => [input.container];
 
 export const contentsOperations = [
+  implement(samplesRegister, {
+    agentPolicy: 'propose',
+    run: async (ctx, { label, reason, ...attributes }, deps) =>
+      new RecordService(deps.db, deps.kinds).create(ctx, {
+        kind: 'sample',
+        label,
+        status: 'active',
+        attributes,
+        reason: reason ?? `Registered ${label}`,
+      }),
+  }),
+  implement(inventoryDiscard, {
+    agentPolicy: 'propose',
+    touches: (input) => [input.container],
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await service.get(ctx, input.container).catch((error: unknown) => {
+        if (error instanceof RecordError && error.code === 'not_found') return undefined;
+        throw error;
+      });
+      if (record?.kind !== 'container') {
+        throw new OperationError(
+          'invalid_input',
+          `${input.container} is not a container in this lab`,
+        );
+      }
+      const attributes = record.attributes as ContainerAttributes;
+      if (attributes.status === 'discarded') {
+        throw new OperationError('invalid_input', `${record.name} is already discarded`);
+      }
+      const held = (await service.list(ctx, { kind: 'container', limit: 50_000 })).filter((c) => {
+        const a = c.attributes as ContainerAttributes;
+        return (
+          a.status !== 'discarded' &&
+          a.place &&
+          'container' in a.place &&
+          a.place.container === record.id
+        );
+      });
+      if (held.length > 0) {
+        throw new OperationError(
+          'invalid_input',
+          `${record.name} still holds ${held.map((c) => c.name).join(', ')}; move or discard them first`,
+        );
+      }
+      const rows = await deps.db
+        .select({ well: wellContents.well })
+        .from(wellContents)
+        .where(eq(wellContents.containerId, record.id));
+      let event: InventoryEvent | undefined;
+      if (rows.length > 0) {
+        const ledger = new Ledger(
+          deps.db,
+          ctx,
+          'discard',
+          inventoryDiscard.id,
+          input.reason,
+          service,
+        );
+        const v = await ledger.vessel(record.id);
+        for (const { well } of rows) ledger.set(v, well, EMPTY_WELL_STATE, { change: 'set' });
+        event = (await ledger.commit()).event;
+      }
+      const container = await service.update(ctx, record.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: { ...attributes, status: 'discarded' },
+        reason: input.reason ?? 'Discarded',
+      });
+      return { container, ...(event ? { event } : {}) };
+    },
+  }),
   implement(inventoryFill, {
     agentPolicy: 'propose',
     touches: touchesContainer,

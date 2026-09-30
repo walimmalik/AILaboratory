@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Component, InventoryEvent, WellRef, WellState } from '../contents.ts';
+import { Component, InventoryEvent, SampleAttributes, WellRef, WellState } from '../contents.ts';
 import { ContainerId } from '../inventory.ts';
 import { LiquidVolume, WellName } from '../labware.ts';
 import { defineContract } from '../operation.ts';
@@ -125,4 +125,30 @@ export const inventoryHistory = defineContract({
     limit: z.number().int().min(1).max(500).optional(),
   }),
   output: z.object({ events: z.array(InventoryEvent) }),
+});
+
+export const samplesRegister = defineContract({
+  id: 'samples.register',
+  summary:
+    'Register a batch the lab made of an entity: a miniprep, PCR product, purified protein, culture or cell bank, with its QC (concentration, A260/280, sequence verified, passage). Its tubes are containers filled with it',
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('e.g. "pIL6p-luc2 miniprep, colony 1"'),
+    ...SampleAttributes.shape,
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const inventoryDiscard = defineContract({
+  id: 'inventory.discard',
+  summary:
+    'Record a container thrown away: its wells are emptied in the ledger and it is marked discarded. It stays readable with its history. A rack or box must be emptied first',
+  effect: 'write',
+  input: z.strictObject({
+    container: ContainerId,
+    expectedVersion: z.number().int().positive().describe('The version you last read'),
+    reason: Reason,
+  }),
+  output: z.object({ container: RecordEnvelope, event: InventoryEvent.optional() }),
 });

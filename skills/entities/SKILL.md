@@ -5,7 +5,7 @@ description: Register what things are in AILaboratory (plasmids, cell lines, com
 
 # Entities in AILaboratory
 
-An **entity kind** (`entity_kind`, `ENK-0001`) is a kind of thing the lab registers: plasmid, cell line, compound, or one the lab adds. It has a base class (`dna`, `rna`, `protein`, `chemical`, `cells`, `organism`, `other`), a readable prefix (`PLS`) and typed fields. An **entity** (`entity`) is one plasmid, cell line or compound, named with its kind's prefix (`PLS-0001`). Samples and containers holding them come later (plan 010).
+An **entity kind** (`entity_kind`, `ENK-0001`) is a kind of thing the lab registers: plasmid, cell line, compound, or one the lab adds. It has a base class (`dna`, `rna`, `protein`, `chemical`, `cells`, `organism`, `other`), a readable prefix (`PLS`) and typed fields. An **entity** (`entity`) is one plasmid, cell line or compound, named with its kind's prefix (`PLS-0001`). Batches the lab makes of an entity are samples, and the tubes and plates holding them are containers: see the inventory skill.
 
 ## Finding
 

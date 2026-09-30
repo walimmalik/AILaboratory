@@ -60,7 +60,7 @@ Seed data uses its own marking per value: verified, estimated or unknown. Loader
 
 ## IDs and readable names
 
-Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and liquid classes (009), entity kinds and entities (010a), locations and containers (010b), plus the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
+Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and liquid classes (009), entity kinds and entities (010a), locations and containers (010b), samples (010c), plus the test `widget` (`WDG-0001`, registered when `AILAB_TEST_KINDS=1`). Everything else is planned; prefixes come from the plans and are unique across kinds (the kind registry refuses duplicates).
 
 | Kind | ID prefix | Readable name | Plan |
 | --- | --- | --- | --- |
@@ -76,7 +76,7 @@ Built kinds: `labware_type` and `vendor` (007a), instruments (008), reagents and
 | Lot | `lot_` | `LOT-0001` | 009 |
 | Entity kind | `enk_` | `ENK-0001` | 010, built |
 | Entity | `ent_` | per kind: `PLS-0012`, `CMP-0003`, `CEL-0001` | 010, built |
-| Sample | `smp_` | `SMP-0001` | 010 |
+| Sample | `smp_` | `SMP-0001` | 010, built |
 | Container | `lw_` | per family: `PLT-`, `TUB-`, `RES-`, `BOX-`, `TIP-`, `LID-` + 6 digits; the name is the barcode | 010, built |
 | Location | `loc_` | `LOC-0001` | 010, built |
 | Inventory event (not a record: a ledger entry) | `iev_` | none | 010, built |
