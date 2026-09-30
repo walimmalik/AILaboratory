@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pinOf } from './design.ts';
 import { RecordId, recordIdOf } from './ids.ts';
 import { DecimalString, Quantity } from './quantity.ts';
 
@@ -130,3 +131,56 @@ export type WellPlan = z.infer<typeof WellPlan>;
 
 export const PlatePlan = z.object({ plate: z.number().int(), wells: z.array(WellPlan) });
 export type PlatePlan = z.infer<typeof PlatePlan>;
+
+/** A hand edit to one well (P4, M5): applied after placement, kept through regeneration. */
+export const WellOverride = z.strictObject({
+  plate: z.number().int().min(1).describe('Plate 1 to n in the map'),
+  well: z.string().regex(/^[A-Z]{1,2}\d{1,2}$/, 'a well like A1 or AF48'),
+  role: WellRole,
+  subject: RecordId.optional().describe('What goes in, if anything'),
+  label: z.string().min(1).optional(),
+  note: z.string().min(1).optional().describe('Why it was changed'),
+});
+export type WellOverride = z.infer<typeof WellOverride>;
+
+/**
+ * A plate map (014 P1, M3): a layout applied to real subjects across as many plates as they need.
+ * The wells are worked out from the pinned layout version, subjects, seed and overrides, so the
+ * same map always gives the same plates.
+ */
+export const PlateMapAttributes = z.strictObject({
+  layout: pinOf(LayoutId).describe('The layout and the version it applies'),
+  experiment: recordIdOf('exp').optional(),
+  purpose: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('What it is for, when it is not part of an experiment'),
+  labware: pinOf(recordIdOf('lwt')).optional().describe('The plate type the map is for'),
+  subjects: z
+    .array(
+      z.strictObject({
+        record: RecordId.describe('An entity, sample, lot or container'),
+        label: z.string().min(1).optional().describe('How the map shows it; default its name'),
+      }),
+    )
+    .describe('In the order they are placed'),
+  controls: z
+    .array(
+      z.strictObject({
+        region: LocalName.describe("The layout's fixed region id"),
+        record: RecordId,
+      }),
+    )
+    .optional()
+    .describe('Records for the fixed regions, e.g. the DMSO lot in the neutral controls'),
+  strategy: Placement.strategy.describe("Instead of the layout's strategy"),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe('For randomized and balanced placement; set when the map is drafted'),
+  overrides: z.array(WellOverride).optional(),
+  notes: z.string().min(1).optional(),
+});
+export type PlateMapAttributes = z.infer<typeof PlateMapAttributes>;

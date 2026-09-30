@@ -1,11 +1,76 @@
 import { generatePlateMap, PlateMapError } from '@ailab/domain';
-import { type LayoutAttributes, layoutsDraft, layoutsPreview } from '@ailab/schema';
+import {
+  type LayoutAttributes,
+  layoutsDraft,
+  layoutsPreview,
+  type PlateMapAttributes,
+  platemapsDraft,
+  platemapsExport,
+  platemapsOverride,
+  platemapsWells,
+  type RecordEnvelope,
+} from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
-import { implement } from '../operations/registry.ts';
-import { RecordService } from '../records/service.ts';
+import { type AgentPolicy, implement, type OperationDeps } from '../operations/registry.ts';
+import { type RecordContext, RecordService } from '../records/service.ts';
+import { planPlateMap } from './generate.ts';
 import { layoutSpec, subjectOf } from './spec.ts';
 
-/** Layout templates (plan 014a): drafting them and previewing what they give. */
+const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
+  new RecordService(deps.db, deps.kinds);
+
+/** A record as it is now, or at a version; refused when it isn't of the kind. */
+async function recordAt(
+  records: RecordService,
+  ctx: RecordContext,
+  id: string,
+  kind: string,
+  noun: string,
+  version?: number,
+): Promise<RecordEnvelope> {
+  const record =
+    version === undefined
+      ? await records.get(ctx, id).catch(() => undefined)
+      : (await records.history(ctx, id).catch(() => [])).find((v) => v.version === version)
+          ?.snapshot;
+  if (record?.kind !== kind)
+    throw new OperationError(
+      'not_found',
+      `${id}${version ? ` version ${version}` : ''} is not ${noun} in this lab`,
+    );
+  return record;
+}
+
+/** A plate map worked out at a version, with its pinned layout. */
+async function wellsOf(
+  deps: Pick<OperationDeps, 'db' | 'kinds'>,
+  ctx: RecordContext,
+  id: string,
+  version?: number,
+) {
+  const records = service(deps);
+  const map = await recordAt(records, ctx, id, 'plate_map', 'a plate map', version);
+  const a = map.attributes as PlateMapAttributes;
+  const layout = await recordAt(records, ctx, a.layout.id, 'layout', 'a layout', a.layout.version);
+  const get = (rid: string) => records.get(ctx, rid).catch(() => undefined);
+  try {
+    return { map, result: await planPlateMap(a, layout.attributes as LayoutAttributes, get) };
+  } catch (error) {
+    if (error instanceof PlateMapError) throw new OperationError('invalid_state', error.message);
+    throw error;
+  }
+}
+
+/** Agents edit a draft plate map directly; changes to a confirmed one are proposals. */
+const draftOnly: AgentPolicy<{ id: string }> = async (ctx, input, deps) =>
+  (await service(deps).get(ctx, input.id)).status === 'draft' ? 'direct' : 'propose';
+
+const csvCell = (v: string | number | undefined) => {
+  const s = v === undefined ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+};
+
+/** Layout templates and plate maps (plan 014a). */
 export const plateMapOperations = [
   implement(layoutsDraft, {
     agentPolicy: 'direct',
@@ -55,6 +120,99 @@ export const plateMapOperations = [
           throw new OperationError('invalid_input', error.message);
         throw error;
       }
+    },
+  }),
+  implement(platemapsDraft, {
+    agentPolicy: 'direct',
+    run: async (ctx, { label, layout, layoutVersion, seed, evidence, reason, ...rest }, deps) => {
+      const records = service(deps);
+      const current = await recordAt(records, ctx, layout, 'layout', 'a layout');
+      const version = layoutVersion ?? current.version;
+      const pinned = await recordAt(records, ctx, layout, 'layout', 'a layout', version);
+      const strategy =
+        rest.strategy ?? (pinned.attributes as LayoutAttributes).strategy ?? 'in_order';
+      const chosen =
+        seed ?? (strategy === 'in_order' ? undefined : Math.floor(Math.random() * 2 ** 31));
+      return records.create(ctx, {
+        kind: 'plate_map',
+        label,
+        attributes: {
+          layout: { id: layout, version },
+          ...rest,
+          ...(chosen !== undefined ? { seed: chosen } : {}),
+        } satisfies PlateMapAttributes,
+        ...(evidence ? { evidence } : {}),
+        reason: reason ?? `Drafted the plate map ${label} from ${current.name}`,
+      });
+    },
+  }),
+  implement(platemapsWells, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const { result } = await wellsOf(deps, ctx, input.id, input.version);
+      return result as never;
+    },
+  }),
+  implement(platemapsOverride, {
+    agentPolicy: draftOnly,
+    run: async (ctx, input, deps) => {
+      const records = service(deps);
+      const map = await recordAt(records, ctx, input.id, 'plate_map', 'a plate map');
+      const a = map.attributes as PlateMapAttributes;
+      if (!input.overrides?.length && !input.clear?.length)
+        throw new OperationError('invalid_input', 'Give wells to change or hand edits to clear');
+      const key = (o: { plate: number; well: string }) => `${o.plate}:${o.well}`;
+      const drop = new Set([...(input.clear ?? []), ...(input.overrides ?? [])].map(key));
+      const unknown = (input.clear ?? []).filter(
+        (c) => !(a.overrides ?? []).some((o) => key(o) === key(c)),
+      );
+      if (unknown.length)
+        throw new OperationError(
+          'invalid_input',
+          `No hand edit on ${unknown.map((c) => `plate ${c.plate} ${c.well}`).join(', ')}`,
+        );
+      const overrides = [
+        ...(a.overrides ?? []).filter((o) => !drop.has(key(o))),
+        ...(input.overrides ?? []),
+      ];
+      const { overrides: _o, ...rest } = a;
+      const n = input.overrides?.length ?? 0;
+      return records.update(ctx, map.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: { ...rest, ...(overrides.length ? { overrides } : {}) },
+        reason:
+          input.reason ??
+          (n
+            ? `Changed ${n} well${n === 1 ? '' : 's'} by hand`
+            : `Cleared ${input.clear?.length} hand edit${input.clear?.length === 1 ? '' : 's'}`),
+      });
+    },
+  }),
+  implement(platemapsExport, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const { map, result } = await wellsOf(deps, ctx, input.id, input.version);
+      const lines = [
+        'plate,well,role,subject,name,replicate,point,concentration,unit',
+        ...result.plates.flatMap((p) =>
+          p.wells.map((w) =>
+            [
+              p.plate,
+              w.well,
+              w.role,
+              w.subject,
+              w.label,
+              w.replicate,
+              w.point,
+              w.concentration?.value,
+              w.concentration?.unit,
+            ]
+              .map(csvCell)
+              .join(','),
+          ),
+        ),
+      ];
+      return { filename: `${map.name}.csv`, csv: `${lines.join('\n')}\n` };
     },
   }),
 ];
