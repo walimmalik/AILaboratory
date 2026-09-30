@@ -1,6 +1,6 @@
 import type { LiquidClassAttributes, RecordEnvelope } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
-import { cellWords, classMatrix, type MatrixClass, volumeWords } from './liquids.ts';
+import { cellWords, classMatrix, type MatrixClass, shortLabel, volumeWords } from './liquids.ts';
 
 const cls = (
   label: string,
@@ -73,5 +73,27 @@ describe('volumeWords', () => {
     );
     expect(volumeWords({ min: { value: '2.5', unit: 'nL' } })).toBe('from 2.5 nL');
     expect(volumeWords(undefined)).toBe('—');
+  });
+});
+
+describe('shortLabel', () => {
+  it('names a model by its model name and an Echo plate by its code', () => {
+    const of = (kind: string, label: string, attributes: Record<string, unknown> = {}) =>
+      ({ kind, label, attributes }) as RecordEnvelope;
+    expect(
+      shortLabel(of('instrument_kind', 'Hamilton Microlab STAR', { model: 'Microlab STAR' })),
+    ).toBe('Microlab STAR');
+    expect(shortLabel(of('instrument_kind', 'Echo 650'))).toBe('Echo 650');
+    expect(
+      shortLabel(
+        of(
+          'labware_type',
+          'Echo Qualified 384-well Cyclic Olefin Copolymer (COC) Source Microplate, Low Dead Volume (384LDV), clear, non-sterile',
+        ),
+      ),
+    ).toBe('384LDV');
+    expect(shortLabel(of('equipment_kind', 'STAR 1000 uL channels (8)'))).toBe(
+      'STAR 1000 uL channels (8)',
+    );
   });
 });

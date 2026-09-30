@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
@@ -36,6 +36,22 @@ function ShellLayout() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const assistant = useAssistant();
+  // At laptop width, or with the assistant open below a wide screen, the module list folds behind
+  // a Menu button so tables keep their columns. Phones get the row of links instead (CSS).
+  const wide = useMedia('(min-width: 1600px)');
+  const roomy = useMedia('(min-width: 1200px)');
+  const phone = !useMedia('(min-width: 721px)');
+  const compact = !phone && (!roomy || (assistant.open && !wide));
+  const [menu, setMenu] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close the menu whenever the page changes
+  useEffect(() => setMenu(false), [path]);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && setMenu(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menu]);
 
   const signOut = async () => {
     await api.signOut();
@@ -44,8 +60,22 @@ function ShellLayout() {
   };
 
   return (
-    <div className={`shell ${assistant.open ? 'with-assistant' : ''}`}>
+    <div
+      className={`shell${assistant.open ? ' with-assistant' : ''}${compact ? ' compact' : ''}${compact && menu ? ' nav-open' : ''}`}
+    >
       <header className="topbar">
+        {compact && (
+          <button
+            type="button"
+            className="btn small"
+            aria-expanded={menu}
+            aria-controls="modules"
+            onClick={() => setMenu(!menu)}
+          >
+            Menu
+            {pending > 0 && <span className="count num agent-ink"> {pending}</span>}
+          </button>
+        )}
         <Link to="/activity" className="brand">
           ai<span>lab</span>
         </Link>
@@ -76,7 +106,7 @@ function ShellLayout() {
         </button>
       </header>
 
-      <nav className="nav" aria-label="Modules">
+      <nav className="nav" id="modules" aria-label="Modules">
         <section>
           <h2>Lab</h2>
           <ul>
@@ -162,6 +192,19 @@ function ShellLayout() {
       </footer>
     </div>
   );
+}
+
+/** Whether the window matches a media query, kept current as it resizes. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const onChange = () => setMatches(list.matches);
+    onChange();
+    list.addEventListener('change', onChange);
+    return () => list.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
 }
 
 /** The global ask bar: starts a new conversation with the assistant from any page. "/" focuses it. */

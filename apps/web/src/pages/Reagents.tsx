@@ -19,6 +19,7 @@ import {
   classMatrix,
   type MatrixClass,
   platformWords,
+  shortLabel,
   storageWords,
   volumeWords,
 } from '../lib/liquids.ts';
@@ -212,14 +213,14 @@ export function LiquidTypesPage() {
   );
 }
 
-/** Labels of a few records by ID, fetched one by one (for IDs across several kinds). */
-function useRecordLabels(ids: string[]) {
+/** A few records by ID, fetched one by one (for IDs across several kinds). */
+function useRecordsById(ids: string[]) {
   const results = useQueries({ queries: ids.map((id) => recordQuery(id)) });
-  const labels = new Map<string, string>();
+  const found = new Map<string, RecordEnvelope>();
   results.forEach((r, i) => {
-    if (r.data) labels.set(ids[i] as string, r.data.label);
+    if (r.data) found.set(ids[i] as string, r.data);
   });
-  return labels;
+  return found;
 }
 
 /**
@@ -248,12 +249,20 @@ function ClassMatrix() {
       ),
     ),
   ].sort();
-  const labels = useRecordLabels(ids);
+  const byId = useRecordsById(ids);
   const rows = classMatrix(
     classes,
     types.map((t) => t.id),
-    (id) => labels.get(id) ?? '…',
+    (id) => byId.get(id)?.label ?? '…',
+    (id) => {
+      const record = byId.get(id);
+      return record ? shortLabel(record) : '…';
+    },
   );
+  const [picked, setPicked] = useState<{ row: string; type: string }>();
+  const pickedRow = rows.find((r) => r.key === picked?.row);
+  const pickedCell = picked ? pickedRow?.cells.get(picked.type) : undefined;
+  const pickedType = types.find((t) => t.id === picked?.type);
   return (
     <section className="block" aria-label="Classes by device and liquid type">
       <header>
@@ -280,17 +289,31 @@ function ClassMatrix() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.key}>
-                    <td className="device">{row.label}</td>
+                    <td className="device" title={row.title}>
+                      {row.label}
+                    </td>
                     {types.map((t) => {
                       const cell = row.cells.get(t.id);
                       const { text, tone } = cellWords(cell);
+                      const ink = tone === 'agent' ? 'agent-ink' : (tone ?? '');
+                      const here = picked?.row === row.key && picked.type === t.id;
                       return (
-                        <td
-                          key={t.id}
-                          className={`nowrap ${tone === 'agent' ? 'agent-ink' : (tone ?? '')}`}
-                          title={cell?.classes.map((c) => c.record.label).join('\n')}
-                        >
-                          {text}
+                        <td key={t.id} className={`nowrap ${ink}`}>
+                          {cell && cell.classes.length > 0 ? (
+                            <button
+                              type="button"
+                              className={`link-btn ${ink}`}
+                              aria-pressed={here}
+                              aria-label={`${text}: ${row.title}, ${t.label}`}
+                              onClick={() =>
+                                setPicked(here ? undefined : { row: row.key, type: t.id })
+                              }
+                            >
+                              {text}
+                            </button>
+                          ) : (
+                            text
+                          )}
                         </td>
                       );
                     })}
@@ -300,9 +323,36 @@ function ClassMatrix() {
             </table>
           </div>
         )}
+        {pickedRow && pickedCell && (
+          <section className="matrix-pick" aria-label="Classes in the selected cell">
+            <h3>
+              {pickedType?.label} on {pickedRow.title}
+            </h3>
+            <ul className="plain">
+              {pickedCell.classes.map((c) => (
+                <li key={c.record.id}>
+                  <Link to="/records/$id" params={{ id: c.record.id }}>
+                    {c.record.label}
+                  </Link>
+                  <span className="muted">
+                    {' '}
+                    {[
+                      volumeWords(c.attributes.volume),
+                      c.attributes.labDefault ? 'lab default' : undefined,
+                      c.verified ? 'verified' : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  {c.record.status !== 'active' && <span className="agent-ink"> · draft</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <p className="muted">
           Drafts, in agent ink, wait for your review; only confirmed classes are used for transfers.
-          A class counts as verified only after a real check in this lab. Point at a cell to see its
+          A class counts as verified only after a real check in this lab. Select a cell to list its
           classes.
         </p>
       </div>
