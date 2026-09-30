@@ -1,4 +1,5 @@
 import type { Actor, RecordEnvelope } from '@ailab/schema';
+import pg from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { connect } from '../db/client.ts';
@@ -12,14 +13,20 @@ import { inventoryKinds } from './kinds.ts';
 
 /**
  * PGlite runs everything on one connection, so a race between inventory writes only shows on a
- * real Postgres with a pool. Set TEST_DATABASE_URL to a migrated database to run it (the CI
- * Postgres job does); each run makes its own lab, so it can share a database.
+ * real Postgres with a pool. Set TEST_DATABASE_URL to a Postgres the test may create databases on
+ * (the CI Postgres job does); it runs in a database of its own and drops it afterwards.
  */
 const url = process.env.TEST_DATABASE_URL;
 
 describe.skipIf(!url)('inventory on Postgres', () => {
   it('keeps every volume when operations consume from the same well at once', async () => {
-    const { db, migrate, close } = await connect(url as string);
+    const admin = new pg.Client({ connectionString: url });
+    await admin.connect();
+    const name = `ailab_race_${Date.now()}`;
+    await admin.query(`create database ${name}`);
+    const scratch = new URL(url as string);
+    scratch.pathname = `/${name}`;
+    const { db, migrate, close } = await connect(scratch.toString());
     try {
       await migrate();
       const tenant = await createTenant(db, {
@@ -98,6 +105,8 @@ describe.skipIf(!url)('inventory on Postgres', () => {
       expect(events.filter((e) => e.type === 'consume')).toHaveLength(12);
     } finally {
       await close();
+      await admin.query(`drop database ${name}`);
+      await admin.end();
     }
   }, 60_000);
 });
