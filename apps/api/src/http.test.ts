@@ -156,6 +156,7 @@ describe('MCP', () => {
       'sops.calculate',
       'sops.evaluate',
       'sops.score',
+      'transfers.check',
       'transfers.dilution_options',
       'transfers.optimize_dilution',
       'transfers.options',

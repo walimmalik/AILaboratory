@@ -22,3 +22,12 @@ Code works out every volume, droplet count, concentration and total; you pick th
 ## Source volumes
 
 `transfers.source_volumes` `{draws: [{container, well, volume}], overage?}` sums what each source well gives, adds its labware type's dead volume and the overage, and compares with what inventory says the well holds. `short` says how much is missing. Nothing is reserved yet: transfer plans reserve stock when they come (016a-3).
+
+## Transfer plans
+
+A transfer plan (`TFP-0001`) is a design: plates and groups of transfers that code checks and a person confirms.
+
+- `transfers.draft` `{label, experiment?, purpose?, plates, groups}`. Each plate is `{id, role: source | destination | intermediate, labwareType: {id, version}, container?, plateMap?: {map: {id, version}, plate}}`; transfers name plates by that `id`. Each group is `{id, label, method, instrument?: {instrument, node?}, reason, alternatives?, liquid?, liquidClass?, tips?, transfers: [{from: {plate, well}, to: {plate, well}, volume}]}`, in the order they run. Leave `instrument` out for by hand. Put why you chose the method and instrument in `reason`, and what else you considered in `alternatives`. Code copies the instrument's limits into the group.
+- `transfers.set_instrument` switches a group (with `why`); `transfers.pick_sources` says which container each source plate is. Both are direct on drafts and proposed on a confirmed plan.
+- `records.readiness` shows what code checks from the records: volumes against each group's instrument, wells overfilled, intermediates drawn before they are made, sources not picked, unconfirmed or newer labware and plate maps. `transfers.check` adds what is true today: instruments ready with the limits the plan used, source wells holding enough after other plans' reservations, and totals (transfers, tips estimated, source wells).
+- A person confirms the plan section by section. A confirmed plan reserves what it draws from its source containers until it is archived (or, from 016b, its run is recorded). `transfers.reserved {container}` shows reservations; over-committing warns, it does not block.

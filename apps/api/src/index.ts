@@ -18,6 +18,7 @@ import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { widget } from './records/test-kinds.ts';
 import { sopKinds } from './sops/kinds.ts';
+import { transferKinds } from './transfers/kinds.ts';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -42,6 +43,7 @@ for (const kind of [
   ...sopKinds,
   ...campaignKinds,
   ...plateMapKinds,
+  ...transferKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);

@@ -28,9 +28,20 @@ It reports, per point, where it comes from (the source, or the intermediate well
 
 - **The device.** `transfers.dilution_options` and `transfers.optimize_dilution` take `{instrument, node?}` or plain limits. An instrument's limits come from `instruments.resolve`: its transfer or dispense capability's volume minimum, maximum and step. An instrument with several such devices needs `node`.
 - **`transfers.optimize_dilution`** reads the intermediate plate from a labware type: its grid, dead volume and working (or maximum) volume. A type missing either volume is refused.
-- **`transfers.source_volumes`** takes each container's dead volume from its labware type (a note says when there is none) and what each well holds from `inventory.wells`; it reports what is short. Reservations wait for transfer plans (016a-3).
+- **`transfers.source_volumes`** takes each container's dead volume from its labware type (a note says when there is none) and what each well holds from `inventory.wells`; it reports what is short. It takes other confirmed plans' reservations off what each well holds (`plan` leaves one plan's own out).
 - **`transfers.options`** lists every instrument's transfer and dispense capabilities with volume limits and ranks them with `rankDevices`. With a liquid type it asks `liquids.resolve_class` for each device's class and whether it is verified. Tips are estimated until methods declare them: none for dispensers and droplet devices without channels, the lab default otherwise. Devices without volume limits are listed apart; instruments not ready and devices that skip the plate format are noted.
+
+## Transfer plans (016a-3, ADR 0045)
+
+A `transfer_plan` (`tfp_`, `TFP-0001`) has two sections a person confirms: **plates and sources** (experiment, purpose, plates) and **transfers** (groups, notes).
+
+- **Plates** are named in the plan (`src`, `assay1`) with a role (source, destination, intermediate), a pinned labware type, and when known a container (sources are picked on the day, P5) or a plate map plate (pinned, P6).
+- **Groups** run in order; each is one method on one instrument (or by hand) with the agent's reason and alternatives, an optional liquid, liquid class and tip rule, and its transfers `{from: {plate, well}, to: {plate, well}, volume}`. `transfers.draft` and `transfers.set_instrument` copy the instrument's limits into the group's `device`.
+- **Refused on write:** plates or groups named twice, a container given twice or of another labware type, transfers naming a plate that doesn't exist or a well it doesn't have, drawing from a destination or filling a source, a missing record.
+- **Readiness** (`apps/api/src/transfers/rules.ts`): it moves something; every volume fits its group's device; every well holds what goes in (working or maximum volume); intermediates are filled by an earlier group before they are drawn from; sources are picked; labware and plate maps are confirmed (blockers); newer versions exist (warning).
+- **`transfers.check`** runs the same rules plus live ones: instruments ready with the limits the plan used, and each source well's draws plus its dead volume against what it holds less other plans' reservations (warnings, V8). It also totals transfers, tips (estimated from each group's rule) and source wells.
+- **Reservations** (`apps/api/src/transfers/reservations.ts`) are derived, not stored: every active plan reserves what it draws from its source containers. Archiving a plan ends them; recording its run will too (016b). `transfers.reserved {container}` lists them per well.
 
 ## Not yet
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. The transfer plan record (016a-3), worklists and reports (016b, 016c), screens (016d).
+Chained intermediates (an intermediate made from another) for points below 1000-fold. Drafting plans from plate maps (016a-4), worklists and reports (016b, 016c), screens (016d).
