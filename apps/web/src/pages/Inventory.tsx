@@ -20,6 +20,7 @@ import { type CSSProperties, Fragment, type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
 import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
+  contentGroups,
   fullestWell,
   gridOf,
   heatLevel,
@@ -31,6 +32,7 @@ import {
   ruleWells,
   storageRangeWords,
   volumeText,
+  wellRanges,
 } from '../lib/inventory.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
@@ -291,7 +293,7 @@ export function ContainerBlocks({ record }: { record: RecordEnvelope }) {
   if (!wells.data) return null;
   return (
     <>
-      <WellsBlock positions={wells.data.positions} wells={wells.data.wells} />
+      <WellsBlock positions={wells.data.positions} wells={wells.data.wells} name={record.name} />
       <RulesBlock record={record} filled={wells.data.wells.length} />
       <LedgerBlock record={record} />
     </>
@@ -340,22 +342,67 @@ function useSourceLabels(wells: { state: WellState }[]) {
 function WellsBlock({
   positions,
   wells,
+  name,
 }: {
   positions: string[];
   wells: { well: string; state: WellState }[];
+  name: string;
 }) {
   const byWell = new Map(wells.map((w) => [w.well, w.state]));
   const grid = gridOf(positions);
   const fullest = fullestWell(wells.map((w) => w.state));
   const labels = useSourceLabels(wells);
+  const groups = contentGroups(wells);
+  const groupOf = new Map(groups.flatMap((g, i) => g.wells.map((w) => [w, i] as const)));
+  // Shaded by what the wells hold when they don't all hold the same; by volume otherwise.
+  const [shade, setShade] = useState<'contents' | 'volume'>(
+    groups.length > 1 ? 'contents' : 'volume',
+  );
   const [picked, setPicked] = useState<string | undefined>(grid ? undefined : 'A1');
   const [pointed, setPointed] = useState<string>();
+  const [highlight, setHighlight] = useState<number>();
+  const [find, setFind] = useState('');
   const state = picked ? byWell.get(picked) : undefined;
+  const contentWords = (components: WellState['components']) =>
+    components
+      .map(
+        (c) =>
+          `${labels.get(c.source)}${c.concentration ? ` ${formatQuantity(c.concentration)}` : ''}`,
+      )
+      .join(' + ') || 'nothing named';
   const describe = (well: string) => {
     const s = byWell.get(well);
-    return s
-      ? `${well}: ${volumeText(s)}, ${s.components.map((c) => labels.get(c.source)).join(', ') || 'nothing named'}`
-      : `${well}: empty`;
+    return s ? `${well}: ${volumeText(s)}, ${contentWords(s.components)}` : `${well}: empty`;
+  };
+  // A well name picks the well; any other text lights up the wells whose contents match it.
+  const query = find.trim().toLowerCase();
+  const wellQuery = /^[a-z]{1,2}\d{1,2}$/i.test(query) ? query.toUpperCase() : undefined;
+  const matches = (well: string) => {
+    if (highlight !== undefined) return groupOf.get(well) === highlight;
+    if (!query || wellQuery) return true;
+    const s = byWell.get(well);
+    return !!s?.components.some((c) => labels.get(c.source)?.toLowerCase().includes(query));
+  };
+  const lit = query && !wellQuery ? wells.filter((w) => matches(w.well)).length : undefined;
+  const exportCsv = () => {
+    const rows = [['well', 'volume', 'unit', 'contents', 'estimated']];
+    for (const w of wells) {
+      const v = w.state.volume;
+      rows.push([
+        w.well,
+        v === 'unknown' ? '' : v.value,
+        v === 'unknown' ? '' : v.unit,
+        contentWords(w.state.components),
+        w.state.assumed ? 'yes' : '',
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${c.replaceAll('"', '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}-wells.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   return (
     <section className="block" aria-label="Wells">
@@ -366,100 +413,172 @@ function WellsBlock({
         </span>
       </header>
       <div className="body">
+        {grid && wells.length > 0 && (
+          <ul className="contents-key" aria-label="What the wells hold">
+            {groups.map((g, i) => (
+              <li key={g.key}>
+                <button
+                  type="button"
+                  aria-pressed={highlight === i}
+                  title="Show only these wells"
+                  onClick={() => setHighlight(highlight === i ? undefined : i)}
+                >
+                  <i className={`swatch data-${(i % 6) + 1}`} aria-hidden="true" />
+                  <span className="num">
+                    {g.wells.length} {g.wells.length === 1 ? 'well' : 'wells'}
+                  </span>
+                  <span>{contentWords(g.components)}</span>
+                  <span className="mono muted">{wellRanges(g.wells)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {grid && (
-          <div className="plate-wrap">
-            <ul className="legend" aria-label="Key">
-              <li>
-                <i />
-                Empty
-              </li>
-              <li>
-                <i className="heat-2" />
-                Less
-              </li>
-              <li>
-                <i className="heat-4" />
-                {fullest ? `Fullest, ${formatQuantity(fullest)}` : 'Fullest'}
-              </li>
-              <li>
-                <i className="heat-unknown" />
-                Volume unknown
-              </li>
-              <li>
-                <i className="assumed" />
-                Estimated
-              </li>
-            </ul>
-            <fieldset
-              className={`plate${grid.columns > 12 ? ' dense' : ''}`}
-              aria-label="Plate map, shaded by volume"
-              style={{ '--cols': grid.columns } as CSSProperties}
-            >
-              <span className="axis" />
-              {Array.from({ length: grid.columns }, (_, c) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
-                <span key={c} className="axis">
-                  {c + 1}
-                </span>
-              ))}
-              {grid.rowLabels.map((row) => (
-                <Fragment key={row}>
-                  <span className="axis">{row}</span>
-                  {Array.from({ length: grid.columns }, (_, c) => {
-                    const well = `${row}${c + 1}`;
-                    const s = byWell.get(well);
-                    const level = heatLevel(s, fullest);
-                    return (
-                      <button
-                        key={well}
-                        type="button"
-                        className={`well heat-${level}${s?.assumed ? ' assumed' : ''}`}
-                        aria-pressed={picked === well}
-                        aria-label={describe(well)}
-                        onClick={() => setPicked(well)}
-                        onMouseEnter={() => setPointed(well)}
-                        onFocus={() => setPointed(well)}
-                        onMouseLeave={() => setPointed(undefined)}
-                        onBlur={() => setPointed(undefined)}
-                      />
-                    );
-                  })}
-                </Fragment>
-              ))}
+          <div className="plate-tools">
+            <input
+              type="search"
+              placeholder="Find a well or what it holds (B7, staurosporine)"
+              aria-label="Find a well or what it holds"
+              value={find}
+              onChange={(e) => {
+                setFind(e.target.value);
+                setHighlight(undefined);
+                const w = e.target.value.trim().toUpperCase();
+                if (/^[A-Z]{1,2}\d{1,2}$/.test(w) && positions.includes(w)) setPicked(w);
+              }}
+            />
+            {lit !== undefined && (
+              <span className="muted">{lit === 1 ? '1 well matches' : `${lit} wells match`}</span>
+            )}
+            <fieldset className="segmented">
+              <legend className="sr-only">Shade by</legend>
+              <button
+                type="button"
+                aria-pressed={shade === 'contents'}
+                onClick={() => setShade('contents')}
+              >
+                Contents
+              </button>
+              <button
+                type="button"
+                aria-pressed={shade === 'volume'}
+                onClick={() => setShade('volume')}
+              >
+                Volume
+              </button>
             </fieldset>
-            <p className="hover-info" aria-live="polite">
-              {pointed
-                ? describe(pointed)
-                : 'Point at a well to see what it holds; select it for details.'}
-            </p>
+            {wells.length > 0 && (
+              <button type="button" className="btn small" onClick={exportCsv}>
+                Export CSV
+              </button>
+            )}
           </div>
         )}
-        {picked &&
-          (state ? (
-            <div className="well-detail">
-              <h3>
-                {grid ? `${picked}: ` : ''}
-                {volumeText(state)}
-                {state.assumed && <span className="agent-ink"> (estimated)</span>}
-              </h3>
-              <ul className="plain">
-                {state.components.map((c) => (
-                  <li key={c.source}>
-                    <Link to="/records/$id" params={{ id: c.source }}>
-                      {labels.get(c.source)}
-                    </Link>
-                    {c.concentration
-                      ? ` at ${formatQuantity(c.concentration)}`
-                      : c.amount
-                        ? `, ${formatQuantity(c.amount)}`
-                        : ', concentration not known'}
+        <div className="plate-layout">
+          {grid && (
+            <div className="plate-wrap">
+              {shade === 'volume' && (
+                <ul className="legend" aria-label="Key">
+                  <li>
+                    <i />
+                    Empty
                   </li>
+                  <li>
+                    <i className="heat-2" />
+                    Less
+                  </li>
+                  <li>
+                    <i className="heat-4" />
+                    {fullest ? `Fullest, ${formatQuantity(fullest)}` : 'Fullest'}
+                  </li>
+                  <li>
+                    <i className="heat-unknown" />
+                    Volume unknown
+                  </li>
+                  <li>
+                    <i className="assumed" />
+                    Estimated
+                  </li>
+                </ul>
+              )}
+              <fieldset
+                className={`plate${grid.columns > 12 ? ' dense' : ''}`}
+                aria-label={`Plate map, shaded by ${shade}`}
+                style={{ '--cols': grid.columns } as CSSProperties}
+              >
+                <span className="axis" />
+                {Array.from({ length: grid.columns }, (_, c) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+                  <span key={c} className="axis">
+                    {c + 1}
+                  </span>
                 ))}
-              </ul>
+                {grid.rowLabels.map((row) => (
+                  <Fragment key={row}>
+                    <span className="axis">{row}</span>
+                    {Array.from({ length: grid.columns }, (_, c) => {
+                      const well = `${row}${c + 1}`;
+                      const s = byWell.get(well);
+                      const group = groupOf.get(well);
+                      const fill =
+                        shade === 'contents'
+                          ? group === undefined
+                            ? 'heat-0'
+                            : `data-${(group % 6) + 1}`
+                          : `heat-${heatLevel(s, fullest)}`;
+                      return (
+                        <button
+                          key={well}
+                          type="button"
+                          className={`well ${fill}${s?.assumed ? ' assumed' : ''}${matches(well) ? '' : ' dim'}`}
+                          aria-pressed={picked === well}
+                          aria-label={describe(well)}
+                          onClick={() => setPicked(well)}
+                          onMouseEnter={() => setPointed(well)}
+                          onFocus={() => setPointed(well)}
+                          onMouseLeave={() => setPointed(undefined)}
+                          onBlur={() => setPointed(undefined)}
+                        />
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </fieldset>
+              <p className="hover-info" aria-live="polite">
+                {pointed
+                  ? describe(pointed)
+                  : 'Point at a well to see what it holds; select it for details.'}
+              </p>
             </div>
-          ) : (
-            <p className="empty">{grid ? `${picked} is empty.` : 'Empty.'}</p>
-          ))}
+          )}
+          {picked &&
+            (state ? (
+              <div className="well-detail">
+                <h3>
+                  {grid ? `${picked}: ` : ''}
+                  {volumeText(state)}
+                  {state.assumed && <span className="agent-ink"> (estimated)</span>}
+                </h3>
+                <ul className="plain">
+                  {state.components.map((c) => (
+                    <li key={c.source}>
+                      <Link to="/records/$id" params={{ id: c.source }}>
+                        {labels.get(c.source)}
+                      </Link>
+                      {c.concentration
+                        ? ` at ${formatQuantity(c.concentration)}`
+                        : c.amount
+                          ? `, ${formatQuantity(c.amount)}`
+                          : ', concentration not known'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="empty well-detail">{grid ? `${picked} is empty.` : 'Empty.'}</p>
+            ))}
+        </div>
       </div>
     </section>
   );

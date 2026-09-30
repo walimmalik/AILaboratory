@@ -1240,6 +1240,33 @@ ul.rules {
   background: repeating-linear-gradient(45deg, var(--well-empty) 0 3px, var(--accent-soft) 3px 6px);
   border-color: var(--rule);
 }
+.plate .well.data-1,
+.contents-key .swatch.data-1 {
+  background: var(--data-1);
+}
+.plate .well.data-2,
+.contents-key .swatch.data-2 {
+  background: var(--data-2);
+}
+.plate .well.data-3,
+.contents-key .swatch.data-3 {
+  background: var(--data-3);
+}
+.plate .well.data-4,
+.contents-key .swatch.data-4 {
+  background: var(--data-4);
+}
+.plate .well.data-5,
+.contents-key .swatch.data-5 {
+  background: var(--data-5);
+}
+.plate .well.data-6,
+.contents-key .swatch.data-6 {
+  background: var(--data-6);
+}
+.plate .well.dim {
+  opacity: 0.25;
+}
 .plate .well.assumed {
   border: 2px dashed var(--agent);
 }
@@ -1286,6 +1313,61 @@ ul.rules {
   color: var(--ink-2);
   min-height: 1.5em;
   margin: 0;
+}
+/* The well picked sits beside the plate when there is room, below it otherwise. */
+.plate-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 24px;
+}
+.plate-layout .plate-wrap {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+.plate-layout .well-detail {
+  flex: 0 1 260px;
+}
+.plate-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0 12px;
+}
+.plate-tools input[type="search"] {
+  flex: 0 1 320px;
+}
+.contents-key {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+.contents-key button {
+  display: grid;
+  grid-template-columns: 10px 5.5em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.contents-key button:hover {
+  border-color: var(--rule);
+}
+.contents-key button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+.contents-key .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 .block .body .well-detail h3 {
   margin: 0 0 6px;

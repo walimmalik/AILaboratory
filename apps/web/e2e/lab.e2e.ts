@@ -323,6 +323,8 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
   await volumes.getByRole('button', { name: 'Load the new values' }).click();
   await volumes.getByRole('button', { name: 'Save' }).click();
+  // The form closes once the save has landed.
+  await expect(volumes.getByRole('button', { name: 'Edit volumes' })).toBeVisible();
 
   const saved = await asAgent(request, 'records.get', { id });
   expect(saved.output.version).toBe(3);
@@ -501,6 +503,9 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await page.getByRole('row', { name: new RegExp(plate.name) }).click();
   const wells = page.getByRole('region', { name: 'Wells' });
   await expect(wells).toContainText('3 of 96 filled');
+  // One kind of contents, so the key has one line and the plate is shaded by volume.
+  await expect(wells.getByRole('button', { name: /^3 wells/ })).toBeVisible();
+  await expect(wells.getByRole('group', { name: 'Plate map, shaded by volume' })).toBeVisible();
   await wells.getByRole('button', { name: /^B1: 25 / }).click();
   await expect(wells).toContainText(`Glo reagent ${stamp}`);
   const handling = page.getByRole('region', { name: 'Handling' });

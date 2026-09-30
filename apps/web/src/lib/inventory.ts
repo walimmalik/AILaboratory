@@ -164,3 +164,70 @@ export function ruleWells(rule: EffectiveRule, filled: number): string | undefin
   }
   return wells.size >= filled ? undefined : blocks.join(', ');
 }
+
+/**
+ * Wells as blocks corner to corner: "A3:P22" for a filled rectangle, "A1:A2, C1" otherwise. Rows
+ * with the same columns are merged into one block when they follow each other.
+ */
+export function wellRanges(wells: readonly string[]): string {
+  const rows = new Map<number, { label: string; columns: number[] }>();
+  for (const name of wells) {
+    const { row, column } = parseWellName(name);
+    const entry = rows.get(row) ?? { label: name.replace(/\d+$/, '').toUpperCase(), columns: [] };
+    entry.columns.push(column + 1);
+    rows.set(row, entry);
+  }
+  const runsOf = (columns: number[]) => {
+    const sorted = [...columns].sort((a, b) => a - b);
+    const runs: [number, number][] = [];
+    for (const c of sorted) {
+      const last = runs.at(-1);
+      if (last && c === last[1] + 1) last[1] = c;
+      else runs.push([c, c]);
+    }
+    return runs;
+  };
+  const ordered = [...rows.entries()].sort((a, b) => a[0] - b[0]);
+  const blocks: string[] = [];
+  let i = 0;
+  while (i < ordered.length) {
+    const [firstRow, first] = ordered[i] as [number, { label: string; columns: number[] }];
+    const key = JSON.stringify(runsOf(first.columns));
+    let j = i;
+    while (
+      j + 1 < ordered.length &&
+      (ordered[j + 1] as [number, unknown])[0] === firstRow + (j + 1 - i) &&
+      JSON.stringify(runsOf((ordered[j + 1] as [number, { columns: number[] }])[1].columns)) === key
+    )
+      j++;
+    const lastLabel = (ordered[j] as [number, { label: string }])[1].label;
+    for (const [a, b] of runsOf(first.columns)) {
+      const from = `${first.label}${a}`;
+      const to = `${lastLabel}${b}`;
+      blocks.push(from === to ? from : `${from}:${to}`);
+    }
+    i = j + 1;
+  }
+  return blocks.join(', ');
+}
+
+/** Wells that hold the same things at the same strengths, largest group first. */
+export interface ContentGroup {
+  key: string;
+  wells: string[];
+  components: WellState['components'];
+}
+
+export function contentGroups(
+  wells: readonly { well: string; state: WellState }[],
+): ContentGroup[] {
+  const groups = new Map<string, ContentGroup>();
+  for (const { well, state } of wells) {
+    const components = [...state.components].sort((a, b) => a.source.localeCompare(b.source));
+    const key = JSON.stringify(components);
+    const group = groups.get(key) ?? { key, wells: [], components };
+    group.wells.push(well);
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.wells.length - a.wells.length);
+}

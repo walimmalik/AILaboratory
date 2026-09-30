@@ -1,6 +1,7 @@
 import type { EffectiveRule, WellState } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
 import {
+  contentGroups,
   fullestWell,
   gridOf,
   heatLevel,
@@ -10,6 +11,7 @@ import {
   ruleSources,
   ruleWells,
   storageRangeWords,
+  wellRanges,
 } from './inventory.ts';
 
 const uL = (value: string) => ({ value, unit: 'uL' as const });
@@ -105,5 +107,28 @@ describe('rules in words', () => {
     expect(
       storageRangeWords({ min: { value: '2', unit: 'degC' }, max: { value: '8', unit: 'degC' } }),
     ).toBe('2 °C to 8 °C');
+  });
+});
+
+describe('plate contents', () => {
+  const block = (rows: string, from: number, to: number) =>
+    [...rows].flatMap((r) => Array.from({ length: to - from + 1 }, (_, i) => `${r}${from + i}`));
+
+  it('writes wells as blocks corner to corner', () => {
+    expect(wellRanges(block('ABCDEFGHIJKLMNOP', 3, 22))).toBe('A3:P22');
+    expect(wellRanges([...block('AB', 1, 2), ...block('AB', 23, 24)])).toBe('A1:B2, A23:B24');
+    expect(wellRanges(['C1', 'A1', 'A2'])).toBe('A1:A2, C1');
+    expect(wellRanges(['B7'])).toBe('B7');
+  });
+
+  it('groups wells that hold the same things, largest group first', () => {
+    const dmso = { source: 'lot_dmso', concentration: { value: '100', unit: '%v/v' } };
+    const drug = { source: 'lot_drug', concentration: { value: '10', unit: 'mM' } };
+    const groups = contentGroups([
+      { well: 'A1', state: { volume: uL('40'), components: [dmso] } },
+      { well: 'A2', state: { volume: uL('40'), components: [drug, dmso] } },
+      { well: 'A3', state: { volume: uL('20'), components: [dmso, drug] } },
+    ]);
+    expect(groups.map((g) => g.wells)).toEqual([['A2', 'A3'], ['A1']]);
   });
 });
