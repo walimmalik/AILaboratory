@@ -34,7 +34,7 @@ An AI-driven lab management system for wet and dry labs: registries (labware, in
 - **Tests use PGlite**, so `pnpm test` needs no Docker.
 - **Seed data lives in `seed/`**, so every agent and developer works against the same Demo Lab.
 - **Cross-platform.** Development happens on Windows too: no bash-only npm scripts, LF line endings.
-- **Small PRs, one plan step each, CI green before review.**
+- **Small PRs, one plan step each, CI green before review.** Each PR also gets a Codex code review and a browser UI QA comment, run with the owner's Codex CLI ([.github/codex](../../.github/codex/README.md)); blocking findings get fixed or answered.
 
 ## How work is organized
 

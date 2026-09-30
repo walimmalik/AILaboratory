@@ -1,0 +1,23 @@
+# Overrides compose.yaml for the browser QA run (scripts/codex-pr.mjs), which starts its own stack
+# per pull request as compose project "ailab-qa-<number>". Its ports are moved off the defaults so it
+# runs beside the lab's own app, and its file store is a host folder that the seed loader (run on the
+# host) and the API share. The assistant is off unless QA_OPENROUTER_API_KEY is set.
+services:
+  db:
+    ports: !override
+      - "${QA_DB_PORT:-15432}:5432"
+  api:
+    environment:
+      AGENT_PROVIDER: ${QA_AGENT_PROVIDER:-}
+      OPENROUTER_API_KEY: ${QA_OPENROUTER_API_KEY:-}
+      AGENT_MODEL: ${QA_AGENT_MODEL:-}
+    ports: !override
+      - "${QA_API_PORT:-13001}:3001"
+    volumes:
+      - ${QA_FILES_DIR:?set QA_FILES_DIR}:/data/files
+  science:
+    ports: !override
+      - "${QA_SCIENCE_PORT:-18001}:8001"
+  web:
+    ports: !override
+      - "${QA_WEB_PORT:-18080}:80"
