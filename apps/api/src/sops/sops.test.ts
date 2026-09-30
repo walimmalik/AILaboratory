@@ -1,10 +1,12 @@
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import type { Actor, Converted, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { fileKinds } from '../files/kinds.ts';
+import { MemoryFileStore } from '../files/store.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import type { Converter } from '../library/convert.ts';
 import { libraryKinds } from '../library/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
@@ -18,6 +20,25 @@ let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
 let otherLab: RecordContext;
+
+/** One section per "# " heading, one passage per paragraph. */
+const converter: Converter = {
+  convert: async ({ bytes }) => {
+    const sections: Converted['sections'] = [];
+    for (const part of new TextDecoder().decode(bytes).split(/^# /m).filter(Boolean)) {
+      const [heading, ...rest] = part.split('\n');
+      sections.push({
+        heading: [heading as string],
+        passages: rest
+          .join('\n')
+          .split(/\n\n+/)
+          .filter((t) => t.trim())
+          .map((text) => ({ text: text.trim(), page: 1 })),
+      });
+    }
+    return { converter: 'test', sections, warnings: [] };
+  },
+};
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -34,7 +55,10 @@ beforeEach(async () => {
   const kinds = new KindRegistry();
   for (const kind of [...labwareKinds, ...reagentKinds, ...fileKinds, ...libraryKinds, ...sopKinds])
     kinds.register(kind);
-  registry = createRegistry(db, kinds, new ActivityBus());
+  registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
+    files: new MemoryFileStore(),
+    converter,
+  });
 });
 afterEach(() => close());
 
@@ -477,5 +501,147 @@ describe('binding roles (012b)', () => {
       passed: false,
       severity: 'blocker',
     });
+  });
+});
+
+describe('sops.answer_question', () => {
+  it('lets a person answer or accept the suggestion, which clears the blocker; an agent cannot', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      questions: [
+        ...elisa.questions,
+        { id: 'q2', question: 'Which plate sealer?', status: 'open' },
+      ],
+    });
+    await expect(
+      registry.execute(agent, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q1',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q2',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('no suggestion'),
+    });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q9',
+        answer: 'Yes',
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('no question q9'),
+    });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: 'q1',
+        answer: 'Yes',
+        acceptSuggestion: true,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+
+    const first = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: sop.id,
+      expectedVersion: sop.version,
+      question: 'q1',
+      acceptSuggestion: true,
+    });
+    const second = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: sop.id,
+      expectedVersion: first.version,
+      question: 'q2',
+      answer: 'Adhesive film',
+    });
+    expect((second.attributes as { questions: unknown[] }).questions).toEqual([
+      expect.objectContaining({
+        id: 'q1',
+        status: 'accepted_suggestion',
+        answer: 'Room temperature, as the vendor sheet says',
+      }),
+      expect.objectContaining({ id: 'q2', status: 'answered', answer: 'Adhesive film' }),
+    ]);
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(true);
+  });
+});
+
+describe('sops.check_citations', () => {
+  it('finds each quote in its passage, elsewhere in the document, or nowhere', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'elisa.md',
+      mediaType: 'text/markdown',
+      text: '# Coating\nCoat the plate overnight at room temperature.\n\n# Reading\nRead within 30 minutes.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Vendor ELISA sheet',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    const cite = (passage: string | undefined, quote: string) => ({
+      document: doc.id,
+      ...(passage ? { passage } : {}),
+      quote,
+    });
+    const draft = async (passages: { id: string }[]) =>
+      run<RecordEnvelope>(agent, 'sops.draft', {
+        ...elisa,
+        source: { document: doc.id },
+        steps: elisa.steps.map((s, i) =>
+          i === 0
+            ? { ...s, cite: [cite(passages[0]?.id, 'coat the plate  OVERNIGHT')] }
+            : i === 1
+              ? { ...s, cite: [cite(passages[0]?.id, 'Read within 30 minutes')] }
+              : { ...s, cite: [cite(undefined, 'Shake at 500 rpm')] },
+        ),
+      });
+    const unparsed = await draft([]);
+    const before = await run<{ citations: { result: string }[] }>(person, 'sops.check_citations', {
+      sop: unparsed.id,
+    });
+    expect(before.citations.every((c) => c.result === 'unparsed')).toBe(true);
+
+    await run(person, 'library.parse', { document: doc.id });
+    const outline = await run<{ outline: { index: number }[] }>(person, 'library.read', {
+      document: doc.id,
+    });
+    const coating = await run<{ passages: { id: string }[] }>(person, 'library.read', {
+      document: doc.id,
+      section: outline.outline[0]?.index,
+    });
+    const byId = await run<{ passages: { id: string; text: string }[] }>(person, 'library.read', {
+      document: doc.id,
+      passages: coating.passages.map((p) => p.id),
+    });
+    expect(byId.passages[0]?.text).toContain('overnight');
+
+    const sop = await draft(coating.passages);
+    const checked = await run<{
+      citations: { where: string; result: string; foundIn?: string }[];
+      matches: number;
+      problems: number;
+    }>(agent, 'sops.check_citations', { sop: sop.id });
+    const steps = elisa.steps.map((s) => s.id);
+    expect(checked.citations.map((c) => [c.where, c.result])).toEqual(
+      steps.map((id, i) => [
+        `step ${id}`,
+        i === 0 ? 'matches' : i === 1 ? 'found_elsewhere' : 'not_found',
+      ]),
+    );
+    expect(checked.citations[1]?.foundIn).toBeDefined();
+    expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
   });
 });
