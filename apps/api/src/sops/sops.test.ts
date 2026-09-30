@@ -374,6 +374,36 @@ describe('sops.calculate', () => {
     });
     await expect(calc(otherLab, [])).rejects.toMatchObject({ code: 'not_found' });
   });
+
+  it('holds inputs to their limits, units and one value each', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const calc = (inputs: unknown[]) =>
+      registry.execute(agent, 'sops.calculate', { sop: sop.id, inputs });
+    await expect(calc([{ name: 'n_samples', value: '41' }])).rejects.toMatchObject({
+      message: 'n_samples: 41 is above the most allowed, 40',
+    });
+    await expect(calc([{ name: 'n_samples', value: '0' }])).rejects.toMatchObject({
+      message: 'n_samples: 0 is below the least allowed, 1',
+    });
+    await expect(
+      calc([
+        { name: 'n_samples', value: '10' },
+        { name: 'n_samples', value: '20' },
+      ]),
+    ).rejects.toMatchObject({ message: 'n_samples is given twice' });
+    await expect(calc([{ name: 'well_volume', value: '50' }])).rejects.toMatchObject({
+      message: 'well_volume needs a unit, like µL',
+    });
+    await expect(calc([{ name: 'well_volume', value: q('1', 'h') }])).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    await expect(calc([{ name: 'well_volume', value: q('1', 'furlong') }])).rejects.toMatchObject({
+      message: 'well_volume: unknown unit "furlong"',
+    });
+    await expect(calc([{ name: 'n_samples', value: q('1', 'uL') }])).rejects.toMatchObject({
+      message: 'n_samples is a plain number, without a unit',
+    });
+  });
 });
 
 describe('binding roles (012b)', () => {

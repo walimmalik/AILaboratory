@@ -29,7 +29,7 @@ An SOP (`SOP-0001`) is confirmed in eight sections: overview (purpose, scope, sa
 
 Writes are refused when names repeat or a step, parameter, layout, timing rule or question refers to something the SOP doesn't have, or a unit or linked record is unknown. Readiness blocks on no steps, broken formulas, timing that isn't a time and open questions, and warns about steps without a citation when the SOP has a source.
 
-`sops.calculate` works out an SOP's variables for a run: given inputs replace defaults, record variables use their typical value until bound, and each result says where it came from (`input`, `default`, `typical`, `computed`, `missing`).
+`sops.calculate` works out an SOP's variables for a run: given inputs replace defaults, record variables use their typical value until bound, and each result says where it came from (`input`, `default`, `typical`, `computed`, `missing`). Each input is given once, in a known unit of the same kind as the variable's default and limits (a plain number where those are plain numbers), and within its `min` and `max`; anything else is refused. A formula that uses a name no variable declares is reported as an error, not as missing.
 
 | Operation | Does | Agents |
 | --- | --- | --- |
