@@ -86,9 +86,17 @@ async function watch(everyMs) {
 
 async function runPr(number, only) {
   const pr = JSON.parse(
-    run('gh', ['pr', 'view', String(number), '--json', 'title,body,baseRefName,headRefOid']),
+    run('gh', [
+      'pr',
+      'view',
+      String(number),
+      '--json',
+      'title,body,baseRefName,headRefOid,state,files',
+    ]),
   );
   const sha = pr.headRefOid.slice(0, 7);
+  if (pr.state !== 'OPEN')
+    throw new Error(`PR #${number} is ${pr.state.toLowerCase()}; nothing to review`);
   console.log(`PR #${number} at ${sha}: ${pr.title}`);
 
   // A detached worktree at the PR's head, next to (never inside) the lab's own checkouts.
@@ -103,7 +111,7 @@ async function runPr(number, only) {
   writeFileSync(join(dir, '.codex-pr', 'pr.diff'), git(['diff', range], dir));
   writeFileSync(join(dir, '.codex-pr', 'pr.stat'), git(['diff', '--stat', range], dir));
   writeFileSync(join(dir, '.codex-pr', 'description.md'), `# ${pr.title}\n\n${pr.body}\n`);
-  const changed = git(['diff', '--name-only', range], dir).split('\n').filter(Boolean);
+  const changed = pr.files.map((file) => file.path);
 
   if (!only || only === 'review') {
     const report = await codexExec(
