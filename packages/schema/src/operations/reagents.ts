@@ -48,6 +48,7 @@ export const DraftComponent = z.union([
 
 export const reagentsDraftProduct = defineContract({
   id: 'reagents.draft_product',
+  verbs: { done: 'drafted a product', intent: 'draft a product' },
   summary:
     'Draft a product the lab buys or makes (a reagent, a kit, a lab-made solution with its recipe) from what you know: a catalog number, a datasheet, a description. A kit drafts its new component products with it. Mark where values came from; unknown values stay out rather than guessed',
   effect: 'write',
@@ -63,6 +64,7 @@ export const reagentsDraftProduct = defineContract({
 
 export const reagentsScaleRecipe = defineContract({
   id: 'reagents.scale_recipe',
+  verbs: { done: 'scaled the recipe of', intent: 'scale the recipe of' },
   calculator: true,
   summary:
     "Work out how much of each component a lab-made product's recipe needs for a target batch (e.g. 250 mL of Reagent Diluent). Use this rather than your own arithmetic",
@@ -76,6 +78,7 @@ export const reagentsScaleRecipe = defineContract({
 
 export const reagentsReceiveLot = defineContract({
   id: 'reagents.receive_lot',
+  verbs: { done: 'received a lot of', intent: 'receive a lot of' },
   summary:
     "Record a lot of a product: lot number, expiry, dates and the certificate's values for the product's lot fields. A kit lot lists its component lots; a lab-made batch lists the lots it was made from. Containers holding it are inventory's (plan 010)",
   effect: 'write',
@@ -89,6 +92,7 @@ export const reagentsReceiveLot = defineContract({
 
 export const reagentsSetLotStatus = defineContract({
   id: 'reagents.set_lot_status',
+  verbs: { done: 'set the status of', intent: 'set the status of' },
   summary:
     "Set a lot's status: opened (with the date, today when left out), quarantined (it can't be used in new plans), expired, used_up or back to unopened",
   effect: 'write',
@@ -104,6 +108,7 @@ export const reagentsSetLotStatus = defineContract({
 
 export const reagentsSearch = defineContract({
   id: 'reagents.search',
+  verbs: { done: 'searched reagents', intent: 'search reagents' },
   summary:
     "Find the lab's products by name, catalog number or CAS, and by category, vendor, liquid type, storage or origin; or those with a lot in date, or a lot expiring soon. Each result carries its lot count, lots in date and next expiry",
   effect: 'read',

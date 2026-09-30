@@ -31,7 +31,7 @@ export function ReviewBlocks({
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
-  renderValue: (value: unknown) => ReactNode;
+  renderValue: (value: unknown, field?: string) => ReactNode;
   /** Shown between the readiness block and the sections, e.g. a labware drawing. */
   aside?: ReactNode;
 }) {
@@ -217,7 +217,7 @@ export function SettledDetails({
   record: RecordEnvelope;
   readiness: Readiness;
   titles: Record<string, string>;
-  renderValue: (value: unknown) => ReactNode;
+  renderValue: (value: unknown, field?: string) => ReactNode;
   onEdit: (section: string) => void;
   /** Whether the checks get a line here; off when a readiness block above already lists them. */
   checks?: boolean;
@@ -483,7 +483,7 @@ function SectionBlock({
   section: ReadinessSection;
   /** Whether confirming this section also makes the draft active. */
   activates: boolean;
-  renderValue: (value: unknown) => ReactNode;
+  renderValue: (value: unknown, field?: string) => ReactNode;
   editing: boolean;
   onEdit: (on: boolean) => void;
   notApplicable: string[];
@@ -575,7 +575,7 @@ function SectionValues({
 }: {
   section: ReadinessSection;
   me: Me | undefined;
-  renderValue: (value: unknown) => ReactNode;
+  renderValue: (value: unknown, field?: string) => ReactNode;
   notApplicable: string[];
   /** Leaves out fields with no value, for a confirmed record read rather than reviewed. */
   hideEmpty?: boolean;
@@ -595,11 +595,11 @@ function SectionValues({
                 <td>
                   {f.state === 'changed' && (
                     <>
-                      <span className="was">{renderValue(f.confirmedValue)}</span>{' '}
+                      <span className="was">{renderValue(f.confirmedValue, f.field)}</span>{' '}
                     </>
                   )}
                   <span className={f.state === 'changed' ? 'now' : undefined}>
-                    {renderValue(f.value)}
+                    {renderValue(f.value, f.field)}
                   </span>
                 </td>
                 <td className="source">

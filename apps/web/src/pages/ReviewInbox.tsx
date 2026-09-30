@@ -13,7 +13,6 @@ import { api } from '../api.ts';
 import {
   actorLabel,
   diffRecords,
-  formatValue,
   formatWhen,
   operationIntent,
   operationVerb,
@@ -21,6 +20,8 @@ import {
 import { kindPage } from '../lib/kinds.ts';
 import { decidedProposalsQuery, recordQuery, reviewKindQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
+import { fieldLabel } from './RecordReview.tsx';
+import { renderValue } from './Value.tsx';
 
 /**
  * Everything waiting for you (plan 004d): drafts to review and confirm, and changes agents proposed
@@ -379,11 +380,11 @@ function Change({
 }) {
   return (
     <tr>
-      <td className="field-name">{field}</td>
+      <td className="field-name">{fieldLabel(field)}</td>
       <td className={`before ${isNew || before === undefined ? 'none' : ''}`}>
-        {isNew ? '—' : formatValue(before)}
+        {isNew ? '—' : renderValue(before)}
       </td>
-      <td className="after">{formatValue(after)}</td>
+      <td className="after">{renderValue(after)}</td>
     </tr>
   );
 }

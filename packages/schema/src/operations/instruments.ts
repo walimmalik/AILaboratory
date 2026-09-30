@@ -27,6 +27,7 @@ const Reason = z.string().min(1).optional().describe('Why; kept in history');
 
 export const instrumentsCapabilities = defineContract({
   id: 'instruments.capabilities',
+  verbs: { done: 'listed instrument capabilities', intent: 'list instrument capabilities' },
   summary:
     'List the capability catalog: every capability an instrument or equipment kind can offer (transfer, read_absorbance, incubate…), what it means and which limits a kind should give for it',
   effect: 'read',
@@ -45,6 +46,7 @@ export const instrumentsCapabilities = defineContract({
 
 export const instrumentsResolve = defineContract({
   id: 'instruments.resolve',
+  verbs: { done: 'found instruments that can', intent: 'find instruments that can' },
   summary:
     "Check a configuration of an instrument kind (which equipment is on which mount, slot or track) and work out its labware sites, what each piece takes up and the capabilities it has with their limits. Returns every problem found (unknown slot, overlap, equipment that doesn't fit the mount); nothing is saved",
   effect: 'read',
@@ -59,6 +61,7 @@ export const instrumentsResolve = defineContract({
 
 export const instrumentsRegister = defineContract({
   id: 'instruments.register',
+  verbs: { done: 'registered an instrument', intent: 'register an instrument' },
   summary:
     'Register a real instrument of an instrument kind as a draft (name, serial, room, starting configuration). The configuration is checked first and refused if it has errors',
   effect: 'write',
@@ -99,6 +102,7 @@ export type ConfigurationChange = z.infer<typeof ConfigurationChange>;
 
 export const instrumentsChangeConfiguration = defineContract({
   id: 'instruments.change_configuration',
+  verbs: { done: 'changed the setup of', intent: 'change the setup of' },
   summary:
     "Change what is installed on a registered instrument: place, move or remove equipment, or say which item it is. All changes apply together and the whole configuration is checked; it is refused with every problem if it doesn't resolve",
   effect: 'write',
@@ -113,6 +117,7 @@ export const instrumentsChangeConfiguration = defineContract({
 
 export const instrumentsSetStatus = defineContract({
   id: 'instruments.set_status',
+  verbs: { done: 'set the status of', intent: 'set the status of' },
   summary: "Set a registered instrument's status: ready, in_use, maintenance or out_of_service",
   effect: 'write',
   input: z.strictObject({
@@ -126,6 +131,7 @@ export const instrumentsSetStatus = defineContract({
 
 export const instrumentsLogService = defineContract({
   id: 'instruments.log_service',
+  verbs: { done: 'logged a service of', intent: 'log a service of' },
   summary:
     'Record a service, calibration or repair on a registered instrument, and optionally when calibration is next due. Earlier entries stay in its history',
   effect: 'write',
@@ -144,6 +150,7 @@ export const instrumentsLogService = defineContract({
 
 export const workcellsDraft = defineContract({
   id: 'workcells.draft',
+  verbs: { done: 'drafted a workcell', intent: 'draft a workcell' },
   summary:
     'Draft a workcell: the registered instruments that work together (e.g. the FlexPod with its Echo, PreciseDrop and sealer), for each the device it maps to in the digital twin and whether people can also use it by hand, and the twin workcell ID. No positions or reach: those live in the twin. A person confirms it with records.confirm_section',
   effect: 'write',
@@ -158,6 +165,7 @@ export const workcellsDraft = defineContract({
 
 export const workcellsChangeMembers = defineContract({
   id: 'workcells.change_members',
+  verbs: { done: 'changed the members of', intent: 'change the members of' },
   summary:
     "Add, remove or change members of a workcell (their twin device or hand use). On a confirmed workcell an agent's change is a proposal; the change is a new version",
   effect: 'write',
@@ -180,6 +188,7 @@ export const workcellsChangeMembers = defineContract({
 
 export const workcellsOfInstrument = defineContract({
   id: 'workcells.of_instrument',
+  verbs: { done: 'looked up the workcell of', intent: 'look up the workcell of' },
   summary:
     'Which workcell an instrument is in: the confirmed workcell using it (at most one, I9), and draft workcells that plan it. Not in a confirmed workcell means it is used standalone',
   effect: 'read',

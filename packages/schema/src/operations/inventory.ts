@@ -23,6 +23,7 @@ const ExpectedVersion = z
 
 export const locationsCreate = defineContract({
   id: 'locations.create',
+  verbs: { done: 'added a storage location', intent: 'add a storage location' },
   summary:
     'Add a place that does not move: a room, a fridge or freezer in it, a shelf in a freezer, an incubator or an automated store. Boxes and racks are containers, not locations',
   effect: 'write',
@@ -36,6 +37,7 @@ export const locationsCreate = defineContract({
 
 export const inventoryRegisterContainers = defineContract({
   id: 'inventory.register_containers',
+  verbs: { done: 'registered containers', intent: 'register containers' },
   summary:
     'Register physical plates, tubes, reservoirs, racks or boxes of one labware type, each with where it is. Each gets its lab barcode as its name (PLT-000001, TUB-000001, BOX-000001); codes already printed on it (FluidX, vendor) are kept and also scan. What they hold comes with 010c; say it in `description` for now',
   effect: 'write',
@@ -68,6 +70,7 @@ export const inventoryRegisterContainers = defineContract({
 
 export const inventoryMove = defineContract({
   id: 'inventory.move',
+  verbs: { done: 'moved', intent: 'move' },
   summary:
     'Move a container to a location, or into a position of a rack or box. Moving a box moves everything in it',
   effect: 'write',
@@ -82,6 +85,7 @@ export const inventoryMove = defineContract({
 
 export const inventoryScan = defineContract({
   id: 'inventory.scan',
+  verbs: { done: 'scanned', intent: 'scan' },
   summary:
     'Resolve a scanned or typed code to its record: a readable name of any record (PLT-000345, LOT-0003; with or without the dash, any case) or a code printed on a container. Containers and locations come with where they are',
   effect: 'read',
@@ -95,6 +99,7 @@ export const inventoryScan = defineContract({
 
 export const inventoryListPlace = defineContract({
   id: 'inventory.list_place',
+  verbs: { done: 'listed what is in', intent: 'list what is in' },
   summary:
     'What is in a location or a rack or box: the containers there (with their positions), and for a location the locations inside it. `deep` includes everything further in',
   effect: 'read',
@@ -113,6 +118,7 @@ export const inventoryListPlace = defineContract({
 
 export const inventoryCalculateTransfer = defineContract({
   id: 'inventory.calculate_transfer',
+  verbs: { done: 'calculated a transfer', intent: 'calculate a transfer' },
   calculator: true,
   summary:
     'Work out what two wells hold after moving a volume from one to the other: the volumes left and the concentration of every component after mixing (e.g. 25 nL of a 10 mM stock into 25 µL of medium). Use this rather than your own arithmetic; it changes nothing',
@@ -133,6 +139,7 @@ export const inventoryCalculateTransfer = defineContract({
 
 export const inventoryWhereIs = defineContract({
   id: 'inventory.where_is',
+  verbs: { done: 'looked up where it is', intent: 'look up where it is' },
   summary:
     'Where a lot, a sample or a product is: every container holding it (a product: any of its lots), where each container is, and the wells with their volume and concentration. Discarded containers are left out',
   effect: 'read',

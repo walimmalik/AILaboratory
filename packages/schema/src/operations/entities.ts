@@ -14,6 +14,7 @@ const Evidence = z
 
 export const entitiesDraftKind = defineContract({
   id: 'entities.draft_kind',
+  verbs: { done: 'drafted an entity kind', intent: 'draft an entity kind' },
   summary:
     'Draft a new kind of entity the lab registers (a nanobody, a gRNA, a patient sample…): its base class (dna, rna, protein, chemical, cells, organism, other), a readable prefix such as NBD, and its typed fields. A person confirms it before entities of the kind can be confirmed',
   effect: 'write',
@@ -28,6 +29,7 @@ export const entitiesDraftKind = defineContract({
 
 export const entitiesDraft = defineContract({
   id: 'entities.draft',
+  verbs: { done: 'drafted an entity', intent: 'draft an entity' },
   summary:
     "Draft an entity (a plasmid, cell line, compound, antibody…) of an entity kind: its fields by key, and a sequence (DNA, RNA, protein kinds) or structure (chemical kinds). Values are checked against the kind's fields; required ones may wait until confirmation. Readable names use the kind's prefix, e.g. PLS-0001",
   effect: 'write',
@@ -43,6 +45,7 @@ export const entitiesDraft = defineContract({
 
 export const entitiesSearch = defineContract({
   id: 'entities.search',
+  verbs: { done: 'searched entities', intent: 'search entities' },
   summary:
     'Find entities by name, readable name, synonym or a text field, by kind or base class, by a field value, or by a stretch of sequence they contain. Each result names its kind',
   effect: 'read',

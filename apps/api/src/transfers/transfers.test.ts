@@ -1046,7 +1046,6 @@ describe('transfers.draft_from_plate_map', () => {
     const h1 = groups[3]?.transfers.find((t) => t.to.well === 'H1');
     expect(h1?.volume).toEqual(nL('25'));
     const ready = await run<Readiness>(person, 'records.readiness', { id: out.plan.id });
-    const failing = ready.checks.filter((c) => !c.passed).map((c) => c.id);
     // Echo volumes fit; the intermediate diluent is too much for it, which readiness says.
     expect(ready.checks.find((c) => c.id === 'volumes_fit')?.message).toMatch(
       /^Solvent into the intermediate wells: 2 transfers: .* is above the maximum of 10 µL$/,

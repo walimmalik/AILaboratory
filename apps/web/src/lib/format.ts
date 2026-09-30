@@ -1,51 +1,23 @@
 import { formatQuantity, isUnit } from '@ailab/domain';
-import type { ActivityEntry, Actor, Me, Quantity } from '@ailab/schema';
+import {
+  type ActivityEntry,
+  type Actor,
+  type Me,
+  operationContracts,
+  type Quantity,
+} from '@ailab/schema';
 
-/** What an operation does, in plain words (product rule 9): [past tense, base form]. */
-const verbs: Record<string, [string, string]> = {
-  'records.create': ['created', 'create'],
-  'records.update': ['edited', 'edit'],
-  'records.activate': ['activated', 'activate'],
-  'records.archive': ['archived', 'archive'],
-  'records.unarchive': ['unarchived', 'unarchive'],
-  'records.restore': ['restored an earlier version of', 'restore an earlier version of'],
-  'records.delete_draft': ['deleted the draft', 'delete the draft'],
-  'records.confirm_section': ['confirmed a section of', 'confirm a section of'],
-  'proposals.approve': ['confirmed a proposed change', 'confirm a proposed change'],
-  'proposals.reject': ['rejected a proposed change', 'reject a proposed change'],
-  'assistant.ask': ['asked the assistant', 'ask the assistant'],
-  // Reads, as the assistant's steps show them.
-  'records.get': ['looked at', 'look at'],
-  'records.list': ['looked up records', 'look up records'],
-  'records.kinds': ['checked which record kinds exist', 'check which record kinds exist'],
-  'records.history': ['read the history of', 'read the history of'],
-  'records.links': ['looked at the links of', 'look at the links of'],
-  'records.readiness': ['checked what still needs review on', 'check what still needs review on'],
-  'proposals.list': ['looked at the proposals', 'look at the proposals'],
-  'review.list': ['looked at what is waiting for you', 'look at what is waiting for you'],
-  'activity.list': ['read the activity ledger', 'read the activity ledger'],
-};
-
-const reads = new Set([
-  'records.get',
-  'records.list',
-  'records.kinds',
-  'records.history',
-  'records.links',
-  'records.readiness',
-  'proposals.list',
-  'review.list',
-  'activity.list',
-]);
+/** Reads, which the assistant's steps show in muted ink. */
+const isRead = (operationId: string) => operationContracts.get(operationId)?.effect === 'read';
 
 /** "edited" (what happened). */
 export function operationVerb(operationId: string): string {
-  return verbs[operationId]?.[0] ?? operationId;
+  return operationContracts.get(operationId)?.verbs.done ?? 'did something';
 }
 
 /** "edit" (what someone wants to do). */
 export function operationIntent(operationId: string): string {
-  return verbs[operationId]?.[1] ?? operationId;
+  return operationContracts.get(operationId)?.verbs.intent ?? 'do something';
 }
 
 /** "you", "Claude for you", "DeepSeek for Wali"… */
@@ -243,7 +215,7 @@ export function describeToolStep(step: {
   const verb = operationVerb(step.operationId);
   return {
     text: step.outcome === 'preview' ? `previewed: ${verb}` : verb,
-    tone: record && !reads.has(step.operationId) ? 'ok-ink' : 'muted',
+    tone: record && !isRead(step.operationId) ? 'ok-ink' : 'muted',
     ...(record ? { record } : {}),
   };
 }
@@ -271,7 +243,7 @@ export function waitingForYou(
   for (const step of steps) {
     const proposal = (step.result as { proposal?: { id?: unknown } } | undefined)?.proposal;
     if (step.outcome === 'proposed' && typeof proposal?.id === 'string') changes.push(proposal.id);
-    if (step.outcome !== 'done' || reads.has(step.operationId)) continue;
+    if (step.outcome !== 'done' || isRead(step.operationId)) continue;
     const output = (step.result as { output?: unknown } | undefined)?.output;
     for (const { record, envelope } of recordsIn(output)) {
       const { status } = envelope as { status?: unknown };

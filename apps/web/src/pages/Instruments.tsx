@@ -1,6 +1,8 @@
 import {
   type CapabilityProvider,
+  type Configuration,
   type EquipmentKindAttributes,
+  type EquipmentNode,
   type InstrumentAttributes,
   type InstrumentKindAttributes,
   instrumentsResolve,
@@ -10,6 +12,7 @@ import {
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 import { api } from '../api.ts';
 import {
   capabilityLabel,
@@ -22,6 +25,7 @@ import {
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
 import { RecordList } from './Records.tsx';
+import { LinkedName } from './Value.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 
@@ -444,4 +448,46 @@ function MountDrawing({ view, label }: { view: DeckView; label: (node: string) =
       <figcaption>{view.label}</figcaption>
     </figure>
   );
+}
+
+/**
+ * What is installed on an instrument, for its configuration section: each piece by its kind's name,
+ * where it sits, and what is attached to it, indented under it.
+ */
+export function InstalledEquipment({
+  configuration,
+}: {
+  configuration: Configuration | undefined;
+}) {
+  const nodes = configuration?.equipment ?? [];
+  if (nodes.length === 0) return <span className="muted">nothing installed</span>;
+  const where = (n: EquipmentNode) =>
+    n.placement.on === 'slot'
+      ? `in slot ${n.placement.slot}`
+      : n.placement.on === 'rail'
+        ? `on the deck from track ${n.placement.track}`
+        : `at ${n.mount.replaceAll('-', ' ')}`;
+  const branch = (parent: string | undefined): ReactNode => {
+    const children = nodes.filter((n) => n.parent === parent);
+    if (children.length === 0) return null;
+    return (
+      <ul className="equipment-tree">
+        {children.map((n) => (
+          <li key={n.id}>
+            <LinkedName id={n.kind} />
+            {n.label && <span> “{n.label}”</span>}
+            <span className="muted"> {where(n)}</span>
+            {n.item && (
+              <span>
+                {' '}
+                · <LinkedName id={n.item} />
+              </span>
+            )}
+            {branch(n.id)}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+  return branch(undefined);
 }

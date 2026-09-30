@@ -6,9 +6,10 @@ Every capability is an **operation**. People (through the web app) and agents (t
 
 | Piece | Where |
 | --- | --- |
-| Contracts: ID, summary, effect (`read` or `write`), Zod input and output, and optionally `file` when the output is a file a person saves (clients offer it as a download; agents don't repeat it) | `packages/schema/src/operations/` |
+| Contracts: ID, summary, plain words (`verbs.done` and `verbs.intent`, which screens show instead of the ID; ADR 0048), effect (`read` or `write`), Zod input and output, and optionally `file` when the output is a file a person saves (clients offer it as a download; agents don't repeat it) | `packages/schema/src/operations/` |
 | Result, error, proposal and activity shapes | `packages/schema/src/operation.ts` |
 | Registry and `execute` | `apps/api/src/operations/registry.ts` |
+| The catalog: every contract by ID, which screens read words from; a test checks the registry registers exactly these | `packages/schema/src/operations/catalog.ts` |
 | Implementations | `apps/api/src/operations/*-operations.ts` |
 | REST, OpenAPI and the live stream | `apps/api/src/app.ts`, `operations/describe.ts` |
 | MCP server | `apps/api/src/operations/mcp.ts` |

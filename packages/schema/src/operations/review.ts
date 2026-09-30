@@ -38,6 +38,7 @@ export type ReviewItem = z.infer<typeof ReviewItem>;
 
 export const reviewList = defineContract({
   id: 'review.list',
+  verbs: { done: 'looked at what is waiting for you', intent: 'look at what is waiting for you' },
   summary:
     'Everything waiting for a person: drafts to review and confirm, and proposed changes to confirm or reject, newest first',
   effect: 'read',

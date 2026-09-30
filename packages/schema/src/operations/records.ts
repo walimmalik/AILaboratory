@@ -20,6 +20,7 @@ const Evidence = z
 
 export const recordsCreate = defineContract({
   id: 'records.create',
+  verbs: { done: 'created', intent: 'create' },
   summary:
     'Create a record of a registered kind, as a draft unless status is "active" (kinds with sections always start as drafts)',
   effect: 'write',
@@ -36,6 +37,7 @@ export const recordsCreate = defineContract({
 
 export const recordsGet = defineContract({
   id: 'records.get',
+  verbs: { done: 'looked at', intent: 'look at' },
   summary: 'Read a record by ID',
   effect: 'read',
   input: z.object({ id: RecordId }),
@@ -44,6 +46,7 @@ export const recordsGet = defineContract({
 
 export const recordsList = defineContract({
   id: 'records.list',
+  verbs: { done: 'looked up records', intent: 'look up records' },
   summary:
     'Find records, most recently changed first; archived records only when status is "archived"',
   effect: 'read',
@@ -73,6 +76,7 @@ export const recordsList = defineContract({
 
 export const recordsUpdate = defineContract({
   id: 'records.update',
+  verbs: { done: 'edited', intent: 'edit' },
   summary: "Change a record's label or attributes",
   effect: 'write',
   input: z.object({
@@ -91,6 +95,7 @@ export const recordsUpdate = defineContract({
 
 export const recordsActivate = defineContract({
   id: 'records.activate',
+  verbs: { done: 'activated', intent: 'activate' },
   summary:
     'Confirm a draft and make it active; for kinds with sections, every section must be confirmed and no blocker check may fail',
   effect: 'write',
@@ -100,6 +105,7 @@ export const recordsActivate = defineContract({
 
 export const recordsConfirmSection = defineContract({
   id: 'records.confirm_section',
+  verbs: { done: 'confirmed a section of', intent: 'confirm a section of' },
   summary:
     'A person confirms one section of a draft as it stands; any later change sends it back to review',
   effect: 'write',
@@ -109,6 +115,7 @@ export const recordsConfirmSection = defineContract({
 
 export const recordsConfirm = defineContract({
   id: 'records.confirm',
+  verbs: { done: 'confirmed', intent: 'confirm' },
   summary:
     'A person confirms, in one step, every section of a record that waits for review, as it stands, except sections with a failing blocker check of their own; each section still gets its own confirmation. A draft becomes active when that leaves nothing to do',
   effect: 'write',
@@ -118,6 +125,7 @@ export const recordsConfirm = defineContract({
 
 export const recordsReadiness = defineContract({
   id: 'records.readiness',
+  verbs: { done: 'checked what still needs review on', intent: 'check what still needs review on' },
   summary:
     'What is confirmed, what changed since it was confirmed, what was assumed, and which readiness checks pass',
   effect: 'read',
@@ -127,6 +135,7 @@ export const recordsReadiness = defineContract({
 
 export const recordsArchive = defineContract({
   id: 'records.archive',
+  verbs: { done: 'archived', intent: 'archive' },
   summary: 'Archive a record: hidden from pickers, links keep working',
   effect: 'write',
   input: z.object(Target),
@@ -135,6 +144,7 @@ export const recordsArchive = defineContract({
 
 export const recordsUnarchive = defineContract({
   id: 'records.unarchive',
+  verbs: { done: 'unarchived', intent: 'unarchive' },
   summary: 'Return an archived record to its earlier status',
   effect: 'write',
   input: z.object(Target),
@@ -143,6 +153,7 @@ export const recordsUnarchive = defineContract({
 
 export const recordsRestore = defineContract({
   id: 'records.restore',
+  verbs: { done: 'restored an earlier version of', intent: 'restore an earlier version of' },
   summary: 'Write a new version with the label and attributes of an earlier version',
   effect: 'write',
   input: z.object({ ...Target, version: z.number().int().positive() }),
@@ -151,6 +162,7 @@ export const recordsRestore = defineContract({
 
 export const recordsDeleteDraft = defineContract({
   id: 'records.delete_draft',
+  verbs: { done: 'deleted the draft', intent: 'delete the draft' },
   summary: 'Delete a draft that nothing links to (everything else can only be archived)',
   effect: 'write',
   input: z.object({ id: RecordId, expectedVersion: ExpectedVersion }),
@@ -159,6 +171,7 @@ export const recordsDeleteDraft = defineContract({
 
 export const recordsHistory = defineContract({
   id: 'records.history',
+  verbs: { done: 'read the history of', intent: 'read the history of' },
   summary: 'List every version of a record with who changed it and why',
   effect: 'read',
   input: z.object({ id: RecordId }),
@@ -167,6 +180,7 @@ export const recordsHistory = defineContract({
 
 export const recordsLinks = defineContract({
   id: 'records.links',
+  verbs: { done: 'looked at the links of', intent: 'look at the links of' },
   summary: 'List what a record links to ("from") or where it is used ("to")',
   effect: 'read',
   input: z.object({ id: RecordId, direction: z.enum(['from', 'to']) }),
@@ -175,6 +189,7 @@ export const recordsLinks = defineContract({
 
 export const recordsKinds = defineContract({
   id: 'records.kinds',
+  verbs: { done: 'checked which record kinds exist', intent: 'check which record kinds exist' },
   summary:
     "List the record kinds this lab can hold, with the JSON Schema of each kind's attributes (read this before records.create)",
   effect: 'read',
