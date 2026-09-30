@@ -22,6 +22,15 @@ The solvent limit, the tolerance and the intermediate plate's volumes are hard l
 
 It reports, per point, where it comes from (the source, or the intermediate wells `I1`, `I2`…), the droplets, the concentration the well gets, its error and its solvent. Per intermediate well it reports the concentration, what the preparation puts in (stock, then solvent up to the volume), what the dispenses draw and the dead volume. A point no route reaches is listed with why.
 
+## Calculator operations (016a-2)
+
+`apps/api/src/transfers/calculators.ts` exposes the math as read operations marked `calculator` (listed by `describe_operations {calculators: true}`); the transfers skill explains them.
+
+- **The device.** `transfers.dilution_options` and `transfers.optimize_dilution` take `{instrument, node?}` or plain limits. An instrument's limits come from `instruments.resolve`: its transfer or dispense capability's volume minimum, maximum and step. An instrument with several such devices needs `node`.
+- **`transfers.optimize_dilution`** reads the intermediate plate from a labware type: its grid, dead volume and working (or maximum) volume. A type missing either volume is refused.
+- **`transfers.source_volumes`** takes each container's dead volume from its labware type (a note says when there is none) and what each well holds from `inventory.wells`; it reports what is short. Reservations wait for transfer plans (016a-3).
+- **`transfers.options`** lists every instrument's transfer and dispense capabilities with volume limits and ranks them with `rankDevices`. With a liquid type it asks `liquids.resolve_class` for each device's class and whether it is verified. Tips are estimated until methods declare them: none for dispensers and droplet devices without channels, the lab default otherwise. Devices without volume limits are listed apart; instruments not ready and devices that skip the plate format are noted.
+
 ## Not yet
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. The calculator operations and the transfer plan record (016a-3, 016a-4), worklists and reports (016b, 016c), screens (016d).
+Chained intermediates (an intermediate made from another) for points below 1000-fold. The transfer plan record (016a-3), worklists and reports (016b, 016c), screens (016d).

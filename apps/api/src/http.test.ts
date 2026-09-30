@@ -156,6 +156,10 @@ describe('MCP', () => {
       'sops.calculate',
       'sops.evaluate',
       'sops.score',
+      'transfers.dilution_options',
+      'transfers.optimize_dilution',
+      'transfers.options',
+      'transfers.source_volumes',
     ]);
     expect(listed.every((o: { calculator?: boolean }) => o.calculator)).toBe(true);
   });
