@@ -37,6 +37,7 @@ export function ReviewPage() {
   const counts = waiting.data?.counts;
   const changes = all.filter((i) => i.type === 'change');
   const drafts = all.filter((i) => i.type === 'draft');
+  const mentions = all.filter((i) => i.type === 'mentions');
   const draftTotal = Object.values(counts?.drafts ?? {}).reduce((sum, n) => sum + n, 0);
   const [show, setShow] = useState('all');
   // One chip per kind of draft waiting, counted over everything waiting rather than the page read.
@@ -74,8 +75,10 @@ export function ReviewPage() {
       </div>
 
       {waiting.error && <p className="error-text">{waiting.error.message}</p>}
-      {waiting.data && changes.length + draftTotal === 0 && (
-        <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
+      {waiting.data && changes.length + draftTotal + mentions.length === 0 && (
+        <p className="empty">
+          Nothing waiting. Drafts, proposed changes and library mentions appear here live.
+        </p>
       )}
 
       {changes.length > 0 && (
@@ -134,6 +137,62 @@ export function ReviewPage() {
                   : 'Confirm some of these to see the rest.'}
               </p>
             )}
+          </div>
+        </section>
+      )}
+
+      {mentions.length > 0 && (
+        <section className="block" aria-label="Library mentions">
+          <header>
+            <h2>Library mentions</h2>
+            <span className="state muted">
+              {counts?.mentions} to check in {mentions.length}{' '}
+              {mentions.length === 1 ? 'document' : 'documents'}
+            </span>
+          </header>
+          <div className="body">
+            <p className="muted">
+              What each document names: products, labware, instruments, assays and parameters. Check
+              them on the document, where each sits beside its passage.
+            </p>
+            <div className="table-wrap">
+              <table className="dense">
+                <thead>
+                  <tr>
+                    <th>Document</th>
+                    <th>Mentions</th>
+                    <th>Found</th>
+                    <th>
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mentions.map(
+                    (item) =>
+                      item.type === 'mentions' && (
+                        <tr key={item.document.id} aria-label={`Mentions in ${item.document.name}`}>
+                          <td>
+                            <span className="mono">{item.document.name}</span> {item.document.label}
+                          </td>
+                          <td className="num">{item.proposed}</td>
+                          <td className="when">{formatWhen(item.at)}</td>
+                          <td className="row-actions">
+                            <Link
+                              to="/records/$id"
+                              params={{ id: item.document.id }}
+                              className="btn small"
+                              aria-label={`Check mentions in ${item.document.name}`}
+                            >
+                              Check
+                            </Link>
+                          </td>
+                        </tr>
+                      ),
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       )}

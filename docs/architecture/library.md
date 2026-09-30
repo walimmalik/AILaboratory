@@ -72,6 +72,7 @@ What a passage mentions is a row in `library_mentions`: a registry record, the a
 - `library.mine` with `{document}` matches the lab's products (name, catalog number), labware types (name, catalog number), instrument kinds (name, model) and entities (name, synonyms) in the document's passages, at word boundaries with spaces and dashes interchangeable, and proposes what it finds. Deterministic, so it can run again; what is already there is skipped.
 - `library.propose_mentions` with `{document, mentions: [{passage, text, record | assay | parameter}]}` is for what matching can't find: the assay, parameters ("blocking time", 1 h), records named differently. The words must be in the passage.
 - `library.review_mentions` with `{confirm, reject}` settles them in bulk (people only).
+- Documents with proposed mentions wait in Review as one item each (`mentionsWaiting`, ADR 0052).
 - `library.mentions` with `document`, `record` or `parameter` (words in its name) lists them, proposed and confirmed unless `status` says otherwise, with the documents' names.
 - Parsing again removes the document's proposed mentions and keeps reviewed ones; mining again doesn't repeat a reviewed mention with the same words under the same heading.
 - Record pages show "Mentioned in": each document and passage heading, the words, how it was found, and Confirm or Reject for proposed ones (agent ink).

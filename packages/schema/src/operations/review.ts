@@ -59,17 +59,32 @@ export const ReviewChange = z.object({
   proposal: Proposal,
 });
 
-export const ReviewItem = z.discriminatedUnion('type', [ReviewDraft, ReviewChange]);
+/**
+ * A document whose library mentions wait for a person to check (plan 004e, ADR 0052). They are
+ * checked on the document's page, in bulk, with `library.review_mentions`.
+ */
+export const ReviewMentions = z.object({
+  type: z.literal('mentions'),
+  ...addressed,
+  at: z.iso.datetime().describe('When the newest mention was proposed'),
+  document: z.object({ id: RecordId, name: RecordName, label: z.string() }),
+  proposed: z.number().int().positive().describe('Mentions waiting in this document'),
+});
+
+export const ReviewItem = z.discriminatedUnion('type', [ReviewDraft, ReviewChange, ReviewMentions]);
 export type ReviewItem = z.infer<typeof ReviewItem>;
 
 export const reviewList = defineContract({
   id: 'review.list',
   verbs: { done: 'looked at what is waiting for you', intent: 'look at what is waiting for you' },
   summary:
-    'Everything waiting for a person: drafts to review and confirm, and proposed changes to confirm or reject, newest first',
+    'Everything waiting for a person: drafts to review and confirm, proposed changes to confirm or reject, and documents whose library mentions need checking, newest first',
   effect: 'read',
   input: z.strictObject({
-    kind: z.string().optional().describe('Only drafts of this kind; proposed changes are left out'),
+    kind: z
+      .string()
+      .optional()
+      .describe('Only drafts of this kind; proposed changes and mentions are left out'),
     mine: z.boolean().optional().describe('Only items addressed to you'),
   }),
   output: z.object({
@@ -80,8 +95,17 @@ export const reviewList = defineContract({
       ),
     counts: z
       .object({
-        total: z.number().int().nonnegative().describe('Everything waiting, drafts and changes'),
+        total: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Everything waiting: drafts, changes and documents with mentions'),
         changes: z.number().int().nonnegative(),
+        mentions: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Library mentions waiting, across all documents'),
         needsYou: z
           .number()
           .int()

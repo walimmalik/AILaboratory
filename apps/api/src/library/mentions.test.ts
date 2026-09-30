@@ -133,6 +133,21 @@ describe('library mentions', () => {
     expect(byRecord.get(plate.id)).toMatchObject({ text: '3590', how: 'catalog_number' });
     expect((await run<Mentions>(agent, 'library.mine', { document: doc.id })).added).toBe(0);
 
+    // The document waits in Review, addressed to the person the agent worked for (ADR 0052).
+    type Waiting = {
+      items: { type: string; for?: string; proposed?: number; document?: { id: string } }[];
+      counts: { mentions: number; needsYou: number };
+    };
+    const review = await run<Waiting>(person, 'review.list', {});
+    const waiting = review.items.find((i) => i.type === 'mentions');
+    expect(waiting).toMatchObject({
+      tier: 'to_confirm',
+      for: (person.actor as { userId: string }).userId,
+      proposed: 2,
+      document: { id: doc.id },
+    });
+    expect(review.counts).toMatchObject({ mentions: 2, needsYou: 0 });
+
     await expect(
       registry.execute(agent, 'library.review_mentions', { confirm: [mined.mentions[0]?.id] }),
     ).rejects.toMatchObject({ code: 'forbidden' });
@@ -152,6 +167,9 @@ describe('library mentions', () => {
     );
     expect(where.documents.map((d) => d.label)).toEqual(['IL-6 ELISA']);
     expect(where.mentions[0]).toMatchObject({ status: 'confirmed', reviewedBy: person.actor });
+    expect(
+      (await run<Waiting>(person, 'review.list', {})).items.filter((i) => i.type === 'mentions'),
+    ).toEqual([]);
     const shown = await run<{ mentions: Mention[] }>(person, 'library.mentions', {
       document: doc.id,
     });
