@@ -1,10 +1,6 @@
 import {
-  compare,
   evaluateVariables,
-  formatQuantity,
-  getUnit,
   isUnit,
-  LabDecimal,
   scoreSop,
   type VariableDefinition,
   type VariableOutcome,
@@ -26,6 +22,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { checkCitations } from './citations.ts';
+import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 import { bindRoles, type ReadValue, readField } from './resolve.ts';
 import { reviewSop, roundsOf } from './review.ts';
@@ -101,7 +98,8 @@ export const sopOperations = [
             `${name} is worked out by a formula; give the values it uses`,
           );
         }
-        checkInput(v, value);
+        const problem = inputProblem(v, value);
+        if (problem) throw new OperationError('invalid_input', problem);
         given.set(name, value);
       }
       const pinned = new Map<string, number>();
@@ -273,59 +271,4 @@ function outcomeWords(name: string, outcome: VariableOutcome | undefined) {
   if (r.type === 'number') return { name, ok: true, number: r.value };
   if (r.type === 'quantity') return { name, ok: true, quantity: r.quantity };
   return { name, ok: true, list: [...(r.items as (string | Quantity)[])] };
-}
-
-type InputValue = Quantity | string | (Quantity | string)[];
-
-/** A value given for an SOP input: a known unit, the same kind of quantity as the SOP declares, within its limits. */
-function checkInput(v: SopAttributes['variables'][number], value: InputValue): void {
-  const declared = [v.min, v.max, ...(Array.isArray(v.value) ? v.value : v.value ? [v.value] : [])];
-  const quantityUnit = declared.find((d): d is Quantity => typeof d === 'object')?.unit;
-  for (const item of Array.isArray(value) ? value : [value]) {
-    if (typeof item === 'object' && !isUnit(item.unit)) {
-      throw new OperationError('invalid_input', `${v.name}: unknown unit "${item.unit}"`);
-    }
-    if (quantityUnit && typeof item !== 'object') {
-      throw new OperationError(
-        'invalid_input',
-        `${v.name} needs a unit, like ${getUnit(quantityUnit).symbol}`,
-      );
-    }
-    if (typeof item === 'object' && declared.length > 0 && !quantityUnit) {
-      throw new OperationError('invalid_input', `${v.name} is a plain number, without a unit`);
-    }
-    if (
-      typeof item === 'object' &&
-      quantityUnit &&
-      getUnit(item.unit).dimension !== getUnit(quantityUnit).dimension
-    ) {
-      throw new OperationError(
-        'invalid_input',
-        `${v.name}: ${formatQuantity(item)} is not the same kind of quantity as ${getUnit(quantityUnit).symbol}`,
-      );
-    }
-    if (v.min !== undefined && order(item, v.min) < 0) {
-      throw new OperationError(
-        'invalid_input',
-        `${v.name}: ${words(item)} is below the least allowed, ${words(v.min)}`,
-      );
-    }
-    if (v.max !== undefined && order(item, v.max) > 0) {
-      throw new OperationError(
-        'invalid_input',
-        `${v.name}: ${words(item)} is above the most allowed, ${words(v.max)}`,
-      );
-    }
-  }
-}
-
-function order(a: Quantity | string, b: Quantity | string): number {
-  if (typeof a === 'object' && typeof b === 'object') return compare(a, b);
-  return new LabDecimal(typeof a === 'object' ? a.value : a).comparedTo(
-    typeof b === 'object' ? b.value : b,
-  );
-}
-
-function words(value: Quantity | string): string {
-  return typeof value === 'object' ? formatQuantity(value) : value;
 }
