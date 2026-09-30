@@ -132,3 +132,49 @@ export const sopsCalculate = defineContract({
     ),
   }),
 });
+
+export const sopsAnswerQuestion = defineContract({
+  id: 'sops.answer_question',
+  summary:
+    "Answer an SOP's open question, or accept the answer it suggests. People only: an open question blocks confirming until a person settles it",
+  effect: 'write',
+  input: z
+    .strictObject({
+      sop: SopId,
+      expectedVersion: z.number().int().positive(),
+      question: z.string().min(1).describe('The question id'),
+      answer: z.string().min(1).optional(),
+      acceptSuggestion: z.literal(true).optional(),
+      reason: Reason,
+    })
+    .refine((i) => (i.answer === undefined) !== (i.acceptSuggestion === undefined), {
+      message: 'Give an answer or accept the suggestion, not both',
+    }),
+  output: RecordEnvelope,
+});
+
+export const CitationCheck = z.object({
+  where: z.string().describe('What cites it, e.g. "step coat" or "variable well_volume"'),
+  document: z.string(),
+  passage: z.string().optional(),
+  quote: z.string(),
+  result: z
+    .enum(['matches', 'found_elsewhere', 'not_found', 'unparsed'])
+    .describe(
+      'matches: the quote is in the cited passage; found_elsewhere: in another passage of the document (see foundIn); not_found: nowhere in its text; unparsed: the document has no text yet',
+    ),
+  foundIn: z.string().optional().describe('The passage that has it, when found elsewhere'),
+});
+
+export const sopsCheckCitations = defineContract({
+  id: 'sops.check_citations',
+  summary:
+    "Check that every quote an SOP cites is really in its library document: in the cited passage, elsewhere in the document, or nowhere. Spacing and case don't matter; any other difference does",
+  effect: 'read',
+  input: z.strictObject({ sop: SopId }),
+  output: z.object({
+    citations: z.array(CitationCheck),
+    matches: z.number().int(),
+    problems: z.number().int().describe('Citations not found or pointing at the wrong passage'),
+  }),
+});

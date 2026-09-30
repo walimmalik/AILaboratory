@@ -34,6 +34,8 @@ Writes are refused when names repeat or a step, parameter, layout, timing rule o
 | `sops.evaluate` | Works out formulas over named values (calculator) | read |
 | `sops.draft` | Drafts an SOP | direct (drafts) |
 | `sops.calculate` | Works out an SOP's variables for a run (calculator) | read |
+| `sops.answer_question` | Answers an open question or accepts its suggestion | people only |
+| `sops.check_citations` | Checks each cited quote against its library document | read |
 
 ## Binding roles and reading values (012b)
 
@@ -43,10 +45,16 @@ A record variable reads its `readFrom` field from the role's record: a lot's cer
 
 `sops.calculate` takes `bindings` (a record per role for this run; otherwise each role's default) as well as `inputs`, and returns each role's record with any misfit, and each variable with where it came from (`input`, `record`, `typical`, `default`, `computed`, `missing`), the record and field it was read from, and any problem. Readiness blocks on defaults that don't fit their role and warns about record variables their default can't provide.
 
+## Open questions and citations (012c)
+
+An open question (G6) blocks confirming until a person settles it with `sops.answer_question`: an `answer` in their words (status `answered`) or `acceptSuggestion` (status `accepted_suggestion`, the suggestion becomes the answer). Agents can't call it. It is an ordinary record update, so the change is in the SOP's history.
+
+`sops.check_citations` reads each cited document's passages through `library.read` and looks for each quote, ignoring spacing and case: `matches` (in the cited passage, or anywhere when no passage is named), `found_elsewhere` (in another passage, named in `foundIn`), `not_found`, or `unparsed` (the document has no text yet). It is how a digitizer or reviewer checks its own quotes before a person reads the draft. `library.read` takes `passages` (ids) to read cited passages back.
+
 ## The lab's own SOPs (012a)
 
 The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from the front matter's `uses` (labware, reagents, entities, instruments), each a role named after its seed key, with its default bound to the lab's record of the same seed label when the lab has it. Variables come from the front matter as defaults (values that aren't numbers, such as a 1:5 split ratio, go into the notes). The numbered list becomes the steps, each a `manual` step in the SOP's own words with its bold title, until the digitizer types them. Analysis, before-you-start, handling and timing sections go into analysis and notes. Each SOP links to its library document of the same title. Values marked estimated in the seed are marked assumed. Running the seed again skips SOPs the lab has by title.
 
 ## Not yet
 
-Dead volume per pipetting instrument kind (007 L4) as a field to read; the digitizer and review loop (012c); the SOP page (012d).
+Dead volume per pipetting instrument kind (007 L4) as a field to read; the AI review loop and benchmark (rest of 012c); the SOP page (012d).
