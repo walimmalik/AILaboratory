@@ -11,11 +11,14 @@ export class KindRegistry {
     if (!idPrefixPattern.test(idPrefix)) throw new Error(`Invalid ID prefix "${idPrefix}"`);
     if (!namePrefixPattern.test(namePrefix)) throw new Error(`Invalid name prefix "${namePrefix}"`);
     if (!Number.isInteger(nameWidth) || nameWidth < 1) throw new Error(`Invalid name width`);
+    const mine = [namePrefix, ...(definition.otherNamePrefixes ?? [])];
+    for (const prefix of mine) {
+      if (!namePrefixPattern.test(prefix)) throw new Error(`Invalid name prefix "${prefix}"`);
+    }
     for (const other of this.#kinds.values()) {
       if (other.idPrefix === idPrefix) throw new Error(`ID prefix "${idPrefix}" is already used`);
-      if (other.namePrefix === namePrefix) {
-        throw new Error(`Name prefix "${namePrefix}" is already used`);
-      }
+      const taken = mine.find((p) => namePrefixesOf(other).includes(p));
+      if (taken) throw new Error(`Name prefix "${taken}" is already used`);
     }
     this.#kinds.set(kind, definition);
     return this;
@@ -30,4 +33,9 @@ export class KindRegistry {
     if (!definition) throw new RecordError('unknown_kind', `Unknown record kind "${kind}"`);
     return definition;
   }
+}
+
+/** Every readable name prefix a kind names its records with. */
+export function namePrefixesOf(kind: KindDefinition): string[] {
+  return [kind.namePrefix, ...(kind.otherNamePrefixes ?? [])];
 }

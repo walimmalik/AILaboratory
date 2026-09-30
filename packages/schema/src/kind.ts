@@ -14,6 +14,11 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
   namePrefix: string;
   /** Zero-padding width of the readable name counter. */
   nameWidth: number;
+  /**
+   * Other readable name prefixes this kind gives its records through `related` (containers are
+   * PLT, TUB, BOX… by labware family). They are reserved like `namePrefix`.
+   */
+  otherNamePrefixes?: string[];
   attributes: A;
   links?: (attributes: z.infer<A>) => Omit<RecordLink, 'fromId'>[];
   /**

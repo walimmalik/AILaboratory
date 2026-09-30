@@ -7,6 +7,8 @@ import { entityKinds } from './entities/kinds.ts';
 import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
+import { inventoryKinds } from './inventory/kinds.ts';
+import { loadSeedInventory, readSeedInventory } from './inventory/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -18,7 +20,8 @@ import { KindRegistry } from './records/kinds.ts';
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
  * types, instrument and equipment kinds and instruments, reagents (lots as proposals), liquid
- * classes, then entity kinds and entities. Runs as the agent "Seed loader" on behalf of a user,
+ * classes, entity kinds and entities, then locations and containers (proposals; a container or
+ * storage location waits for its place to be approved, so run it again after approving). Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
  * nobody else has changed their wells (confirmed types as a proposal).
@@ -68,7 +71,13 @@ if (!ctx) {
 }
 
 const kinds = new KindRegistry();
-for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...entityKinds])
+for (const kind of [
+  ...labwareKinds,
+  ...instrumentKinds,
+  ...reagentKinds,
+  ...entityKinds,
+  ...inventoryKinds,
+])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus());
 
@@ -154,5 +163,24 @@ console.log(
   `Entities: ${entities.entities.created.length} drafted, ${entities.entities.existing.length} already there.`,
 );
 for (const line of entities.entities.created) console.log(`  + ${line}`);
+const inventory = await loadSeedInventory(
+  registry,
+  ctx,
+  readSeedInventory({
+    lab: await seedFile('lab.yaml'),
+    inventory: await seedFile('inventory.yaml'),
+    labware: await seedFile('labware.yaml'),
+  }),
+);
+for (const [what, part] of [
+  ['Locations', inventory.locations],
+  ['Containers', inventory.containers],
+] as const) {
+  console.log(
+    `${what}: ${part.created.length} added, ${part.proposed.length} proposed for review, ${part.existing.length} already there or waiting, ${part.waiting.length} wait for their place to be approved (run the seed again after approving).`,
+  );
+  for (const line of part.created) console.log(`  + ${line}`);
+}
+for (const skip of inventory.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

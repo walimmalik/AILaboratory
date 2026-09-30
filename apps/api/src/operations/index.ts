@@ -2,6 +2,7 @@ import { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
 import { entityOperations } from '../entities/operations.ts';
 import { instrumentOperations } from '../instruments/operations.ts';
+import { inventoryOperations } from '../inventory/operations.ts';
 import { labwareOperations } from '../labware/operations.ts';
 import { liquidOperations } from '../reagents/liquid-operations.ts';
 import { reagentOperations } from '../reagents/operations.ts';
@@ -33,6 +34,7 @@ export function createRegistry(
     ...reagentOperations,
     ...liquidOperations,
     ...entityOperations,
+    ...inventoryOperations,
     ...assistantOperations,
   );
 }
