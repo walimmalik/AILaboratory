@@ -520,3 +520,28 @@ test('scanning a tube opens it and moves it into a box position', async ({ page 
   await expect(page.getByText(`Moved ${tube.name} to`)).toBeVisible();
   await expect(found).toContainText(`Box ${stamp} › ${tube.name} B3`);
 });
+
+test('a file added on the documents page becomes a draft document with its file', async ({
+  page,
+}) => {
+  await signIn(page);
+  const stamp = Date.now();
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Documents' })
+    .click();
+  const add = page.getByRole('region', { name: 'Add documents' });
+  await add.getByLabel('Files').setInputFiles({
+    name: `Coating ${stamp}.md`,
+    mimeType: 'text/markdown',
+    buffer: Buffer.from(`# Coating ${stamp}\n\nCoat the plate overnight at 4 °C.\n`),
+  });
+  await add.getByLabel('License').selectOption({ label: "The lab's own" });
+  await add.getByRole('button', { name: 'Add' }).click();
+  // Without the science service in this run, the text waits to be read.
+  await expect(add.getByText('added as a draft')).toBeVisible();
+  await add.getByRole('link', { name: new RegExp(`Coating ${stamp}`) }).click();
+  await expect(page).toHaveURL(/\/records\/doc_/);
+  await expect(page.getByRole('region', { name: 'Files' })).toContainText(`Coating ${stamp}.md`);
+  await expect(page.getByRole('region', { name: 'Text' })).toContainText('not read yet');
+});

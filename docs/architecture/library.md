@@ -18,6 +18,7 @@ The lab's reading shelf (plan [011](../plans/011-sop-library.md)): stored files,
 | Mentions: matcher, table, operations | `packages/domain/src/mentions.ts`, `library_mentions`, `apps/api/src/library/mentions.ts` |
 | Folder import (manifest or Markdown with front matter) | `apps/api/src/library/import.ts`, command `library:import` |
 | Download route | `GET /v1/files/:id` in `apps/api/src/app.ts` |
+| Screens | `apps/web/src/pages/Documents.tsx`, "Mentioned in" in `apps/web/src/pages/Mentions.tsx` |
 | Agent skill | `skills/library/SKILL.md` |
 
 ## Files (011a)
@@ -82,6 +83,12 @@ What a passage mentions is a row in `library_mentions`: a registry record, the a
 | `library.review_mentions` | Confirms or rejects mentions in bulk | people only |
 | `library.mentions` | Mentions of a document, record or parameter | read |
 
+## Screens (011d)
+
+- **Documents** (Library menu, `/documents`): text search with the matches highlighted and each passage's document, heading and page; adding files (several at once, with a type and a license: each becomes a draft document, is read and mined when it can be, and reports what happened); the list with type, assay, version, license and confirmed mentions.
+- **A document's page** adds its files (open or download each), its text by section with mentioned words underlined (proposed ones in agent ink), buttons to read the text again and find mentions, and what it mentions with Confirm and Reject.
+- **Other record pages** show "Mentioned in" when the library mentions them.
+
 ## Importing folders
 
 `importIntoLibrary` uploads each file (`files.upload`, source `folder` with its path), drafts each document (`library.add`, every value marked `imported` from its manifest entry or file) parses it (`library.parse`) and mines it (`library.mine`), skipping documents the lab already has by title but parsing those not parsed yet, so it can run again once the science service is up. What couldn't be parsed is reported with the reason. Two folder formats:
@@ -93,4 +100,4 @@ The seed loads `seed/sops/own` (the lab's own, shareable) and `docs/sop-library`
 
 ## Not yet
 
-Docling for PDF and DOCX, embeddings and hybrid ranking (011b-2); fetching a document by URL or DOI; screens (011d). Removing stored bytes nobody references.
+Docling for PDF and DOCX, embeddings and hybrid ranking (011b-2); fetching a document by URL or DOI; a PDF viewer beside the text and a text diff between revisions on the document page. Removing stored bytes nobody references.

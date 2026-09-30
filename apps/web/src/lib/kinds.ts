@@ -22,7 +22,8 @@ export interface KindPage {
     | '/places'
     | '/samples'
     | '/entities'
-    | '/entity-kinds';
+    | '/entity-kinds'
+    | '/documents';
   /** The menu group it sits in: one per registry. */
   group: 'Library' | 'Instruments' | 'Reagents' | 'Inventory';
 }
@@ -36,6 +37,7 @@ export const libraryPages: KindPage[] = [
     group: 'Library',
   },
   { kind: 'vendor', title: 'Vendors', noun: 'vendor', path: '/vendors', group: 'Library' },
+  { kind: 'document', title: 'Documents', noun: 'document', path: '/documents', group: 'Library' },
   {
     kind: 'instrument',
     title: 'Instruments',

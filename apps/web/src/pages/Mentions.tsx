@@ -1,3 +1,4 @@
+import { formatQuantity } from '@ailab/domain';
 import {
   libraryMentions,
   libraryReviewMentions,
@@ -18,31 +19,52 @@ const howWords: Record<Mention['how'], string> = {
   agent: 'found by an agent',
 };
 
+/** What a mention is about, in words: a record, "Assay: ELISA", "blocking time: 1 h". */
+function MentionWhat({ mention }: { mention: Mention }) {
+  const what = mention.what;
+  if (what.type === 'record') {
+    return (
+      <Link to="/records/$id" params={{ id: what.record }}>
+        {what.label}
+      </Link>
+    );
+  }
+  if (what.type === 'assay') return <>Assay: {what.assay}</>;
+  return (
+    <>
+      {what.parameter}: <span className="num">{formatQuantity(what.value)}</span>
+    </>
+  );
+}
+
 /**
- * Where the library mentions this record (plan 011c): each passage with its document and heading.
- * Proposed mentions are in agent ink until a person confirms or rejects them.
+ * Mentions in a table with Confirm and Reject for proposed ones (plan 011c). On a record page each
+ * row names its document; on a document page it names what is mentioned.
  */
-export function MentionedIn({ record }: { record: RecordEnvelope }) {
+function MentionsBlock({
+  title,
+  mentions,
+  documents,
+  show,
+}: {
+  title: string;
+  mentions: Mention[];
+  documents: ReadonlyMap<string, { label: string }>;
+  show: 'document' | 'what';
+}) {
   const me = useMe();
   const queryClient = useQueryClient();
-  const found = useQuery({
-    queryKey: ['library', 'mentions', record.id],
-    queryFn: () => api.run(libraryMentions, { record: record.id }),
-  });
   const review = useMutation({
     mutationFn: (input: { confirm?: string[]; reject?: string[] }) =>
       api.run(libraryReviewMentions, input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library', 'mentions'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }),
   });
-  const mentions = found.data?.mentions ?? [];
-  if (mentions.length === 0) return null;
-  const titles = new Map(found.data?.documents.map((d) => [d.id, d] as const));
   const proposed = mentions.filter((m) => m.status === 'proposed');
   const person = me !== undefined;
   return (
-    <section className="block" aria-label="Mentioned in">
+    <section className="block" aria-label={title}>
       <header>
-        <h2>Mentioned in</h2>
+        <h2>{title}</h2>
         <span className="state muted num">
           {mentions.length}
           {proposed.length > 0 && ` · ${proposed.length} to review`}
@@ -65,7 +87,7 @@ export function MentionedIn({ record }: { record: RecordEnvelope }) {
           <table>
             <thead>
               <tr>
-                <th>Document</th>
+                <th>{show === 'document' ? 'Document' : 'Mentions'}</th>
                 <th>Where</th>
                 <th>As written</th>
                 <th>Found</th>
@@ -74,14 +96,17 @@ export function MentionedIn({ record }: { record: RecordEnvelope }) {
             </thead>
             <tbody>
               {mentions.map((m) => {
-                const doc = titles.get(m.document);
                 const agent = m.status === 'proposed' && isAgent(m.proposedBy);
                 return (
                   <tr key={m.id}>
                     <td>
-                      <Link to="/records/$id" params={{ id: m.document }}>
-                        {doc?.label ?? m.document}
-                      </Link>
+                      {show === 'document' ? (
+                        <Link to="/records/$id" params={{ id: m.document }}>
+                          {documents.get(m.document)?.label ?? m.document}
+                        </Link>
+                      ) : (
+                        <MentionWhat mention={m} />
+                      )}
                     </td>
                     <td>
                       {m.heading.join(' › ') || 'Start'}
@@ -91,6 +116,7 @@ export function MentionedIn({ record }: { record: RecordEnvelope }) {
                     <td className="muted">
                       {howWords[m.how]}
                       {m.status === 'proposed' ? ', not yet confirmed' : ''}
+                      {m.status === 'rejected' ? ', rejected' : ''}
                     </td>
                     <td>
                       {person && m.status === 'proposed' && (
@@ -123,5 +149,33 @@ export function MentionedIn({ record }: { record: RecordEnvelope }) {
         {review.error && <p className="error-text">{review.error.message}</p>}
       </div>
     </section>
+  );
+}
+
+export const mentionsQuery = (input: { document?: string; record?: string }) => ({
+  queryKey: ['library', 'mentions', input],
+  queryFn: () => api.run(libraryMentions, input),
+});
+
+/** Where the library mentions this record: each document and passage heading. */
+export function MentionedIn({ record }: { record: RecordEnvelope }) {
+  const found = useQuery(mentionsQuery({ record: record.id }));
+  const mentions = found.data?.mentions ?? [];
+  if (mentions.length === 0) return null;
+  return (
+    <MentionsBlock
+      title="Mentioned in"
+      show="document"
+      mentions={mentions}
+      documents={new Map(found.data?.documents.map((d) => [d.id, d] as const))}
+    />
+  );
+}
+
+/** What a document mentions: records, its assay and the parameters it states. */
+export function DocumentMentions({ mentions }: { mentions: Mention[] }) {
+  if (mentions.length === 0) return null;
+  return (
+    <MentionsBlock title="What it mentions" show="what" mentions={mentions} documents={new Map()} />
   );
 }
