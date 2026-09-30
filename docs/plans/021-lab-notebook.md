@@ -1,8 +1,15 @@
 # 021: Lab notebook
 
-- Status: accepted. Rounds 1 and 2 (N1 to N12) accepted by Wali 2026-09-30, all as recommended. Builds after 020 in plan order; 021a can start earlier, since 011 and 013 exist. Embedding analyses and graphs waits for 020.
+- Status: accepted. Rounds 1 and 2 (N1 to N12) accepted by Wali 2026-09-30, all as recommended. Eight changes from the adversarial review (`reviews/021-lab-notebook-adversarial.md` in the project files) accepted by Wali the same day; see "Changes after the adversarial review", which wins where it differs from a round's text. Builds after 020 in plan order; 021a can start earlier, since 011 and 013 exist. Embedding analyses and graphs waits for 020.
 - Depends on: 002 (records, versions, links), 003 (operations, activity ledger, ADR 0018), 004 (saved conversations, draft and confirm, Review, 004e change sets and page context), 005 (lab memory: entries as evidence, memories proposed from entries), 010 (containers, lots, samples, the volume ledger), 011 (file store, text search, the deterministic mention matcher of ADR 0035), 013 (campaigns, experiments, runs with steps, deviations and data files, conclusions, sets), 014 (plate maps), 020 (analyses and Vega-Lite graphs to embed)
-- Feeds: 005 (entries are evidence for memories, and a person's "remember this" from an entry), 013 (values written in a note become run records), 020 (entries cite analyses and graphs)
+- Needs from other modules (owned there, built before the 021 step that uses them):
+  - **002:** `tags` on the record envelope (change 1) and the `Locator` type in `packages/schema` (change 1), before 021a.
+  - **013:** `runs.correct` for a late actual or deviation on a finished run (change 4), before N7 in 021b. Until then N7 works only on runs in progress.
+  - **003 (ADR 0018 amendment):** ledger rows record the records they wrote as `{id, version}`, with an index over record ids (change 5), in or before 021b.
+  - **011:** a shared text index with one `search.all` that any module registers into (change 6), before 021d; image previews, thumbnails, HEIC and EXIF handling for photos (change 7), before 021c's run-view photos.
+  - **One PDF renderer for 020 and 021** (headless Chromium over a print view of the web app, change 6), decided as an ADR by whichever of 020b or 021d is built first.
+  - **Lab setting:** a lab time zone (change 1), in 021a; 019 needs it too.
+- Feeds: 005 (entries are evidence for memories, and a person's "remember this" from an entry), 013 (values written in a note become run records through `runs.correct`), 020 (entries cite analyses and graphs)
 
 ## What this plan delivers
 
@@ -34,15 +41,15 @@ The records below already hold the facts. The notebook points at them and shows 
 - 019 S11: a loosened constraint is carried into the run and the notebook.
 - 004 saves every assistant conversation, linked to the records it touched.
 - 011 (ADR 0035) already has a deterministic matcher for the lab's names, catalog numbers, models and synonyms, and keyword search over passages.
-- The web app renders Markdown with `react-markdown` (`apps/web/src/lib/RichText.tsx`, the wiki and documents).
+- The web app has two Markdown renderers, neither of which knows embeds: `apps/web/src/lib/RichText.tsx` is a small hand-written renderer for what models write (paragraphs, lists, bold, code), and the wiki uses `react-markdown`. 021c adds the notebook's pipeline (react-markdown with a remark plugin for the closed syntax of change 3).
 - AGENTS.md: a module that owns outcome data ships detectors to `memory.observe`. The notebook owns free text, not outcome data; see "Detectors".
 
 ## Model
 
 | Layer | Record or table | Holds |
 | --- | --- | --- |
-| Instance | **Notebook entry** (`nbe_`, `NB-0001`) | Author, the day it is about, title, body (N2), what it is about (links to experiments, runs, campaigns and any other records), attachments (files through 011), status (draft, active, archived), who wrote it (person, or agent with the conversation) |
-| Computed | **Timeline** (no table) | Notable events for a day, a person, an experiment or a campaign, computed from the activity ledger and record history (N3) |
+| Instance | **Notebook entry** (`nbe_`, `NB-0001`) | Author (always a person), `at` (when it was written, set by the server) and `day` (the day it is about, in the lab's time zone, settable backward), title, body in the closed syntax (N2, change 3), what it is about (links with locators, change 1), tags (on the record envelope), `people` mentioned with `@`, `for` (an addressee: a person or `agent`), `replies_to`, attachments (files through 011), `conversation` (the assistant conversation id when an agent drafted it; optional), locked and addenda, status (draft, active, archived) |
+| Computed | **Timeline** (no table) | Notable events for a day, a person, an experiment or a campaign, computed from the activity ledger and record history (N3); each event's id is its ledger row id |
 
 ## Operations
 
@@ -51,16 +58,20 @@ The records below already hold the facts. The notebook points at them and shows 
 | `notebook.write` (a person's entry, active at once), `notebook.draft` (an agent's entry, a draft), `notebook.update`, `notebook.confirm` | people write; agents draft, a person confirms |
 | `notebook.summarize` (draft a day, run or experiment summary from the timeline) | direct: makes a draft |
 | `notebook.timeline` (by day, person, experiment, campaign, record) | read |
-| `notebook.lock`, `notebook.add_addendum` (N4) | people |
-| `notebook.get`, `notebook.search`, `notebook.for` (entries about a record) | read |
+| `notebook.lock`, `notebook.unlock` (with a reason, a version shown like a late edit), `notebook.add_addendum` (N4) | people |
+| `notebook.request_review` (asks a person to review an entry; their Reviewed is a section confirmation) | direct |
+| `notebook.save_reply` (save an assistant reply as a draft entry with the conversation linked) | direct: makes a draft |
+| `notebook.get`, `notebook.search` (text, tags, people, `for`, open follow-ups), `notebook.for` (entries about a record), `notebook.tags` (tags in use with counts), `notebook.inbox` (entries addressed to agents) | read |
 | `notebook.export` (an experiment, a campaign or a date range as PDF or HTML) | read |
 
 ## Screens
 
 - **Notebook page:** today first, one column: your entries and the timeline for the day, summarized ("3 runs finished, 1 deviation, 2 analyses to confirm"), each expandable. Filters for person, experiment and campaign.
-- **Writing:** one box, type and go; `@` or `[[` to link a record; paste or drop a photo; nothing else required.
-- **On record pages:** a "Notes" line on experiments, runs, campaigns, containers and lots, with the count and the latest note.
-- **Run view:** a note box per step and for the whole run, with the tablet camera for photos and the device's own dictation (N10).
+- **Writing:** one box, type and go; `[[` to link a record or a place in it, `@` to mention a person, `#` for a tag; paste or drop a photo; nothing else required. Saves on Save, on leaving the box, and at most once a minute while typing (change 7).
+- **For you:** a line at the top of the notebook page with entries that mention you or ask you to review, and follow-ups (unticked `- [ ]` boxes) in your entries.
+- **Replies:** shown threaded under the entry they answer.
+- **On record pages:** a "Notes" line on every record page (it is one link query), with the count and the latest note.
+- **Run view:** a note box per step and for the whole run, with the tablet camera for photos and the device's own dictation (N10). Each note is its own entry, linked to the run with a step locator, and the run page groups them by step.
 
 ## Detectors
 
@@ -71,11 +82,43 @@ None. The notebook owns written text, not outcome data (runs, ledgers, schedules
 Wali asked how this works. Nothing new is stored; the timeline is a query plus pure rules.
 
 1. **Each module declares its notable operations.** Next to an operation's definition (`packages/schema/src/operations`), a module can add a `timeline` entry: the event it stands for (`run_finished`, `deviation_recorded`, `analysis_confirmed`...), which record it is about, and which outcome counts (`succeeded`, or `approved` for a proposal a person confirmed). Everything not declared (edits to drafts, readiness reads, failed calls) stays out. The list is closed and grows only by PR, like the memory effects in 005.
-2. **The query.** `notebook.timeline` reads the activity ledger (ADR 0018) for the lab and the window (a day, or an experiment's life), keeps rows whose operation is declared, and reads the record version each row wrote (002 history) for what it needs to say ("finished as failed", "2 files", "IC50 0.8 uM" from the analysis's own result, never recomputed). An index on the ledger by lab, operation and time keeps this fast.
+2. **The query.** `notebook.timeline` reads the activity ledger (ADR 0018) for the lab and the window (a day in the lab's time zone, or an experiment's life), keeps rows whose operation is declared, and reads the exact version each row wrote with `getVersion` (the ledger records `{id, version}` after change 5) for what it needs to say ("finished as failed", "2 files", "IC50 0.8 uM" from the analysis's own result, never recomputed). Run-to-experiment links are read in one batch per query. An index over record ids serves per-record timelines. Rows written by the seed are not events. An approved proposal is one event, done by the agent and confirmed by the person.
 3. **Grouping and summary lines are pure code** in `packages/domain/notebook`, with unit tests: events are placed under their experiment (a run, a deviation or a data file through its run, an analysis through its runs; anything else under the day), then grouped by day, and each group becomes one line from fixed wording ("RUN-0012 done, 1 deviation, 2 files"). Opening a line lists its events, and each event opens its ledger entry and record.
 4. **Agents read the same thing.** `notebook.timeline` is an operation, so an agent's write-up (N5) is built from these events and cites them as record references.
 
 If it ever gets slow, the same rules can fill a cache table without changing what anyone sees.
+
+## Changes after the adversarial review
+
+Wali accepted all eight on 2026-09-30. They settle the entry schema before 021a, move work that belongs to other modules to those modules, and add the tagging, addressing and deep-link layer the rounds left out.
+
+1. **The entry schema is settled before 021a.**
+   - `at` and `day`: `at` is when it was written (for a photo, the capture time from EXIF), `day` the day it is about, in a new lab time zone setting (bootstrap and seed set it; grouping by day is tested across midnight).
+   - **Tags** are lowercase strings (`[a-z0-9-]`, no registry), typed as `#tag` or picked with autocomplete from `notebook.tags`. They go on the record envelope (002), not only on entries, because experiments, campaigns and memories will want the same tags and moving them later is a migration; renaming a tag is one operation. The write-up shapes of N12 (observation, troubleshooting, meeting, literature) become suggested tags, not templates.
+   - **People and addressees:** `@Name` resolves to user ids in `people`; a mention puts the entry in that person's Review in the "for your information" tier (004e R1). `notebook.request_review` adds a "needs you" item; the person's Reviewed is a section confirmation on the entry's one `body` section, so a later edit shows "changed since Jordan reviewed". An entry `for: agent` is listed by `notebook.inbox` for an outside agent to answer as a reply draft; in the app, "Ask the agent" opens a conversation with the entry as page context. A standing agent that watches the inbox is a later plan, not 021.
+   - **Locators:** one `Locator` type in `packages/schema` (`{id, version?, path?}`, with a closed set of paths per kind: `steps/<id>`, `wells/<A1>`, `passages/<id>`, `sections/<id>`), used by entry links, the URL router (`/records/RUN-0012?at=steps/s3` scrolls to it; entry headings get stable anchors) and timeline events (the ledger row id). It is core, because 005 memories and 020 conclusions will cite places too.
+   - **Replies** are entries with `replies_to`; agents reply as drafts. **Follow-ups** are `- [ ]` checkboxes that toggle in place; `notebook.search {openTasks}` lists them. No task record.
+   - **Author and conversation:** the author is always a person (the one the agent acts for); the agent, model and conversation are provenance. `conversation` is an optional attribute, because conversations aren't records and outside agents have none.
+   - "Notes" shows on every record page.
+2. **Addressed drafts, not private drafts (replaces N9's author-only drafts).** The record service has no per-record visibility, and adding it would be a core decision. An agent's draft is addressed to its author, so it lands in that person's Review and nobody else's, and everywhere else it shows in agent ink as "draft for Jordan". Real privacy, if ever wanted, is asked as a 002 decision covering entries, conversations and personal memories together.
+3. **A closed body syntax, checked on write.** `[[RUN-0012]]` links by readable name (an unknown name renders as plain text, "not found"); `[[RUN-0012/steps/s3]]` links a place; `![[PLT-0003@4]]` embeds a record card at a version, which is required and filled in by the editor (a missing version refuses the write, like `checkPin`); `![[FIL-0021]]` shows a stored image or file; GitHub-style Markdown tables, headings, lists, bold, code and checkboxes as usual. Raw HTML, scripts and external images are refused on write, not only stripped on render, because an external image in a note everyone opens is a tracking or exfiltration channel. External links are fine.
+4. **N7 targets `runs.correct` in 013.** 013's run writes refuse a finished run, and notes are mostly written after the run. 013 adds `runs.correct`: a late actual or deviation on a finished run with a reason, recorded as a new run version with evidence `stated` citing the entry; people direct, agents proposed. N7 always proposes the structured step form (step, field, planned, actual) when the note names a step and a value, so lab memory's deviation detector can group it (005 change 5), and a free-text deviation only for what isn't a step's value. Until `runs.correct` exists, N7 works only on runs in progress.
+5. **ADR 0018 amended in 021b.** A ledger row records the records it wrote as `{id, version}`, and gets an index over record ids. The timeline reads exact versions, never matching by timestamp, and each event's stable id is its ledger row id, which is what deep links to an event use. Inventory events in the timeline are limited to opening a lot, finishing a lot and discards; until 016 links consumption to experiments, they sit under the day.
+6. **Search and PDF are decided once, outside 021.** Notes join search through a shared text index owned by 011 (a table keyed by record id and kind that any module registers into, one `search.all` returning hits by kind; embeddings land once for everything), not by writing into `library_passages`. Export uses one renderer shared with 020's reports: headless Chromium in the API over a print view of the web app, so every React renderer (plate maps, graphs, cards) is reused as is. Whichever of 020b or 021d is built first writes the ADR both cite.
+7. **Editing, bench notes, photos and context.**
+   - The editor keeps a local draft and saves on Save, on blur, and at most once a minute while typing; a save with no change makes no version. The ledger row for `notebook.write` and `notebook.update` keeps the body's length and the linked records, not the body. "Edited" means a version written after the entry's day. A version conflict shows the other person's text instead of retrying.
+   - One entry per bench note, linked to the run with a step locator; "write it up" folds them into one summary draft that links each.
+   - Photos (assigned to 011): JPEG, PNG, WebP and HEIC accepted; a JPEG preview and a thumbnail derived as `derived` files; capture time from EXIF into `at`; GPS stripped before storing; gel and microscope images kept unconverted beside the preview.
+   - Only active entries go into the page context bundle, never drafts, each line with its author and day ("Jordan, 12 Oct: edge wells dried again"). An entry addressed to an agent is delivered as an ask, not in the bundle.
+   - Locking is a kind rule: a locked entry takes only addenda and refuses `records.update` as well as `notebook.update`. Anyone in the lab may lock or unlock for now (no roles yet); unlocking needs a reason and shows like a late edit. Archiving a locked entry is allowed.
+8. **Acceptance scenarios.** Each is a test or an end-to-end run:
+   - A person writes "RUN-0012 cells looked patchy in column 12" on the run's page; the entry is active at once, appears under Notes on RUN-0012 and its experiment, and `notebook.for RUN-0012` returns it.
+   - In the seed lab's demo campaign, `notebook.timeline` for the ELISA experiment shows one line per run day with the run status, deviation count and file count, and nothing for draft edits, readiness reads or seed loads.
+   - An agent's `notebook.draft` for Jordan appears in Jordan's Review and nowhere else as a normal entry; confirming it activates it; the run page's context bundle never contains it before that.
+   - An entry embedding `![[PLT-0003@4]]` still shows version 4 after the plate map is edited to version 5, with the "newer version" line; the update moves it to 5.
+   - A locked entry refuses `records.update` and `notebook.update` from anyone, accepts an addendum, and the export shows the addendum dated.
+   - A note saying "incubated 45 min, not 30" about a finished run yields exactly one proposal (`runs.correct` with step, field, planned and actual), and confirming it links the entry to the run version it made.
+   - `@Jordan` puts the entry in Jordan's "for your information" tier, a review request puts it in "needs you", and `#edge-effect` makes it findable by tag.
 
 ---
 
@@ -118,12 +161,13 @@ Wali chose A for N7 to N12 on 2026-09-30.
 - Readable name `NB-0001`; an entry's day defaults to today and can be set back (writing up yesterday).
 - Attachments go through the 011 file store and show inline; images are shown, other files as a line with Download.
 - An entry about a run is shown on the run page under the checklist, and on its experiment's page.
-- Entries by a person are active as soon as they are written (like `memory.remember`); they don't go through Review.
+- Entries by a person are active as soon as they are written (like `memory.remember`); they don't go through Review unless they ask someone to review them.
 - Built after 020 in plan order; 021a (entries and links) could start earlier since 011 and 013 exist.
 
 ## Split
 
-- **021a:** the entry record, write, draft, confirm, update, lock and addenda, links and mention suggestions, attachments, `notebook.for`, the notebook skill (including the write-up shapes of N12).
-- **021b:** the `timeline` declarations on operations, the ledger index, `notebook.timeline` with grouping in `packages/domain/notebook`, `notebook.summarize`, and proposing run records from a note (N7).
-- **021c:** screens: the notebook page, the editor, "Notes" on record pages, the note box on the run view, embeds pinned by version.
-- **021d:** entries in the library search and the page context bundle (N8, after 005b), and `notebook.export` to PDF and HTML (N11).
+- **Before 021a (002):** `tags` on the record envelope, the `Locator` type, the lab time zone setting.
+- **021a:** the entry record with the schema of change 1 and the closed syntax checked on write, write, draft (addressed to the author), confirm, update, lock, unlock and addenda, links with locators and mention suggestions, tags, `@` mentions and review requests, replies, attachments, `notebook.for`, `notebook.tags`, `notebook.inbox`, `notebook.save_reply`, the notebook skill (with the suggested tags of N12).
+- **021b:** the ADR 0018 amendment (`{id, version}` on ledger rows, index over record ids), the `timeline` declarations on operations, `notebook.timeline` with grouping in `packages/domain/notebook` by the lab's time zone, `notebook.summarize`, and proposing run records from a note (N7, through 013's `runs.correct` once it exists).
+- **021c:** screens: the notebook page with For you and follow-ups, the editor and its save rules, the notebook Markdown pipeline, "Notes" on every record page, replies, the note box on the run view (one entry per note), embeds pinned by version, locator deep links.
+- **021d:** entries registered in 011's shared text index and in the page context bundle (N8, after 005b; active entries only), and `notebook.export` to PDF and HTML through the shared renderer (N11).

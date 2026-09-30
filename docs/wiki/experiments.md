@@ -116,3 +116,5 @@ These drive the templates and the first end-to-end target (one ELISA): sandwich 
 - **Timeline:** computed from the activity ledger and record history, never retyped: one line per experiment per day ("RUN-0012 done, 1 deviation, 2 files") that opens to the events.
 - **Agents draft, people confirm:** write-ups and photo transcriptions on request, numbers as record references. A value in a note ("incubated 45 min, not 30") becomes a run record only through a proposal a person confirms.
 - **History:** every version kept, late edits marked; a locked entry takes only addenda. Export to PDF or HTML per experiment, campaign, person or date range.
+- **Tags, people and places:** `#tags` (on every record), `@` mentions and review requests that land in Review, replies, follow-up checkboxes, and links into a step, a well or a passage.
+- **Needs from other modules:** `runs.correct` in 013 for notes about finished runs, versions on ledger rows, a shared search index in 011 and one PDF renderer shared with analysis.
