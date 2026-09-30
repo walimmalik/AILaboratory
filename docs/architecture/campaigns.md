@@ -45,6 +45,7 @@ Each protocol part carries `bindings` (the SOP's material roles bound to records
 | `experiments.where_used` (campaigns, experiments and runs using a record, optionally one version) | read |
 | `runs.start` (an in-progress run of a planned experiment, as a checklist) | proposal |
 | `runs.record_step`, `runs.done_as_planned`, `runs.record_deviation`, `runs.attach_data`, `runs.finish` | direct in a run a person started, proposal otherwise |
+| `runs.correct` | proposal |
 | `experiments.conclude` (verdict per hypothesis, summary, runs it rests on; stage to concluded) | proposal |
 | `sets.create` | proposal |
 | `sets.get` (members named, experiments that test the set) | read |
@@ -55,7 +56,7 @@ Links: a set `contains` its members and is `picked_by` its experiment; a conclud
 
 `runs.start` pins the experiment's current confirmed version and turns every step of each pinned SOP version into a checklist item with its planned values: fixed parameters, the calculated value of a parameter's variable (from `experiments.calculate`), and `times` for a repeated step. It needs the experiment planned (or already running or analysing) and its protocol to work out, and it moves the experiment to running. The run records who started it; agents record directly into a run a person started and propose into any other (010 V7, E11).
 
-Ticking a step (`runs.record_step`) records it done as planned, with the time and who ticked it. A value given in `changed` that differs from the plan is kept as an actual and makes a deviation on the step (what, planned value, why, impact); `skipped` does the same for a step not done. Both need `why`. `runs.done_as_planned` ticks every step still pending. `runs.record_deviation` records anything else that happened. `runs.attach_data` links a file record (011) to the run, optionally to a step and a container, so analysis (020) can join reads to wells. `runs.finish` ends the run as done (every step ticked or skipped), failed or aborted; a finished run takes no more records.
+Ticking a step (`runs.record_step`) records it done as planned, with the time and who ticked it. A value given in `changed` that differs from the plan is kept as an actual and makes a deviation on the step (what, planned value, why, impact); `skipped` does the same for a step not done. Both need `why`. `runs.done_as_planned` ticks every step still pending. `runs.record_deviation` records anything else that happened. `runs.attach_data` links a file record (011) to the run, optionally to a step and a container, so analysis (020) can join reads to wells. `runs.finish` ends the run as done (every step ticked or skipped), failed or aborted; a finished run takes no more checklist records. `runs.correct` records what is said about it afterwards (from the 021 notebook review): a step's values in the same structured form as `runs.record_step`, which rebuilds the step's actuals and deviation and appends a correction (when, who, why, source), or a deviation marked `corrected`. The finish time stays; the record's history keeps the earlier values. People record corrections directly, agents propose them, and an agent's carries evidence `stated` with its source.
 
 `apps/api/src/campaigns/runs.ts` holds the run operations.
 

@@ -238,8 +238,18 @@ export const Deviation = z.strictObject({
   impact: z.string().min(1).optional().describe('What it may change in the results'),
   at: z.iso.datetime(),
   by: Actor,
+  corrected: z.literal(true).optional().describe('Recorded after the run finished (runs.correct)'),
 });
 export type Deviation = z.infer<typeof Deviation>;
+
+/** A late record on a finished run (runs.correct): when, by whom, and what it came from. */
+export const Correction = z.strictObject({
+  at: z.iso.datetime(),
+  by: Actor,
+  why: z.string().min(1),
+  source: z.string().min(1).optional().describe('e.g. the notebook entry it came from'),
+});
+export type Correction = z.infer<typeof Correction>;
 
 /**
  * One step of the pinned SOPs as a line of the run's checklist (E7). Ticking it records the planned
@@ -257,7 +267,11 @@ export const RunStep = z.strictObject({
     .array(z.strictObject({ name: z.string().min(1), value: RunValue }))
     .optional()
     .describe('Only values that differed from the plan'),
-  deviation: Deviation.omit({ at: true, by: true }).optional(),
+  deviation: Deviation.omit({ at: true, by: true, corrected: true }).optional(),
+  corrections: z
+    .array(Correction)
+    .optional()
+    .describe('Late changes made after the run finished; the history keeps the earlier values'),
 });
 export type RunStep = z.infer<typeof RunStep>;
 
