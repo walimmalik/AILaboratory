@@ -30,8 +30,10 @@ interface EditorContext {
   hidden: ReadonlySet<string>;
   /** The record's values as edited so far, for editors that refer to other fields (an SOP's steps). */
   document?: Record<string, unknown>;
-  /** Editors of their own for the items of some lists, by the list's path (an SOP's variables). */
+  /** Editors of their own for the items of some lists, by the list's path (an SOP's steps). */
   itemEditors?: Record<string, ItemEditor>;
+  /** Editors of their own for some whole lists, by the list's path (an SOP's values). */
+  listEditors?: Record<string, ComponentType<ListEditorProps>>;
 }
 const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {}, hidden: new Set() });
 
@@ -50,6 +52,15 @@ export interface ItemEditorProps {
   path: string;
   /** Its place in the list, from 0. */
   index: number;
+}
+
+export interface ListEditorProps {
+  /** The schema of one item. */
+  schema: JsonSchema;
+  value: unknown;
+  onChange: Change;
+  label: string;
+  path: string;
 }
 
 export interface ItemEditor {
@@ -473,7 +484,30 @@ function ItemsEditor({
   label: string;
   path: string;
 }) {
-  const custom = useContext(Context).itemEditors?.[path];
+  const { itemEditors, listEditors } = useContext(Context);
+  const Whole = listEditors?.[path];
+  if (Whole)
+    return <Whole schema={schema} value={value} onChange={onChange} label={label} path={path} />;
+  return (
+    <ListOfItems
+      schema={schema}
+      value={value}
+      onChange={onChange}
+      label={label}
+      path={path}
+      custom={itemEditors?.[path]}
+    />
+  );
+}
+
+function ListOfItems({
+  schema,
+  value,
+  onChange,
+  label,
+  path,
+  custom,
+}: ListEditorProps & { custom: ItemEditor | undefined }) {
   const items = Array.isArray(value) ? value : [];
   // Keys follow the items as they move, so an open item's fields stay with it.
   const [keys, setKeys] = useState(() => items.map(() => nextItemKey++));

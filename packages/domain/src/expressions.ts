@@ -73,8 +73,11 @@ const unitSpellings: [spelling: string, code: string][] = listUnits()
 
 const wordChar = /[\p{L}\p{N}_]/u;
 
-/** The unit spelled at `at`, the longest that ends at a word boundary. */
-function unitAt(text: string, at: number): { code: string; length: number } | undefined {
+/**
+ * The unit spelled at `at`, the longest that ends at a word boundary, as its code. Editors use it
+ * to read "100 µL" the way formulas do.
+ */
+export function unitAt(text: string, at: number): { code: string; length: number } | undefined {
   const od = /^OD\d{3,4}/.exec(text.slice(at));
   if (od && !wordChar.test(text[at + od[0].length] ?? '')) {
     return { code: od[0], length: od[0].length };

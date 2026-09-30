@@ -28,6 +28,11 @@
   --data-4: #9a5d8c;
   --data-5: #4f9a93;
   --data-6: #a38a3c;
+  /* SOP text: values of the SOP in blue, materials in orange (the first two data colors). */
+  --value: #3f7fa6;
+  --value-soft: rgba(63, 127, 166, 0.12);
+  --material: #b0764a;
+  --material-soft: rgba(176, 118, 74, 0.12);
   --font-display: "Martian Mono Variable", "IBM Plex Mono", Consolas, monospace;
   --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
@@ -62,6 +67,10 @@
     --data-4: #c996bb;
     --data-5: #82c7c0;
     --data-6: #d2bb72;
+    --value: #7fb0d0;
+    --value-soft: rgba(127, 176, 208, 0.16);
+    --material: #d6a27a;
+    --material-soft: rgba(214, 162, 122, 0.16);
     color-scheme: dark;
   }
 }
@@ -92,5 +101,9 @@
   --data-4: #c996bb;
   --data-5: #82c7c0;
   --data-6: #d2bb72;
+  --value: #7fb0d0;
+  --value-soft: rgba(127, 176, 208, 0.16);
+  --material: #d6a27a;
+  --material-soft: rgba(214, 162, 122, 0.16);
   color-scheme: dark;
 }

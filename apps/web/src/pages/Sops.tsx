@@ -13,18 +13,21 @@ import {
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
+import { fieldWords, sopTerms } from '../lib/sop-text.ts';
 import { recordQuery } from '../queries.ts';
 import { Head } from './Instruments.tsx';
 import { RecordList } from './Records.tsx';
+import { describeSop, TermAnchor, TermCards } from './SopText.tsx';
 
 /**
  * Digital SOP screens (plan 012d): the list, and on an SOP's page the procedure as a person reads
- * it at the bench, with its run values, open questions, and the checks against its source. Editing
- * stays in the section blocks below it.
+ * it at the bench, with its run values, open questions, and the checks against its source. A number
+ * that comes from a value keeps the value's color, and hovering it says which value it is and where
+ * it came from (ADR 0046). Editing stays in the section blocks below it.
  */
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
@@ -102,44 +105,61 @@ const calculationQuery = (record: RecordEnvelope) => ({
 function ProcedureBlock({ record }: { record: RecordEnvelope }) {
   const a = of(record);
   const calc = useQuery(calculationQuery(record));
+  // Values read as their numbers at the bench; names shows which value each number is.
+  const [names, setNames] = useState(false);
   const values = new Map((calc.data?.variables ?? []).map((v) => [v.name, v]));
-  const labels = new Map(a.variables.map((v) => [v.name, v.label]));
-  const roles = new Map([
-    ...a.materials.map((m) => [m.role, m.label] as const),
-    ...(a.solutions ?? []).map((s) => [s.role, s.label] as const),
-    ...a.steps.flatMap((s) => (s.produces ?? []).map((p) => [p.role, p.label] as const)),
-  ]);
+  const terms = useMemo(() => sopTerms(a), [a]);
   const runValue = (name: string) => {
     const v = values.get(name);
     if (!v?.ok) return undefined;
     return formatValue(v.quantity ?? v.number ?? v.list);
   };
-  const parameter = (p: StepParameter) => {
-    if (p.variable) {
-      const value = runValue(p.variable);
-      return `${p.name} ${value ?? '…'} (${labels.get(p.variable) ?? p.variable})`;
-    }
-    return `${p.name} ${formatValue(p.quantity ?? p.number ?? p.text)}`;
+  const assumed = (name: string) => {
+    const from = values.get(name)?.from;
+    return from === 'typical' || from === 'missing';
   };
-  // Step text names values as `name`; at the bench it reads as the value itself.
+  const describe = describeSop(a, terms, (name) => {
+    const v = values.get(name);
+    if (!v) return undefined;
+    return {
+      value: runValue(name) ?? v.error ?? 'no value yet',
+      from: `${fromWords[v.from]}${v.source ? ` (${v.source.name}, ${fieldWords(v.source.field)})` : ''}`,
+      assumed: assumed(name),
+    };
+  });
+  /** A value in a step: its number, or its name; colored so it reads as a value, not typed text. */
+  const valueAt = (name: string, key?: number) => {
+    const label = terms.values.find((v) => v.name === name)?.label ?? name;
+    return (
+      <TermAnchor
+        key={key}
+        type="value"
+        name={name}
+        className={assumed(name) ? 'bench agent-ink' : 'bench'}
+      >
+        {names ? label : (runValue(name) ?? '…')}
+      </TermAnchor>
+    );
+  };
+  const materialAt = (role: string, key?: number) => (
+    <TermAnchor key={key} type="material" name={role} className="bench">
+      {terms.materials.find((m) => m.name === role)?.label ?? role}
+    </TermAnchor>
+  );
+  const parameter = (p: StepParameter, i: number) => (
+    <span key={`${p.name}-${i}`}>
+      {i > 0 && ' · '}
+      {p.name} {p.variable ? valueAt(p.variable) : formatValue(p.quantity ?? p.number ?? p.text)}
+    </span>
+  );
+  // Step text names values and materials as `name`; at the bench each reads as its value or label.
   const inline = (text: string): ReactNode[] =>
     text.split(/`([A-Za-z_][A-Za-z0-9_]*)`/).map((part, i) => {
       if (i % 2 === 0) return part;
-      const v = values.get(part);
-      const value = runValue(part);
-      if (value !== undefined) {
-        const assumed = v?.from === 'typical' || v?.from === 'missing';
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed string
-          <b key={i} className={assumed ? 'agent-ink' : undefined} title={labels.get(part)}>
-            {value}
-          </b>
-        );
-      }
-      const role = roles.get(part);
-      if (role) return role;
+      if (terms.values.some((v) => v.name === part)) return valueAt(part, i);
+      if (terms.materials.some((m) => m.name === part)) return materialAt(part, i);
       // biome-ignore lint/suspicious/noArrayIndexKey: parts of one fixed string
-      return <code key={i}>{labels.get(part) ?? part}</code>;
+      return <code key={i}>{part}</code>;
     });
   const shown = a.variables.filter((v) => values.get(v.name));
   const unsure = (calc.data?.variables ?? []).filter(
@@ -154,79 +174,98 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
           {unsure.length > 0 && ` · ${unsure.length} values to settle`}
         </span>
       </header>
-      <div className="body">
-        {a.purpose && <p>{a.purpose}</p>}
-        {a.steps.length === 0 ? (
-          <p className="empty">No steps yet.</p>
-        ) : (
-          <ol className="sop-steps">
-            {a.steps.map((s) => (
-              <li key={s.id}>
-                <p className="sop-line">
-                  {/* "By hand" on every manual step says nothing; other actions keep their word. */}
-                  {(s.title ?? (s.action === 'manual' ? undefined : actionWords[s.action])) && (
-                    <b>{s.title ?? actionWords[s.action]}. </b>
-                  )}
-                  {inline(s.text)}
-                  {s.repeat && <span className="muted"> Repeat {s.repeat} times.</span>}
-                </p>
-                {(s.parameters?.length || s.uses?.length) && (
-                  <p className="sop-line muted sop-note">
-                    {[
-                      ...(s.parameters ?? []).map(parameter),
-                      ...(s.uses?.length
-                        ? [`uses ${s.uses.map((u) => roles.get(u) ?? u).join(', ')}`]
-                        : []),
-                    ].join(' · ')}
+      <TermCards describe={describe}>
+        <div className="body">
+          {a.purpose && <p>{a.purpose}</p>}
+          {a.variables.length > 0 && a.steps.length > 0 && (
+            <fieldset className="segmented no-print bench-switch">
+              <legend className="sr-only">Show values as</legend>
+              <button type="button" aria-pressed={!names} onClick={() => setNames(false)}>
+                Numbers
+              </button>
+              <button type="button" aria-pressed={names} onClick={() => setNames(true)}>
+                Names
+              </button>
+            </fieldset>
+          )}
+          {a.steps.length === 0 ? (
+            <p className="empty">No steps yet.</p>
+          ) : (
+            <ol className="sop-steps">
+              {a.steps.map((s) => (
+                <li key={s.id}>
+                  <p className="sop-line">
+                    {/* "By hand" on every manual step says nothing; other actions keep their word. */}
+                    {(s.title ?? (s.action === 'manual' ? undefined : actionWords[s.action])) && (
+                      <b>{s.title ?? actionWords[s.action]}. </b>
+                    )}
+                    {inline(s.text)}
+                    {s.repeat && <span className="muted"> Repeat {s.repeat} times.</span>}
                   </p>
-                )}
-                <Cites cites={s.cite} />
-              </li>
-            ))}
-          </ol>
-        )}
-        {shown.length > 0 && (
-          <details open={unsure.length > 0}>
-            <summary>Values for a run ({shown.length})</summary>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Value</th>
-                    <th>Amount</th>
-                    <th>Where it comes from</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shown.map((v) => {
-                    const result = values.get(v.name);
-                    const assumed = result?.from === 'typical' || result?.from === 'missing';
-                    return (
-                      <tr key={v.name}>
-                        <td>{v.label}</td>
-                        <td className="num">
-                          {result?.ok ? runValue(v.name) : (result?.error ?? '—')}
-                        </td>
-                        <td className={assumed ? 'agent-ink' : 'muted'}>
-                          {result ? fromWords[result.from] : '—'}
-                          {result?.source && ` (${result.source.name}, ${result.source.field})`}
-                          {result?.problem && ` · ${result.problem}`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        )}
-        {calc.error && <p className="error-text">{calc.error.message}</p>}
-        <div className="actions no-print">
-          <button type="button" className="btn" onClick={() => window.print()}>
-            Print
-          </button>
+                  {(s.parameters?.length || s.uses?.length) && (
+                    <p className="sop-line muted sop-note">
+                      {(s.parameters ?? []).map(parameter)}
+                      {s.uses?.length ? (
+                        <span>
+                          {s.parameters?.length ? ' · ' : ''}uses{' '}
+                          {s.uses.map((u, i) => (
+                            <span key={u}>
+                              {i > 0 && ', '}
+                              {materialAt(u)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </p>
+                  )}
+                  <Cites cites={s.cite} />
+                </li>
+              ))}
+            </ol>
+          )}
+          {shown.length > 0 && (
+            <details open={unsure.length > 0}>
+              <summary>Values for a run ({shown.length})</summary>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Value</th>
+                      <th>Amount</th>
+                      <th>Where it comes from</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((v) => {
+                      const result = values.get(v.name);
+                      const assumed = result?.from === 'typical' || result?.from === 'missing';
+                      return (
+                        <tr key={v.name}>
+                          <td>{v.label}</td>
+                          <td className="num">
+                            {result?.ok ? runValue(v.name) : (result?.error ?? '—')}
+                          </td>
+                          <td className={assumed ? 'agent-ink' : 'muted'}>
+                            {result ? fromWords[result.from] : '—'}
+                            {result?.source && ` (${result.source.name}, ${result.source.field})`}
+                            {result?.problem && ` · ${result.problem}`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+          {calc.error && <p className="error-text">{calc.error.message}</p>}
+          <div className="actions no-print">
+            <button type="button" className="btn" onClick={() => window.print()}>
+              Print
+            </button>
+          </div>
         </div>
-      </div>
+      </TermCards>
     </section>
   );
 }

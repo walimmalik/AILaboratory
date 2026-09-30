@@ -1036,50 +1036,13 @@ table.checks td.mark {
   display: flex;
   gap: 6px;
 }
-/* SOP editors: a value's kind as a choice, formulas in lab words, step settings as rows. */
-.choices {
-  display: grid;
-  gap: 4px;
-  border: 0;
-  margin: 0;
-  padding: 0;
-}
-.choices.inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-}
+/* SOP editors (ADR 0046): one highlighted box per value and per step's words. */
 .more-head {
   cursor: pointer;
-  color: var(--muted);
+  color: var(--ink-3);
 }
 .more > .form-rows {
   padding-top: 8px;
-}
-.formula {
-  display: grid;
-  gap: 6px;
-}
-.formula > .suggestions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.formula-help {
-  display: grid;
-  gap: 6px;
-}
-.formula-help > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-.formula-result {
-  margin: 0;
 }
 .settings {
   display: grid;
@@ -1095,6 +1058,331 @@ table.checks td.mark {
 }
 .setting-row > .field:first-child {
   width: 11em;
+}
+.field.short {
+  width: 7em;
+}
+
+/* Values and materials in SOP text, in the editor and at the bench. */
+.t-val {
+  color: var(--value);
+  background: var(--value-soft);
+  border-radius: 3px;
+}
+.t-mat {
+  color: var(--material);
+  background: var(--material-soft);
+  border-radius: 3px;
+}
+.t-op {
+  color: var(--ink-3);
+}
+.t-fn {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.t-unk {
+  color: var(--warn);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.t-ph {
+  color: var(--ink-3);
+}
+.term-legend .t-val,
+.term-legend .t-mat,
+.term-legend .t-unk {
+  font-family: var(--font-mono);
+  padding: 0 4px;
+}
+
+/* The box: a transparent textarea over a mirror that paints the same characters. */
+.term-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.term-box {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: var(--field);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.term-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.term-box.bad {
+  border-color: var(--warn);
+}
+.term-box.assumed {
+  border-color: var(--agent);
+}
+.term-mirror,
+.term-box > textarea {
+  font: 14px / 22px var(--font-mono);
+  padding: 5px 8px;
+  margin: 0;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  letter-spacing: 0;
+  tab-size: 2;
+  min-height: 34px;
+}
+.term-mirror {
+  color: var(--ink);
+  pointer-events: none;
+}
+.term-box > textarea {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  overflow: hidden;
+}
+.term-box.assumed .term-mirror,
+.term-box.assumed .t-val,
+.term-box.assumed .t-mat {
+  color: var(--agent);
+}
+.term-box > textarea::selection {
+  background: var(--accent-soft);
+  color: transparent;
+}
+.term-picks {
+  position: absolute;
+  z-index: 5;
+  left: 8px;
+  top: calc(100% + 2px);
+  display: grid;
+  min-width: 16em;
+  padding: 3px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+}
+.term-picks [role="option"] {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.term-picks [role="option"].on,
+.term-picks [role="option"]:hover {
+  background: var(--accent-soft);
+}
+.pick-kind {
+  font: 11px var(--font-mono);
+  color: var(--ink-3);
+}
+.pick-kind.value {
+  color: var(--value);
+}
+.pick-kind.material {
+  color: var(--material);
+}
+.term-problem {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* A value or material you can hover, focus or tap for its card. */
+.term-anchor {
+  font: inherit;
+  border: 0;
+  padding: 0 1px;
+  margin: 0;
+  cursor: help;
+}
+.term-anchor.bench {
+  background: none;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.term-anchor.agent-ink {
+  color: var(--agent);
+}
+.term-card {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+  font-size: 12px;
+  pointer-events: none;
+}
+.term-card.assumed .term-title {
+  color: var(--agent);
+}
+.term-card dl {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+.term-card dl > div {
+  display: flex;
+  gap: 8px;
+}
+.term-card dl > div > dt {
+  color: var(--ink-3);
+  min-width: 5em;
+}
+.term-card dl > div > dd {
+  margin: 0;
+}
+
+/* Values: one line each, name = box, with the result and its kind under the box. */
+.values {
+  display: grid;
+  width: 100%;
+  max-width: 96ch;
+}
+.value-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) 12px minmax(0, 1fr);
+  gap: 4px 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+}
+.value-row:first-child {
+  border-top: 0;
+}
+.value-name {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  font: inherit;
+  color: var(--ink);
+  min-width: 0;
+  width: 100%;
+}
+.value-name:hover,
+.value-name:focus {
+  border-color: var(--rule);
+  background: var(--field);
+  outline: none;
+}
+.value-name:focus {
+  border-color: var(--accent);
+}
+.value-eq {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  padding-top: 6px;
+  text-align: center;
+}
+.value-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.value-after {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-size: 12px;
+  min-height: 18px;
+}
+.value-result {
+  font-family: var(--font-mono);
+}
+.kind-words {
+  font: 11px / 1 var(--font-mono);
+  color: var(--ink-3);
+}
+.value-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  padding: 4px 0 2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.value-more label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.values-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 8px;
+}
+.term-legend {
+  font-size: 12px;
+}
+kbd {
+  font: 11px var(--font-mono);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0 4px;
+  color: var(--ink-2);
+}
+
+/* A step: one line for what it is, then its words, then what was read from them. */
+.step-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.step-line .field.grow {
+  flex: 1 1 14em;
+}
+.step-words {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-width: 96ch;
+}
+.step-read {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+.step-read .term-anchor {
+  font-family: var(--font-mono);
+  margin-right: 6px;
+}
+.setting-words {
+  margin-right: 10px;
+}
+.bench-switch {
+  justify-self: start;
+  width: fit-content;
+}
+@media (max-width: 560px) {
+  .value-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .value-eq {
+    display: none;
+  }
 }
 .json-field {
   width: 100%;
