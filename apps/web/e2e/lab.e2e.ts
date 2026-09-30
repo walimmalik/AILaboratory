@@ -303,7 +303,11 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await page.goto(`/records/${id}`);
   const volumes = page.getByRole('region', { name: 'Volumes' });
   await volumes.getByRole('button', { name: 'Edit volumes' }).click();
-  await volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first().fill('20');
+  const dead = volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first();
+  await dead.fill('twenty');
+  await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await expect(volumes.getByText('Fix the field marked in red before saving.')).toBeVisible();
+  await dead.fill('20');
   await volumes.getByRole('combobox', { name: 'dead volume unit' }).first().selectOption('uL');
 
   // While the form is open, the agent raises the maximum volume.

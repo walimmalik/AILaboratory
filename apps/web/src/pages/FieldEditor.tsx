@@ -441,16 +441,21 @@ function JsonEditor({
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+          // Text that isn't JSON makes the form invalid, so Save can't quietly keep the last good value.
+          const problem = (message?: string) => {
+            e.target.setCustomValidity(message ?? '');
+            setError(message);
+          };
           if (e.target.value.trim() === '') {
-            setError(undefined);
+            problem();
             onChange(undefined);
             return;
           }
           try {
             onChange(JSON.parse(e.target.value));
-            setError(undefined);
+            problem();
           } catch {
-            setError('Not valid JSON yet');
+            problem('Not valid JSON: fix it or clear it before saving');
           }
         }}
       />

@@ -43,6 +43,7 @@ export function SectionEditor({
   );
   const [source, setSource] = useState<Source>('person');
   const [reference, setReference] = useState('');
+  const [invalid, setInvalid] = useState(false);
   const [note, setNote] = useState('');
   const queryClient = useQueryClient();
 
@@ -98,6 +99,8 @@ export function SectionEditor({
     <EditorScope root={root} kindOfPrefix={kindOfPrefix} hidden={new Set(notApplicable)}>
       <form
         className="editor"
+        // A field whose text can't be a value (not a number, not JSON) holds Save until it is fixed.
+        onChange={(e) => setInvalid(!e.currentTarget.checkValidity())}
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
@@ -173,7 +176,7 @@ export function SectionEditor({
           <button
             type="submit"
             className="btn primary"
-            disabled={changed.length === 0 || theirs || save.isPending}
+            disabled={changed.length === 0 || theirs || invalid || save.isPending}
           >
             Save
           </button>
@@ -181,9 +184,11 @@ export function SectionEditor({
             Cancel
           </button>
           <span className="muted">
-            {changed.length === 0
-              ? 'Nothing changed yet.'
-              : `Changes ${changed.map(fieldLabel).join(', ')}.`}
+            {invalid
+              ? 'Fix the field marked in red before saving.'
+              : changed.length === 0
+                ? 'Nothing changed yet.'
+                : `Changes ${changed.map(fieldLabel).join(', ')}.`}
           </span>
         </div>
         {save.error && <p className="error-text">{save.error.message}</p>}
