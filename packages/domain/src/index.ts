@@ -10,6 +10,7 @@ export * from './liquids.ts';
 export * from './media.ts';
 export * from './mentions.ts';
 export * from './opentrons.ts';
+export * from './platemap.ts';
 export * from './readiness.ts';
 export * from './reagents.ts';
 export * from './sop-benchmark.ts';

@@ -327,8 +327,11 @@ test("an editor open while an agent changes the record doesn't write over the ag
   // The editor closes once the save is written.
   await expect(volumes.getByRole('button', { name: 'Edit volumes' })).toBeVisible();
 
+  // The save is a round trip; read the record once it has landed.
+  await expect
+    .poll(async () => (await asAgent(request, 'records.get', { id })).output.version)
+    .toBe(3);
   const saved = await asAgent(request, 'records.get', { id });
-  expect(saved.output.version).toBe(3);
   expect(saved.output.attributes.maxVolume).toEqual({ value: '300', unit: 'uL' });
   expect(saved.output.attributes.deadVolume).toEqual({ value: '20', unit: 'uL' });
 });

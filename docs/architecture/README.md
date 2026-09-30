@@ -17,3 +17,4 @@ The system-level architecture is in [plan 000](../plans/000-foundation-architect
 | Files, documents, search, mentions | [library.md](library.md) | 011 |
 | Digital SOPs, formulas | [sops.md](sops.md) | 012 |
 | Campaigns, experiments, runs, pinned inputs | [campaigns.md](campaigns.md) | 013 |
+| Layout templates and plate maps | [plate-maps.md](plate-maps.md) | 014 |

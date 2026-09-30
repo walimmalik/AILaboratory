@@ -97,5 +97,5 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **014a:** schemas, `packages/domain/platemap` with every placement strategy, operations, seed layouts from `assays.yaml`.
+- **014a:** schemas, `packages/domain/platemap` with every placement strategy, operations, seed layouts from `assays.yaml`. Built (014a-1): `packages/domain/src/platemap.ts` with regions, series, replicate cells, paging with per-plate controls, the three strategies with seeds, edges, leftovers and overrides.
 - **014b:** plate map page and editor (select and paint, drag), layout library, agent drafting, readiness checks, skill.
