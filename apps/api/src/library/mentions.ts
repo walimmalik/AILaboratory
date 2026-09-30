@@ -1,5 +1,6 @@
 import { type MatchCandidate, type MatchTerm, matchMentions, newId } from '@ailab/domain';
 import {
+  type Actor,
   type DocumentAttributes,
   libraryMentions as libraryMentionsContract,
   libraryMine,
@@ -8,7 +9,7 @@ import {
   type Mention,
   type RecordEnvelope,
 } from '@ailab/schema';
-import { and, asc, desc, eq, ilike, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, max, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { libraryMentions, libraryPassages, records } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -16,6 +17,33 @@ import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 
 type Row = typeof libraryMentions.$inferSelect;
+
+/**
+ * Documents with proposed mentions, for Review (plan 004e, ADR 0052): how many, when the newest was
+ * proposed and by whom. Archived documents are left out.
+ */
+export async function mentionsWaiting(db: Db, ctx: RecordContext) {
+  const rows = await db
+    .select({
+      id: libraryMentions.documentId,
+      name: records.name,
+      label: records.label,
+      proposed: count(),
+      at: max(libraryMentions.proposedAt),
+      proposedBy: sql<Actor>`(array_agg(${libraryMentions.proposedBy} order by ${libraryMentions.proposedAt} desc))[1]`,
+    })
+    .from(libraryMentions)
+    .innerJoin(records, eq(records.id, libraryMentions.documentId))
+    .where(
+      and(
+        eq(libraryMentions.labId, ctx.labId),
+        eq(libraryMentions.status, 'proposed'),
+        ne(records.status, 'archived'),
+      ),
+    )
+    .groupBy(libraryMentions.documentId, records.name, records.label);
+  return rows.map((r) => ({ ...r, at: (r.at ?? new Date(0)).toISOString() }));
+}
 
 /** The words a record goes by, for the matcher: names, catalog numbers, models, synonyms. */
 function termsOf(record: { kind: string; label: string; attributes: unknown }): MatchTerm[] {

@@ -2,6 +2,7 @@ import { readiness, summarizeReadiness } from '@ailab/domain';
 import { type Actor, type ReviewItem, reviewList } from '@ailab/schema';
 import { and, count, eq } from 'drizzle-orm';
 import { records } from '../db/schema.ts';
+import { mentionsWaiting } from '../library/mentions.ts';
 import { RecordService } from '../records/service.ts';
 import { listProposals } from './proposal-store.ts';
 import { implement } from './registry.ts';
@@ -25,6 +26,7 @@ export const reviewOperations = [
         limit: DRAFT_LIMIT,
       });
       const changes = await listProposals(deps.db, ctx, 'pending');
+      const mentions = await mentionsWaiting(deps.db, ctx);
       // Drafts of a kind this lab no longer offers can't be confirmed, so they aren't waiting on anyone.
       const kinds = new Map(deps.kinds.list().map((k) => [k.kind, k]));
       const perKind = await deps.db
@@ -83,12 +85,23 @@ export const reviewOperations = [
             proposal,
           }),
         ),
+        ...(input.kind ? [] : mentions).map(
+          (m): ReviewItem => ({
+            type: 'mentions',
+            tier: 'to_confirm',
+            for: addressee(m.proposedBy),
+            at: m.at,
+            document: { id: m.id, name: m.name, label: m.label },
+            proposed: m.proposed,
+          }),
+        ),
       ].filter((item) => !input.mine || item.for === me);
       return {
         items: items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)),
         counts: {
-          total: draftTotal + changes.length,
+          total: draftTotal + changes.length + mentions.length,
           changes: changes.length,
+          mentions: mentions.reduce((sum, m) => sum + m.proposed, 0),
           needsYou: changes.filter((p) => addressee(p.proposedBy) === me).length,
           drafts: draftCounts,
         },

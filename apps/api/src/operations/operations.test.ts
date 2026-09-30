@@ -554,7 +554,13 @@ describe('review inbox', () => {
     const output = await run<{ items: ReviewItem[]; counts: unknown }>(person, 'review.list', {});
     expect(() => reviewList.output.parse(output)).not.toThrow();
     const { items } = output;
-    expect(output.counts).toEqual({ total: 2, changes: 1, needsYou: 1, drafts: { widget: 1 } });
+    expect(output.counts).toEqual({
+      total: 2,
+      changes: 1,
+      mentions: 0,
+      needsYou: 1,
+      drafts: { widget: 1 },
+    });
     expect(items.map((i) => i.type)).toEqual(['change', 'draft']);
     // A proposed change blocks the agent, so it needs you; a draft waits to be confirmed.
     expect(items.map((i) => i.tier)).toEqual(['needs_you', 'to_confirm']);
@@ -651,14 +657,20 @@ describe('review inbox', () => {
     );
     // The kind filter leaves proposed changes out of the items but not out of the counts.
     expect(one.items.map((i) => i.type)).toEqual(['draft', 'draft']);
-    expect(one.counts).toEqual({ total: 3, changes: 1, needsYou: 1, drafts: { widget: 2 } });
+    expect(one.counts).toEqual({
+      total: 3,
+      changes: 1,
+      mentions: 0,
+      needsYou: 1,
+      drafts: { widget: 2 },
+    });
   });
 
   it('is empty when nothing waits, and refuses unknown input', async () => {
     await create(person, { status: 'active' });
     expect(await run(agent, 'review.list', {})).toEqual({
       items: [],
-      counts: { total: 0, changes: 0, needsYou: 0, drafts: {} },
+      counts: { total: 0, changes: 0, mentions: 0, needsYou: 0, drafts: {} },
     });
     expect((await refused(registry.execute(person, 'review.list', { x: 1 }))).code).toBe(
       'invalid_input',

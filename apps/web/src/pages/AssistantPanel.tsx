@@ -171,7 +171,13 @@ function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
   if (!review || steps.length === 0) return null;
   const turn = waitingForYou(steps);
   const waitingIds = new Set(
-    review.map((item) => (item.type === 'draft' ? item.record.id : item.proposal.id)),
+    review.map((item) =>
+      item.type === 'draft'
+        ? item.record.id
+        : item.type === 'change'
+          ? item.proposal.id
+          : item.document.id,
+    ),
   );
   const drafts = turn.drafts.filter((d) => waitingIds.has(d.id));
   const changes = turn.changes.filter((id) => waitingIds.has(id)).length;
