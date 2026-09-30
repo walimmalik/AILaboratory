@@ -10,7 +10,15 @@
  *   pnpm codex:pr watch              every open PR, again on each new push; polls every 5 minutes
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -191,7 +199,7 @@ async function uiQa(number, dir) {
       '--viewport-size=1440x900',
       `--output-dir=${shots}`,
     ];
-    return await codexExec(dir, 'ui-qa', prompt, [
+    const report = await codexExec(dir, 'ui-qa', prompt, [
       '-c',
       `model_reasoning_effort=${qaEffort}`,
       '-c',
@@ -205,6 +213,11 @@ async function uiQa(number, dir) {
       '-c',
       'mcp_servers.playwright.default_tools_approval_mode="approve"',
     ]);
+    // A run that never opened the browser must not post "0 problems found".
+    if (!readdirSync(shots).some((file) => file.endsWith('.png'))) {
+      throw new Error('UI QA took no screenshots, so the browser was not used');
+    }
+    return report;
   } finally {
     const logs = run('docker', [...compose, 'logs', 'api', 'web', 'science'], {
       cwd: dir,
@@ -234,19 +247,37 @@ function codexExec(dir, name, prompt, extra) {
   ];
   console.log(`  Codex ${name} (${model})...`);
   const started = Date.now();
+  const env = { ...process.env, CODEX_HOME: isolatedCodexHome() };
   return new Promise((done, fail) => {
-    const child = spawn(codex, args, { cwd: dir, stdio: ['pipe', 'ignore', 'inherit'] });
+    const child = spawn(codex, args, { cwd: dir, env, stdio: ['pipe', 'ignore', 'inherit'] });
     child.stdin.end(prompt);
     child.on('error', fail);
     child.on('close', (code) => {
       const minutes = ((Date.now() - started) / 60_000).toFixed(1);
       if (code !== 0 || !existsSync(out)) return fail(new Error(`codex ${name} exited ${code}`));
-      console.log(`  Codex ${name} done in ${minutes} min: ${out}`);
+      console.log(`  Codex ${name} done in ${minutes} min`);
       const report = readFileSync(out, 'utf8').trim();
       rmSync(out);
       done(report);
     });
   });
+}
+
+/**
+ * A Codex home with only the owner's sign-in and no config, so runs don't load their personal
+ * plugins, connectors (mail, Slack) or computer use, and QA drives the browser only through the
+ * Playwright MCP server this script configures.
+ */
+function isolatedCodexHome() {
+  const personal = process.env.CODEX_HOME || join(homedir(), '.codex');
+  const home = join(workRoot, 'codex-home');
+  mkdirSync(home, { recursive: true });
+  if (!existsSync(join(personal, 'auth.json'))) {
+    throw new Error(`No Codex sign-in at ${personal}; run codex login first`);
+  }
+  copyFileSync(join(personal, 'auth.json'), join(home, 'auth.json'));
+  writeFileSync(join(home, 'config.toml'), '');
+  return home;
 }
 
 /** Creates or updates this run's one comment on the PR, found by its marker. */
