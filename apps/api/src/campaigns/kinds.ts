@@ -5,6 +5,7 @@ import {
   defineKind,
   type ExperimentAttributes,
   ExperimentAttributes as ExperimentSchema,
+  MATERIAL_KINDS,
   type RunAttributes,
   RunAttributes as RunSchema,
   type SetAttributes,
@@ -13,7 +14,6 @@ import {
 } from '@ailab/schema';
 import { checkPin } from '../records/pins.ts';
 import { inputProblem } from '../sops/inputs.ts';
-import { KINDS_FOR } from '../sops/resolve.ts';
 
 /** Kinds that are definitions, so bindings pin their version (ADR 0039). */
 export const PINNED_KINDS: readonly string[] = [
@@ -235,7 +235,7 @@ export const experiment = defineKind({
           );
           continue;
         }
-        const kinds = KINDS_FOR[material.type];
+        const kinds = MATERIAL_KINDS[material.type];
         if (!kinds.includes(record.kind)) {
           misfits.push(
             `${where}: ${record.name} is a ${record.kind.replaceAll('_', ' ')}; ${material.label} needs a ${kinds.map((k) => k.replaceAll('_', ' ')).join(' or ')}`,

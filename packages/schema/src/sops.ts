@@ -37,6 +37,16 @@ export const MaterialType = z.enum([
   'solution',
 ]);
 
+/** Record kinds that can fill a role of each material type. */
+export const MATERIAL_KINDS: Record<z.infer<typeof MaterialType>, readonly string[]> = {
+  labware: ['labware_type', 'container'],
+  reagent: ['product', 'lot'],
+  entity: ['entity', 'sample'],
+  instrument: ['instrument_kind', 'instrument', 'equipment_kind'],
+  consumable: ['labware_type', 'product', 'lot'],
+  solution: ['product', 'lot'],
+};
+
 /**
  * A material by role (G4): what the step needs, with requirements and a default, bound to a
  * concrete record when an experiment is planned.

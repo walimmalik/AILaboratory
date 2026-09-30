@@ -1,6 +1,7 @@
 import {
   recordsActivate,
   recordsArchive,
+  recordsConfirm,
   recordsConfirmSection,
   recordsCreate,
   recordsDeleteDraft,
@@ -119,6 +120,12 @@ export const recordOperations = [
     agentPolicy: 'direct',
     run: (ctx, { id, section, ...input }, deps) =>
       service(deps).confirmSection(ctx, id, { section, ...transition(input) }),
+  }),
+  implement(recordsConfirm, {
+    // One Confirm for everything ready (ADR 0046); still a person's step, like each section's.
+    actors: 'people',
+    agentPolicy: 'direct',
+    run: (ctx, { id, ...input }, deps) => service(deps).confirmAll(ctx, id, transition(input)),
   }),
   implement(recordsReadiness, {
     run: (ctx, input, deps) => service(deps).readiness(ctx, input.id),

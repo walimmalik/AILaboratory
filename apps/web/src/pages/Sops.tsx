@@ -27,7 +27,7 @@ import { describeSop, TermAnchor, TermCards } from './SopText.tsx';
  * Digital SOP screens (plan 012d): the list, and on an SOP's page the procedure as a person reads
  * it at the bench, with its run values, open questions, and the checks against its source. A number
  * that comes from a value keeps the value's color, and hovering it says which value it is and where
- * it came from (ADR 0046). Editing stays in the section blocks below it.
+ * it came from (ADR 0046). Editing and confirming are on the SOP page around these blocks (SopPage.tsx).
  */
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
@@ -86,7 +86,7 @@ export function SopsPage() {
   );
 }
 
-/** The blocks an SOP's page shows above its sections. */
+/** The blocks an SOP's page shows between its readiness and its details. */
 export function SopBlocks({ record }: { record: RecordEnvelope }) {
   return (
     <>

@@ -202,36 +202,47 @@ export function ReadinessBlock({
 }
 
 /**
- * A settled record's readiness and sections as one block: a line each, saying who confirmed it and
- * how many of its fields hold a value, opened in place. Editing a section opens the full review.
+ * A record's readiness and sections as one block: a line each, saying who confirmed it and how many
+ * of its fields hold a value, opened in place. Editing a section opens the full review (the SOP page
+ * opens its whole-page editor).
  */
-function SettledDetails({
+export function SettledDetails({
   record,
   readiness,
   titles,
   renderValue,
   onEdit,
+  checks = true,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
   titles: Record<string, string>;
   renderValue: (value: unknown) => ReactNode;
   onEdit: (section: string) => void;
+  /** Whether the checks get a line here; off when a readiness block above already lists them. */
+  checks?: boolean;
 }) {
   const me = useMe();
   const [open, setOpen] = useState<string>();
   const toggle = (id: string) => setOpen(open === id ? undefined : id);
   const warnings = readiness.checks.filter((c) => !c.passed).length;
   const passing = readiness.checks.length - warnings;
+  const toReview = readiness.sections.filter((s) => s.state === 'needs_review').length;
   return (
     <section className="block" aria-label="Details">
       <header>
         <h2>Details</h2>
-        <span className="state ok-ink">✓ confirmed</span>
+        {toReview === 0 ? (
+          <span className="state ok-ink">✓ confirmed</span>
+        ) : (
+          <span className="state warn-ink">
+            {toReview === 1 ? '1 part needs review' : `${toReview} parts need review`}
+          </span>
+        )}
       </header>
       <div className="body">
         <ul className="settled">
-          {readiness.checks.length > 0 && (
+          {checks && readiness.checks.length > 0 && (
             <li>
               <button
                 type="button"
@@ -272,8 +283,12 @@ function SettledDetails({
                   <b>{section.title}</b>
                   <span className="muted">
                     {filledWords(section)}
-                    {section.review &&
-                      ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`}
+                    {section.state === 'needs_review' ? (
+                      <span className="warn-ink"> · needs review</span>
+                    ) : (
+                      section.review &&
+                      ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`
+                    )}
                   </span>
                 </button>
                 {open === section.id && (
@@ -327,7 +342,7 @@ const isEmpty = (value: unknown) =>
 const rank = (c: CheckResult) => (c.passed ? 2 : c.severity === 'blocker' ? 0 : 1);
 
 /** Failing checks first, each with a link to the section that fixes it; passing ones folded away. */
-function Checks({
+export function Checks({
   checks,
   titles,
   onFix,

@@ -1,11 +1,10 @@
 import { type EvidenceInput, type RecordEnvelope, recordsUpdate } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { fieldLabel } from './RecordReview.tsx';
-import { sopItemEditors, sopListEditors } from './SopEditors.tsx';
 
 type Source = 'person' | 'measured' | 'datasheet' | 'calculated';
 const sources: [Source, string][] = [
@@ -18,24 +17,12 @@ const sources: [Source, string][] = [
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Edit a group of a record's values in place, then say where the new values came from. Saving runs
- * `records.update`, so it is the same change an agent would make; changed values in a confirmed section
- * need confirming again.
+ * A person's edits to some of a record's values, saved as one `records.update` (the same change an
+ * agent would make). Saving is checked against the version the editor opened on and writes only the
+ * values the person changed; if the record changes meanwhile, the editor says so and can load the
+ * new values, keeping the person's own.
  */
-export function SectionEditor({
-  record,
-  fields,
-  notApplicable = [],
-  onDone,
-}: {
-  record: RecordEnvelope;
-  fields: string[];
-  /** Paths that don't apply to this record; left out unless they hold a value. */
-  notApplicable?: string[];
-  onDone: () => void;
-}) {
-  const kinds = useQuery(kindsQuery).data;
-  const definition = kinds?.find((k) => k.kind === record.kind);
+export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: () => void) {
   // The version the person started from. Saving is checked against it, so a change someone else
   // makes while the editor is open is never silently written over.
   const [base, setBase] = useState(record);
@@ -44,6 +31,7 @@ export function SectionEditor({
   );
   const [source, setSource] = useState<Source>('person');
   const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
   const [invalid, setInvalid] = useState(false);
   const form = useRef<HTMLFormElement>(null);
   // Values also change without a typed change event (a pick, a suggested fix), so validity is read
@@ -51,7 +39,6 @@ export function SectionEditor({
   useEffect(() => {
     if (values && form.current) setInvalid(!form.current.checkValidity());
   }, [values]);
-  const [note, setNote] = useState('');
   const queryClient = useQueryClient();
 
   const changed = fields.filter((f) => !same(values[f], base.attributes[f]));
@@ -97,7 +84,211 @@ export function SectionEditor({
       onDone();
     },
   });
+  return {
+    record,
+    base,
+    values,
+    set: (field: string, next: unknown) => setValues((v) => ({ ...v, [field]: next })),
+    changed,
+    theirs,
+    takeTheirs,
+    save,
+    invalid,
+    setInvalid,
+    form,
+    source,
+    setSource,
+    reference,
+    setReference,
+    note,
+    setNote,
+    onDone,
+  };
+}
 
+export type FieldEdits = ReturnType<typeof useFieldEdits>;
+
+/** The form around edits: Save holds while a field is invalid; `children` are the fields. */
+export function EditForm({
+  edits,
+  className,
+  children,
+}: {
+  edits: FieldEdits;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <form
+      ref={edits.form as RefObject<HTMLFormElement>}
+      className={className ?? 'editor'}
+      // A field whose text can't be a value (not a number, not JSON) holds Save until it is fixed.
+      onChange={(e) => edits.setInvalid(!e.currentTarget.checkValidity())}
+      onSubmit={(e) => {
+        e.preventDefault();
+        edits.save.mutate();
+      }}
+    >
+      {children}
+    </form>
+  );
+}
+
+/** Where the values came from; a small choice beside Save when `compact`. */
+function WhereFrom({ edits, compact }: { edits: FieldEdits; compact?: boolean }) {
+  const detail = (
+    <>
+      {edits.source === 'datasheet' && (
+        <input
+          className="field"
+          type="text"
+          aria-label="Datasheet"
+          placeholder="A link, or the document's name"
+          value={edits.reference}
+          onChange={(e) => edits.setReference(e.target.value)}
+        />
+      )}
+      {edits.source !== 'person' && (
+        <input
+          className="field"
+          type="text"
+          aria-label="Note"
+          placeholder="e.g. page 2, or how it was worked out"
+          value={edits.note}
+          onChange={(e) => edits.setNote(e.target.value)}
+        />
+      )}
+    </>
+  );
+  if (compact)
+    return (
+      <>
+        <select
+          className="field"
+          aria-label="Where these values came from"
+          value={edits.source}
+          onChange={(e) => edits.setSource(e.target.value as Source)}
+        >
+          {sources.map(([value, words]) => (
+            <option key={value} value={value}>
+              {words}
+            </option>
+          ))}
+        </select>
+        {detail}
+      </>
+    );
+  return (
+    <div className="form-rows">
+      <FormRow label="where from">
+        <fieldset className="segmented">
+          <legend className="sr-only">Where these values came from</legend>
+          {sources.map(([value, words]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={edits.source === value}
+              onClick={() => edits.setSource(value)}
+            >
+              {words}
+            </button>
+          ))}
+        </fieldset>
+      </FormRow>
+      {edits.source === 'datasheet' && (
+        <FormRow label="datasheet" hint="A link, or the document's name">
+          <input
+            className="field grow"
+            type="text"
+            aria-label="Datasheet"
+            value={edits.reference}
+            onChange={(e) => edits.setReference(e.target.value)}
+          />
+        </FormRow>
+      )}
+      {edits.source !== 'person' && (
+        <FormRow label="note" hint="e.g. page 2, calipers, or how it was worked out">
+          <input
+            className="field grow"
+            type="text"
+            aria-label="Note"
+            value={edits.note}
+            onChange={(e) => edits.setNote(e.target.value)}
+          />
+        </FormRow>
+      )}
+    </div>
+  );
+}
+
+/** Save and Cancel, what changed, and a notice when the record moved on while editing. */
+export function SaveBar({
+  edits,
+  compact,
+  words = (field) => fieldLabel(field),
+}: {
+  edits: FieldEdits;
+  /** Where-from as a small choice beside Save, not a row of its own. */
+  compact?: boolean;
+  words?: (field: string) => string;
+}) {
+  const { record, changed, theirs, invalid, save } = edits;
+  return (
+    <>
+      {!compact && <WhereFrom edits={edits} />}
+      {theirs && (
+        <p className="warn-ink" role="alert">
+          This record changed to version {record.version} while you were editing.{' '}
+          <button type="button" className="link-btn" onClick={edits.takeTheirs}>
+            Load the new values
+          </button>{' '}
+          (your own changes are kept) before saving.
+        </p>
+      )}
+      <div className="actions">
+        <button
+          type="submit"
+          className="btn primary"
+          disabled={changed.length === 0 || theirs || invalid || save.isPending}
+        >
+          Save
+        </button>
+        <button type="button" className="btn" onClick={edits.onDone}>
+          Cancel
+        </button>
+        {compact && <WhereFrom edits={edits} compact />}
+        <span className="muted">
+          {invalid
+            ? 'Fix the field marked in red before saving.'
+            : changed.length === 0
+              ? 'Nothing changed yet.'
+              : `Changes ${changed.map(words).join(', ')}.`}
+        </span>
+      </div>
+      {save.error && <p className="error-text">{save.error.message}</p>}
+    </>
+  );
+}
+
+/**
+ * Edit a group of a record's values in place, then say where the new values came from. Changed
+ * values in a confirmed section need confirming again.
+ */
+export function SectionEditor({
+  record,
+  fields,
+  notApplicable = [],
+  onDone,
+}: {
+  record: RecordEnvelope;
+  fields: string[];
+  /** Paths that don't apply to this record; left out unless they hold a value. */
+  notApplicable?: string[];
+  onDone: () => void;
+}) {
+  const kinds = useQuery(kindsQuery).data;
+  const definition = kinds?.find((k) => k.kind === record.kind);
+  const edits = useFieldEdits(record, fields, onDone);
   if (!definition) return <p className="empty">Loading…</p>;
   const root = definition.attributes as JsonSchema;
   const kindOfPrefix = Object.fromEntries(kinds?.map((k) => [k.idPrefix, k.kind]) ?? []);
@@ -107,32 +298,20 @@ export function SectionEditor({
       root={root}
       kindOfPrefix={kindOfPrefix}
       hidden={new Set(notApplicable)}
-      document={{ ...base.attributes, ...values }}
-      {...(record.kind === 'sop'
-        ? { itemEditors: sopItemEditors, listEditors: sopListEditors }
-        : {})}
+      document={{ ...edits.base.attributes, ...edits.values }}
     >
-      <form
-        ref={form}
-        className="editor"
-        // A field whose text can't be a value (not a number, not JSON) holds Save until it is fixed.
-        onChange={(e) => setInvalid(!e.currentTarget.checkValidity())}
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate();
-        }}
-      >
+      <EditForm edits={edits}>
         <div className="form-rows">
           {fields.map((field) => {
             const schema = root.properties?.[field];
             if (!schema) return null;
-            if (notApplicable.includes(field) && values[field] === undefined) return null;
+            if (notApplicable.includes(field) && edits.values[field] === undefined) return null;
             return (
               <FormRow key={field} label={fieldLabel(field)} hint={schema.description}>
                 <ValueEditor
                   schema={schema}
-                  value={values[field]}
-                  onChange={(next) => setValues((v) => ({ ...v, [field]: next }))}
+                  value={edits.values[field]}
+                  onChange={(next) => edits.set(field, next)}
                   label={fieldLabel(field)}
                   path={field}
                 />
@@ -140,75 +319,8 @@ export function SectionEditor({
             );
           })}
         </div>
-        <div className="form-rows">
-          <FormRow label="where from">
-            <fieldset className="segmented">
-              <legend className="sr-only">Where these values came from</legend>
-              {sources.map(([value, words]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={source === value}
-                  onClick={() => setSource(value)}
-                >
-                  {words}
-                </button>
-              ))}
-            </fieldset>
-          </FormRow>
-          {source === 'datasheet' && (
-            <FormRow label="datasheet" hint="A link, or the document's name">
-              <input
-                className="field grow"
-                type="text"
-                aria-label="Datasheet"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </FormRow>
-          )}
-          {source !== 'person' && (
-            <FormRow label="note" hint="e.g. page 2, calipers, or how it was worked out">
-              <input
-                className="field grow"
-                type="text"
-                aria-label="Note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </FormRow>
-          )}
-        </div>
-        {theirs && (
-          <p className="warn-ink" role="alert">
-            This record changed to version {record.version} while you were editing.{' '}
-            <button type="button" className="link-btn" onClick={takeTheirs}>
-              Load the new values
-            </button>{' '}
-            (your own changes are kept) before saving.
-          </p>
-        )}
-        <div className="actions">
-          <button
-            type="submit"
-            className="btn primary"
-            disabled={changed.length === 0 || theirs || invalid || save.isPending}
-          >
-            Save
-          </button>
-          <button type="button" className="btn" onClick={onDone}>
-            Cancel
-          </button>
-          <span className="muted">
-            {invalid
-              ? 'Fix the field marked in red before saving.'
-              : changed.length === 0
-                ? 'Nothing changed yet.'
-                : `Changes ${changed.map(fieldLabel).join(', ')}.`}
-          </span>
-        </div>
-        {save.error && <p className="error-text">{save.error.message}</p>}
-      </form>
+        <SaveBar edits={edits} />
+      </EditForm>
     </EditorScope>
   );
 }

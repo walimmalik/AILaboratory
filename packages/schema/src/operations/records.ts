@@ -107,6 +107,15 @@ export const recordsConfirmSection = defineContract({
   output: RecordEnvelope,
 });
 
+export const recordsConfirm = defineContract({
+  id: 'records.confirm',
+  summary:
+    'A person confirms, in one step, every section of a record that waits for review, as it stands, except sections with a failing blocker check of their own; each section still gets its own confirmation. A draft becomes active when that leaves nothing to do',
+  effect: 'write',
+  input: z.object(Target),
+  output: RecordEnvelope,
+});
+
 export const recordsReadiness = defineContract({
   id: 'records.readiness',
   summary:

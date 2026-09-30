@@ -27,6 +27,10 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 
 `library.read` with `passages: [id, …]` reads cited passages back by id.
 
+## Filling in part of an SOP
+
+`sops.suggest` asks the assistant's model for one part of an SOP while a person edits it: `{sop, attributes?, value: "diluent"}` for a value, `step: "coat"` for a step's settings and uses, `newStep: "wash three times"` for a new step, or `steps: true` to draft every step from the source document. Give exactly one, and pass `attributes` when the SOP as edited differs from what is stored. The answer is checked (formulas with the calculator, steps against the SOP's materials and values) and returned; nothing is saved. The editor uses it; when you draft or change an SOP yourself, write the parts directly with `sops.draft` or `records.update` instead.
+
 ## The benchmark
 
 To compare models, digitize a document that has an expectation in `seed/sop-benchmark/` (its `document` is the library title), then `sops.score` with `{sop, expected}` gives each section's share found and what is missing. People run all of them with `pnpm --filter @ailab/api sop:benchmark`.

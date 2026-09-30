@@ -28,6 +28,8 @@ interface EditorContext {
   kindOfPrefix: Record<string, string>;
   /** Dotted paths that don't apply to this record (`Readiness.notApplicable`); left out unless set. */
   hidden: ReadonlySet<string>;
+  /** The record being edited, for editors that ask about it (the assistant's fill-in). */
+  recordId?: string;
   /** The record's values as edited so far, for editors that refer to other fields (an SOP's steps). */
   document?: Record<string, unknown>;
   /** Editors of their own for the items of some lists, by the list's path (an SOP's steps). */

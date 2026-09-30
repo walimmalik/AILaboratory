@@ -390,6 +390,64 @@ describe('draft and confirm', () => {
     expect((await refused(create(agent, { status: 'active' }))).code).toBe('invalid_state');
   });
 
+  it('a person confirms everything ready in one step, and the draft becomes active', async () => {
+    const draft = await create(agent);
+    const confirmed = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: draft.id,
+      expectedVersion: 1,
+    });
+    expect(confirmed).toMatchObject({ status: 'active', version: 2 });
+    const state = await run<Readiness>(person, 'records.readiness', { id: draft.id });
+    expect(state.sections.map((s) => [s.id, s.review?.confirmedBy])).toEqual([
+      ['appearance', person.actor],
+      ['volume', person.actor],
+    ]);
+  });
+
+  it('leaves a section with a failing blocker unconfirmed, and says when nothing is left', async () => {
+    const draft = await create(agent, {
+      attributes: { ...attributes, volume: { value: '0', unit: 'uL' } },
+    });
+    const partly = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: draft.id,
+      expectedVersion: 1,
+    });
+    expect(partly.status).toBe('draft');
+    const state = await run<Readiness>(person, 'records.readiness', { id: draft.id });
+    expect(state.sections.map((s) => [s.id, s.state])).toEqual([
+      ['appearance', 'confirmed'],
+      ['volume', 'needs_review'],
+    ]);
+    const blocked = await refused(
+      registry.execute(person, 'records.confirm', { id: draft.id, expectedVersion: 2 }),
+    );
+    expect(blocked).toMatchObject({ code: 'invalid_state' });
+    expect(blocked.message).toContain('Volume');
+    const gadget = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'gadget',
+      label: 'g',
+      attributes: { color: 'red' },
+    });
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'records.confirm', { id: gadget.id, expectedVersion: 1 }),
+        )
+      ).code,
+    ).toBe('invalid_input');
+    expect(
+      (await refused(registry.execute(person, 'records.confirm', { id: draft.id }))).code,
+    ).toBe('invalid_input');
+  });
+
+  it('only people confirm everything at once', async () => {
+    const draft = await create(agent);
+    const forbidden = await refused(
+      registry.execute(agent, 'records.confirm', { id: draft.id, expectedVersion: 1 }),
+    );
+    expect(forbidden.code).toBe('forbidden');
+  });
+
   it("approving an agent's change to an active record confirms the sections it changed", async () => {
     const record = await create(person, { status: 'active' });
     const proposed = await registry.execute(agent, 'records.update', {

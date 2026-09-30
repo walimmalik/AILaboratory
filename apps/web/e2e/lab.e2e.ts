@@ -685,9 +685,13 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await procedure.getByText('Values for a run').click();
   await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(/9\.60* mL/);
 
-  // A value is its name and one box: what is written there decides its kind.
-  const variables = page.getByRole('region', { name: 'Variables' });
-  await variables.getByRole('button', { name: 'Edit variables' }).click();
+  // Edit opens the whole SOP as one form. A value is its name and one box: what is written there
+  // decides its kind.
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  await readiness.getByRole('button', { name: 'Edit', exact: true }).click();
+  const materials = page.getByRole('region', { name: 'Materials' });
+  await expect(materials.getByRole('textbox', { name: 'Material' })).toHaveValue('Coating plate');
+  const variables = page.getByRole('region', { name: 'Values' });
   await variables.getByRole('textbox', { name: 'Well volume: value or formula' }).fill('150 uL');
   const formula = variables.getByRole('textbox', { name: 'Coating solution: value or formula' });
   await expect(formula).toHaveValue('Wells × Well volume');
@@ -707,8 +711,46 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(variables).toContainText('Did you mean Well volume?');
   await variables.getByRole('button', { name: 'Use Well volume' }).click();
   await expect(formula).toHaveValue('Wells × Well volume × 1.1');
-  await variables.getByRole('button', { name: 'Save' }).click();
-  await expect(variables.getByRole('button', { name: 'Edit variables' })).toBeVisible();
+  // The assistant fills in a value, shown in agent ink until someone changes it. Its answer is played
+  // back here; sops.suggest itself is tested in the API.
+  await page.route('**/api/v1/ops/sops.suggest', (route) =>
+    route.fulfill({
+      json: {
+        status: 'done',
+        output: {
+          variable: {
+            name: 'plates',
+            label: 'Plates',
+            kind: 'computed',
+            expression: 'ceil(wells / 96)',
+          },
+          reason: 'One plate per 96 wells',
+          model: 'test/model',
+        },
+      },
+    }),
+  );
+  await variables.getByRole('button', { name: 'Add value' }).click();
+  await variables.getByRole('textbox', { name: 'Called' }).last().fill('Plates');
+  await variables.getByRole('button', { name: 'Fill in with the assistant' }).click();
+  await expect(variables.getByRole('textbox', { name: 'Plates: value or formula' })).toHaveValue(
+    /ceil\(Wells ÷ 96\)/,
+  );
+  await expect(variables).toContainText('assistant: One plate per 96 wells');
+
+  // A step's words mark its values and materials; what it uses and its settings are read from them.
+  const steps = page.getByRole('region', { name: 'Steps' });
+  await expect(steps.getByRole('combobox', { name: 'Action' })).toHaveValue('add');
+  await steps
+    .getByRole('textbox', { name: 'Step 1: what to do' })
+    .fill('Add Well volume of coating solution to the Coating plate. Incubate 2 h.');
+  const read = steps.locator('.step-read');
+  await expect(read).toContainText('Uses Coating plate');
+  await expect(read).toContainText('volume = Well volume');
+  await expect(read).toContainText('duration = 2 h');
+  // One Save for the whole SOP.
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(procedure).toContainText('Add 150 µL of coating solution to the Coating plate.');
   await expect(procedure).toContainText('volume 150 µL');
   await procedure
     .locator('details')
@@ -720,39 +762,20 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
     /15\.840* mL/,
   );
 
-  // A step's words mark its values and materials; what it uses and its settings are read from them.
-  const steps = page.getByRole('region', { name: 'Procedure' });
-  await steps.getByRole('button', { name: 'Edit procedure' }).click();
-  await steps.locator('summary').filter({ hasText: 'Coat' }).click();
-  await expect(steps.getByRole('combobox', { name: 'Action' })).toHaveValue('add');
-  await steps
-    .getByRole('textbox', { name: 'Step 1: what to do' })
-    .fill('Add Well volume of coating solution to the Coating plate. Incubate 2 h.');
-  const read = steps.locator('.step-read');
-  await expect(read).toContainText('Uses Coating plate');
-  await expect(read).toContainText('volume = Well volume');
-  await expect(read).toContainText('duration = 2 h');
-  await steps.getByRole('button', { name: 'Save' }).click();
-  await expect(procedure).toContainText('Add 150 µL of coating solution to the Coating plate.');
-
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');
   await questions.getByRole('button', { name: 'Accept the suggestion' }).click();
   await expect(questions).toContainText('all settled');
+
+  // One Confirm settles every part and makes the SOP active.
+  await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
+  await expect(readiness).toContainText('✓ confirmed');
+  await expect(page.getByRole('region', { name: 'Details' })).toContainText('✓ confirmed');
 });
 
-/** A person confirms every section of a draft, which activates it. */
+/** A person confirms every section of a draft at once, which activates it. */
 async function confirmAll(page: Page, record: { id: string; version: number }) {
-  const readiness = await asPerson(page, 'records.readiness', { id: record.id });
-  let current = record;
-  for (const section of readiness.sections as { id: string }[]) {
-    current = await asPerson(page, 'records.confirm_section', {
-      id: current.id,
-      expectedVersion: current.version,
-      section: section.id,
-    });
-  }
-  return current;
+  return asPerson(page, 'records.confirm', { id: record.id, expectedVersion: record.version });
 }
 
 test('a person plans an experiment, runs it as a checklist and finishes the run', async ({
