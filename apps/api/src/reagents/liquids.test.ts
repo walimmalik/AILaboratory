@@ -1,10 +1,13 @@
+import { readFile } from 'node:fs/promises';
 import type { Actor, ClassChoice, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
+import { loadSeedInstruments, readSeedInstruments } from '../instruments/seed.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import { loadSeedLabware, readDefinitions } from '../labware/seed.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -14,6 +17,8 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { reagentKinds } from './kinds.ts';
+import { loadSeedLiquidClasses, readSeedLiquidClasses } from './liquid-seed.ts';
+import { loadSeedReagents, readSeedReagents } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -244,4 +249,84 @@ describe('liquids.record_verification', () => {
     );
     expect(notAClass.message).toMatch(/^No liquid class lqc_/);
   });
+});
+
+describe('seed liquid classes', () => {
+  it('drafts the vendor defaults for what the lab has, once, and they resolve once confirmed', async () => {
+    const seedFile = (name: string) =>
+      readFile(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const seeder: RecordContext = {
+      ...person,
+      actor: {
+        type: 'agent',
+        agentName: 'Seed loader',
+        onBehalfOf: (person.actor as { userId: string }).userId,
+      },
+    };
+    await loadSeedLabware(
+      registry,
+      seeder,
+      await seedFile('labware.yaml'),
+      await readDefinitions(new URL('../../../../seed/opentrons/', import.meta.url)),
+    );
+    await loadSeedInstruments(
+      registry,
+      seeder,
+      readSeedInstruments(
+        await seedFile('instrument-library.yaml'),
+        await seedFile('instruments.yaml'),
+      ),
+    );
+    await loadSeedReagents(
+      registry,
+      seeder,
+      readSeedReagents(await seedFile('reagent-library.yaml')),
+    );
+    const opentrons = Object.fromEntries(
+      await Promise.all(
+        ['water.json', 'glycerol_50.json', 'ethanol_80.json'].map(
+          async (name) => [name, await seedFile(`liquid-classes/opentrons/${name}`)] as const,
+        ),
+      ),
+    );
+    const library = readSeedLiquidClasses({
+      index: await seedFile('liquid-classes.yaml'),
+      opentrons,
+      hamilton: await seedFile('liquid-classes/hamilton-defaults.yaml'),
+      instrumentLibrary: await seedFile('instrument-library.yaml'),
+      labware: await seedFile('labware.yaml'),
+      reagentLibrary: await seedFile('reagent-library.yaml'),
+    });
+    const report = await loadSeedLiquidClasses(registry, seeder, library);
+    expect(report.skipped).toEqual([]);
+    expect(report.created).toHaveLength(library.classes.length);
+    const again = await loadSeedLiquidClasses(registry, seeder, library);
+    expect(again.existing).toHaveLength(library.classes.length);
+
+    const byLabel = async (kind: string, label: string) =>
+      (
+        await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+          kind,
+          search: label,
+          limit: 20,
+        })
+      ).records.find((r) => r.label === label) as RecordEnvelope;
+    const water = await byLabel(
+      'liquid_class',
+      'Opentrons water, Flex 1-Channel Pipette (1000 uL), filtertiprack_200ul',
+    );
+    expect(water.evidence.settings).toMatchObject({ source: 'imported' });
+    expect(water.evidence.liquidTypes).toMatchObject({ source: 'assumed' });
+    await confirm(water);
+    const choice = await run<ClassChoice>(agent, 'liquids.resolve_class', {
+      liquid: { liquidType: (await byLabel('liquid_type', 'Aqueous')).id },
+      instrumentKind: (await byLabel('instrument_kind', 'Opentrons Flex')).id,
+      device: (await byLabel('equipment_kind', 'Flex 1-Channel Pipette (1000 uL)')).id,
+      tip: (
+        await byLabel('labware_type', 'Opentrons Flex Tips, 200 uL, filtered, racks (20 racks)')
+      ).id,
+      volume: uL('100'),
+    });
+    expect(choice).toMatchObject({ liquidClass: water.id, how: 'lab_default', verified: false });
+  }, 300_000);
 });

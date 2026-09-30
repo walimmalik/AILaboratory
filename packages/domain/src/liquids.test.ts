@@ -131,6 +131,19 @@ describe('resolveClass', () => {
     });
   });
 
+  it('asks for the dispense mode when the defaults differ in it', () => {
+    const classes = [
+      cls(1, { labDefault: true, mode: 'jet_empty' }),
+      cls(2, { labDefault: true, mode: 'surface_empty' }),
+    ];
+    expect(resolveClass(request, classes).issue).toBe(
+      'Several default classes for Aqueous fit and they dispense differently; say the dispense mode (jet_empty, surface_empty)',
+    );
+    expect(resolveClass({ ...request, mode: 'surface_empty' }, classes).liquidClass).toBe(
+      id('lqc', 2),
+    );
+  });
+
   it('says why nothing fits', () => {
     const classes = [cls(1, { labDefault: true }), cls(2, { labDefault: true }, { active: false })];
     expect(resolveClass({ ...request, volume: uL('500') }, classes)).toMatchObject({

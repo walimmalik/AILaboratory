@@ -1,0 +1,41 @@
+# The seed lab's liquid classes (plan 009b, R12), loaded by `pnpm --filter @ailab/api seed` as
+# drafts to confirm. Everything here is a vendor default: none is verified in this lab until a real
+# check says so (R11). Items name each other by their keys in seed/instrument-library.yaml
+# (instrument and equipment kinds), seed/labware.yaml (tips, source plates) and
+# seed/reagent-library.yaml (liquid types).
+
+# Opentrons: one class per liquid, pipette and tip rack the lab has, with Opentrons' full transfer
+# properties from liquid-classes/opentrons/<file>.
+opentrons:
+  instrumentKind: opentrons-flex
+  liquids:
+    - { file: water.json, liquidType: aqueous }
+    - { file: glycerol_50.json, liquidType: glycerol }
+    - { file: ethanol_80.json, liquidType: ethanol }
+  pipettes:
+    flex_1channel_50: flex-1ch-50
+    flex_1channel_1000: flex-1ch-1000
+    flex_8channel_50: flex-8ch-50
+    flex_8channel_1000: flex-8ch-1000
+    flex_96channel_1000: flex-96ch-1000
+  tipracks:
+    opentrons/opentrons_flex_96_filtertiprack_50ul/1: opentrons-991-00104
+    opentrons/opentrons_flex_96_filtertiprack_200ul/1: opentrons-991-00105
+    opentrons/opentrons_flex_96_filtertiprack_1000ul/1: opentrons-991-00106
+
+# Hamilton's defaults for the lab's CO-RE II filter tips, generated from PyLabRobot.
+hamilton: liquid-classes/hamilton-defaults.yaml
+
+# Echo 650 calibrations: the class name is the source plate type and calibration joined (Wali,
+# 2026-09-29). What each aqueous code covers is estimated until checked against the Echo software;
+# the full list per source plate type comes from the lab's Echo.
+echo:
+  instrumentKind: echo-650
+  droplet: { value: "2.5", unit: nL }
+  classes:
+    - { name: 384PP_DMSO2, calibration: DMSO2, sourceLabware: beckman-001-14555, liquidType: dmso }
+    - { name: 384PP_AQ_BP, calibration: AQ_BP, sourceLabware: beckman-001-14555, liquidType: aqueous,
+        note: "Aqueous buffers (BP); coverage estimated" }
+    - { name: 384PP_AQ_CP, calibration: AQ_CP, sourceLabware: beckman-001-14555, liquidType: serum,
+        note: "Concentrated protein (CP); coverage estimated" }
+    - { name: 384LDV_DMSO2, calibration: DMSO2, sourceLabware: beckman-001-12782, liquidType: dmso }

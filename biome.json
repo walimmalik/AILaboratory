@@ -15,7 +15,8 @@
       "!apps/api/drizzle",
       "!docs/sop-library/sops",
       "!docs/sop-library/literature",
-      "!seed/opentrons"
+      "!seed/opentrons",
+      "!seed/liquid-classes/opentrons"
     ]
   },
   "formatter": {
