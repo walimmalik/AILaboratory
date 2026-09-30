@@ -285,6 +285,48 @@ test('a failing check links to its section, where a person fills in the value an
   await expect(drawing.getByText(/Wells drawn 4.5 mm apart/)).toHaveCount(0);
 });
 
+test("an editor open while an agent changes the record doesn't write over the agent's change", async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'labware_type',
+    label: `Deep well ${Date.now()}`,
+    attributes: {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 8, columns: 12 },
+      maxVolume: { value: '200', unit: 'uL' },
+    },
+  });
+  const id = drafted.output.id;
+  await page.goto(`/records/${id}`);
+  const volumes = page.getByRole('region', { name: 'Volumes' });
+  await volumes.getByRole('button', { name: 'Edit volumes' }).click();
+  await volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first().fill('20');
+  await volumes.getByRole('combobox', { name: 'dead volume unit' }).first().selectOption('uL');
+
+  // While the form is open, the agent raises the maximum volume.
+  await asAgent(request, 'records.update', {
+    id,
+    expectedVersion: 1,
+    attributes: {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 8, columns: 12 },
+      maxVolume: { value: '300', unit: 'uL' },
+    },
+  });
+  await expect(volumes.getByText(/changed to version 2 while you were editing/)).toBeVisible();
+  await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await volumes.getByRole('button', { name: 'Load the new values' }).click();
+  await volumes.getByRole('button', { name: 'Save' }).click();
+
+  const saved = await asAgent(request, 'records.get', { id });
+  expect(saved.output.version).toBe(3);
+  expect(saved.output.attributes.maxVolume).toEqual({ value: '300', unit: 'uL' });
+  expect(saved.output.attributes.deadVolume).toEqual({ value: '20', unit: 'uL' });
+});
+
 test('the wiki is readable in the app, with links between its pages', async ({ page }) => {
   await signIn(page);
   await page
