@@ -16,6 +16,7 @@ import { RecordEnvelope } from '../record.ts';
 
 export const liquidsResolveClass = defineContract({
   id: 'liquids.resolve_class',
+  calculator: true,
   summary:
     "Pick the liquid class for a transfer and say why: a class chosen on the step, then the product's own class for that device, then the lab's default for the liquid's type on that device and tip. Only confirmed classes are used; when nothing fits it says what is missing and lists the classes that would do",
   effect: 'read',

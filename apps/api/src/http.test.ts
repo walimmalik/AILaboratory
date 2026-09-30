@@ -141,6 +141,17 @@ describe('MCP', () => {
       'proposals.list',
       'proposals.reject',
     ]);
+    const calculators = await rpc('tools/call', {
+      name: 'describe_operations',
+      arguments: { calculators: true },
+    });
+    const listed = (await calculators.json()).result.structuredContent.operations;
+    expect(listed.map((o: { id: string }) => o.id).sort()).toEqual([
+      'inventory.calculate_transfer',
+      'liquids.resolve_class',
+      'reagents.scale_recipe',
+    ]);
+    expect(listed.every((o: { calculator?: boolean }) => o.calculator)).toBe(true);
   });
 
   it('runs operations as the agent, and proposes archiving', async () => {

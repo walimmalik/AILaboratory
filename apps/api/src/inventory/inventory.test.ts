@@ -352,3 +352,38 @@ describe('seed inventory', () => {
     ]);
   });
 });
+
+describe('calculate transfer', () => {
+  it('mixes for people and agents alike, and refuses taking more than is there', async () => {
+    const source = {
+      volume: { value: '40', unit: 'uL' },
+      components: [
+        { source: 'lot_01M3QZX866A5SB53SPYV40HA9G', concentration: { value: '10', unit: 'mM' } },
+      ],
+    };
+    const destination = { volume: { value: '25', unit: 'uL' }, components: [] };
+    const result = await run<{
+      source: { volume: unknown };
+      destination: { volume: unknown; components: { concentration?: unknown }[] };
+      explanation: string;
+    }>(agent, 'inventory.calculate_transfer', {
+      source,
+      destination,
+      volume: { value: '25', unit: 'nL' },
+    });
+    expect(result.source.volume).toEqual({ value: '39.975', unit: 'uL' });
+    expect(result.destination.volume).toEqual({ value: '25.025', unit: 'uL' });
+    expect(result.explanation).toContain('Moving 25 nL');
+    const tooMuch = await refused(
+      run(person, 'inventory.calculate_transfer', { source, volume: { value: '1', unit: 'mL' } }),
+    );
+    expect(tooMuch.message).toContain('Only 40 uL is there');
+    const bad = await refused(
+      run(person, 'inventory.calculate_transfer', {
+        source: { volume: '5 uL', components: [] },
+        volume: { value: '1', unit: 'uL' },
+      }),
+    );
+    expect(bad.code).toBe('invalid_input');
+  });
+});

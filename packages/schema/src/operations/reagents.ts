@@ -63,6 +63,7 @@ export const reagentsDraftProduct = defineContract({
 
 export const reagentsScaleRecipe = defineContract({
   id: 'reagents.scale_recipe',
+  calculator: true,
   summary:
     "Work out how much of each component a lab-made product's recipe needs for a target batch (e.g. 250 mL of Reagent Diluent). Use this rather than your own arithmetic",
   effect: 'read',

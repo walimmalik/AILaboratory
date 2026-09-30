@@ -1,5 +1,7 @@
+import { ContentsError, EMPTY_WELL_STATE, formatQuantity, transfer } from '@ailab/domain';
 import {
   type ContainerAttributes,
+  inventoryCalculateTransfer,
   inventoryListPlace,
   inventoryMove,
   inventoryRegisterContainers,
@@ -8,6 +10,7 @@ import {
   locationsCreate,
   type PlacePath,
   type RecordEnvelope,
+  type WellState,
 } from '@ailab/schema';
 import type { Db } from '../db/client.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -68,7 +71,26 @@ function nameCandidates(code: string): string[] {
   return [...new Set([upper, `${prefix}-${digits}`])];
 }
 
+const volumeWords = (v: WellState['volume']) =>
+  v === 'unknown' ? 'an unknown volume' : formatQuantity(v);
+
 export const inventoryOperations = [
+  implement(inventoryCalculateTransfer, {
+    run: async (_ctx, input) => {
+      const destination = input.destination ?? EMPTY_WELL_STATE;
+      try {
+        const after = transfer(input.source, destination, input.volume);
+        return {
+          ...after,
+          explanation: `Moving ${formatQuantity(input.volume)} takes the source from ${volumeWords(input.source.volume)} to ${volumeWords(after.source.volume)} and the destination from ${volumeWords(destination.volume)} to ${volumeWords(after.destination.volume)}. Each component's concentration is its total amount (concentration × volume, from both wells) over the new volume; a component whose concentration or well volume is unknown stays unknown.`,
+        };
+      } catch (error) {
+        if (error instanceof ContentsError)
+          throw new OperationError('invalid_input', error.message);
+        throw error;
+      }
+    },
+  }),
   implement(locationsCreate, {
     agentPolicy: 'propose',
     run: async (ctx, { label, reason, ...attributes }, deps) =>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { WellState } from '../contents.ts';
 import { recordIdOf } from '../ids.ts';
 import {
   ContainerAttributes,
@@ -8,6 +9,7 @@ import {
   LocationId,
   PlacePath,
 } from '../inventory.ts';
+import { LiquidVolume } from '../labware.ts';
 import { defineContract } from '../operation.ts';
 import { RecordEnvelope } from '../record.ts';
 
@@ -105,5 +107,25 @@ export const inventoryListPlace = defineContract({
     containers: z.array(
       z.object({ container: RecordEnvelope, position: z.string().optional(), path: PlacePath }),
     ),
+  }),
+});
+
+export const inventoryCalculateTransfer = defineContract({
+  id: 'inventory.calculate_transfer',
+  calculator: true,
+  summary:
+    'Work out what two wells hold after moving a volume from one to the other: the volumes left and the concentration of every component after mixing (e.g. 25 nL of a 10 mM stock into 25 µL of medium). Use this rather than your own arithmetic; it changes nothing',
+  effect: 'read',
+  input: z.strictObject({
+    source: WellState.describe('What the source well holds'),
+    destination: WellState.optional().describe(
+      'What the destination well holds; empty if left out',
+    ),
+    volume: LiquidVolume.describe('How much to move'),
+  }),
+  output: z.object({
+    source: WellState,
+    destination: WellState,
+    explanation: z.string(),
   }),
 });
