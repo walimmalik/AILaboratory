@@ -7,6 +7,7 @@ import { instrumentOperations } from '../instruments/operations.ts';
 import { contentsOperations } from '../inventory/contents.ts';
 import { inventoryOperations } from '../inventory/operations.ts';
 import { labwareOperations } from '../labware/operations.ts';
+import { libraryOperations } from '../library/operations.ts';
 import { liquidOperations } from '../reagents/liquid-operations.ts';
 import { reagentOperations } from '../reagents/operations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
@@ -41,6 +42,7 @@ export function createRegistry(
     ...inventoryOperations,
     ...contentsOperations,
     ...fileOperations,
+    ...libraryOperations,
     ...assistantOperations,
   );
 }

@@ -19,3 +19,12 @@ A **file** (`file`, `FIL-0001`) is stored bytes with what they are: `mediaType`,
 - People open a file in the app at `/api/v1/files/<id>`.
 
 A file's bytes never change. A revised SOP or manual is a new upload.
+
+## Documents
+
+A **document** (`document`, `DOC-0001`) is a source as published, with its files: an SOP, vendor manual, paper, protocol code, web page or note.
+
+- `library.add` with `{label, type, license: {name, sharePolicy}, files: [{file, role: "original"}], authors?, vendor?, version?, published?, doi?, url?, journal?, partNumbers?, language?, assays?, tags?, notes?, evidence?}` drafts one. Upload the files first. Exactly one file is the `original`; the DOCX of a PDF is an `alternate`, a plate map image a `supplement`. `published` is `"2018"`, `"2018-05"` or a date; `doi` has no `https://doi.org/`.
+- Set `sharePolicy: "lab_private"` for All Rights Reserved, vendor and non-commercial documents; say where values came from in `evidence` (e.g. `{"doi": {"source": "datasheet", "reference": "<url>"}}`), or they show as assumed.
+- A person confirms each section (Source, License, Files, Topics). Before adding, check `records.list` with `kind: "document"` and a `search` so you don't add the same source twice.
+- `library.add_revision` with `{document, expectedVersion, file, version?, published?}` when the source is revised: the old file stays as an earlier revision. On a confirmed document it is a proposal.
