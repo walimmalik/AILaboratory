@@ -5,7 +5,7 @@ description: The lab calculators in AILaboratory, deterministic tools for volume
 
 # Lab calculators
 
-Volumes, concentrations, dilutions and amounts come from a calculator, never from your own arithmetic (ADR 0024). Calculators are read operations: they change nothing, so call them freely to explore before drafting. When you put a calculator's result into a draft, say it was calculated and by which operation. If no calculator covers a number you need, say so and mark your figure assumed.
+Volumes, concentrations, dilutions and amounts come from a calculator, never from your own arithmetic (ADR 0024). Calculators are read operations: they change nothing, so call them freely to explore before drafting. When you put a calculator's result into a draft, mark it calculated with the `calculation` handle that came back with the result (`{"source": "calculated", "calculation": "calc_…", "output": "/volume"}`); the record service refuses a value the calculation did not give. If no calculator covers a number you need, say so and mark your figure assumed.
 
 | Calculator | Use it for | Input |
 | --- | --- | --- |

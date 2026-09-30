@@ -2166,3 +2166,7 @@ td > ul.equipment-tree {
   padding-left: 0;
   list-style: none;
 }
+p.item-changes {
+  margin: 4px 0 0;
+  font-size: 12px;
+}

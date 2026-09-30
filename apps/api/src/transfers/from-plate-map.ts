@@ -20,6 +20,7 @@ import {
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
+import { saveCalculation } from '../records/calculations.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { calculating, deviceOf, deviceOut, run } from './calculators.ts';
 
@@ -321,11 +322,20 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
       groups,
       ...(notes.length ? { notes: notes.join('\n') } : {}),
     };
+    const calculation = await saveCalculation(
+      deps.db,
+      ctx,
+      'transfers.draft_from_plate_map',
+      input,
+      attributes.groups,
+    );
     const plan = await service(deps).create(ctx, {
       kind: 'transfer_plan',
       label: input.label,
       attributes,
-      evidence: { groups: { source: 'calculated', note: 'transfers.draft_from_plate_map' } },
+      evidence: {
+        groups: { source: 'calculated', calculation, note: 'transfers.draft_from_plate_map' },
+      },
       reason: input.reason ?? `Drafted from ${map.name}`,
     });
     return {

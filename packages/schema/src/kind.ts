@@ -31,6 +31,12 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
    * sections can only be activated once every section is confirmed and no blocker check fails.
    */
   sections?: KindSection[];
+  /**
+   * Lists whose items carry their own evidence and confirmation (R4, ADR 0049), by the field that
+   * keys each item: `{ steps: 'id', variables: 'name' }`. Evidence for an item is keyed
+   * `/steps/<id>`; reordering keeps each item's confirmation.
+   */
+  items?: Record<string, string>;
   checks?: KindCheck<z.infer<A>>[];
   /**
    * Attributes that don't apply given the others (e.g. an A1 offset on a tube), as dotted paths. The

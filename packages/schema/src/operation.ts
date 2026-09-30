@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Actor } from './actor.ts';
+import { CalculationId } from './design.ts';
 import { RecordId } from './ids.ts';
 
 /** Reads change nothing and are never logged; writes run in one transaction and are logged in the activity ledger. */
@@ -107,14 +108,18 @@ export type Proposal = z.infer<typeof Proposal>;
 /** What calling an operation produced. Agents may get "proposed" instead of "done". */
 export function operationResult<O extends z.ZodType>(output: O) {
   return z.discriminatedUnion('status', [
-    z.object({ status: z.literal('done'), output }),
-    z.object({ status: z.literal('preview'), output }),
+    z.object({ status: z.literal('done'), output, calculation: CalculationId.optional() }),
+    z.object({ status: z.literal('preview'), output, calculation: CalculationId.optional() }),
     z.object({ status: z.literal('proposed'), proposal: Proposal }),
   ]);
 }
+/**
+ * A calculator's result also carries its calculation handle (ADR 0049), which `calculated` evidence
+ * names so the record service can check the value against it.
+ */
 export type OperationResult<O> =
-  | { status: 'done'; output: O }
-  | { status: 'preview'; output: O }
+  | { status: 'done'; output: O; calculation?: CalculationId }
+  | { status: 'preview'; output: O; calculation?: CalculationId }
   | { status: 'proposed'; proposal: Proposal };
 
 export const ActivityOutcome = z.enum(['succeeded', 'failed', 'proposed', 'approved', 'rejected']);

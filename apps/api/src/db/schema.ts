@@ -490,3 +490,27 @@ export const sopReviews = pgTable(
   },
   (t) => [index('sop_reviews_sop_idx').on(t.labId, t.sopId)],
 );
+
+/**
+ * What lab calculators returned (ADR 0049): a calculation handle names one row, so `calculated`
+ * evidence can be checked against the numbers the calculator gave. The ID is a hash of the lab, the
+ * operation, its input and its output, so the same calculation is stored once.
+ */
+export const calculations = pgTable(
+  'calculations',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    operationId: text('operation_id').notNull(),
+    input: jsonb('input').notNull(),
+    output: jsonb('output').notNull(),
+    createdBy: jsonb('created_by').$type<Actor>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('calculations_lab_idx').on(t.labId, t.createdAt)],
+);

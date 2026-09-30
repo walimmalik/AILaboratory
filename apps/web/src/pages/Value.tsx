@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import { formatValue, isQuantity } from '../lib/format.ts';
+import { fieldLabel, formatValue, isQuantity } from '../lib/format.ts';
 import { recordQuery } from '../queries.ts';
-import { fieldLabel } from './RecordReview.tsx';
 
 /**
  * Any stored value as a person reads it (UI rule 1): a record ID at any depth is its linked name,

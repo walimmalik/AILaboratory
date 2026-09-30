@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1 so far). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2 so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -53,6 +53,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0046](../decisions/0046-sop-text-and-one-confirm.md) | An SOP value's kind comes from its text (number, formula or Material.field) in one highlighted box, step words give a step's materials and settings, storage unchanged; whole-page edit with one Save, one Confirm per SOP (`records.confirm`), the assistant's fill-in (`sops.suggest`) |
 | [0047](../decisions/0047-workcells.md) | Workcells list member instruments mapped to twin devices; drafts may share instruments, confirming checks that no member is in another confirmed workcell, and the twin mapping is unchecked until 015 |
 | [0048](../decisions/0048-plain-words-on-contracts.md) | Every operation contract carries plain words (`verbs.done`, `verbs.intent`) that screens read from one catalog; one value renderer names records at any depth, and kinds give fields a lab form |
+| [0049](../decisions/0049-evidence-by-item-and-checked-calculations.md) | Kinds key lists by item (SOP steps by id), each item with its own evidence and state; `record`, `template` and `memory` sources name where a value was copied from; calculator results carry a handle that `calculated` evidence must name, checked by the record service |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

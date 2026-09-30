@@ -10,6 +10,7 @@ import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
 import type { FileStore } from '../files/store.ts';
 import type { Converter } from '../library/convert.ts';
+import { saveCalculation } from '../records/calculations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { type ActivityBus, recordActivity } from './activity.ts';
@@ -136,7 +137,13 @@ export class OperationRegistry {
 
     if (operation.contract.effect === 'read') {
       const output = await this.#run(operation, ctx, input, deps);
-      return { status: options.preview ? 'preview' : 'done', output };
+      const status = options.preview ? 'preview' : 'done';
+      // Lab calculators keep what they returned under a handle (ADR 0049).
+      if (operation.contract.calculator) {
+        const calculation = await saveCalculation(db, ctx, id, input, output);
+        return { status, output, calculation };
+      }
+      return { status, output };
     }
 
     if (options.preview) {

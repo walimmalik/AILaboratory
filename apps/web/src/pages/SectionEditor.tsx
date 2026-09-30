@@ -6,12 +6,13 @@ import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { fieldLabel } from './RecordReview.tsx';
 
-type Source = 'person' | 'measured' | 'datasheet' | 'calculated';
+// "Calculated" is not offered: it names a calculator's result by its handle (ADR 0049), and a
+// person's own arithmetic is entered by them.
+type Source = 'person' | 'measured' | 'datasheet';
 const sources: [Source, string][] = [
   ['person', 'Entered by me'],
   ['measured', 'Measured'],
   ['datasheet', 'From a datasheet'],
-  ['calculated', 'Calculated'],
 ];
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
