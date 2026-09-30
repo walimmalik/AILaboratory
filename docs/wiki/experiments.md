@@ -47,7 +47,7 @@ Building: 014a placement rules, layout templates and plate maps are built ([plat
 
 ### Transfers (plan 016)
 
-Building: 016a-1 transfer math and the dilution optimizer are built ([transfers.md](../architecture/transfers.md)); the calculator operations (016a-2) and the transfer plan record with soft reservations (016a-3, ADR 0045) are built; drafting plans from plate maps (016a-4) is built; Echo and Opentrons files (016b) are next.
+Building: 016a-1 transfer math and the dilution optimizer are built ([transfers.md](../architecture/transfers.md)); the calculator operations (016a-2) and the transfer plan record with soft reservations (016a-3, ADR 0045) are built; drafting plans from plate maps (016a-4) is built; Echo pick lists from confirmed plans (016b-1) are built; Echo report import is next.
 
 - Code in `packages/domain/transfers` solves targets and sources into exact transfers; the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates) and explains it.
 - **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations. They are lab calculators (ADR 0024).

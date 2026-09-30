@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { recordIdOf } from './ids.ts';
+import { RecordId, recordIdOf } from './ids.ts';
 
 /**
  * Files (plan 011a, ADR 0033): the bytes of an original or derived file live in a content-addressed
@@ -33,6 +33,11 @@ export const FileSource = z
     z.strictObject({
       from: z.literal('derived'),
       file: FileId.describe('The file it was made from, e.g. the PDF a figure was cut from'),
+    }),
+    z.strictObject({
+      from: z.literal('export'),
+      record: RecordId.describe('The record it was written from, e.g. a transfer plan'),
+      version: z.number().int().min(1).describe('The version of that record'),
     }),
   ])
   .describe('Where the file came from');

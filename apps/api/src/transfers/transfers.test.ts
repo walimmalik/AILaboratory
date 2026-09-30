@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
+import { fileKinds } from '../files/kinds.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { inventoryKinds } from '../inventory/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
@@ -17,6 +20,7 @@ import { plateMapKinds } from '../platemaps/kinds.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { type EchoRow, echoPickList } from './echo.ts';
 import { transferKinds } from './kinds.ts';
 
 let db: Db;
@@ -48,6 +52,7 @@ beforeEach(async () => {
     ...inventoryKinds,
     ...transferKinds,
     ...plateMapKinds,
+    ...fileKinds,
   ]) {
     kinds.register(kind);
   }
@@ -79,7 +84,7 @@ const create = (label: string, kind: string, attributes: unknown) =>
 async function lab() {
   const echoKind = await create('Echo 650', 'instrument_kind', {
     model: 'Echo 650',
-    category: 'liquid_handler',
+    category: 'acoustic_dispenser',
     performedBy: 'machine',
     capabilities: [
       {
@@ -144,6 +149,7 @@ async function lab() {
     maxVolume: uL('65'),
     workingVolume: { min: uL('15'), max: uL('65') },
     deadVolume: uL('15'),
+    echoPlateTypes: ['384PP_DMSO2'],
   });
   return { echo, flex, pp };
 }
@@ -412,6 +418,7 @@ describe('transfer plans', () => {
       },
       wells: { layout: 'grid', rows: 16, columns: 24 },
       maxVolume: uL('50'),
+      echoPlateTypes: ['Corning_384_3570'],
     });
     const { containers } = await run<{ containers: RecordEnvelope[] }>(
       person,
@@ -657,6 +664,139 @@ describe('transfer plans', () => {
       run(otherLab, 'transfers.reserved', { container: other.id }),
     );
     expect(hiddenReserved).toMatchObject({ code: 'not_found' });
+  });
+
+  it('writes an Echo pick list from a confirmed plan and stores it with the plan version', async () => {
+    const { flex, pp, assay, src, draft } = await setup();
+    const ppOk = await confirm(pp);
+    const assayOk = await confirm(assay);
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', {
+      ...draft,
+      plates: [
+        {
+          id: 'src',
+          label: 'Compound source 1',
+          role: 'source',
+          labwareType: { id: ppOk.id, version: ppOk.version },
+          container: src.id,
+        },
+        {
+          id: 'assay',
+          label: 'Assay plate 1',
+          role: 'destination',
+          labwareType: { id: assayOk.id, version: assayOk.version },
+        },
+      ],
+      groups: [
+        { ...draft.groups[0], transfers: draft.groups[0]?.transfers.slice(0, 2) },
+        {
+          id: 'buffer',
+          label: 'Flex: buffer into the assay plate',
+          method: 'reagent_addition',
+          instrument: { instrument: flex.id },
+          reason: 'Microlitre volumes',
+          tips: 'new_each',
+          transfers: [
+            {
+              from: { plate: 'src', well: 'B1' },
+              to: { plate: 'assay', well: 'A1' },
+              volume: uL('10'),
+            },
+          ],
+        },
+        {
+          id: 'mix',
+          label: 'By hand: top up',
+          method: 'reagent_addition',
+          reason: 'One well',
+          transfers: [
+            {
+              from: { plate: 'src', well: 'B1' },
+              to: { plate: 'assay', well: 'A2' },
+              volume: uL('10'),
+            },
+          ],
+        },
+      ],
+    });
+    const early = await refused(run(agent, 'transfers.export', { id: plan.id }));
+    expect(early).toMatchObject({ code: 'invalid_state' });
+    expect(early.message).toContain('not confirmed');
+
+    const active = await confirm(plan);
+    expect(active.status).toBe('active');
+    const out = await run<{
+      files: { group: string; file: RecordEnvelope; filename: string; rows: number }[];
+      skipped: { group: string; why: string }[];
+    }>(agent, 'transfers.export', { id: active.id });
+    expect(out.skipped).toEqual([
+      { group: 'buffer', why: 'No file writer for Flex 1 yet' },
+      { group: 'mix', why: 'Done by hand; no instrument file' },
+    ]);
+    expect(out.files).toMatchObject([
+      {
+        group: 'compounds',
+        filename: `TFP-0001 v${active.version} compounds Echo pick list.csv`,
+        rows: 2,
+      },
+    ]);
+    const file = out.files[0]?.file as RecordEnvelope;
+    expect(file.attributes).toMatchObject({
+      mediaType: 'text/csv',
+      source: { from: 'export', record: active.id, version: active.version },
+    });
+    const { text } = await run<{ text: string }>(agent, 'files.get', { id: file.id });
+    expect(text).toBe(
+      [
+        'Source Plate Name,Source Plate Barcode,Source Plate Type,Source Well,Transfer Volume,Destination Plate Name,Destination Plate Barcode,Destination Plate Type,Destination Well',
+        `Compound source 1,${src.name},384PP_DMSO2,A1,2500,Assay plate 1,,Corning_384_3570,A1`,
+        `Compound source 1,${src.name},384PP_DMSO2,A1,2500,Assay plate 1,,Corning_384_3570,A2`,
+        '',
+      ].join('\n'),
+    );
+
+    const onlyFlex = await refused(
+      run(agent, 'transfers.export', { id: active.id, group: 'buffer' }),
+    );
+    expect(onlyFlex.message).toBe('No file writer for Flex 1 yet');
+    const noGroup = await refused(run(agent, 'transfers.export', { id: active.id, group: 'x' }));
+    expect(noGroup.message).toBe('TFP-0001 has no group x');
+    const hidden = await refused(run(otherLab, 'transfers.export', { id: active.id }));
+    expect(hidden).toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('Echo pick list', () => {
+  it('writes the lab example exactly', async () => {
+    const example = readFileSync(
+      fileURLToPath(
+        new URL('../../../../seed/worklists/echo-pick-list-single-point.csv', import.meta.url),
+      ),
+      'utf8',
+    );
+    const [, ...lines] = example.trimEnd().split('\n');
+    const rows = lines.map((line) => {
+      const c = line.split(',') as string[];
+      return {
+        source: { name: c[0], barcode: c[1], type: c[2] },
+        sourceWell: c[3],
+        volume: c[4],
+        destination: { name: c[5], barcode: c[6], type: c[7] },
+        destinationWell: c[8],
+      } as EchoRow;
+    });
+    expect(rows).toHaveLength(96);
+    expect(echoPickList(rows)).toBe(example);
+  });
+
+  it('quotes names that hold commas or quotes', () => {
+    const plate = { name: 'Plate "A", left', barcode: '', type: '384PP_DMSO2' };
+    const csv = echoPickList([
+      { source: plate, sourceWell: 'A1', volume: '2.5', destination: plate, destinationWell: 'B1' },
+    ]);
+    expect(csv.split('\n')[1]).toBe(
+      '"Plate ""A"", left",,384PP_DMSO2,A1,2.5,"Plate ""A"", left",,384PP_DMSO2,B1',
+    );
   });
 });
 
