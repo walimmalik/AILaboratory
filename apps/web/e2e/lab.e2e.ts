@@ -518,5 +518,5 @@ test('scanning a tube opens it and moves it into a box position', async ({ page 
   await move.getByLabel('Position').fill('b3');
   await move.getByRole('button', { name: 'Move' }).click();
   await expect(page.getByText(`Moved ${tube.name} to`)).toBeVisible();
-  await expect(found).toContainText(`${box.name} B3`);
+  await expect(found).toContainText(`Box ${stamp} › ${tube.name} B3`);
 });
