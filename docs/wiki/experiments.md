@@ -109,3 +109,14 @@ These drive the templates and the first end-to-end target (one ELISA): sandwich 
 - **Judgement stays with people:** exclusions need a reason and outlier tests only propose. Hit rules produce proposed sets, and a prediction is supported only when its whole confidence interval passes the threshold. Repeats are fitted per run and summarized, and a curve that can't give a value says so ("IC50 > 10 µM").
 - **Exploration:** saved **views** (`VIW-0001`) over any runs, experiments, campaigns or sets, with linked heatmaps, scatter, curves and tables. A question in plain language becomes a view spec you can see and edit.
 - **Learning:** `analysis.power` suggests replicates to the designer from the template's own history, and control charts per template flag drift by instrument, lot and operator as readiness notes and lab memory proposals.
+
+## Lab notebook (plan 021)
+
+[Plan 021](../plans/021-lab-notebook.md). Locked 2026-09-30; builds after 020 (021a can start earlier).
+
+- **Entries** (`NB-0001`): dated, written fast, linked to any experiments, runs or records (or none). Read as your notebook, on an experiment or run page, per campaign or lab-wide. Markdown with record cards (a plate map, a run, a graph) pinned to the version they had.
+- **Timeline:** computed from the activity ledger and record history, never retyped: one line per experiment per day ("RUN-0012 done, 1 deviation, 2 files") that opens to the events.
+- **Agents draft, people confirm:** write-ups and photo transcriptions on request, numbers as record references. A value in a note ("incubated 45 min, not 30") becomes a run record only through a proposal a person confirms.
+- **History:** every version kept, late edits marked; a locked entry takes only addenda. Export to PDF or HTML per experiment, campaign, person or date range.
+- **Tags, people and places:** `#tags` (on every record), `@` mentions and review requests that land in Review, replies, follow-up checkboxes, and links into a step, a well or a passage.
+- **Needs from other modules:** `runs.correct` in 013 for notes about finished runs, versions on ledger rows, a shared search index in 011 and one PDF renderer shared with analysis.

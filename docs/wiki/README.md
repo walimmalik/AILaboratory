@@ -16,7 +16,7 @@ Last brought up to date: 2026-09-29, after labware types (007a) landed, the lab 
 | [Architecture](architecture.md) | Services, packages, the operation registry and its doors, the in-app assistant |
 | [Registries](registries.md) | Labware (007), instruments (008), reagents and liquid classes (009), inventory (010) |
 | [SOPs and the library](sops.md) | The SOP and literature library (011) and digital SOPs (012) |
-| [Experiments and designers](experiments.md) | Campaigns, experiments and runs (013); plate maps, transfers and the experiment designer (014, 016, 017); workflows (018); the scheduler and orchestrator (019); analysis (020) |
+| [Experiments and designers](experiments.md) | Campaigns, experiments and runs (013); plate maps, transfers and the experiment designer (014, 016, 017); workflows (018); the scheduler and orchestrator (019); analysis (020); the lab notebook (021) |
 | [Web app and design system](ui.md) | The bench console look, layout rules and what Wali does not want to see |
 | [Glossary](glossary.md) | Lab and app words as this project uses them |
 
