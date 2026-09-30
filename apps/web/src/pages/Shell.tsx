@@ -30,10 +30,9 @@ function ShellLayout() {
   const me = useMe();
   const live = useLive();
   const [theme, setTheme] = useTheme();
-  const waiting = useQuery(reviewQuery).data ?? [];
-  const pending = waiting.length;
-  const draftsOf = (kind: string) =>
-    waiting.filter((i) => i.type === 'draft' && i.record.kind === kind).length;
+  const counts = useQuery(reviewQuery).data?.counts;
+  const pending = counts?.total ?? 0;
+  const draftsOf = (kind: string) => counts?.drafts[kind] ?? 0;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const assistant = useAssistant();

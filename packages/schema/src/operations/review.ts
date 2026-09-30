@@ -41,6 +41,23 @@ export const reviewList = defineContract({
   summary:
     'Everything waiting for a person: drafts to review and confirm, and proposed changes to confirm or reject, newest first',
   effect: 'read',
-  input: z.strictObject({}),
-  output: z.object({ items: z.array(ReviewItem) }),
+  input: z.strictObject({
+    kind: z.string().optional().describe('Only drafts of this kind; proposed changes are left out'),
+  }),
+  output: z.object({
+    items: z
+      .array(ReviewItem)
+      .describe(
+        'Newest first; at most 200 drafts, so compare with counts to see what was left out',
+      ),
+    counts: z
+      .object({
+        total: z.number().int().nonnegative().describe('Everything waiting, drafts and changes'),
+        changes: z.number().int().nonnegative(),
+        drafts: z
+          .record(z.string(), z.number().int().positive())
+          .describe('Drafts waiting per kind, all of them, not only those listed'),
+      })
+      .describe('Counts over everything waiting, whatever the filter and limit'),
+  }),
 });

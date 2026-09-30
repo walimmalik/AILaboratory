@@ -19,7 +19,7 @@ import {
   operationVerb,
 } from '../lib/format.ts';
 import { kindPage } from '../lib/kinds.ts';
-import { decidedProposalsQuery, recordQuery, reviewQuery } from '../queries.ts';
+import { decidedProposalsQuery, recordQuery, reviewKindQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
 /**
@@ -30,18 +30,31 @@ export function ReviewPage() {
   const waiting = useQuery(reviewQuery);
   const decided = useQuery(decidedProposalsQuery);
   const me = useMe();
-  const all = waiting.data ?? [];
+  const all = waiting.data?.items ?? [];
+  const counts = waiting.data?.counts;
+  const total = counts?.total ?? 0;
   const [show, setShow] = useState('all');
-  // One chip per kind of draft waiting, plus changes to active records.
+  // One chip per kind of draft waiting, plus changes to active records, counted over everything
+  // waiting rather than over the page of items read.
   const groups = new Map<string, { label: string; count: number }>();
-  for (const item of all) {
-    const key = groupOf(item);
-    const label =
-      item.type === 'change' ? 'Changes' : (kindPage(item.record.kind)?.title ?? item.record.kind);
-    groups.set(key, { label, count: (groups.get(key)?.count ?? 0) + 1 });
+  if (counts?.changes) groups.set('changes', { label: 'Changes', count: counts.changes });
+  for (const [kind, count] of Object.entries(counts?.drafts ?? {})) {
+    groups.set(kind, { label: kindPage(kind)?.title ?? kind, count });
   }
   const shown = show === 'all' || !groups.has(show) ? 'all' : show;
-  const items = shown === 'all' ? all : all.filter((i) => groupOf(i) === shown);
+  // A kind whose drafts didn't all fit in the first page is read on its own.
+  const loadedOf = (key: string) => all.filter((i) => groupOf(i) === key).length;
+  const needsOwnPage =
+    shown !== 'all' && shown !== 'changes' && loadedOf(shown) < (groups.get(shown)?.count ?? 0);
+  const ofKind = useQuery({ ...reviewKindQuery(shown), enabled: needsOwnPage });
+  const items =
+    shown === 'all'
+      ? all
+      : needsOwnPage
+        ? (ofKind.data ?? [])
+        : all.filter((i) => groupOf(i) === shown);
+  const expected = shown === 'all' ? total : (groups.get(shown)?.count ?? 0);
+  const leftOut = waiting.data && !(needsOwnPage && ofKind.isPending) ? expected - items.length : 0;
 
   return (
     <>
@@ -61,16 +74,14 @@ export function ReviewPage() {
       <section className="block">
         <header>
           <h2>Waiting for you</h2>
-          <span className={`state ${all.length ? 'agent-ink' : 'muted'}`}>
-            {all.length} waiting
-          </span>
+          <span className={`state ${total ? 'agent-ink' : 'muted'}`}>{total} waiting</span>
         </header>
         <div className="body">
-          {groups.size > 1 && (
+          {(groups.size > 1 || total > all.length) && (
             <fieldset className="segmented">
               <legend className="sr-only">Show</legend>
               <button type="button" aria-pressed={shown === 'all'} onClick={() => setShow('all')}>
-                All {all.length}
+                All {total}
               </button>
               {[...groups].map(([key, group]) => (
                 <button
@@ -85,7 +96,7 @@ export function ReviewPage() {
             </fieldset>
           )}
           {waiting.error && <p className="error-text">{waiting.error.message}</p>}
-          {waiting.data?.length === 0 && (
+          {waiting.data && total === 0 && (
             <p className="empty">Nothing waiting. Drafts and proposed changes appear here live.</p>
           )}
           {items.map((item) =>
@@ -94,6 +105,14 @@ export function ReviewPage() {
             ) : (
               <PendingProposal key={item.proposal.id} proposal={item.proposal} />
             ),
+          )}
+          {leftOut > 0 && (
+            <p className="muted">
+              Showing the newest {items.length} of {expected}.{' '}
+              {shown === 'all'
+                ? 'Pick a kind above to see all of its drafts.'
+                : 'Confirm some of these to see the rest.'}
+            </p>
           )}
         </div>
       </section>

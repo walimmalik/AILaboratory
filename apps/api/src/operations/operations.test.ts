@@ -427,8 +427,10 @@ describe('review inbox', () => {
       label: 'Rack (blue)',
     });
 
-    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
-    expect(() => reviewList.output.parse({ items })).not.toThrow();
+    const output = await run<{ items: ReviewItem[]; counts: unknown }>(person, 'review.list', {});
+    expect(() => reviewList.output.parse(output)).not.toThrow();
+    const { items } = output;
+    expect(output.counts).toEqual({ total: 2, changes: 1, drafts: { widget: 1 } });
     expect(items.map((i) => i.type)).toEqual(['change', 'draft']);
     expect(items[1]).toMatchObject({
       type: 'draft',
@@ -440,9 +442,32 @@ describe('review inbox', () => {
     });
   });
 
+  it('counts every draft per kind, and lists one kind on its own', async () => {
+    await create(agent);
+    await create(agent, { label: 'Second' });
+    const active = await create(person, { status: 'active', label: 'Rack' });
+    await registry.execute(agent, 'records.update', {
+      id: active.id,
+      expectedVersion: 1,
+      label: 'Rack (blue)',
+    });
+
+    const one = await run<{ items: ReviewItem[]; counts: { drafts: Record<string, number> } }>(
+      person,
+      'review.list',
+      { kind: 'widget' },
+    );
+    // The kind filter leaves proposed changes out of the items but not out of the counts.
+    expect(one.items.map((i) => i.type)).toEqual(['draft', 'draft']);
+    expect(one.counts).toEqual({ total: 3, changes: 1, drafts: { widget: 2 } });
+  });
+
   it('is empty when nothing waits, and refuses unknown input', async () => {
     await create(person, { status: 'active' });
-    expect((await run<{ items: unknown[] }>(agent, 'review.list', {})).items).toEqual([]);
+    expect(await run(agent, 'review.list', {})).toEqual({
+      items: [],
+      counts: { total: 0, changes: 0, drafts: {} },
+    });
     expect((await refused(registry.execute(person, 'review.list', { x: 1 }))).code).toBe(
       'invalid_input',
     );

@@ -7,7 +7,7 @@ import { reviewQuery } from '../queries.ts';
  * "active · change waiting" or "archived".
  */
 export function StatusChip({ record }: { record: Pick<RecordEnvelope, 'id' | 'status'> }) {
-  const items = useQuery(reviewQuery).data ?? [];
+  const items = useQuery(reviewQuery).data?.items ?? [];
   const changeWaiting = items.some(
     (i) =>
       i.type === 'change' && (i.proposal.input as { id?: unknown } | undefined)?.id === record.id,

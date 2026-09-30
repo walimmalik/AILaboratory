@@ -30,8 +30,15 @@ export const pendingProposalsQuery = queryOptions({
 /** Everything waiting for a person: drafts to confirm and proposed changes (plan 004d). */
 export const reviewQuery = queryOptions({
   queryKey: ['review'],
-  queryFn: async () => (await api.run(reviewList, {})).items,
+  queryFn: async () => api.run(reviewList, {}),
 });
+
+/** The drafts of one kind waiting for review, for when the whole list is longer than one page. */
+export const reviewKindQuery = (kind: string) =>
+  queryOptions({
+    queryKey: ['review', 'kind', kind],
+    queryFn: async () => (await api.run(reviewList, { kind })).items,
+  });
 
 export const decidedProposalsQuery = queryOptions({
   queryKey: ['proposals', 'decided'],

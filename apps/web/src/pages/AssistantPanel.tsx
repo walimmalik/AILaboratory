@@ -159,7 +159,7 @@ type ToolMessage = Extract<AssistantMessage, { role: 'tool' }>;
  * proposed that still wait on the Review page, each linked to where you act on it.
  */
 function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
-  const review = useQuery(reviewQuery).data;
+  const review = useQuery(reviewQuery).data?.items;
   const lastAsk = messages.findLastIndex((m) => m.role === 'user');
   const steps = messages.slice(lastAsk + 1).filter((m): m is ToolMessage => m.role === 'tool');
   if (!review || steps.length === 0) return null;
