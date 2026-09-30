@@ -151,6 +151,7 @@ describe('MCP', () => {
       'inventory.map_plates',
       'liquids.resolve_class',
       'reagents.scale_recipe',
+      'sops.evaluate',
     ]);
     expect(listed.every((o: { calculator?: boolean }) => o.calculator)).toBe(true);
   });
