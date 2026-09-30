@@ -7,6 +7,8 @@ import {
   ExperimentAttributes as ExperimentSchema,
   type RunAttributes,
   RunAttributes as RunSchema,
+  type SetAttributes,
+  SetAttributes as SetSchema,
   type SopAttributes,
 } from '@ailab/schema';
 import { checkPin } from '../records/pins.ts';
@@ -124,6 +126,12 @@ export const experiment = defineKind({
       toId: d.document,
       relation: d.use === 'follows' ? 'follows' : 'references',
     })),
+    ...[
+      ...new Set([
+        ...(a.conclusion?.runs ?? []),
+        ...(a.conclusion?.verdicts ?? []).flatMap((v) => (v.evidence ?? []).map((e) => e.record)),
+      ]),
+    ].map((toId) => ({ toId, relation: 'evidence' })),
   ],
   sections: [
     {
@@ -172,6 +180,21 @@ export const experiment = defineKind({
     for (const h of a.hypotheses ?? []) {
       if (h.prediction && !readouts.has(h.prediction.readout))
         invalid.push(`Hypothesis ${h.id} is measured on ${h.prediction.readout}, not a readout`);
+    }
+    if (a.conclusion) {
+      const hypotheses = new Set((a.hypotheses ?? []).map((h) => h.id));
+      for (const v of a.conclusion.verdicts ?? []) {
+        if (!hypotheses.has(v.hypothesis)) invalid.push(`There is no hypothesis ${v.hypothesis}`);
+        for (const e of v.evidence ?? [])
+          if (!(await get(e.record))) invalid.push(`${e.record} is not a record in this lab`);
+      }
+      for (const d of duplicates((a.conclusion.verdicts ?? []).map((v) => v.hypothesis)))
+        invalid.push(`Hypothesis ${d} has two verdicts`);
+      for (const id of a.conclusion.runs ?? []) {
+        const run = await get(id);
+        if (run?.kind !== 'run' || (run.attributes as RunAttributes).experiment.id !== current?.id)
+          invalid.push(`${id} is not a run of this experiment`);
+      }
     }
     const unconfirmed: string[] = [];
     const newer: string[] = [];
@@ -300,7 +323,7 @@ export const experiment = defineKind({
 
 /**
  * A run (plan 013, E2): one execution of an experiment's confirmed design, pinned to the design
- * version it followed. Step actuals, deviations and data files come with 013c.
+ * version it followed, with its steps as a checklist, deviations and data files (013c).
  */
 export const run = defineKind({
   kind: 'run',
@@ -329,4 +352,48 @@ export const run = defineKind({
   },
 });
 
-export const campaignKinds = [campaign, experiment, run];
+/** Kinds a set's members may be (E10). */
+const MEMBER_KINDS = ['entity', 'sample', 'container'];
+
+/**
+ * A set (plan 013, E10): a named list of entities, samples or containers one experiment hands to
+ * the next, with the criterion that picked them.
+ */
+export const set = defineKind({
+  kind: 'set',
+  idPrefix: 'set',
+  namePrefix: 'SET',
+  nameWidth: 3,
+  attributes: SetSchema,
+  createdBy: 'sets.create',
+  links: (a: SetAttributes) => [
+    ...[...new Set(a.members.map((m) => m.record))].map((toId) => ({ toId, relation: 'contains' })),
+    ...(a.from ? [{ toId: a.from.experiment, relation: 'picked_by' }] : []),
+  ],
+  related: async (a, { get }) => {
+    const invalid: string[] = [];
+    for (const d of duplicates(a.members.map((m) => m.record)))
+      invalid.push(`${d} is in the set twice`);
+    for (const m of a.members) {
+      const record = await get(m.record);
+      if (!record) invalid.push(`${m.record} is not a record in this lab`);
+      else if (!MEMBER_KINDS.includes(record.kind))
+        invalid.push(`${record.name} is not an entity, sample or container, which a set holds`);
+    }
+    if (a.from) {
+      if ((await get(a.from.experiment))?.kind !== 'experiment')
+        invalid.push(`${a.from.experiment} is not an experiment in this lab`);
+      if (a.from.run) {
+        const run = await get(a.from.run);
+        if (
+          run?.kind !== 'run' ||
+          (run.attributes as RunAttributes).experiment.id !== a.from.experiment
+        )
+          invalid.push(`${a.from.run} is not a run of ${a.from.experiment}`);
+      }
+    }
+    return invalid.length ? { invalid } : {};
+  },
+});
+
+export const campaignKinds = [campaign, experiment, run, set];

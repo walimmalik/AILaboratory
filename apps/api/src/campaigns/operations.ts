@@ -146,6 +146,12 @@ export const campaignOperations = [
       const service = new RecordService(deps.db, deps.kinds);
       const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
       const a = record.attributes as ExperimentAttributes;
+      if (input.stage === 'concluded' && NEXT[a.stage].includes('concluded')) {
+        throw new OperationError(
+          'invalid_input',
+          `Conclude ${record.name} with experiments.conclude, which records a verdict per hypothesis`,
+        );
+      }
       if (!NEXT[a.stage].includes(input.stage)) {
         const allowed = NEXT[a.stage].map(words);
         throw new OperationError(
