@@ -149,6 +149,15 @@ describe('sops.evaluate', () => {
   });
 });
 
+/** The error a call is refused with. */
+const refused = (call: Promise<unknown>) =>
+  call.then(
+    () => {
+      throw new Error('Expected a refusal');
+    },
+    (error: Error) => error,
+  );
+
 async function run<T>(ctx: RecordContext, id: string, input: unknown) {
   const result = await registry.execute(ctx, id, input);
   if (result.status !== 'done') throw new Error(`${id} was ${result.status}`);
@@ -704,6 +713,75 @@ describe('sops.check_citations', () => {
     );
     expect(checked.citations[1]?.foundIn).toBeDefined();
     expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
+
+    // A reparse keeps the passage IDs of text that didn't change, so citations still resolve.
+    await run(person, 'library.parse', { document: doc.id });
+    const again = await run<{ citations: { result: string }[] }>(agent, 'sops.check_citations', {
+      sop: sop.id,
+    });
+    expect(again.citations[0]?.result).toBe('matches');
+
+    // The SOP links the documents it cites; a citation must name a library document.
+    const links = await run<{ links: { toId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      { id: sop.id, direction: 'from' },
+    );
+    expect(links.links).toContainEqual(
+      expect.objectContaining({ toId: doc.id, relation: 'digitized_from' }),
+    );
+    const notADocument = await refused(
+      run(agent, 'sops.draft', {
+        ...elisa,
+        steps: elisa.steps.map((s) => ({
+          ...s,
+          cite: [{ document: sop.id.replace('sop_', 'doc_'), quote: 'x' }],
+        })),
+      }),
+    );
+    expect(notADocument.message).toContain('is cited but is not a library document');
+  });
+});
+
+describe('SOP solutions', () => {
+  it('links a solution to its recipe, so the recipe draft stays while the SOP uses it', async () => {
+    const recipe = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'product',
+      label: 'Wash buffer',
+      attributes: { category: 'buffer', origin: 'made' },
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      solutions: [
+        { role: 'wash_buffer', label: 'Wash buffer', text: 'See recipe', recipe: recipe.id },
+      ],
+    });
+    const links = await run<{ links: { fromId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      { id: recipe.id, direction: 'to' },
+    );
+    expect(links.links).toContainEqual(
+      expect.objectContaining({ fromId: sop.id, relation: 'made_with' }),
+    );
+    const kept = await refused(
+      run(person, 'records.delete_draft', { id: recipe.id, expectedVersion: recipe.version }),
+    );
+    expect(kept.message).toContain('linked from other records');
+    const wrong = await refused(
+      run(agent, 'sops.draft', {
+        ...elisa,
+        solutions: [
+          {
+            role: 'wash_buffer',
+            label: 'Wash buffer',
+            text: 'See recipe',
+            recipe: sop.id.replace('sop_', 'prd_'),
+          },
+        ],
+      }),
+    );
+    expect(wrong.message).toContain('is not a product in this lab');
   });
 });
 
