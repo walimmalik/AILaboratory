@@ -335,9 +335,9 @@ function FilesBlock({ record }: { record: RecordEnvelope }) {
   const files = (record.attributes as Partial<DocumentAttributes>).files ?? [];
   const records = useQueries({ queries: files.map((f) => recordQuery(f.file)) });
   return (
-    <section className="block" aria-label="Files">
+    <section className="block" aria-label="Stored files">
       <header>
-        <h2>Files</h2>
+        <h2>Stored files</h2>
         <span className="state muted num">{files.length}</span>
       </header>
       <div className="table-wrap">

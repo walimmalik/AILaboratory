@@ -542,6 +542,8 @@ test('a file added on the documents page becomes a draft document with its file'
   await expect(add.getByText('added as a draft')).toBeVisible();
   await add.getByRole('link', { name: new RegExp(`Coating ${stamp}`) }).click();
   await expect(page).toHaveURL(/\/records\/doc_/);
-  await expect(page.getByRole('region', { name: 'Files' })).toContainText(`Coating ${stamp}.md`);
+  await expect(page.getByRole('region', { name: 'Stored files' })).toContainText(
+    `Coating ${stamp}.md`,
+  );
   await expect(page.getByRole('region', { name: 'Text' })).toContainText('not read yet');
 });
