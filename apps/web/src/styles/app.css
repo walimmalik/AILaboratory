@@ -1333,6 +1333,11 @@ ul.rules {
 .contents-key .swatch.data-6 {
   background: var(--data-6);
 }
+.plate .well.data-rest,
+.contents-key .swatch.data-rest {
+  background: var(--ink-3);
+  opacity: 0.55;
+}
 .plate .well.dim {
   opacity: 0.25;
 }

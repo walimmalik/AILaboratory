@@ -54,6 +54,14 @@ export const recordsList = defineContract({
       .string()
       .optional()
       .describe('Matches label or readable name, e.g. "PLT-0003" or "tip box"'),
+    ids: z
+      .array(RecordId)
+      .min(1)
+      .max(500)
+      .optional()
+      .describe(
+        'Only these records, in any status unless status is given (names for a plate of samples)',
+      ),
     limit: z.number().int().min(1).max(200).optional(),
     before: z.iso
       .datetime()

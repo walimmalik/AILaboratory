@@ -161,7 +161,14 @@ describe('finding records', () => {
     // Search text is literal: % and _ are not wildcards.
     expect(await list({ search: '%_' })).toEqual([pipette.name]);
     expect(await list({ kind: 'plasmid' })).toEqual([]);
+    // By ID, archived ones too: naming what a plate's wells hold.
+    expect((await list({ ids: [rack.id, tipBox.id], limit: 1 })).sort()).toEqual(
+      [rack.name, tipBox.name].sort(),
+    );
     expect((await refused(registry.execute(person, 'records.list', { limit: 0 }))).code).toBe(
+      'invalid_input',
+    );
+    expect((await refused(registry.execute(person, 'records.list', { ids: ['nope'] }))).code).toBe(
       'invalid_input',
     );
   });

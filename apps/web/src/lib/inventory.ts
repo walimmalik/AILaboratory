@@ -220,23 +220,79 @@ export function wellRanges(wells: readonly string[]): string {
   return blocks.join(', ');
 }
 
+/** How many lines the contents key shows before folding the rest. */
+export const KEY_LINES = 8;
+
 /** Wells that hold the same things at the same strengths, largest group first. */
 export interface ContentGroup {
   key: string;
   wells: string[];
+  /** What every well in the group holds, at the same strength. */
   components: WellState['components'];
+  /**
+   * On a library plate: each well also holds its own compound or sample, one not shared with the
+   * rest of the group (1536 compounds are one line, not 1536).
+   */
+  varying?: {
+    /** How many such components each well holds. */
+    each: number;
+    noun: 'sample' | 'reagent';
+    /** Their strength, when they all share one ("10 mM"). */
+    concentration?: Quantity;
+  };
 }
 
+type Component = WellState['components'][number];
+
+const sorted = (components: readonly Component[]) =>
+  [...components].sort((a, b) => a.source.localeCompare(b.source));
+
+/**
+ * Groups wells by what they hold. Each distinct mix is a group, unless that makes more lines than
+ * the key shows: then a component found in only a few wells counts as "a different one in each
+ * well", so a library plate reads as its compounds in DMSO plus its control wells.
+ */
 export function contentGroups(
   wells: readonly { well: string; state: WellState }[],
 ): ContentGroup[] {
-  const groups = new Map<string, ContentGroup>();
+  const exact = groupBy(wells, (state) => ({ shared: sorted(state.components), varying: [] }));
+  if (exact.length <= KEY_LINES) return exact;
+  // Rare: in fewer than 2% of the filled wells, and in no more than a dilution series' worth.
+  const wellsWith = new Map<string, number>();
+  for (const { state } of wells)
+    for (const source of new Set(state.components.map((c) => c.source)))
+      wellsWith.set(source, (wellsWith.get(source) ?? 0) + 1);
+  const rare = (c: Component) => (wellsWith.get(c.source) ?? 0) < Math.max(2, wells.length * 0.02);
+  return groupBy(wells, (state) => ({
+    shared: sorted(state.components.filter((c) => !rare(c))),
+    varying: state.components.filter(rare),
+  }));
+}
+
+function groupBy(
+  wells: readonly { well: string; state: WellState }[],
+  split: (state: WellState) => { shared: Component[]; varying: Component[] },
+): ContentGroup[] {
+  const groups = new Map<string, ContentGroup & { strengths: Set<string> }>();
   for (const { well, state } of wells) {
-    const components = [...state.components].sort((a, b) => a.source.localeCompare(b.source));
-    const key = JSON.stringify(components);
-    const group = groups.get(key) ?? { key, wells: [], components };
+    const { shared, varying } = split(state);
+    const noun = varying.every((c) => c.source.startsWith('smp_')) ? 'sample' : 'reagent';
+    const key = JSON.stringify([shared, varying.length, varying.length ? noun : '']);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, wells: [], components: shared, strengths: new Set() };
+      if (varying.length) group.varying = { each: varying.length, noun };
+      groups.set(key, group);
+    }
     group.wells.push(well);
-    groups.set(key, group);
+    for (const c of varying) group.strengths.add(JSON.stringify(c.concentration ?? null));
   }
-  return [...groups.values()].sort((a, b) => b.wells.length - a.wells.length);
+  return [...groups.values()]
+    .map(({ strengths, ...group }) => {
+      const [only] = [...strengths];
+      if (group.varying && strengths.size === 1 && only !== 'null')
+        group.varying.concentration = JSON.parse(only as string) as Quantity;
+      return group;
+    })
+    .sort((a, b) => b.wells.length - a.wells.length);
 }

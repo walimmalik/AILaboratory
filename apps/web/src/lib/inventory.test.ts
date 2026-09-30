@@ -137,4 +137,41 @@ describe('plate contents', () => {
     ]);
     expect(groups.map((g) => g.wells)).toEqual([['A2', 'A3'], ['A1']]);
   });
+
+  it('reads a library plate as its compounds in DMSO, not one line per compound', () => {
+    const dmso = { source: 'lot_dmso', concentration: { value: '100', unit: '%v/v' } };
+    const stauro = { source: 'lot_stauro', concentration: { value: '1', unit: 'mM' } };
+    const rows = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+      .split('')
+      .concat(['AA', 'AB', 'AC', 'AD', 'AE', 'AF']);
+    const wells = rows.flatMap((row) =>
+      Array.from({ length: 48 }, (_, c) => {
+        const well = `${row}${c + 1}`;
+        const components =
+          c < 2
+            ? [dmso]
+            : c >= 46
+              ? [dmso, stauro]
+              : [dmso, { source: `smp_${well}`, concentration: { value: '10', unit: 'mM' } }];
+        return { well, state: { volume: uL('5'), components } };
+      }),
+    );
+    const groups = contentGroups(wells);
+    expect(groups).toHaveLength(3);
+    expect(groups[0]).toMatchObject({
+      components: [dmso],
+      varying: { each: 1, noun: 'sample', concentration: { value: '10', unit: 'mM' } },
+    });
+    expect(groups[0]?.wells).toHaveLength(1408);
+    expect(wellRanges(groups[0]?.wells ?? [])).toBe('A3:AF46');
+    expect(groups.slice(1).map((g) => g.components)).toEqual([[dmso], [dmso, stauro]]);
+  });
+
+  it('keeps each mix its own line while they fit in the key', () => {
+    const wells = Array.from({ length: 6 }, (_, i) => ({
+      well: `A${i + 1}`,
+      state: { volume: uL('5'), components: [{ source: `smp_${i}` }] },
+    }));
+    expect(contentGroups(wells).every((g) => g.varying === undefined)).toBe(true);
+  });
 });

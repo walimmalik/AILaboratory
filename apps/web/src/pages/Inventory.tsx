@@ -11,6 +11,7 @@ import {
   type LocationAttributes,
   type Quantity,
   type RecordEnvelope,
+  recordsList,
   type SampleAttributes,
   type WellState,
 } from '@ailab/schema';
@@ -21,10 +22,12 @@ import { api } from '../api.ts';
 import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
   atWords,
+  type ContentGroup,
   contentGroups,
   fullestWell,
   gridOf,
   heatLevel,
+  KEY_LINES,
   pathWords,
   placeWords,
   ruleLimit,
@@ -35,7 +38,7 @@ import {
   wellRanges,
 } from '../lib/inventory.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
-import { recordQuery, recordsQuery } from '../queries.ts';
+import { recordsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { Head, useLabels } from './Instruments.tsx';
 import { RecordList } from './Records.tsx';
@@ -335,10 +338,22 @@ function BoxContents({ record }: { record: RecordEnvelope }) {
   );
 }
 
+/** Names of what the wells hold, fetched 500 at a time (a 1536-well library plate is 4 reads). */
 function useSourceLabels(wells: { state: WellState }[]) {
-  const ids = [...new Set(wells.flatMap((w) => w.state.components.map((c) => c.source)))];
-  const records = useQueries({ queries: ids.map((id) => ({ ...recordQuery(id), retry: false })) });
-  return new Map(ids.map((id, i) => [id, records[i]?.data?.label ?? id]));
+  const ids = [...new Set(wells.flatMap((w) => w.state.components.map((c) => c.source)))].sort();
+  const chunks = Array.from({ length: Math.ceil(ids.length / 500) }, (_, i) =>
+    ids.slice(i * 500, i * 500 + 500),
+  );
+  const results = useQueries({
+    queries: chunks.map((chunk) => ({
+      queryKey: ['records', 'ids', chunk],
+      queryFn: () => api.run(recordsList, { ids: chunk }),
+    })),
+  });
+  const labels = new Map(ids.map((id) => [id, id]));
+  for (const r of results)
+    for (const record of r.data?.records ?? []) labels.set(record.id, record.label);
+  return labels;
 }
 
 function WellsBlock({
@@ -372,6 +387,20 @@ function WellsBlock({
           `${labels.get(c.source)}${c.concentration ? ` ${formatQuantity(c.concentration)}` : ''}`,
       )
       .join(' + ') || 'nothing named';
+  const groupWords = (g: ContentGroup) => {
+    const v = g.varying;
+    const own = v
+      ? `${v.each === 1 ? 'a different' : v.each} ${v.noun}${v.each === 1 ? '' : 's'} in each well${v.concentration ? ` at ${formatQuantity(v.concentration)}` : ''}`
+      : undefined;
+    return [own, g.components.length > 0 ? contentWords(g.components) : undefined]
+      .filter(Boolean)
+      .join(' + ');
+  };
+  // Past six groups the colours would repeat, so the smaller ones share one quiet shade.
+  const colour = (group: number) => (group < 6 ? `data-${group + 1}` : 'data-rest');
+  const [allLines, setAllLines] = useState(false);
+  const shown = allLines || groups.length <= KEY_LINES ? groups : groups.slice(0, KEY_LINES - 1);
+  const folded = groups.slice(shown.length);
   const describe = (well: string) => {
     const s = byWell.get(well);
     return s ? `${well}: ${volumeText(s)}, ${contentWords(s.components)}` : `${well}: empty`;
@@ -417,7 +446,7 @@ function WellsBlock({
       <div className="body">
         {grid && wells.length > 0 && (
           <ul className="contents-key" aria-label="What the wells hold">
-            {groups.map((g, i) => (
+            {shown.map((g, i) => (
               <li key={g.key}>
                 <button
                   type="button"
@@ -425,15 +454,27 @@ function WellsBlock({
                   title="Show only these wells"
                   onClick={() => setHighlight(highlight === i ? undefined : i)}
                 >
-                  <i className={`swatch data-${(i % 6) + 1}`} aria-hidden="true" />
+                  <i className={`swatch ${colour(i)}`} aria-hidden="true" />
                   <span className="num">
                     {g.wells.length} {g.wells.length === 1 ? 'well' : 'wells'}
                   </span>
-                  <span>{contentWords(g.components)}</span>
+                  <span>{groupWords(g)}</span>
                   <span className="mono muted">{wellRanges(g.wells)}</span>
                 </button>
               </li>
             ))}
+            {folded.length > 0 && (
+              <li>
+                <button type="button" className="more" onClick={() => setAllLines(true)}>
+                  <i className="swatch data-rest" aria-hidden="true" />
+                  <span className="num">
+                    {folded.reduce((n, g) => n + g.wells.length, 0)} wells
+                  </span>
+                  <span className="muted">{folded.length} more mixes: show them</span>
+                  <span />
+                </button>
+              </li>
+            )}
           </ul>
         )}
         {grid && (
@@ -527,7 +568,7 @@ function WellsBlock({
                         shade === 'contents'
                           ? group === undefined
                             ? 'heat-0'
-                            : `data-${(group % 6) + 1}`
+                            : colour(group)
                           : `heat-${heatLevel(s, fullest)}`;
                       return (
                         <button

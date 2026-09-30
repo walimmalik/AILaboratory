@@ -51,6 +51,8 @@ export interface ListRecordsInput {
   status?: RecordStatus | undefined;
   /** Matches label or readable name, case-insensitively. */
   search?: string | undefined;
+  /** Only these records, in any status unless `status` is given; all of them, whatever `limit`. */
+  ids?: readonly string[] | undefined;
   limit?: number | undefined;
   /** Only records changed before this time (for paging). */
   before?: string | undefined;
@@ -150,7 +152,11 @@ export class RecordService {
 
   /** Records in the lab, most recently changed first. Archived records are left out unless asked for. */
   async list(ctx: RecordContext, input: ListRecordsInput = {}): Promise<RecordEnvelope[]> {
-    const statuses = input.status ? [input.status] : (['draft', 'active'] as const);
+    const statuses = input.status
+      ? [input.status]
+      : input.ids
+        ? (['draft', 'active', 'archived'] as const)
+        : (['draft', 'active'] as const);
     const search = input.search?.trim();
     const rows = await this.db
       .select()
@@ -159,6 +165,7 @@ export class RecordService {
         and(
           eq(records.labId, ctx.labId),
           input.kind ? eq(records.kind, input.kind) : undefined,
+          input.ids ? inArray(records.id, [...input.ids]) : undefined,
           inArray(records.status, [...statuses]),
           search
             ? or(
@@ -170,7 +177,7 @@ export class RecordService {
         ),
       )
       .orderBy(desc(records.updatedAt), desc(records.id))
-      .limit(input.limit ?? 50);
+      .limit(input.ids ? input.ids.length : (input.limit ?? 50));
     return rows.map(toEnvelope);
   }
 
