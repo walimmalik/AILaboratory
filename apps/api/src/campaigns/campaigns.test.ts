@@ -322,26 +322,22 @@ describe('experiment stages and runs', () => {
     });
     expect(planned.attributes).toMatchObject({ stage: 'planned' });
 
-    const day1 = await run(person, 'records.create', {
-      kind: 'run',
+    const day1 = await run(person, 'runs.start', {
+      experiment: planned.id,
       label: 'Day 1',
-      status: 'active',
-      attributes: {
-        experiment: { id: planned.id, version: confirmed.version },
-        status: 'scheduled',
-        date: '2026-10-01',
-      },
+      date: '2026-10-01',
     });
     expect(day1.name).toBe('RUN-0001');
+    expect(day1.attributes).toMatchObject({
+      experiment: { id: planned.id, version: planned.version },
+    });
     await expect(
       registry.execute(person, 'records.create', {
         kind: 'run',
         label: 'Day 0',
         attributes: { experiment: { id: planned.id, version: 1 }, status: 'scheduled' },
       }),
-    ).rejects.toMatchObject({
-      message: expect.stringContaining('a run follows a confirmed experiment design'),
-    });
+    ).rejects.toMatchObject({ message: expect.stringContaining('created with runs.start') });
 
     const bySop = await run<{
       experiments: { name: string; how: string }[];
@@ -621,5 +617,219 @@ describe('binding the protocol (013b)', () => {
       stage: 'planned',
     });
     expect(planned.attributes).toMatchObject({ stage: 'planned' });
+  });
+});
+
+describe('recording runs (013c)', () => {
+  async function plannedExperiment() {
+    const campaign = await activeCampaign();
+    const sop = await confirm(
+      await run(agent, 'sops.draft', {
+        ...coating,
+        steps: [
+          { ...coating.steps[0], title: 'Coat' },
+          { id: 'wash', action: 'wash', title: 'Wash', text: 'Wash the plate.', repeat: 3 },
+        ],
+      }),
+    );
+    const experiment = await confirm(
+      await run(agent, 'experiments.draft', {
+        label: 'Stimulus panel',
+        campaign: campaign.id,
+        question: 'Which stimuli raise IL-6?',
+        protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
+      }),
+    );
+    return run(person, 'experiments.set_stage', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      stage: 'planned',
+    });
+  }
+
+  it('starts a run as a checklist of planned steps and records ticks, changes, skips, data and the finish', async () => {
+    const experiment = await plannedExperiment();
+    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    expect(started.status).toBe('active');
+    expect(started.attributes).toMatchObject({
+      status: 'in_progress',
+      startedBy: person.actor,
+      steps: [
+        {
+          part: 'coating',
+          step: 'coat',
+          title: 'Coat',
+          planned: [{ name: 'volume', value: { value: '100', unit: 'uL' } }],
+          status: 'pending',
+        },
+        { step: 'wash', planned: [{ name: 'times', value: '3' }], status: 'pending' },
+      ],
+    });
+    const running = await run(person, 'records.get', { id: experiment.id });
+    expect(running.attributes).toMatchObject({ stage: 'running' });
+
+    await expect(
+      registry.execute(person, 'runs.finish', {
+        id: started.id,
+        expectedVersion: started.version,
+        status: 'done',
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('2 steps are not ticked') });
+    await expect(
+      registry.execute(person, 'runs.record_step', {
+        id: started.id,
+        expectedVersion: started.version,
+        part: 'coating',
+        step: 'coat',
+        changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      registry.execute(person, 'runs.record_step', {
+        id: started.id,
+        expectedVersion: started.version,
+        part: 'coating',
+        step: 'block',
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('has no step block') });
+
+    // An agent records into a run a person started directly.
+    const changed = await registry.execute(agent, 'runs.record_step', {
+      id: started.id,
+      expectedVersion: started.version,
+      part: 'coating',
+      step: 'coat',
+      changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      why: 'Coating solution ran short',
+    });
+    if (changed.status !== 'done') throw new Error(`record_step was ${changed.status}`);
+    const coated = changed.output as RecordEnvelope;
+    expect(coated.attributes).toMatchObject({
+      steps: [
+        {
+          status: 'done',
+          by: agent.actor,
+          actuals: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+          deviation: { what: 'volume 90 µL (planned 100 µL)', why: 'Coating solution ran short' },
+        },
+        { status: 'pending' },
+      ],
+    });
+    const skipped = await run(person, 'runs.record_step', {
+      id: coated.id,
+      expectedVersion: coated.version,
+      part: 'coating',
+      step: 'wash',
+      skipped: true,
+      why: 'Washer down',
+      impact: 'Higher background',
+    });
+    expect((skipped.attributes as { steps: unknown[] }).steps[1]).toMatchObject({
+      status: 'skipped',
+      deviation: { what: 'Skipped Wash', why: 'Washer down', impact: 'Higher background' },
+    });
+    await expect(
+      registry.execute(person, 'runs.done_as_planned', {
+        id: skipped.id,
+        expectedVersion: skipped.version,
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('already ticked') });
+
+    const deviated = await run(person, 'runs.record_deviation', {
+      id: skipped.id,
+      expectedVersion: skipped.version,
+      what: 'Plate left on the bench 40 min',
+      why: 'Fire drill',
+    });
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'reads.csv',
+      mediaType: 'text/csv',
+      text: 'well,od450\nA1,0.12\n',
+    });
+    await expect(
+      registry.execute(person, 'runs.attach_data', {
+        id: deviated.id,
+        expectedVersion: deviated.version,
+        file: file.id,
+        part: 'coating',
+      }),
+    ).rejects.toMatchObject({ message: 'Give both the part and the step' });
+    const attached = await run(person, 'runs.attach_data', {
+      id: deviated.id,
+      expectedVersion: deviated.version,
+      file: file.id,
+      part: 'coating',
+      step: 'coat',
+      note: 'Plate reader export',
+    });
+    expect(attached.attributes).toMatchObject({
+      deviations: [{ what: 'Plate left on the bench 40 min', by: person.actor }],
+      data: [{ file: file.id, part: 'coating', step: 'coat' }],
+    });
+    const links = await run<{ links: { toId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      { id: attached.id, direction: 'from' },
+    );
+    expect(links.links).toEqual(
+      expect.arrayContaining([expect.objectContaining({ toId: file.id, relation: 'data' })]),
+    );
+
+    await expect(
+      registry.execute(otherLab, 'runs.finish', {
+        id: attached.id,
+        expectedVersion: attached.version,
+        status: 'done',
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    const finished = await run(person, 'runs.finish', {
+      id: attached.id,
+      expectedVersion: attached.version,
+      status: 'done',
+      note: 'Reads look fine',
+    });
+    expect(finished.attributes).toMatchObject({ status: 'done', notes: 'Reads look fine' });
+    await expect(
+      registry.execute(person, 'runs.record_deviation', {
+        id: finished.id,
+        expectedVersion: finished.version,
+        what: 'Late note',
+        why: 'Forgot',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+  });
+
+  it('ticks the rest as planned; an agent start is a proposal; only planned experiments start', async () => {
+    const campaign = await activeCampaign();
+    const draft = await run(agent, 'experiments.draft', {
+      label: 'Unplanned',
+      campaign: campaign.id,
+      question: 'Does it work?',
+    });
+    await expect(
+      registry.execute(person, 'runs.start', { experiment: draft.id }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+
+    const experiment = await plannedExperiment();
+    const proposal = await registry.execute(agent, 'runs.start', { experiment: experiment.id });
+    expect(proposal.status).toBe('proposed');
+    await expect(
+      registry.execute(otherLab, 'runs.start', { experiment: experiment.id }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    expect((done.attributes as { steps: { status: string }[] }).steps.map((s) => s.status)).toEqual(
+      ['done', 'done'],
+    );
+    const finished = await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    expect(finished.attributes).toMatchObject({ status: 'done' });
   });
 });

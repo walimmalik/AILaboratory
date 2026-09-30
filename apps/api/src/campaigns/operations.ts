@@ -38,7 +38,7 @@ const NEXT: Record<ExperimentStage, ExperimentStage[]> = {
 const STAGE_WORDS: Record<string, string> = { on_hold: 'on hold' };
 const words = (stage: string) => STAGE_WORDS[stage] ?? stage;
 
-async function recordOf(
+export async function recordOf(
   service: RecordService,
   ctx: RecordContext,
   id: string,
@@ -56,7 +56,7 @@ async function recordOf(
 type Calculated = z.infer<typeof experimentsCalculate.output>;
 
 /** Each protocol part worked out at its pinned SOP version with the pinned bindings (013b). */
-async function calculateExperiment(
+export async function calculateExperiment(
   deps: OperationDeps,
   ctx: RecordContext,
   record: RecordEnvelope,
@@ -229,7 +229,12 @@ export const campaignOperations = [
     run: async (ctx, input, deps) => {
       const service = new RecordService(deps.db, deps.kinds);
       const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
-      return calculateExperiment(deps, ctx, record);
+      if (input.version === undefined) return calculateExperiment(deps, ctx, record);
+      const at = (await service.history(ctx, record.id)).find((v) => v.version === input.version);
+      if (!at) {
+        throw new OperationError('invalid_input', `${record.name} has no version ${input.version}`);
+      }
+      return calculateExperiment(deps, ctx, at.snapshot);
     },
   }),
   implement(experimentsAdoptVersions, {

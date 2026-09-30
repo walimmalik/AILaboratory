@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { UserId } from './actor.ts';
+import { Actor, UserId } from './actor.ts';
 import { pinOf } from './design.ts';
+import { FileId } from './files.ts';
 import { RecordId, recordIdOf } from './ids.ts';
+import { ContainerId } from './inventory.ts';
 import { DocumentId } from './library.ts';
 import { DecimalString, Quantity } from './quantity.ts';
 import { SopId, SopName } from './sops.ts';
@@ -197,12 +199,65 @@ export type ExperimentAttributes = z.infer<typeof ExperimentAttributes>;
 export const RunStatus = z.enum(['scheduled', 'in_progress', 'done', 'failed', 'aborted']);
 export type RunStatus = z.infer<typeof RunStatus>;
 
-/** One execution of an experiment's confirmed design (E2); step actuals come with 013c. */
+/** A planned or actual value of a step parameter: a quantity, a number or words. */
+export const RunValue = z.union([Quantity, DecimalString, z.string().min(1)]);
+export type RunValue = z.infer<typeof RunValue>;
+
+/** Something that went differently from the plan (E7), with why. */
+export const Deviation = z.strictObject({
+  what: z.string().min(1).describe('What was different, e.g. "incubated 75 min, not 60"'),
+  why: z.string().min(1),
+  impact: z.string().min(1).optional().describe('What it may change in the results'),
+  at: z.iso.datetime(),
+  by: Actor,
+});
+export type Deviation = z.infer<typeof Deviation>;
+
+/**
+ * One step of the pinned SOPs as a line of the run's checklist (E7). Ticking it records the planned
+ * values as done; a value typed in because it differed is an actual, and makes a deviation.
+ */
+export const RunStep = z.strictObject({
+  part: LocalName.describe('The protocol part it belongs to'),
+  step: z.string().min(1).describe('The SOP step id'),
+  title: z.string().min(1),
+  planned: z.array(z.strictObject({ name: z.string().min(1), value: RunValue })),
+  status: z.enum(['pending', 'done', 'skipped']),
+  at: z.iso.datetime().optional().describe('When it was ticked'),
+  by: Actor.optional(),
+  actuals: z
+    .array(z.strictObject({ name: z.string().min(1), value: RunValue }))
+    .optional()
+    .describe('Only values that differed from the plan'),
+  deviation: Deviation.omit({ at: true, by: true }).optional(),
+});
+export type RunStep = z.infer<typeof RunStep>;
+
+/** One execution of an experiment's confirmed design (E2), recorded as a checklist (E7). */
 export const RunAttributes = z.strictObject({
   experiment: pinOf(ExperimentId).describe('The experiment and the design version it runs'),
   status: RunStatus,
   date: z.iso.date().optional(),
   operator: UserId.optional(),
+  startedAt: z.iso.datetime().optional(),
+  startedBy: Actor.optional().describe(
+    'A run a person started lets agents record into it directly',
+  ),
+  finishedAt: z.iso.datetime().optional(),
+  steps: z.array(RunStep).optional(),
+  deviations: z.array(Deviation).optional().describe('Deviations not tied to one step'),
+  data: z
+    .array(
+      z.strictObject({
+        file: FileId,
+        part: LocalName.optional(),
+        step: z.string().min(1).optional().describe('The read step it came from'),
+        container: ContainerId.optional().describe('The plate it was read from'),
+        note: z.string().min(1).optional(),
+      }),
+    )
+    .optional()
+    .describe('Data files that came out, e.g. reader exports (E9)'),
   notes: z.string().min(1).optional(),
 });
 export type RunAttributes = z.infer<typeof RunAttributes>;

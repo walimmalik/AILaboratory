@@ -308,13 +308,24 @@ export const run = defineKind({
   namePrefix: 'RUN',
   nameWidth: 4,
   attributes: RunSchema,
-  links: (a: RunAttributes) => [{ toId: a.experiment.id, relation: 'runs' }],
+  createdBy: 'runs.start',
+  links: (a: RunAttributes) => [
+    { toId: a.experiment.id, relation: 'runs' },
+    ...[...new Set((a.data ?? []).map((d) => d.file))].map((toId) => ({ toId, relation: 'data' })),
+  ],
   related: async (a, context) => {
     const pin = await checkPin(context, a.experiment, 'experiment', 'an experiment');
     if (pin.invalid) return { invalid: [pin.invalid] };
     if (pin.unconfirmed)
       return { invalid: [`${pin.unconfirmed}; a run follows a confirmed experiment design`] };
-    return {};
+    const invalid: string[] = [];
+    for (const d of a.data ?? []) {
+      if ((await context.get(d.file))?.kind !== 'file')
+        invalid.push(`${d.file} is not a file in this lab`);
+      if (d.container && (await context.get(d.container))?.kind !== 'container')
+        invalid.push(`${d.container} is not a container in this lab`);
+    }
+    return invalid.length ? { invalid } : {};
   },
 });
 

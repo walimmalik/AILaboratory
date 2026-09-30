@@ -23,6 +23,7 @@ import { reviewOperations } from './review-operations.ts';
 export { ActivityBus } from './activity.ts';
 
 import { campaignOperations } from '../campaigns/operations.ts';
+import { runOperations } from '../campaigns/runs.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { OperationError } from './errors.ts';
 
@@ -63,6 +64,7 @@ export function createRegistry(
     ...mentionOperations,
     ...sopOperations,
     ...campaignOperations,
+    ...runOperations,
     ...assistantOperations,
   );
 }
