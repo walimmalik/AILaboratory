@@ -100,7 +100,7 @@ Wali's real instrument list; assays are sandwich ELISA, single-point compound sc
 
 [Plan 007](../plans/007-labware-library.md)
 
-## 008 Instruments (I1 to I9)
+## 008 Instruments (I1 to I15)
 
 | # | Decision |
 | --- | --- |
@@ -113,6 +113,12 @@ Wali's real instrument list; assays are sandwich ELISA, single-point compound sc
 | I7 | Model the lab's own instruments first (see [Registries](registries.md)) |
 | I8 | Workcells are design documents built from registered instruments and FlexPods (step 008d) |
 | I9 | An instrument is in at most one physically active workcell; others are used standalone |
+| I10 | The workcell is the FlexPod (PlateOrient, two 12-position stackers) with the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin |
+| I11 | A workcell is a list of member instruments mapped to the digital twin; no 2D layout |
+| I12 | Reach and move times come from the twin; nobody enters them |
+| I13 | No docks, and re-teaching is not tracked or enforced |
+| I14 | A workcell may have several robots (modelled in the twin) |
+| I15 | Each member says whether it can also be used by hand |
 
 [Plan 008](../plans/008-instrument-library.md)
 

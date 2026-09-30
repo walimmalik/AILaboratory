@@ -70,7 +70,7 @@ Words as this project uses them. Where a word has a lab meaning and an app meani
 | **View** | A saved exploration over results across runs, experiments or sets, with linked charts (plan 020) |
 | **Walk-away time** | The part of an instrument step that needs no person (plan 019) |
 | **Work unit** | What one workflow graph describes: one assay plate (or tube) and everything that happens to it; a run repeats it (plan 018) |
-| **Workcell** | An arrangement of instruments and pods served by a transport robot (plan 008d) |
+| **Workcell** | A set of instruments run together by robots, such as the FlexPod with the Echo; its layout is the digital twin (plan 008d) |
 | **Workcell segment** | The steps a plate does in a row inside the workcell, planned in detail and run by Cellario (plan 019) |
 | **Workflow** | The steps of one or more SOPs and transfer plans in order, with labware paths, waits and timing windows (plan 018) |
 | **Workflow template** | A reusable workflow for an assay or routine, written against roles and capabilities; applied to a new experiment's documents (plan 018) |

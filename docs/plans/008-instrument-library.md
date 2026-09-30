@@ -1,6 +1,6 @@
 # 008: Instrument library
 
-- Status: round 1 accepted by Wali 2026-09-29 (I1 to I6 as recommended; I7 to I9 answered in the table). Ready to build after 007a. Workcell details (transport robots, docking, reach) get a short question round when 008d starts.
+- Status: round 1 accepted by Wali 2026-09-29 (I1 to I6 as recommended; I7 to I9 answered in the table). 008a to 008c built. Round 2 (workcells, I10 to I15) answered by Wali 2026-09-30; 008d is ready to build.
 - Depends on: 002 (records), 003 (operations), 004c (draft-and-confirm), 007 (labware types, for site compatibility)
 - Feeds: 009 (liquid classes per instrument kind), 015 (twin port binds twins to these records), 016 (transfer binding and worklists), 019 (scheduler resources), 022 (device gateway implements the same capabilities)
 
@@ -77,6 +77,30 @@ Wali chose A, B, A, B, A, A for I1 to I6 on 2026-09-29, the recommended option e
 | I8 | Where do workcells and mobile pods go? | Answered by Wali 2026-09-29: yes, and workcells are configured from the instruments we have | **A, extended.** A workcell is a design document built from registered instruments: which instruments and FlexPods it contains, where each pod docks, the transport robot, and which sites that robot can reach. An agent drafts it, a person confirms it, and the scheduler (019) uses confirmed versions only. It gets its own step, 008d, with a deck-style layout view. |
 | I9 | Can an instrument belong to more than one workcell? | Answered by Wali 2026-09-29: A | **A.** An instrument is in at most one physically active workcell at a time; draft workcells can plan other arrangements from the same instruments. An instrument that is not in the active workcell is available standalone (a person loads it, or it runs on its own), and the scheduler books it that way. Confirming a workcell that pulls in a standalone instrument shows what bookings and methods that affects. |
 
+## Round 2: workcells (008d)
+
+Asked and answered 2026-09-30. Wali's direction: a workcell is just a combination of instruments. We list which instruments are in it and map them to the digital twin; the twin is the physical layout. No 2D layout, coordinates, docks or reach tables in the registry.
+
+### Model (from the answers)
+
+- **Workcell** (`wcl_`, `WCL-0001`), a design document (I8): a name, the **member instruments** (registered instruments, I9), for each member the **device in the twin** it maps to and whether it is **also usable by hand** (I15), and the **twin workcell** it maps to (an echo650-twin workcell definition, by ID, like `twin` on instrument kinds). An agent drafts it, a person confirms it, and the scheduler reads confirmed versions only.
+- **Everything physical lives in the twin:** positions, robots, reach, grips, move times, handoff nests, lids and orientation. The registry stores none of it and never asks a person to type it (I11, I12). Several robots in one workcell with handoffs are allowed (I14); the twin models them.
+- **Checks on confirm:** every member is a registered, confirmed instrument; no member is in another active workcell (I9); every member maps to a device in the twin workcell, and the twin's devices map back to members, once the twin port (015) can list them. Until 015 a twin mapping is recorded as given and marked unchecked.
+- **Moving things:** rearranging the workcell is a change to the twin, and changing who is a member is a new workcell version. Nothing tracks whether positions have been re-taught (I13).
+- **Screens:** the workcell page lists the members in plain words (what each can do, its status, whether it can be used by hand) with a link to the twin's 3D view once 015 lands. No 2D layout view (I10 note, I11).
+- **What the scheduler gets (019):** the members, which of them can also be booked by hand, and the twin workcell ID; workcell segments (019c) are planned by the twin's workcell scheduler, so 019c's in-workcell detail needs the twin port (015).
+
+### Answers
+
+| # | Question | Answer (Wali, 2026-09-30) |
+| --- | --- | --- |
+| I10 | What does the FlexPod setup look like today? | The workcell is the **FlexPod** (with the PlateOrient and two 12-position stackers mounted on it), the **Echo 650, PreciseDrop, LidValet, Mantis, A4S sealer, XPeel and MicroSpin**. The seed is corrected to match: the Spark Cyto and Cytomat leave the workcell, the Mantis joins it, and the A4S and XPeel are added as instrument kinds. |
+| I11 | What is a workcell record? | A list of member instruments mapped to the digital twin (the model above). No 2D layout; the physical layout is the 3D twin from echo650-twin. |
+| I12 | How is robot reach described? | Not entered by people and not stored in the registry: reach and move times come from the digital twin. |
+| I13 | Docking and re-teaching? | No docks, and no enforcing or tracking of re-teaching; that can't be enforced in the lab. |
+| I14 | More than one robot in a workcell? | Yes (modelled in the twin). |
+| I15 | Can a person use a workcell instrument by hand? | Yes, set per member: the scheduler can book an "also usable by hand" member for manual use when the workcell isn't using it. |
+
 ## Defaults I'm assuming (say if any is wrong)
 
 - Storage-only units (a manual -80 freezer, a fridge) are inventory locations in 010, not instruments. An automated store or incubator that the scheduler must plan around (Cytomat, Liconic) is an instrument that exposes storage sites.
@@ -90,4 +114,4 @@ Wali chose A, B, A, B, A, A for I1 to I6 on 2026-09-29, the recommended option e
 - **008a:** kinds, equipment kinds, capability catalog, configuration graph and resolver with ported STAR and Flex validators, seed kinds from echo650-twin.
 - **008b:** registered instruments, configuration history and change operations, status and service log.
 - **008c:** instrument list and page, 2D deck view, agent-drafted configuration changes.
-- **008d:** workcells: agent-drafted workcell designs from registered instruments and FlexPods, docking and robot reach, confirm and history.
+- **008d:** workcells (round 2): the `workcell` design document with members, twin mapping and hand use; `workcells` operations (draft, change members, confirm, get, search, which workcell an instrument is in) with the I9 check; the workcell page listing members; the seed corrected per I10 (A4S and XPeel kinds and instruments, FlexPod stackers, Mantis in, Spark Cyto and Cytomat out). One PR, or two if the seed correction is split out.

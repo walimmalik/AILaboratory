@@ -27,7 +27,7 @@ The four registries hold what the lab has: labware, instruments, reagents and ph
 - Resolving a configuration gives the sites where labware can sit, the claims, the capabilities with their limits, and validation issues. Capabilities come from the resolved instrument, not the model name.
 - **Capability contracts** (transfer, dispense, move labware, seal, peel, read absorbance, fluorescence or luminescence, incubate, shake, centrifuge, heat or cool, wash, image, store, delid, rotate, qPCR…) are code; limits are data.
 - **Manual stations** (bench, biosafety cabinet, hand multichannel, manual sealer) are instrument kinds a person operates, so manual ELISA steps can be scheduled.
-- **Workcells** (008d) are design documents built from registered instruments and FlexPods. An instrument is in at most one physically active workcell; others are used standalone.
+- **Workcells** (008d) are design documents listing member instruments, each mapped to a device in the digital twin, which holds the physical layout, robots and reach. An instrument is in at most one physically active workcell; others are used standalone. Each member says whether it can also be used by hand.
 - Storage-only units (a manual freezer) are inventory locations; automated stores (Cytomat) are instruments with storage sites.
 
 **The lab's instruments** (the seed models these first): Opentrons Flex; Echo 650; Hamilton STAR (8 channels, 96 head, CO-RE gripper) and Vantage (8 channels, 96 head, track and CO-RE grippers); Formulatrix Mantis; Dispendix PreciseDrop II; Tecan Spark Cyto; BlueCatBio washer; Analytik Jena CyBio FeliX (250 and 1000 µL heads); qTOWER3 auto 96; Bio-Rad PTC Tempo (2 x 96, 1 x 384); HighRes FlexPod, MicroSpin, LidValet and PlateOrient; Thermo Cytomat 10 C.
