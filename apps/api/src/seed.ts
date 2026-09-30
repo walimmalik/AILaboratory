@@ -9,11 +9,12 @@ import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { reagentKinds } from './reagents/kinds.ts';
+import { loadSeedReagents, readSeedReagents } from './reagents/seed.ts';
 import { KindRegistry } from './records/kinds.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
- * types, then instrument and equipment kinds. Runs as the agent "Seed loader" on behalf of a user,
+ * types, instrument and equipment kinds and instruments, then reagents (lots as proposals). Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
  * nobody else has changed their wells (confirmed types as a proposal).
@@ -96,5 +97,21 @@ console.log(
   `Instruments: ${instruments.registered.length} registered, ${instruments.registeredBefore.length} already there.`,
 );
 for (const line of instruments.registered) console.log(`  + ${line}`);
+
+const reagents = await loadSeedReagents(
+  registry,
+  ctx,
+  readSeedReagents(await seedFile('reagent-library.yaml')),
+);
+console.log(
+  `Liquid types: ${reagents.liquidTypes.created.length} created, ${reagents.liquidTypes.existing.length} already there.`,
+);
+console.log(
+  `Products: ${reagents.products.created.length} drafted, ${reagents.products.existing.length} already there.`,
+);
+for (const line of reagents.products.created) console.log(`  + ${line}`);
+console.log(
+  `Lots: ${reagents.lots.proposed.length} proposed for review, ${reagents.lots.existing.length} already recorded or waiting.`,
+);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
