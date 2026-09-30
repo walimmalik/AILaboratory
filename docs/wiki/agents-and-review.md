@@ -64,6 +64,10 @@ The **Review** page lists everything waiting for a person, grouped by kind: draf
 - **AI review loop (012-G11).** Before a person sees a digitized SOP, a reviewer model checks it against the source. It fixes only what the source settles, each fix a tracked change with a reason and a passage, and asks an open question where the source is ambiguous. Two rounds by default. The review never confirms anything.
 - **Downstream changes (P6, plans 014 to 017).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
 
-## Lab memory (plan 005, not started)
+## Lab memory (plan 005, locked)
 
-Agents will read the lab's conventions, preferences, instrument quirks and lessons through MCP and a context bundle for the current page. They may propose new memories; a person confirms. Memories derived from data link to their evidence. Quirks appear beside results (for example next to a chosen liquid class); they never silently change them.
+- **What it holds:** conventions, preferences, quirks, lessons and facts that no registry has a field for. A memory that implies a typed value (a handling rule, a timing window) proposes it on the record, which stays the one place code reads.
+- **Strength:** a rule is followed, or a design breaking it shows a readiness warning accepted with a reason; a default fills a choice no confirmed record decides, in normal ink with its source; a note only informs. A memory never silently overrides a confirmed SOP or template: the agent proposes changing it.
+- **Reading:** code picks a bundle of about 15 memories for the page (the record, its selection and its links, plus lab-wide rules); design tools apply memory themselves through `memory.for`; values filled from memory carry `memory` evidence.
+- **Writing:** people add memories directly (active at once); agents ask once in the chat when a person states or corrects something general; detectors in each module report through `memory.observe`, and a candidate is proposed only past its detector's bar, into Review's Lab memory section.
+- **Weight and decay:** evidence for and against, and quiet opportunities (matching runs where it didn't happen), set a memory's weight; a memory losing support becomes "due for a check", never retired automatically.
