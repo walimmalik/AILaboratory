@@ -10,6 +10,7 @@ import { fileStoreFromEnv } from './files/store.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
+import { libraryKinds } from './library/kinds.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { widget } from './records/test-kinds.ts';
@@ -33,6 +34,7 @@ for (const kind of [
   ...entityKinds,
   ...inventoryKinds,
   ...fileKinds,
+  ...libraryKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);

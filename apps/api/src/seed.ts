@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { contextFor } from './auth.ts';
 import { connect } from './db/client.ts';
@@ -14,6 +15,8 @@ import { inventoryKinds } from './inventory/kinds.ts';
 import { loadSeedInventory, readSeedInventory } from './inventory/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
+import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
+import { libraryKinds } from './library/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { loadSeedLiquidClasses, readSeedLiquidClasses } from './reagents/liquid-seed.ts';
@@ -23,7 +26,7 @@ import { KindRegistry } from './records/kinds.ts';
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
  * types, instrument and equipment kinds and instruments, reagents (lots as proposals), liquid
- * classes, entity kinds and entities, then locations, containers, samples and what the containers
+ * classes, entity kinds and entities, library documents (seed/sops/own and docs/sop-library), then locations, containers, samples and what the containers
  * hold (proposals; each waits for what it needs to be approved, so run it again after approving). Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
@@ -81,6 +84,7 @@ for (const kind of [
   ...entityKinds,
   ...inventoryKinds,
   ...fileKinds,
+  ...libraryKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(
@@ -211,5 +215,32 @@ for (const [what, part] of [
   );
   for (const line of part.waiting) console.log(`  … ${line}`);
 }
+const library = {
+  added: [] as string[],
+  existing: [] as string[],
+  missing: [] as { key: string; reason: string }[],
+};
+for (const plan of [
+  await readMarkdownFolder(fileURLToPath(new URL('../../../seed/sops/own/', import.meta.url)), {
+    name: "The lab's own",
+    sharePolicy: 'shareable',
+  }),
+  await readManifestFolder(fileURLToPath(new URL('../../../docs/sop-library/', import.meta.url))),
+]) {
+  const part = await importIntoLibrary(
+    registry,
+    ctx,
+    plan,
+    'Seed lab (plan 006), loaded by plan 011a',
+  );
+  library.added.push(...part.added);
+  library.existing.push(...part.existing);
+  library.missing.push(...part.missing);
+}
+console.log(
+  `Library: ${library.added.length} documents drafted, ${library.existing.length} already there, ${library.missing.length} without their files here (import them from their folder with library:import).`,
+);
+for (const line of library.added) console.log(`  + ${line}`);
+for (const skip of library.missing) console.log(`  missing ${skip.key}: ${skip.reason}`);
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();

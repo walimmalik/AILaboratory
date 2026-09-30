@@ -79,7 +79,7 @@ Recommended option in bold.
 
 ## Proposed split
 
-- **011a:** file store and `fil_` records, document kind, upload and folder import, seed loader.
+- **011a:** file store and `fil_` records, document kind, upload and folder import, seed loader. Built (ADR 0033).
 - **011b:** conversion in the science service, sections and passages, full-text and embeddings, `library.search` and `library.read`.
 - **011c:** mining (mentions, proposed links, bulk confirm), "mentioned in" on record pages.
 - **011d:** library and document screens, agent skill.

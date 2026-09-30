@@ -1,12 +1,12 @@
 # SOPs and the library
 
-Two records, two plans: the **library document** is the source as published (011), and the **digital SOP** is the structured, computable procedure built from it (012). Both locked. 011a has started: the file store is built ([library.md](../architecture/library.md), ADR 0033).
+Two records, two plans: the **library document** is the source as published (011), and the **digital SOP** is the structured, computable procedure built from it (012). Both locked. 011a is built: the file store ([ADR 0033](../decisions/0033-file-store.md)), documents, folder import and the seed loader ([library.md](../architecture/library.md)).
 
 ## SOP and literature library (plan 011)
 
 [Plan 011](../plans/011-sop-library.md). The lab's reading shelf, searchable by people and agents.
 
-- **Documents**: SOPs, vendor manuals, papers, robot protocol code and web pages, one record per source; a new revision is a new version. Each carries its license and a share policy. All Rights Reserved and non-commercial items are lab-private and never go into `seed/` or exports.
+- **Documents** (built, `DOC-0001`): SOPs, vendor manuals, papers, robot protocol code and web pages, one record per source with its files (original, alternates, supplements); a new revision is a new version and keeps the old file. Folders import from a `manifest.json` or Markdown with front matter (`library:import`); the seed loads `seed/sops/own` and `docs/sop-library`. Each carries its license and a share policy. All Rights Reserved and non-commercial items are lab-private and never go into `seed/` or exports.
 - **File store** (built, [ADR 0033](../decisions/0033-file-store.md)): content-addressed (bytes named by sha256) on a Docker volume, behind an interface that can move to S3-compatible storage on the cluster. Each file is a `fil_` record (`FIL-0001`); the same bytes are stored once; `files.upload` and `files.get` for agents, `/api/v1/files/<id>` for people. SDS and CoA files use it too.
 - **Parsing**: Docling in the science service keeps headings, page numbers, reading order and tables, with OCR for scans. It runs locally, so private manuals never leave the machine.
 - **Search**: hybrid Postgres full text plus pgvector over passages; every hit points to its page and heading. Embeddings are local by default; an OpenAI-compatible provider is optional (and sends text off the machine). One model per lab; switching re-embeds.

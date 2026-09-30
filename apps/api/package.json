@@ -13,7 +13,8 @@
     "bootstrap": "tsx --env-file-if-exists=../../.env --conditions=source src/bootstrap.ts",
     "token": "tsx --env-file-if-exists=../../.env --conditions=source src/token.ts",
     "password": "tsx --env-file-if-exists=../../.env --conditions=source src/password.ts",
-    "seed": "tsx --env-file-if-exists=../../.env --conditions=source src/seed.ts"
+    "seed": "tsx --env-file-if-exists=../../.env --conditions=source src/seed.ts",
+    "library:import": "tsx --env-file-if-exists=../../.env --conditions=source src/library-import.ts"
   },
   "dependencies": {
     "@ailab/domain": "workspace:*",
