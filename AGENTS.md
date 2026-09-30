@@ -36,7 +36,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 - Each module owns its tables. Other modules go through operations.
 - Every operation has tests for valid input, invalid input and permission.
 - Every record carries `org_id` and `lab_id`.
-- Small PRs, one plan step each. CI green before review. Every PR also gets a Codex code review and a browser UI QA comment ([.github/codex](.github/codex/README.md)); fix their blocking findings or say why not.
+- Small PRs, one plan step each. CI green before review. Every PR also gets a Codex code review and a browser UI QA comment (`pnpm codex:pr`, see [.github/codex](.github/codex/README.md)); fix their blocking findings or say why not.
 - Seed data lives in `seed/` (from plan 006) so every agent and developer works against the same realistic lab.
 
 ## Layout
@@ -72,6 +72,7 @@ Run from the repo root unless noted.
 | All TypeScript checks | `pnpm check` (lint, typecheck, test) |
 | End-to-end tests (needs a bootstrapped database; see `apps/web/playwright.config.ts`) | `pnpm --filter @ailab/web e2e` |
 | Format | `pnpm format` |
+| Codex review and browser QA of a PR (owner's Codex CLI; `watch` covers every new push) | `pnpm codex:pr run <number>` or `pnpm codex:pr watch` |
 | Python checks | `cd apps/science && uv run ruff check . && uv run ruff format --check . && uv run pytest` |
 
 Development happens on Windows as well as Linux: keep scripts cross-platform (no bash-only npm scripts) and keep line endings LF (`.gitattributes`).
