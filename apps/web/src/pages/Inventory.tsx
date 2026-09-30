@@ -1,0 +1,552 @@
+import { formatQuantity } from '@ailab/domain';
+import {
+  type ContainerAttributes,
+  type EntityAttributes,
+  type EntityKindAttributes,
+  inventoryEffectiveRules,
+  inventoryHistory,
+  inventoryListPlace,
+  inventoryWells,
+  type LocationAttributes,
+  type RecordEnvelope,
+  type SampleAttributes,
+  type WellState,
+} from '@ailab/schema';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { type ReactNode, useState } from 'react';
+import { api } from '../api.ts';
+import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
+import {
+  fullestWell,
+  gridOf,
+  heatLevel,
+  placeWords,
+  ruleLimit,
+  ruleSources,
+  ruleTitle,
+  ruleWells,
+  storageRangeWords,
+  volumeText,
+} from '../lib/inventory.ts';
+import { type KindPage, libraryPages } from '../lib/kinds.ts';
+import { recordQuery, recordsQuery } from '../queries.ts';
+import { useMe } from '../session.ts';
+import { Head, useLabels } from './Instruments.tsx';
+import { RecordList } from './Records.tsx';
+
+const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
+const words = (id: string) => id.replaceAll('_', ' ');
+
+/** Labels of containers and locations together, for "where is it". */
+function usePlaceLabels() {
+  const locations = useLabels('location');
+  const containers = useQuery(recordsQuery({ kind: 'container' })).data ?? [];
+  return new Map([...locations, ...containers.map((c) => [c.id, c.name] as const)]);
+}
+
+/** The lab's containers (plan 010e): plates, tubes, reservoirs and boxes, where they are. */
+export function ContainersPage() {
+  const types = useLabels('labware_type');
+  const places = usePlaceLabels();
+  const of = (r: RecordEnvelope) => r.attributes as Partial<ContainerAttributes>;
+  return (
+    <>
+      <Head
+        page={page('container')}
+        lede="Every plate, tube, reservoir and box in the lab. The name is the barcode. Open one to see what its wells hold, the handling rules it inherits and its history."
+      />
+      <RecordList
+        title="Containers"
+        kind="container"
+        placeholder="Find by barcode or label, e.g. PLT-000001"
+        empty="No containers yet. Ask the assistant to register some, or load the seed lab."
+        columns={[
+          {
+            header: 'Labware',
+            cell: (r) => types.get(of(r).labwareType ?? '') ?? '—',
+          },
+          { header: 'Where', cell: (r) => placeWords(of(r).place, places) },
+          {
+            header: 'State',
+            cell: (r) => (of(r).status ? words(of(r).status as string) : '—'),
+            className: 'muted',
+          },
+        ]}
+      />
+    </>
+  );
+}
+
+/** Batches the lab made: minipreps, PCR products, cultures, cell banks. */
+export function SamplesPage() {
+  const entities = useLabels('entity');
+  const of = (r: RecordEnvelope) => r.attributes as Partial<SampleAttributes>;
+  return (
+    <>
+      <Head
+        page={page('sample')}
+        lede="Batches the lab made of something it keeps: minipreps, PCR products, purified proteins, cultures and cell banks, with their QC."
+      />
+      <RecordList
+        title="Samples"
+        kind="sample"
+        placeholder="Find by name, e.g. miniprep or SMP-0001"
+        empty="No samples yet. Ask the assistant to register a miniprep or a cell bank."
+        columns={[
+          { header: 'Of', cell: (r) => entities.get(of(r).entity ?? '') ?? '—' },
+          { header: 'How', cell: (r) => (of(r).method ? words(of(r).method as string) : '—') },
+          { header: 'Made', cell: (r) => of(r).made ?? '—', className: 'num' },
+        ]}
+      />
+    </>
+  );
+}
+
+/** The things the lab keeps track of: plasmids, cell lines, compounds, antibodies. */
+export function EntitiesPage() {
+  const kinds = useLabels('entity_kind');
+  const of = (r: RecordEnvelope) => r.attributes as Partial<EntityAttributes>;
+  return (
+    <>
+      <Head
+        page={page('entity')}
+        lede="What the lab works with, whatever form it is in: plasmids, cell lines, compounds, antibodies, enzymes. Samples and lots are batches of them."
+      />
+      <RecordList
+        title="Entities"
+        kind="entity"
+        placeholder="Find by name or synonym, e.g. HEK293 or PLS-0001"
+        empty="No entities yet. Ask the assistant to draft one, or load the seed lab."
+        columns={[{ header: 'Kind', cell: (r) => kinds.get(of(r).entityKind ?? '') ?? '—' }]}
+      />
+    </>
+  );
+}
+
+export function EntityKindsPage() {
+  const of = (r: RecordEnvelope) => r.attributes as Partial<EntityKindAttributes>;
+  return (
+    <>
+      <Head
+        page={page('entity_kind')}
+        lede="The kinds of things the lab keeps, each with its fields and the handling rules every one of them follows."
+      />
+      <RecordList
+        title="Entity kinds"
+        kind="entity_kind"
+        placeholder="Find by name, e.g. Plasmid"
+        empty="No entity kinds yet. Load the seed lab, or ask the assistant to draft one."
+        columns={[
+          { header: 'Prefix', cell: (r) => of(r).prefix ?? '—', className: 'mono' },
+          { header: 'Base', cell: (r) => (of(r).base ? words(of(r).base as string) : '—') },
+          { header: 'Fields', cell: (r) => of(r).fields?.length ?? 0, className: 'num' },
+        ]}
+      />
+    </>
+  );
+}
+
+/** The location tree with what is in each place. */
+export function PlacesPage() {
+  const locations = useQuery(recordsQuery({ kind: 'location' })).data ?? [];
+  const [selected, setSelected] = useState<string>();
+  const parentOf = (r: RecordEnvelope) => (r.attributes as Partial<LocationAttributes>).parent;
+  const ids = new Set(locations.map((l) => l.id));
+  const isRoot = (l: RecordEnvelope) => !ids.has(parentOf(l) ?? '');
+  const children = (parent: string | undefined) =>
+    locations
+      .filter((l) => (parent ? parentOf(l) === parent : isRoot(l)))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  const tree = (parent: string | undefined, depth: number): ReactNode[] =>
+    children(parent).flatMap((l) => [
+      <li key={l.id} style={{ paddingInlineStart: `${depth * 1.25}em` }}>
+        <button
+          type="button"
+          className="link-btn"
+          aria-pressed={selected === l.id}
+          onClick={() => setSelected(l.id)}
+        >
+          {l.label}
+        </button>{' '}
+        <span className="muted">{placeKind(l)}</span>
+      </li>,
+      ...tree(l.id, depth + 1),
+    ]);
+  return (
+    <>
+      <Head
+        page={page('location')}
+        lede="Rooms, fridges, freezers, incubators and shelves, and what is in each."
+      />
+      <div className="places">
+        <section className="block">
+          <header>
+            <h2>Places</h2>
+            <span className="state muted num">{locations.length}</span>
+          </header>
+          <div className="body">
+            {locations.length === 0 ? (
+              <p className="empty">
+                No places yet. Load the seed lab or ask the assistant to add rooms.
+              </p>
+            ) : (
+              <ul className="tree">{tree(undefined, 0)}</ul>
+            )}
+          </div>
+        </section>
+        {selected ? (
+          <PlaceContents id={selected} />
+        ) : (
+          <section className="block">
+            <header>
+              <h2>What is there</h2>
+            </header>
+            <div className="body">
+              <p className="empty">Pick a place to see what is in it.</p>
+            </div>
+          </section>
+        )}
+      </div>
+    </>
+  );
+}
+
+function placeKind(r: RecordEnvelope) {
+  const a = r.attributes as Partial<LocationAttributes>;
+  return [a.type ? words(a.type) : undefined, a.setpoint ? formatQuantity(a.setpoint) : undefined]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function PlaceContents({ id }: { id: string }) {
+  const place = useQuery({
+    queryKey: ['inventory', 'place', id],
+    queryFn: () => api.run(inventoryListPlace, { place: id, deep: true }),
+  });
+  const here = place.data;
+  return (
+    <section className="block">
+      <header>
+        <h2>{here?.path.at(-1)?.label ?? 'What is there'}</h2>
+        <span className="state muted num">
+          {here ? `${here.containers.length} containers` : ''}
+        </span>
+      </header>
+      <div className="body">
+        {place.error && <p className="error-text">{place.error.message}</p>}
+        {!here ? (
+          <p className="empty">Loading…</p>
+        ) : here.containers.length === 0 ? (
+          <p className="empty">Nothing is registered here.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Barcode</th>
+                  <th>Label</th>
+                  <th>Where in it</th>
+                </tr>
+              </thead>
+              <tbody>
+                {here.containers.map((c) => (
+                  <tr key={c.container.id}>
+                    <td className="q">
+                      <Link to="/records/$id" params={{ id: c.container.id }}>
+                        {c.container.name}
+                      </Link>
+                    </td>
+                    <td>{c.container.label}</td>
+                    <td className="muted">
+                      {c.path
+                        .slice(here.path.length)
+                        .map((p) => (p.position ? `${p.name} ${p.position}` : p.label))
+                        .join(' › ') || 'here'}
+                      {c.position ? ` ${c.position}` : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** On a container's page: its wells, the rules it inherits, and its ledger. */
+export function ContainerBlocks({ record }: { record: RecordEnvelope }) {
+  const wells = useQuery({
+    queryKey: ['inventory', 'wells', record.id, record.version],
+    queryFn: () => api.run(inventoryWells, { container: record.id }),
+    retry: false,
+  });
+  // Racks, tip racks and lids hold no liquid; a box shows what is in its positions instead.
+  if (wells.error) return <BoxContents record={record} />;
+  if (!wells.data) return null;
+  return (
+    <>
+      <WellsBlock positions={wells.data.positions} wells={wells.data.wells} />
+      <RulesBlock record={record} filled={wells.data.wells.length} />
+      <LedgerBlock record={record} />
+    </>
+  );
+}
+
+function BoxContents({ record }: { record: RecordEnvelope }) {
+  const place = useQuery({
+    queryKey: ['inventory', 'place', record.id],
+    queryFn: () => api.run(inventoryListPlace, { place: record.id }),
+  }).data;
+  if (!place) return null;
+  return (
+    <section className="block" aria-label="In this box">
+      <header>
+        <h2>In this box</h2>
+        <span className="state muted num">{place.containers.length}</span>
+      </header>
+      <div className="body">
+        {place.containers.length === 0 ? (
+          <p className="empty">Empty.</p>
+        ) : (
+          <ul className="plain">
+            {place.containers.map((c) => (
+              <li key={c.container.id}>
+                <span className="mono">{c.position}</span>{' '}
+                <Link to="/records/$id" params={{ id: c.container.id }}>
+                  {c.container.name}
+                </Link>{' '}
+                {c.container.label}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function useSourceLabels(wells: { state: WellState }[]) {
+  const ids = [...new Set(wells.flatMap((w) => w.state.components.map((c) => c.source)))];
+  const records = useQueries({ queries: ids.map((id) => ({ ...recordQuery(id), retry: false })) });
+  return new Map(ids.map((id, i) => [id, records[i]?.data?.label ?? id]));
+}
+
+function WellsBlock({
+  positions,
+  wells,
+}: {
+  positions: string[];
+  wells: { well: string; state: WellState }[];
+}) {
+  const byWell = new Map(wells.map((w) => [w.well, w.state]));
+  const grid = gridOf(positions);
+  const fullest = fullestWell(wells.map((w) => w.state));
+  const labels = useSourceLabels(wells);
+  const [picked, setPicked] = useState<string | undefined>(grid ? undefined : 'A1');
+  const state = picked ? byWell.get(picked) : undefined;
+  const describe = (well: string) => {
+    const s = byWell.get(well);
+    return s
+      ? `${well}: ${volumeText(s)}, ${s.components.map((c) => labels.get(c.source)).join(', ') || 'nothing named'}`
+      : `${well}: empty`;
+  };
+  return (
+    <section className="block" aria-label="Wells">
+      <header>
+        <h2>{grid ? 'Wells' : 'Contents'}</h2>
+        <span className="state muted num">
+          {grid ? `${wells.length} of ${positions.length} filled` : ''}
+        </span>
+      </header>
+      <div className="body">
+        {grid && (
+          <div className="well-grid-wrap">
+            <table className="well-grid" aria-label="Plate map, shaded by volume">
+              <thead>
+                <tr>
+                  <th />
+                  {Array.from({ length: grid.columns }, (_, c) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+                    <th key={c} scope="col">
+                      {c + 1}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grid.rowLabels.map((row) => (
+                  <tr key={row}>
+                    <th scope="row">{row}</th>
+                    {Array.from({ length: grid.columns }, (_, c) => {
+                      const well = `${row}${c + 1}`;
+                      const s = byWell.get(well);
+                      const level = heatLevel(s, fullest);
+                      return (
+                        <td key={well} className="cell">
+                          <button
+                            type="button"
+                            className={`well heat-${level}${s?.assumed ? ' assumed' : ''}`}
+                            aria-pressed={picked === well}
+                            title={describe(well)}
+                            aria-label={describe(well)}
+                            onClick={() => setPicked(well)}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {fullest && (
+              <p className="muted">
+                Shaded by volume, darkest at {formatQuantity(fullest)}. Hatched: volume unknown.
+                Agent ink: estimated.
+              </p>
+            )}
+          </div>
+        )}
+        {picked &&
+          (state ? (
+            <div className="well-detail">
+              <h3>
+                {grid ? `${picked}: ` : ''}
+                {volumeText(state)}
+                {state.assumed && <span className="agent-ink"> (estimated)</span>}
+              </h3>
+              <ul className="plain">
+                {state.components.map((c) => (
+                  <li key={c.source}>
+                    <Link to="/records/$id" params={{ id: c.source }}>
+                      {labels.get(c.source)}
+                    </Link>
+                    {c.concentration
+                      ? ` at ${formatQuantity(c.concentration)}`
+                      : c.amount
+                        ? `, ${formatQuantity(c.amount)}`
+                        : ', concentration not known'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="empty">{grid ? `${picked} is empty.` : 'Empty.'}</p>
+          ))}
+      </div>
+    </section>
+  );
+}
+
+function RulesBlock({ record, filled }: { record: RecordEnvelope; filled: number }) {
+  const effective = useQuery({
+    queryKey: ['inventory', 'rules', record.id, record.version, filled],
+    queryFn: () => api.run(inventoryEffectiveRules, { container: record.id }),
+  }).data;
+  if (!effective || (effective.rules.length === 0 && !effective.storage)) return null;
+  return (
+    <section className="block" aria-label="Handling">
+      <header>
+        <h2>Handling</h2>
+        <span className="state muted">from what it holds</span>
+      </header>
+      <div className="body">
+        <ul className="rules">
+          {effective.storage && (
+            <li>
+              <b>Store at {storageRangeWords(effective.storage.range)}</b>
+              {effective.storage.conflict && (
+                <span className="warn-ink"> {effective.storage.conflict}</span>
+              )}
+              <div className="muted">
+                From {effective.storage.from.map((f) => f.origin.label).join(', ')}
+              </div>
+            </li>
+          )}
+          {effective.rules.map((r) => {
+            const limit = ruleLimit(r.rule);
+            const where = ruleWells(r, filled);
+            return (
+              <li key={`${r.rule.rule}-${r.rule.text}`}>
+                <b>
+                  {ruleTitle[r.rule.rule]}
+                  {limit ? `: ${limit}` : ''}
+                </b>{' '}
+                <span className={r.rule.enforced ? 'chip' : 'chip muted'}>
+                  {r.rule.enforced ? 'scheduler keeps to it' : 'advice'}
+                </span>
+                <div>{r.rule.text}</div>
+                {r.conflict && <div className="warn-ink">{r.conflict}</div>}
+                <div className="muted">
+                  From {ruleSources(r)}
+                  {where ? `, wells ${where}` : ''}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+const eventWords: Record<string, string> = {
+  fill: 'Filled',
+  transfer: 'Transfer',
+  stamp: 'Stamped',
+  consume: 'Used',
+  correct: 'Corrected',
+  discard: 'Discarded',
+};
+
+function LedgerBlock({ record }: { record: RecordEnvelope }) {
+  const me = useMe();
+  const events =
+    useQuery({
+      queryKey: ['inventory', 'history', record.id, record.version],
+      queryFn: async () =>
+        (await api.run(inventoryHistory, { container: record.id, limit: 20 })).events,
+    }).data ?? [];
+  if (events.length === 0) return null;
+  return (
+    <section className="block" aria-label="Ledger">
+      <header>
+        <h2>Ledger</h2>
+        <span className="state muted">latest {events.length}</span>
+      </header>
+      <div className="body">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>What</th>
+                <th>Wells</th>
+                <th>By</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((e) => {
+                const mine = e.lines.filter((l) => l.container === record.id);
+                return (
+                  <tr key={e.id}>
+                    <td className="when">{formatWhen(e.at)}</td>
+                    <td>{eventWords[e.type] ?? e.type}</td>
+                    <td className="num">{mine.length}</td>
+                    <td className={isAgent(e.actor) ? 'agent-ink' : undefined}>
+                      {actorLabel(e.actor, me)}
+                    </td>
+                    <td className="muted">{e.reason ?? ''}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}

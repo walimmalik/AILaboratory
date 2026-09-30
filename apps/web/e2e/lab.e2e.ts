@@ -394,3 +394,80 @@ test('the reagent library shows lots in date and the next expiry, and a product 
     page.getByRole('region', { name: 'Classes by device and liquid type' }),
   ).toBeVisible();
 });
+
+test('a plate shows its wells shaded by volume, the rules it inherits and its ledger, and its place lists it', async ({
+  page,
+}) => {
+  await signIn(page);
+  const stamp = Date.now();
+  const freezer = await asPerson(page, 'locations.create', {
+    label: `Freezer ${stamp}`,
+    type: 'freezer',
+    setpoint: { value: '-20', unit: 'degC' },
+  });
+  const plateType = await asPerson(page, 'records.create', {
+    kind: 'labware_type',
+    label: `96 well plate ${stamp}`,
+    attributes: {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 8, columns: 12 },
+      maxVolume: { value: '300', unit: 'uL' },
+    },
+  });
+  const { containers } = await asPerson(page, 'inventory.register_containers', {
+    labwareType: plateType.id,
+    containers: [{ label: `Glo plate ${stamp}`, place: { location: freezer.id } }],
+  });
+  const plate = containers[0];
+  const { product } = await asPerson(page, 'reagents.draft_product', {
+    label: `Glo reagent ${stamp}`,
+    attributes: {
+      category: 'assay_kit',
+      origin: 'bought',
+      storage: { min: { value: '-30', unit: 'degC' }, max: { value: '-10', unit: 'degC' } },
+      handlingRules: [
+        {
+          rule: 'protect_from_light',
+          text: 'Light-sensitive; keep it dark',
+          source: { from: 'vendor' },
+          enforced: true,
+        },
+      ],
+    },
+  });
+  const lot = await asPerson(page, 'reagents.receive_lot', {
+    product: product.id,
+    lotNumber: 'G-1',
+  });
+  await asPerson(page, 'inventory.fill', {
+    container: plate.id,
+    fills: [
+      { wells: ['A1:A2'], volume: { value: '100', unit: 'uL' }, components: [{ source: lot.id }] },
+      { wells: ['B1'], volume: { value: '25', unit: 'uL' }, components: [{ source: lot.id }] },
+    ],
+    reason: 'Plated the reagent',
+  });
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Containers/ })
+    .click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Containers');
+  await page.getByRole('row', { name: new RegExp(plate.name) }).click();
+  const wells = page.getByRole('region', { name: 'Wells' });
+  await expect(wells).toContainText('3 of 96 filled');
+  await wells.getByRole('button', { name: /^B1: 25 / }).click();
+  await expect(wells).toContainText(`Glo reagent ${stamp}`);
+  const handling = page.getByRole('region', { name: 'Handling' });
+  await expect(handling).toContainText(/Store at .30 °C to .10 °C/);
+  await expect(handling).toContainText('Protect from light');
+  await expect(handling).toContainText('scheduler keeps to it');
+  await expect(page.getByRole('region', { name: 'Ledger' })).toContainText('Plated the reagent');
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Places/ })
+    .click();
+  await page.getByRole('button', { name: `Freezer ${stamp}` }).click();
+  await expect(page.getByRole('row', { name: new RegExp(plate.name) })).toBeVisible();
+});

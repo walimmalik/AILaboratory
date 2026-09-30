@@ -15,6 +15,7 @@ import {
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
+import { ContainerBlocks } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
@@ -147,6 +148,8 @@ export function RecordPage() {
           </div>
         </section>
       )}
+
+      {r.kind === 'container' && <ContainerBlocks record={r} />}
 
       <section className="block">
         <header>

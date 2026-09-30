@@ -17,9 +17,14 @@ export interface KindPage {
     | '/lots'
     | '/liquid-classes'
     | '/liquid-types'
-    | '/vendors';
+    | '/vendors'
+    | '/containers'
+    | '/places'
+    | '/samples'
+    | '/entities'
+    | '/entity-kinds';
   /** The menu group it sits in: one per registry. */
-  group: 'Library' | 'Instruments' | 'Reagents';
+  group: 'Library' | 'Instruments' | 'Reagents' | 'Inventory';
 }
 
 export const libraryPages: KindPage[] = [
@@ -68,13 +73,32 @@ export const libraryPages: KindPage[] = [
     path: '/liquid-types',
     group: 'Reagents',
   },
+  {
+    kind: 'container',
+    title: 'Containers',
+    noun: 'container',
+    path: '/containers',
+    group: 'Inventory',
+  },
+  { kind: 'location', title: 'Places', noun: 'place', path: '/places', group: 'Inventory' },
+  { kind: 'sample', title: 'Samples', noun: 'sample', path: '/samples', group: 'Inventory' },
+  { kind: 'entity', title: 'Entities', noun: 'entity', path: '/entities', group: 'Inventory' },
+  {
+    kind: 'entity_kind',
+    title: 'Entity kinds',
+    noun: 'entity kind',
+    path: '/entity-kinds',
+    group: 'Inventory',
+  },
 ];
 
 /** The menu groups in order, each with its pages. */
-export const libraryGroups = (['Library', 'Instruments', 'Reagents'] as const).map((group) => ({
-  group,
-  pages: libraryPages.filter((p) => p.group === group),
-}));
+export const libraryGroups = (['Library', 'Instruments', 'Reagents', 'Inventory'] as const).map(
+  (group) => ({
+    group,
+    pages: libraryPages.filter((p) => p.group === group),
+  }),
+);
 
 export function kindPage(kind: string): KindPage | undefined {
   return libraryPages.find((p) => p.kind === kind);

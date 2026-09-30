@@ -8,6 +8,13 @@ import {
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
 import { EquipmentPage, InstrumentModelsPage, InstrumentsPage } from './pages/Instruments.tsx';
+import {
+  ContainersPage,
+  EntitiesPage,
+  EntityKindsPage,
+  PlacesPage,
+  SamplesPage,
+} from './pages/Inventory.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
 import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pages/Reagents.tsx';
 import { RecordPage } from './pages/Record.tsx';
@@ -105,6 +112,31 @@ const vendors = createRoute({
   path: '/vendors',
   component: VendorsPage,
 });
+const containers = createRoute({
+  getParentRoute: () => app,
+  path: '/containers',
+  component: ContainersPage,
+});
+const places = createRoute({
+  getParentRoute: () => app,
+  path: '/places',
+  component: PlacesPage,
+});
+const samples = createRoute({
+  getParentRoute: () => app,
+  path: '/samples',
+  component: SamplesPage,
+});
+const entities = createRoute({
+  getParentRoute: () => app,
+  path: '/entities',
+  component: EntitiesPage,
+});
+const entityKinds = createRoute({
+  getParentRoute: () => app,
+  path: '/entity-kinds',
+  component: EntityKindsPage,
+});
 const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
@@ -137,6 +169,11 @@ const routeTree = root.addChildren([
     liquidClasses,
     liquidTypes,
     vendors,
+    containers,
+    places,
+    samples,
+    entities,
+    entityKinds,
     records,
     record,
     wiki,
