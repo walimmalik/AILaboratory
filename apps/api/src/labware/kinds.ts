@@ -1,5 +1,6 @@
 import {
   compare,
+  formatQuantity,
   gridFitProblem,
   LabwareError,
   sbsFootprintProblem,
@@ -264,6 +265,25 @@ export const labwareType = defineKind({
   nameWidth: 4,
   attributes: LabwareTypeAttributes,
   links: (a) => (a.manufacturer ? [{ toId: a.manufacturer, relation: 'made_by' }] : []),
+  // "96 wells, 360 µL, sterile, TC-treated" (ADR 0050).
+  summarize: (a) => {
+    const wells =
+      a.wells?.layout === 'grid'
+        ? a.wells.rows * a.wells.columns
+        : a.wells?.layout === 'explicit'
+          ? a.wells.wells.length
+          : undefined;
+    return [
+      wells === undefined
+        ? a.family.replaceAll('_', ' ')
+        : `${wells} ${wells === 1 ? 'well' : 'wells'}`,
+      a.maxVolume && formatQuantity(a.maxVolume),
+      a.sterile && 'sterile',
+      a.surface,
+    ]
+      .filter(Boolean)
+      .join(', ');
+  },
   sections: [
     {
       id: 'identity',

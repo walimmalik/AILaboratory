@@ -4,9 +4,26 @@ import { RecordId, RecordName } from '../ids.ts';
 import { defineContract, Proposal } from '../operation.ts';
 import { RecordStatus } from '../record.ts';
 
+/**
+ * How urgent an item is (plan 004e R1, ADR 0050): "needs_you" blocks someone (an agent waiting on a
+ * proposed change); "to_confirm" has no deadline (drafts); "fyi" needs nothing (reserved for re-plans
+ * and drift notes). Only "needs_you" counts in the nav.
+ */
+export const ReviewTier = z.enum(['needs_you', 'to_confirm', 'fyi']);
+export type ReviewTier = z.infer<typeof ReviewTier>;
+
+const addressed = {
+  tier: ReviewTier,
+  for: z
+    .string()
+    .optional()
+    .describe('The user the item is for: the person the agent worked for, or who made the draft'),
+};
+
 /** A draft waiting for a person to review and confirm it. */
 export const ReviewDraft = z.object({
   type: z.literal('draft'),
+  ...addressed,
   at: z.iso.datetime().describe('When the draft last changed'),
   record: z.object({
     id: RecordId,
@@ -16,7 +33,15 @@ export const ReviewDraft = z.object({
     status: RecordStatus,
     version: z.number().int().positive(),
     updatedBy: Actor,
+    summary: z.string().optional(),
   }),
+  /** Made by an agent, so a person may discard it from Review. */
+  byAgent: z.boolean(),
+  /**
+   * Nothing in it is a guess, no check fails and no confirmed value changed, so it may be confirmed
+   * with others in one step (R3, `records.confirm_many`).
+   */
+  batchable: z.boolean(),
   /** Titles of the sections still to confirm. */
   sectionsToConfirm: z.array(z.string()),
   /** What stands in the way, in plain words. */
@@ -29,6 +54,7 @@ export const ReviewDraft = z.object({
 /** A proposed change to an active record, waiting for a person to confirm or reject it. */
 export const ReviewChange = z.object({
   type: z.literal('change'),
+  ...addressed,
   at: z.iso.datetime().describe('When the change was proposed'),
   proposal: Proposal,
 });
@@ -44,6 +70,7 @@ export const reviewList = defineContract({
   effect: 'read',
   input: z.strictObject({
     kind: z.string().optional().describe('Only drafts of this kind; proposed changes are left out'),
+    mine: z.boolean().optional().describe('Only items addressed to you'),
   }),
   output: z.object({
     items: z
@@ -55,6 +82,11 @@ export const reviewList = defineContract({
       .object({
         total: z.number().int().nonnegative().describe('Everything waiting, drafts and changes'),
         changes: z.number().int().nonnegative(),
+        needsYou: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe('Items addressed to you that block something: the one number the nav shows'),
         drafts: z
           .record(z.string(), z.number().int().positive())
           .describe('Drafts waiting per kind, all of them, not only those listed'),

@@ -2170,3 +2170,15 @@ p.item-changes {
   margin: 4px 0 0;
   font-size: 12px;
 }
+
+/* Review v2 (plan 004e): one dense row per draft, actions at the end. */
+table.dense td.row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+table.dense td.row-actions > * + * {
+  margin-left: 8px;
+}
+.actions.batch {
+  margin-bottom: 8px;
+}

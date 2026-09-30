@@ -5,6 +5,7 @@ import type {
   Readiness,
   ReadinessItem,
   ReadinessSection,
+  ReadinessSummary,
   RecordEnvelope,
 } from '@ailab/schema';
 
@@ -211,4 +212,19 @@ function notApplicable(kind: KindRules, attributes: Record<string, unknown>): st
   } catch {
     return [];
   }
+}
+
+/** Readiness in one line (ADR 0050): what Review, lists and batch confirm read. */
+export function summarizeReadiness(state: Readiness): ReadinessSummary {
+  const failing = state.checks.filter((c) => !c.passed);
+  return {
+    ready: state.ready,
+    blockers: failing.filter((c) => c.severity === 'blocker').length,
+    warnings: failing.filter((c) => c.severity === 'warning').length,
+    assumed: state.assumed.length,
+    sectionsLeft: state.sections.filter((s) => s.state === 'needs_review').map((s) => s.title),
+    changed: state.sections
+      .filter((s) => s.state === 'needs_review' && s.review)
+      .map((s) => s.title),
+  };
 }

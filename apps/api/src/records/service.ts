@@ -7,6 +7,7 @@ import {
   runChecks,
   sameValue,
   sectionValues,
+  summarizeReadiness,
 } from '@ailab/domain';
 import {
   type Actor,
@@ -159,7 +160,7 @@ export class RecordService {
           updatedBy: ctx.actor,
         })
         .returning();
-      const record = required(row);
+      const record = await this.#stamp(tx, ctx, kind, required(row));
       await syncLinks(tx, record, kind, attributes);
       return writeVersion(tx, record, 'create', ctx.actor, input.reason);
     });
@@ -606,6 +607,27 @@ export class RecordService {
     return result;
   }
 
+  /**
+   * Stores the kind's one-line summary and the readiness summary on the row just written (ADR 0050),
+   * with checks that read other records, so every list agrees with the record page.
+   */
+  async #stamp(
+    tx: Db,
+    ctx: RecordContext,
+    kind: KindDefinition,
+    row: RecordRow,
+  ): Promise<RecordRow> {
+    const related = await this.#related(tx, ctx, kind, row.attributes, row, false);
+    const summary = summaryOf(kind, row.attributes);
+    const state = summarizeReadiness(readiness(toEnvelope(row), kind, related.checks));
+    const [stamped] = await tx
+      .update(records)
+      .set({ summary: summary ?? null, readiness: state })
+      .where(eq(records.id, row.id))
+      .returning();
+    return required(stamped);
+  }
+
   async #change(
     ctx: RecordContext,
     id: string,
@@ -637,7 +659,7 @@ export class RecordService {
         })
         .where(eq(records.id, current.id))
         .returning();
-      const record = required(row);
+      const record = await this.#stamp(tx, ctx, kind, required(row));
       if (changes.attributes !== undefined) await syncLinks(tx, record, kind, record.attributes);
       return writeVersion(tx, record, operation, ctx.actor, reason);
     });
@@ -925,6 +947,15 @@ function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/** The kind's summary; one that throws or says nothing gives none. */
+function summaryOf(kind: KindDefinition, attributes: Record<string, unknown>): string | undefined {
+  try {
+    return kind.summarize?.(attributes as never)?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function toEnvelope(row: RecordRow): RecordEnvelope {
   return {
     id: row.id,
@@ -942,6 +973,8 @@ function toEnvelope(row: RecordRow): RecordEnvelope {
     createdBy: row.createdBy,
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
+    ...(row.summary ? { summary: row.summary } : {}),
+    ...(row.readiness ? { readiness: row.readiness } : {}),
   };
 }
 

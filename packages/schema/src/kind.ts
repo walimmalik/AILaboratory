@@ -39,6 +39,11 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
   items?: Record<string, string>;
   checks?: KindCheck<z.infer<A>>[];
   /**
+   * The record in one line of lab words ("96-well PCR plate, 200 uL, skirted"), stored with the record
+   * at every write and shown in lists, Review and links (ADR 0050).
+   */
+  summarize?: (attributes: z.infer<A>) => string | undefined;
+  /**
    * Attributes that don't apply given the others (e.g. an A1 offset on a tube), as dotted paths. The
    * review screen leaves them out of forms, so people are asked only what is relevant.
    */

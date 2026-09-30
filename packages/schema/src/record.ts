@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Actor } from './actor.ts';
-import { FieldEvidence, SectionReview } from './design.ts';
+import { FieldEvidence, ReadinessSummary, SectionReview } from './design.ts';
 import { RecordId, RecordName } from './ids.ts';
 
 export const RecordStatus = z.enum(['draft', 'active', 'archived']);
@@ -28,6 +28,10 @@ export function recordEnvelope<A extends z.ZodType>(attributes: A) {
     createdBy: Actor,
     updatedAt: z.iso.datetime(),
     updatedBy: Actor,
+    /** The kind's one-line summary of the record, stored at write time (ADR 0050). */
+    summary: z.string().optional(),
+    /** Readiness in one line, stored at write time (ADR 0050). */
+    readiness: ReadinessSummary.optional(),
   });
 }
 

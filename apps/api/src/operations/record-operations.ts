@@ -2,6 +2,7 @@ import {
   recordsActivate,
   recordsArchive,
   recordsConfirm,
+  recordsConfirmMany,
   recordsConfirmSection,
   recordsCreate,
   recordsDeleteDraft,
@@ -126,6 +127,53 @@ export const recordOperations = [
     actors: 'people',
     agentPolicy: 'direct',
     run: (ctx, { id, ...input }, deps) => service(deps).confirmAll(ctx, id, transition(input)),
+  }),
+  implement(recordsConfirmMany, {
+    // Batch confirm (plan 004e R3, ADR 0050): only what holds no guess, no failing check and no
+    // changed confirmed value; all or nothing, and each record gets its own confirmation.
+    actors: 'people',
+    agentPolicy: 'direct',
+    touches: (input) => input.records.map((r) => r.id),
+    run: async (ctx, input, deps) => {
+      const records = service(deps);
+      const refused: string[] = [];
+      const states = [];
+      for (const target of input.records) {
+        const record = await records.get(ctx, target.id);
+        const state = await records.readiness(ctx, target.id);
+        const why = [
+          record.version !== target.expectedVersion &&
+            `changed since you looked (v${record.version})`,
+          state.assumed.length > 0 && `${state.assumed.length} assumed`,
+          state.checks.some((c) => !c.passed) && 'a failing check',
+          state.sections.some((s) => s.state === 'needs_review' && s.review) &&
+            'values changed since they were confirmed',
+        ].filter(Boolean);
+        if (why.length) refused.push(`${record.name} (${why.join(', ')})`);
+        states.push(record);
+      }
+      if (refused.length) {
+        throw new OperationError(
+          'invalid_state',
+          `Nothing was confirmed. Open these one by one: ${refused.join('; ')}`,
+          { refused },
+        );
+      }
+      const confirmed = [];
+      for (const record of states) {
+        const done = await records.confirmAll(ctx, record.id, {
+          expectedVersion: record.version,
+          ...(input.reason ? { reason: input.reason } : {}),
+        });
+        confirmed.push({
+          id: done.id,
+          name: done.name,
+          status: done.status,
+          version: done.version,
+        });
+      }
+      return { confirmed };
+    },
   }),
   implement(recordsReadiness, {
     run: (ctx, input, deps) => service(deps).readiness(ctx, input.id),
