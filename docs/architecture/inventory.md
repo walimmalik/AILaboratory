@@ -110,6 +110,8 @@ Editing and confirming use `records.update` and review, which run the same check
 
 The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations in `seed/lab.yaml` into locations and the containers in `seed/inventory.yaml` into registered containers, matched by label so it can run again. It runs as an agent, so each is a proposal, and something whose place is still waiting on Review waits for the next run: approve the rooms, run it again for the fridges and freezers, approve, run again for the containers. The HEK293 flask is skipped until a flask labware family exists.
 
+The same run then registers the seed's samples (the two minipreps and the HEK293 culture), fills the containers from `fills` in `inventory.yaml` (lots by their lot number, samples by key), and stamps the assay-ready plate from the Echo source plate once that is filled (25 nL one to one). Each is a proposal that waits for what it needs: a container, its lots and samples, or the filled source plate. The pGL4.10 and rSAP tubes have no product or lot in the seed yet, so they keep their description and no contents.
+
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, the seed's contents (rest of 010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, handling-rule inheritance (010d), screens (010e).

@@ -7,6 +7,7 @@ import { entityKinds } from './entities/kinds.ts';
 import { loadSeedEntities, readSeedEntities } from './entities/seed.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from './instruments/seed.ts';
+import { loadSeedContents, readSeedContents } from './inventory/contents-seed.ts';
 import { inventoryKinds } from './inventory/kinds.ts';
 import { loadSeedInventory, readSeedInventory } from './inventory/seed.ts';
 import { labwareKinds } from './labware/kinds.ts';
@@ -20,8 +21,8 @@ import { KindRegistry } from './records/kinds.ts';
 /**
  * Loads the seed lab (seed/, plan 006) into the database as drafts for a person to review: labware
  * types, instrument and equipment kinds and instruments, reagents (lots as proposals), liquid
- * classes, entity kinds and entities, then locations and containers (proposals; a container or
- * storage location waits for its place to be approved, so run it again after approving). Runs as the agent "Seed loader" on behalf of a user,
+ * classes, entity kinds and entities, then locations, containers, samples and what the containers
+ * hold (proposals; each waits for what it needs to be approved, so run it again after approving). Runs as the agent "Seed loader" on behalf of a user,
  * so every value shows where it came from. Safe to run again: records the lab already has are left
  * alone, except that labware types it made get well positions the seed has gained since, while
  * nobody else has changed their wells (confirmed types as a proposal).
@@ -182,5 +183,24 @@ for (const [what, part] of [
   for (const line of part.created) console.log(`  + ${line}`);
 }
 for (const skip of inventory.skipped) console.log(`  skipped ${skip.key}: ${skip.reason}`);
+
+const contents = await loadSeedContents(
+  registry,
+  ctx,
+  readSeedContents({
+    inventory: await seedFile('inventory.yaml'),
+    reagentLibrary: await seedFile('reagent-library.yaml'),
+    entityLibrary: await seedFile('entity-library.yaml'),
+  }),
+);
+for (const [what, part] of [
+  ['Samples', contents.samples],
+  ['Contents', contents.contents],
+] as const) {
+  console.log(
+    `${what}: ${part.created.length} added, ${part.proposed.length} proposed for review, ${part.existing.length} already there or waiting, ${part.waiting.length} wait for something to be approved first (run the seed again after approving).`,
+  );
+  for (const line of part.waiting) console.log(`  … ${line}`);
+}
 console.log('Drafts wait on the Review page for you to confirm.');
 await connection.close();
