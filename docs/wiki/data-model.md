@@ -156,7 +156,7 @@ flowchart LR
 
 A typed vocabulary defined in 009 and shared with 010: storage temperature range, light sensitivity, freeze-thaw limit, stability after opening, reconstitution or thaw, equilibrate before use, mix-before-use window, max time out of storage, hygroscopic, time to read after a step, and live-cell rules from 010. Each rule carries its source (vendor with link, lab convention, lab memory) and whether the scheduler **enforces** it or it is **advice**.
 
-Rules flow: entity kinds and products carry them, an entity can tighten its kind's, a container inherits the rules of everything in it with the strictest winning, digital SOP steps add timing windows, and the scheduler (019) prunes schedules that break them and shows the source ("30 min limit, from HEK293 cell line kind").
+Rules flow: entity kinds and products carry them, an entity can tighten its kind's, a container inherits the rules of everything in it with the strictest winning (built in 010d, `inventory.effective_rules`), digital SOP steps add timing windows, and the scheduler (019) prunes schedules that break them and shows the source ("30 min limit, from HEK293 cell line kind").
 
 ## Design documents
 

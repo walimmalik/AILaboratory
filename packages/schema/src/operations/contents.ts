@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { Component, InventoryEvent, SampleAttributes, WellRef, WellState } from '../contents.ts';
+import {
+  Component,
+  EffectiveRule,
+  EffectiveStorage,
+  InventoryEvent,
+  SampleAttributes,
+  WellRef,
+  WellState,
+} from '../contents.ts';
 import { ContainerId } from '../inventory.ts';
 import { LiquidVolume, WellName } from '../labware.ts';
 import { defineContract } from '../operation.ts';
@@ -238,6 +246,24 @@ export const inventoryLineage = defineContract({
         at: z.string(),
         depth: z.number().int(),
       }),
+    ),
+  }),
+});
+
+export const inventoryEffectiveRules = defineContract({
+  id: 'inventory.effective_rules',
+  summary:
+    'The handling rules a container inherits from what its wells hold (time out of the incubator, light, temperature, freeze-thaws), the strictest winning, each with every rule it came from and its source; plus the narrowest storage temperature. What the scheduler keeps to',
+  effect: 'read',
+  input: z.strictObject({
+    container: ContainerId,
+    wells: Wells.optional().describe('Only these wells; every filled well if left out'),
+  }),
+  output: z.object({
+    container: RecordEnvelope,
+    rules: z.array(EffectiveRule).describe('Enforced rules first'),
+    storage: EffectiveStorage.optional().describe(
+      'Left out when nothing in it names a storage temperature',
     ),
   }),
 });

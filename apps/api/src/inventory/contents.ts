@@ -8,19 +8,26 @@ import {
   type Grid,
   LabwareError,
   mapPlates,
+  mergeHandlingRules,
+  mergeStorage,
   mix,
   newId,
   type PlateMapping,
+  type SourcedRule,
+  type SourcedStorage,
   take,
 } from '@ailab/domain';
 import {
   type Component,
   type ContainerAttributes,
+  type EntityAttributes,
+  type EntityKindAttributes,
   type InventoryEvent,
   type InventoryEventType,
   inventoryConsume,
   inventoryCorrect,
   inventoryDiscard,
+  inventoryEffectiveRules,
   inventoryFill,
   inventoryHistory,
   inventoryLineage,
@@ -30,8 +37,12 @@ import {
   inventoryWells,
   type LabwareTypeAttributes,
   type LedgerLine,
+  type LotAttributes,
+  type ProductAttributes,
   type Quantity,
   type RecordEnvelope,
+  type RuleOrigin,
+  type SampleAttributes,
   samplesRegister,
   type WellState,
 } from '@ailab/schema';
@@ -288,6 +299,26 @@ const mappingWords = (m: PlateMapping) =>
     : m.type === 'quadrant'
       ? `into quadrant ${m.quadrant}`
       : `shifted ${m.rows} rows and ${m.columns} columns`;
+
+const originOf = (record: RecordEnvelope): RuleOrigin => ({
+  id: record.id,
+  kind: record.kind as RuleOrigin['kind'],
+  name: record.name,
+  label: record.label,
+});
+
+/**
+ * The records whose handling rules a component brings (plan 010d): a lot its product, a sample its
+ * entity and the entity's kind.
+ */
+async function ruleRecords(service: RecordService, ctx: RecordContext, source: string) {
+  const record = await service.get(ctx, source);
+  if (record.kind === 'lot') {
+    return [await service.get(ctx, (record.attributes as LotAttributes).product)];
+  }
+  const entity = await service.get(ctx, (record.attributes as SampleAttributes).entity);
+  return [await service.get(ctx, (entity.attributes as EntityAttributes).entityKind), entity];
+}
 
 export const contentsOperations = [
   implement(samplesRegister, {
@@ -638,6 +669,47 @@ export const contentsOperations = [
       const order = new Map(v.positions.map((p, i) => [p, i]));
       rows.sort((a, b) => (order.get(a.well) ?? 0) - (order.get(b.well) ?? 0));
       return { container: v.record, positions: v.positions, wells: rows };
+    },
+  }),
+  implement(inventoryEffectiveRules, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const v = await vessel(service, ctx, input.container);
+      const only = input.wells ? new Set(wellsOf(v, input.wells)) : undefined;
+      const rows = await deps.db
+        .select({ well: wellContents.well, state: wellContents.state })
+        .from(wellContents)
+        .where(and(eq(wellContents.containerId, v.record.id), eq(wellContents.labId, ctx.labId)));
+      const wellsBySource = new Map<string, string[]>();
+      for (const { well, state } of rows) {
+        if (only && !only.has(well)) continue;
+        for (const c of (state as WellState).components) {
+          wellsBySource.set(c.source, [...(wellsBySource.get(c.source) ?? []), well]);
+        }
+      }
+      const rules: SourcedRule[] = [];
+      const storage: SourcedStorage[] = [];
+      for (const [via, wells] of wellsBySource) {
+        for (const record of await ruleRecords(service, ctx, via)) {
+          const origin = originOf(record);
+          const attributes = record.attributes as
+            | ProductAttributes
+            | EntityAttributes
+            | EntityKindAttributes;
+          for (const rule of attributes.handlingRules ?? []) {
+            rules.push({ rule, origin, via, wells });
+          }
+          if ('storage' in attributes && attributes.storage) {
+            storage.push({ range: attributes.storage, origin, via, wells });
+          }
+        }
+      }
+      const merged = mergeStorage(storage);
+      return {
+        container: v.record,
+        rules: mergeHandlingRules(rules),
+        ...(merged ? { storage: merged } : {}),
+      };
     },
   }),
   implement(inventoryHistory, {

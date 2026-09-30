@@ -77,6 +77,22 @@ Stamping maps each source well onto a destination well: one to one (same grid), 
 
 Lineage follows a well's `in` lines back: fills carry what went in (`added`), transfers and stamps name the source well, which is followed from the moment the liquid left it.
 
+## Handling rules containers inherit (010d)
+
+A container inherits the handling rules of what its wells hold: a lot brings its product's rules and storage temperature, a sample brings its entity's rules and its entity kind's. `inventory.effective_rules` merges them per rule type, the strictest winning (`mergeHandlingRules` and `mergeStorage` in `@ailab/domain`, ADR 0032):
+
+| Rule | Strictest |
+| --- | --- |
+| Time limits: max time out of storage, use within, stable after opening or preparation | The shortest |
+| Rests: equilibrate, reconstitute | The longest |
+| Freeze-thaw limit | The fewest cycles |
+| Keep cold, thaw, storage temperature | The narrowest range (highest minimum, lowest maximum); a conflict when they don't overlap |
+| Read within, per step named in `after` | The narrowest window |
+| Protect from light, mix before use, hygroscopic | Present once |
+| Advice | Kept per text, never merged |
+
+A merged rule is enforced when any of its sources is. Each effective rule lists every rule it came from: the record it is written on, the lots or samples that brought it, and their wells (as blocks like `A3:P22`). Rules can be read for some wells only. Enforced rules come first; the scheduler (019) keeps to them.
+
 ## Operations
 
 | Operation | Does | Agents |
@@ -97,6 +113,7 @@ Lineage follows a well's `in` lines back: fills carry what went in (`added`), tr
 | `inventory.stamp` | Plate to plate, the same volume per well, by a mapping | proposed |
 | `inventory.lineage` | Where a well's liquid came from, back through fills, transfers and stamps | read |
 | `inventory.wells` | What a container's wells hold | read |
+| `inventory.effective_rules` | The handling rules and storage temperature a container inherits from its contents, strictest winning, with sources | read |
 | `inventory.history` | A container's or well's ledger, newest first | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |
 | `entities.draft` | Drafts an entity of a kind | direct (drafts) |
@@ -114,4 +131,4 @@ The same run then registers the seed's samples (the two minipreps and the HEK293
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, screens (010e). Rules from a recipe's ingredients and a kit's components (only the product's own rules count), freeze-thaw counting from location history, and rules that turn on or off with a step (after thawing, after opening) wait for the scheduler (019).

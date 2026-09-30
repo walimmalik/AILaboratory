@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { Actor } from './actor.ts';
 import { EntityId } from './entities.ts';
 import { recordIdOf } from './ids.ts';
-import { CalendarDate } from './instruments.ts';
+import { CalendarDate, Celsius } from './instruments.ts';
 import { ContainerId } from './inventory.ts';
 import { LiquidVolume, WellName } from './labware.ts';
 import { Quantity } from './quantity.ts';
-import { LotId } from './reagents.ts';
+import { HandlingRule, LotId } from './reagents.ts';
 
 /**
  * What is in a well (plan 010c, V2 to V4): the components (samples the lab made, lots it bought or
@@ -136,3 +136,57 @@ export const InventoryEvent = z.object({
   lines: z.array(LedgerLine),
 });
 export type InventoryEvent = z.infer<typeof InventoryEvent>;
+
+// ---------------------------------------------------------------------------------------------
+// Handling rules a container inherits from what it holds (plan 010d).
+
+export const RuleOrigin = z
+  .object({
+    id: z.string(),
+    kind: z.enum(['product', 'entity', 'entity_kind']),
+    name: z.string(),
+    label: z.string(),
+  })
+  .describe('The record the rule is written on: a product, an entity or an entity kind');
+export type RuleOrigin = z.infer<typeof RuleOrigin>;
+
+export const RuleContribution = z.object({
+  origin: RuleOrigin,
+  rule: HandlingRule.describe('The rule as its record states it'),
+  via: z
+    .array(ComponentSource)
+    .describe(
+      'The lots and samples in the wells that bring it: a lot through its product, a sample through its entity and entity kind',
+    ),
+  wells: z.array(z.string()).describe('The wells holding them, as wells or blocks like "A3:P22"'),
+});
+export type RuleContribution = z.infer<typeof RuleContribution>;
+
+export const EffectiveRule = z.object({
+  rule: HandlingRule.describe(
+    'The rule that binds the container: the strictest of those below (shortest time, fewest freeze-thaws, narrowest temperature range), enforced when any of them is',
+  ),
+  from: z.array(RuleContribution).describe('Every rule it was merged from, with its source'),
+  conflict: z
+    .string()
+    .optional()
+    .describe('The rules below cannot all be kept, e.g. temperature ranges that do not overlap'),
+});
+export type EffectiveRule = z.infer<typeof EffectiveRule>;
+
+export const StorageRange = z.strictObject({ min: Celsius.optional(), max: Celsius.optional() });
+export type StorageRange = z.infer<typeof StorageRange>;
+
+export const EffectiveStorage = z.object({
+  range: StorageRange.describe('The narrowest storage temperature range of everything in it'),
+  from: z.array(
+    z.object({
+      origin: RuleOrigin,
+      range: StorageRange,
+      via: z.array(ComponentSource),
+      wells: z.array(z.string()),
+    }),
+  ),
+  conflict: z.string().optional(),
+});
+export type EffectiveStorage = z.infer<typeof EffectiveStorage>;
