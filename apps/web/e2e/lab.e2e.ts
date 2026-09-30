@@ -306,7 +306,11 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await page.goto(`/records/${id}`);
   const volumes = page.getByRole('region', { name: 'Volumes' });
   await volumes.getByRole('button', { name: 'Edit volumes' }).click();
-  await volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first().fill('20');
+  const dead = volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first();
+  await dead.fill('twenty');
+  await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await expect(volumes.getByText('Fix the field marked in red before saving.')).toBeVisible();
+  await dead.fill('20');
   await volumes.getByRole('combobox', { name: 'dead volume unit' }).first().selectOption('uL');
 
   // While the form is open, the agent raises the maximum volume.
@@ -323,13 +327,33 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
   await volumes.getByRole('button', { name: 'Load the new values' }).click();
   await volumes.getByRole('button', { name: 'Save' }).click();
-  // The form closes once the save has landed.
+  // The editor closes once the save is written.
   await expect(volumes.getByRole('button', { name: 'Edit volumes' })).toBeVisible();
 
+  // The save is a round trip; read the record once it has landed.
+  await expect
+    .poll(async () => (await asAgent(request, 'records.get', { id })).output.version)
+    .toBe(3);
   const saved = await asAgent(request, 'records.get', { id });
-  expect(saved.output.version).toBe(3);
   expect(saved.output.attributes.maxVolume).toEqual({ value: '300', unit: 'uL' });
   expect(saved.output.attributes.deadVolume).toEqual({ value: '20', unit: 'uL' });
+});
+
+test('a draft of a kind without sections is confirmed on its own page', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'vendor',
+    label: `Plates Inc ${Date.now()}`,
+    attributes: { website: 'https://example.org' },
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  const readiness = page.getByRole('region', { name: 'Readiness' });
+  await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
+  await expect(page.getByText('active', { exact: true })).toBeVisible();
+  await expect(readiness).toHaveCount(0);
 });
 
 test('the wiki is readable in the app, with links between its pages', async ({ page }) => {
@@ -667,4 +691,92 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(questions).toContainText('1 open');
   await questions.getByRole('button', { name: 'Accept the suggestion' }).click();
   await expect(questions).toContainText('all settled');
+});
+
+/** A person confirms every section of a draft, which activates it. */
+async function confirmAll(page: Page, record: { id: string; version: number }) {
+  const readiness = await asPerson(page, 'records.readiness', { id: record.id });
+  let current = record;
+  for (const section of readiness.sections as { id: string }[]) {
+    current = await asPerson(page, 'records.confirm_section', {
+      id: current.id,
+      expectedVersion: current.version,
+      section: section.id,
+    });
+  }
+  return current;
+}
+
+test('a person plans an experiment, runs it as a checklist and finishes the run', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await signIn(page);
+  const sop = await confirmAll(
+    page,
+    await asPerson(page, 'sops.draft', {
+      label: `Coating ${stamp}`,
+      materials: [{ role: 'plate', label: 'Coating plate', type: 'labware' }],
+      variables: [
+        {
+          name: 'well_volume',
+          label: 'Well volume',
+          kind: 'default',
+          value: { value: '100', unit: 'uL' },
+        },
+      ],
+      steps: [
+        {
+          id: 'coat',
+          action: 'add',
+          title: 'Coat',
+          text: 'Add coating solution to every well.',
+          parameters: [{ name: 'volume', variable: 'well_volume' }],
+        },
+        { id: 'wash', action: 'wash', title: 'Wash', text: 'Wash the plate.', repeat: 3 },
+      ],
+    }),
+  );
+  const campaign = await confirmAll(
+    page,
+    await asPerson(page, 'campaigns.draft', {
+      label: `IL-6 panel ${stamp}`,
+      goal: 'Find which stimuli raise IL-6',
+      aims: [{ id: 'aim_1', text: 'Rank the stimuli' }],
+    }),
+  );
+  const experiment = await confirmAll(
+    page,
+    await asPerson(page, 'experiments.draft', {
+      label: `Stimulus panel ${stamp}`,
+      campaign: campaign.id,
+      aim: 'aim_1',
+      question: 'Which stimuli raise IL-6?',
+      protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
+    }),
+  );
+
+  await page.goto(`/records/${campaign.id}`);
+  await expect(page.getByRole('region', { name: 'Aims and experiments' })).toContainText(
+    `Stimulus panel ${stamp}`,
+  );
+
+  await page.goto(`/records/${experiment.id}`);
+  const next = page.getByRole('region', { name: 'Next step' });
+  await expect(next).toContainText('Every value of the protocol works out');
+  await next.getByRole('button', { name: 'Plan it' }).click();
+  await expect(next).toContainText('Planned');
+  await next.getByRole('button', { name: 'Start a run' }).click();
+
+  const checklist = page.getByRole('region', { name: 'Checklist' });
+  await expect(checklist).toContainText('0 of 2 steps');
+  await expect(checklist).toContainText('Planned: volume 100 µL');
+  await checklist.getByRole('button', { name: 'Done as planned' }).first().click();
+  await expect(checklist).toContainText('1 of 2 steps');
+  await checklist.getByRole('button', { name: 'Skipped' }).click();
+  await checklist.getByPlaceholder('Why').fill('Washer down');
+  await checklist.getByRole('button', { name: 'Record' }).click();
+  await expect(checklist).toContainText('Skipped Wash. Why: Washer down');
+  await checklist.getByRole('button', { name: 'Finish the run' }).click();
+  await expect(checklist).toContainText('Done · 2 of 2 steps · 1 went differently');
 });

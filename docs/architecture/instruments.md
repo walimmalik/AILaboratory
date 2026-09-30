@@ -37,7 +37,7 @@ Instrument kinds, equipment kinds, the capability catalog and resolving a config
 ## Registered instruments
 
 - `instruments.register` checks the starting configuration and creates a draft (status `ready`).
-- `instruments.change_configuration` applies `place`, `move`, `remove` and `set_item` changes together and refuses the result if it doesn't resolve. Configuration nodes may name the `equipment_item` they are; an item can be installed on one instrument at a time, found from the configurations that name it.
+- `instruments.change_configuration` applies `place`, `move`, `remove` and `set_item` changes together and refuses the result if it doesn't resolve. Configuration nodes may name the `equipment_item` they are; an item can be installed on one instrument at a time, found from the configurations that name it. The rule lives on the `instrument` kind (ADR 0041): its `related` hook resolves the configuration on every write, so `records.create`, `records.update` and an approved proposal are refused a configuration that doesn't resolve just as the instrument operations are, and readiness shows a `configuration_resolves` blocker when something the instrument relies on has changed since (for example, its item was installed elsewhere). Both paths use one resolver, `apps/api/src/instruments/resolve.ts`.
 - `instruments.set_status` and `instruments.log_service` change status and the last service; history is the log.
 
 ## Resolving

@@ -569,11 +569,14 @@ function TextValueEditor({
         onChange={(e) => {
           setText(e.target.value);
           if (e.target.value.trim() === '') {
+            e.target.setCustomValidity('');
             setError(false);
             onChange(undefined);
             return;
           }
           const parsed = parseTyped(e.target.value, variants, root);
+          // Text that can't be a value makes the form invalid, so Save waits for it.
+          e.target.setCustomValidity(parsed.ok ? '' : 'Not a value yet');
           setError(!parsed.ok);
           if (parsed.ok) onChange(parsed.value);
         }}
@@ -638,16 +641,21 @@ function JsonEditor({
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+          // Text that isn't JSON makes the form invalid, so Save can't quietly keep the last good value.
+          const problem = (message?: string) => {
+            e.target.setCustomValidity(message ?? '');
+            setError(message);
+          };
           if (e.target.value.trim() === '') {
-            setError(undefined);
+            problem();
             onChange(undefined);
             return;
           }
           try {
             onChange(JSON.parse(e.target.value));
-            setError(undefined);
+            problem();
           } catch {
-            setError('Not valid JSON yet');
+            problem('Not valid JSON: fix it or clear it before saving');
           }
         }}
       />

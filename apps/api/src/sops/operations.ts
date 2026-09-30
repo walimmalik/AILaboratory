@@ -22,6 +22,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { checkCitations } from './citations.ts';
+import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 import { bindRoles, type ReadValue, readField } from './resolve.ts';
 import { reviewSop, roundsOf } from './review.ts';
@@ -86,8 +87,9 @@ export const sopOperations = [
       };
       const record = input.version ? await atVersion(current.id, input.version) : current;
       const a = record.attributes as SopAttributes;
-      const given = new Map((input.inputs ?? []).map((i) => [i.name, i.value] as const));
-      for (const name of given.keys()) {
+      const given = new Map<string, InputValue>();
+      for (const { name, value } of input.inputs ?? []) {
+        if (given.has(name)) throw new OperationError('invalid_input', `${name} is given twice`);
         const v = a.variables.find((x) => x.name === name);
         if (!v) throw new OperationError('invalid_input', `${record.name} has no variable ${name}`);
         if (v.kind === 'computed') {
@@ -96,6 +98,9 @@ export const sopOperations = [
             `${name} is worked out by a formula; give the values it uses`,
           );
         }
+        const problem = inputProblem(v, value);
+        if (problem) throw new OperationError('invalid_input', problem);
+        given.set(name, value);
       }
       const pinned = new Map<string, number>();
       for (const b of input.bindings ?? []) if (b.version) pinned.set(b.record, b.version);

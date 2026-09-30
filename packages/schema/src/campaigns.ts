@@ -17,6 +17,7 @@ import { SopId, SopName } from './sops.ts';
 export const CampaignId = recordIdOf('cam');
 export const ExperimentId = recordIdOf('exp');
 export const RunId = recordIdOf('run');
+export const SetId = recordIdOf('set');
 
 /** A short id inside a record: letters, digits and _. */
 const LocalName = z
@@ -128,6 +129,32 @@ export const ProtocolStep = z.strictObject({
 });
 export type ProtocolStep = z.infer<typeof ProtocolStep>;
 
+/** What the evidence says about one hypothesis (E9). */
+export const Verdict = z.strictObject({
+  hypothesis: LocalName.describe("The hypothesis's id"),
+  verdict: z.enum(['supported', 'refuted', 'inconclusive']),
+  evidence: z
+    .array(
+      z.strictObject({
+        record: RecordId.describe('A run, file, analysis or document that shows it'),
+        note: z.string().min(1).optional(),
+      }),
+    )
+    .optional(),
+  note: z.string().min(1).optional(),
+});
+export type Verdict = z.infer<typeof Verdict>;
+
+/** The conclusion of an experiment: a verdict per hypothesis and a summary (E9). */
+export const Conclusion = z.strictObject({
+  summary: z.string().min(1).describe('What was found, in a few sentences'),
+  verdicts: z.array(Verdict).optional(),
+  runs: z.array(RunId).optional().describe('The runs the conclusion rests on'),
+  at: z.iso.datetime(),
+  by: Actor,
+});
+export type Conclusion = z.infer<typeof Conclusion>;
+
 export const ExperimentAttributes = z.strictObject({
   campaign: CampaignId,
   aim: LocalName.optional().describe("The campaign aim it serves, by the aim's id"),
@@ -193,6 +220,7 @@ export const ExperimentAttributes = z.strictObject({
     .optional(),
   successCriteria: z.array(z.string().min(1)).optional(),
   notes: z.string().min(1).optional(),
+  conclusion: Conclusion.optional().describe('Set by experiments.conclude'),
 });
 export type ExperimentAttributes = z.infer<typeof ExperimentAttributes>;
 
@@ -261,3 +289,24 @@ export const RunAttributes = z.strictObject({
   notes: z.string().min(1).optional(),
 });
 export type RunAttributes = z.infer<typeof RunAttributes>;
+
+/**
+ * A set (E10): a named list of entities, samples or containers one experiment hands to the next
+ * ("12 hits from EXP-0012, viability below 3 SD"), used as a follow-up's subjects.
+ */
+export const SetAttributes = z.strictObject({
+  members: z
+    .array(
+      z.strictObject({
+        record: RecordId.describe('An entity, sample or container'),
+        note: z.string().min(1).optional().describe('e.g. its value that qualified it'),
+      }),
+    )
+    .min(1),
+  criterion: z.string().min(1).describe('Why these made it, e.g. "viability below 3 SD of DMSO"'),
+  from: z
+    .strictObject({ experiment: ExperimentId, run: RunId.optional() })
+    .optional()
+    .describe('The experiment (and run) that picked them'),
+});
+export type SetAttributes = z.infer<typeof SetAttributes>;

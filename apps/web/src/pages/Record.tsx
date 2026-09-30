@@ -21,6 +21,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { DocumentBlocks } from './Documents.tsx';
+import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
@@ -28,7 +29,7 @@ import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
-import { fieldLabel, ReviewBlocks } from './RecordReview.tsx';
+import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { SopBlocks } from './Sops.tsx';
 import { StatusChip } from './StatusChip.tsx';
@@ -123,48 +124,65 @@ export function RecordPage() {
               <LiquidClassBlocks record={r} />
             ) : r.kind === 'sop' ? (
               <SopBlocks record={r} />
+            ) : r.kind === 'campaign' ? (
+              <CampaignBlocks record={r} />
+            ) : r.kind === 'experiment' ? (
+              <ExperimentBlocks record={r} />
             ) : undefined
           }
         />
       ) : (
-        <section className="block">
-          <header>
-            <h2>Fields</h2>
-          </header>
-          <div className="body">
-            {editing ? (
-              <SectionEditor
-                record={r}
-                fields={Object.keys(
-                  (kinds?.find((k) => k.kind === r.kind)?.attributes as JsonSchema | undefined)
-                    ?.properties ?? r.attributes,
-                )}
-                onDone={() => setEditing(false)}
-              />
-            ) : Object.keys(r.attributes).length === 0 ? (
-              <p className="empty">No fields.</p>
-            ) : (
-              <dl className="kv">
-                {Object.entries(r.attributes).map(([key, value]) => (
-                  <Field key={key} name={key} value={value} />
-                ))}
-              </dl>
-            )}
-            {!editing && r.status !== 'archived' && (
-              <div className="actions">
-                <button type="button" className="btn" onClick={() => setEditing(true)}>
-                  Edit fields
-                </button>
-              </div>
-            )}
-            <details className="tech">
-              <summary>technical details</summary>
-              <pre className="json">{JSON.stringify(r, null, 2)}</pre>
-            </details>
-          </div>
-        </section>
+        <>
+          {readiness && r.status === 'draft' && (
+            // Kinds without sections are confirmed as a whole, here (the Review page sends people here).
+            <ReadinessBlock
+              record={r}
+              readiness={readiness}
+              titles={{}}
+              onFix={() => setEditing(true)}
+            />
+          )}
+          <section className="block">
+            <header>
+              <h2>Fields</h2>
+            </header>
+            <div className="body">
+              {editing ? (
+                <SectionEditor
+                  record={r}
+                  fields={Object.keys(
+                    (kinds?.find((k) => k.kind === r.kind)?.attributes as JsonSchema | undefined)
+                      ?.properties ?? r.attributes,
+                  )}
+                  onDone={() => setEditing(false)}
+                />
+              ) : Object.keys(r.attributes).length === 0 ? (
+                <p className="empty">No fields.</p>
+              ) : (
+                <dl className="kv">
+                  {Object.entries(r.attributes).map(([key, value]) => (
+                    <Field key={key} name={key} value={value} />
+                  ))}
+                </dl>
+              )}
+              {!editing && r.status !== 'archived' && (
+                <div className="actions">
+                  <button type="button" className="btn" onClick={() => setEditing(true)}>
+                    Edit fields
+                  </button>
+                </div>
+              )}
+              <details className="tech">
+                <summary>technical details</summary>
+                <pre className="json">{JSON.stringify(r, null, 2)}</pre>
+              </details>
+            </div>
+          </section>
+        </>
       )}
 
+      {r.kind === 'run' && <RunBlocks record={r} />}
+      {r.kind === 'set' && <SetBlocks record={r} />}
       {r.kind === 'container' && <ContainerBlocks record={r} />}
       {r.kind === 'entity' && <EntityBlocks record={r} />}
       {r.kind === 'document' && <DocumentBlocks record={r} />}

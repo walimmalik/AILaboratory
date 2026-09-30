@@ -30,6 +30,6 @@ Instrument-specific knowledge stays data on instrument kinds (the capability cat
 
 ## Consequences
 
-- `file` declares `createdBy: 'files.upload'` (PR #65). The instrument configuration check and quantity sign and dimension checks move onto their kinds in follow-up PRs.
+- `file` declares `createdBy: 'files.upload'` (PR #65). The instrument kind's `related` hook resolves the configuration on every write, refusing a changed configuration that doesn't resolve and showing a blocker when an unchanged one stops resolving. Well contents aren't records, so their rule sits in the one ledger every well write goes through: fills and corrections refuse a negative volume, a negative concentration or amount, and a concentration or amount of the wrong kind.
 - Dedicated operations can still do more (convenience, bulk work, better messages), but they no longer add rules that only they enforce.
 - Rules run on every write, so they must stay cheap: `related` reads a few records, not whole tables.

@@ -9,6 +9,7 @@ Plan [013](../plans/013-campaigns-and-experiments.md). The scientific frame ever
 | `campaign` | `cam_`, `CAM-001` | goal, background, aims (`id`, text, success), owner and contributors, dates, `about` (entities), `references` (documents), `stage` | Goal, Aims, What it is about |
 | `experiment` | `exp_`, `EXP-0001` | campaign and aim, question, hypotheses (each with an optional prediction: readout, measure, comparison, threshold), `followsUp`, subjects, `protocol` (parts that each pin an SOP `{id, version}`), documents followed or cited, conditions, controls (each with an optional `subject`, e.g. the DMSO entity, linked as `control`), readouts, success criteria, `stage` | Question, What is tested, Protocol, Conditions and controls, Readouts |
 | `run` | `run_`, `RUN-0001` | `experiment` pinned `{id, version}`, status (scheduled, in progress, done, failed, aborted), date, operator, who started it, steps with planned values and actuals, deviations, data files | none; made only by `runs.start` |
+| `set` | `set_`, `SET-001` | members (entities, samples or containers, each with a note), the criterion that picked them, the experiment and run it came from | none; made only by `sets.create` |
 
 Code: `packages/schema/src/campaigns.ts`, `apps/api/src/campaigns/`.
 
@@ -44,8 +45,11 @@ Each protocol part carries `bindings` (the SOP's material roles bound to records
 | `experiments.where_used` (campaigns, experiments and runs using a record, optionally one version) | read |
 | `runs.start` (an in-progress run of a planned experiment, as a checklist) | proposal |
 | `runs.record_step`, `runs.done_as_planned`, `runs.record_deviation`, `runs.attach_data`, `runs.finish` | direct in a run a person started, proposal otherwise |
+| `experiments.conclude` (verdict per hypothesis, summary, runs it rests on; stage to concluded) | proposal |
+| `sets.create` | proposal |
+| `sets.get` (members named, experiments that test the set) | read |
 
-Links: an experiment is `part_of` its campaign, `follows` its SOPs and followed documents, `references` cited ones, `tests` its subjects, links its control compounds as `control`, and `follows_up` or `repeats_with_changes` an earlier experiment. A run `runs` its experiment. A campaign is `about` entities and `references` documents.
+Links: a set `contains` its members and is `picked_by` its experiment; a concluded experiment links its runs and evidence as `evidence`. An experiment is `part_of` its campaign, `follows` its SOPs and followed documents, `references` cited ones, `tests` its subjects, links its control compounds as `control`, and `follows_up` or `repeats_with_changes` an earlier experiment. A run `runs` its experiment. A campaign is `about` entities and `references` documents.
 
 ## Recording a run (013c)
 
@@ -55,10 +59,29 @@ Ticking a step (`runs.record_step`) records it done as planned, with the time an
 
 `apps/api/src/campaigns/runs.ts` holds the run operations.
 
+## Conclusions and sets (013c)
+
+`experiments.conclude` is the only way to concluded (`experiments.set_stage` refuses it). It needs a running or analysing experiment with no run still in progress and at least one finished run, and a verdict (supported, refuted, inconclusive) for every hypothesis, each with the records that show it. The conclusion keeps its summary, the runs it rests on (every finished run unless given), and who concluded and when; runs and evidence are linked as `evidence`. From an agent it is a proposal: the agent drafts, a person confirms (E9).
+
+A set (E10) is a named list of entities, samples or containers with the criterion that picked them and the experiment (and run) it came from. A follow-up experiment lists the set among its subjects, so `sets.get` shows which experiments test it. Sets are made only by `sets.create`, which is a proposal from an agent.
+
+`apps/api/src/campaigns/conclusions.ts` holds these operations.
+
+## Screens (013d)
+
+The menu has an Experiments group: Campaigns, Experiments, Runs and Sets, each a list with its key facts (stage, aims, runs done of total, members). `apps/web/src/pages/Experiments.tsx` adds blocks to the record page, summaries first:
+
+- **Campaign:** each aim with the experiments serving it, their stage and their conclusion.
+- **Experiment:** a Next step block with where it stands, whether the protocol works out (problems folded away), and the one or two actions its stage allows (plan it, start a run, analyse, conclude with a verdict per hypothesis); then its runs and its conclusion. The design stays in the section blocks.
+- **Run:** a checklist of the pinned steps with their planned values. Each step is ticked "Done as planned", or "Something differed" (type only the values that differed, and why) or "Skipped" (why). "The rest went as planned" ticks what's left, and the run is finished as done, failed or aborted. Other deviations are recorded below.
+- **Set:** its members with their notes, why they made it, and the experiments that test it.
+
+Every button calls an operation; the pure rules (which actions a stage allows, run progress) are in `apps/web/src/lib/experiments.ts`.
+
 ## The demo campaigns (013a)
 
 `seed/campaigns.yaml` holds two campaigns: BRD4 degraders (a single-point screen, then a HiBiT dose-response that follows up on it) and the IL-6 reporter panel (Dual-Glo, then an ELISA). Each experiment names an assay template in `seed/assays.yaml`, and its protocol pins that template's SOPs at the version the lab has. Subjects, the campaign's `about` and control compounds are entities found by their seed label. `apps/api/src/campaigns/seed.ts` drafts each campaign the lab doesn't have yet (by title) after the SOPs. It leaves out, and reports, any SOP or entity the lab lacks. The seed SOPs are drafts, so the experiments stay in designing, and `protocol_confirmed` blocks planning until a person confirms the SOPs.
 
 ## Not yet
 
-Reservations (010 V8: confirmed plans soft-reserve stock) need to know how much of each material a run uses, which SOPs don't say yet; SOP defaults are read live rather than pinned when a role is left unbound; scanning containers and lots during a run (inventory fill and consume); conclusions and sets (013c-2); 013d screens and the drafting skill in full.
+Reservations (010 V8: confirmed plans soft-reserve stock) come with the transfer designer (016), which knows exact volumes (Wali, 2026-09-30); SOP defaults are read live rather than pinned when a role is left unbound; scanning containers and lots during a run (inventory fill and consume); attaching data files from the run screen (the operation exists); a campaign flow drawing of experiments and the sets between them.

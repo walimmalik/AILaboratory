@@ -11,6 +11,9 @@ import {
   RoleBinding,
   RunId,
   RunValue,
+  SetAttributes,
+  SetId,
+  Verdict,
 } from '../campaigns.ts';
 import { EvidenceInput } from '../design.ts';
 import { FileId } from '../files.ts';
@@ -275,4 +278,56 @@ export const runsFinish = defineContract({
     reason: Reason,
   }),
   output: RecordEnvelope,
+});
+
+export const experimentsConclude = defineContract({
+  id: 'experiments.conclude',
+  summary:
+    "Conclude a running or analysing experiment: a verdict per hypothesis (supported, refuted, inconclusive) with the runs, files or analyses that show it, and a short summary. The experiment moves to concluded, which is final. An agent's conclusion is a draft a person confirms (a proposal)",
+  effect: 'write',
+  input: z.strictObject({
+    id: ExperimentId,
+    expectedVersion: z.number().int().positive(),
+    summary: z.string().min(1),
+    verdicts: z.array(Verdict).optional().describe('One per hypothesis, when it has hypotheses'),
+    runs: z
+      .array(RunId)
+      .optional()
+      .describe('The runs it rests on; defaults to every finished run'),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const setsCreate = defineContract({
+  id: 'sets.create',
+  summary:
+    'Make a set: a named list of entities, samples or containers one experiment hands to the next ("12 hits from EXP-0012"), with the criterion that picked them. A follow-up experiment lists the set among its subjects. An agent\'s set is a proposal a person confirms',
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('e.g. "BRD4 screen hits"'),
+    ...SetAttributes.shape,
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const setsGet = defineContract({
+  id: 'sets.get',
+  summary: 'A set with its members named, and the experiments that test it',
+  effect: 'read',
+  input: z.strictObject({ id: SetId }),
+  output: z.object({
+    set: RecordEnvelope,
+    members: z.array(
+      z.object({
+        id: RecordId,
+        name: z.string(),
+        label: z.string(),
+        kind: z.string(),
+        note: z.string().optional(),
+      }),
+    ),
+    usedBy: z.array(z.object({ id: ExperimentId, name: z.string(), label: z.string().nullable() })),
+  }),
 });

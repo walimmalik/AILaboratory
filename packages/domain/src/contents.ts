@@ -1,7 +1,7 @@
 import type { Component, Quantity, WellState } from '@ailab/schema';
 import { LabDecimal, toDecimalString } from './decimal.ts';
 import { parseWellName, wellName } from './labware.ts';
-import { add, compare, convert, getUnit, subtract } from './units.ts';
+import { add, compare, convert, getUnit, isUnit, subtract } from './units.ts';
 
 /**
  * Mixing math for well contents (plan 010c, V3). Every concentration per volume mixes linearly:
@@ -44,6 +44,39 @@ const ZERO_VOLUME: Quantity = { value: '0', unit: 'uL' };
 
 /** What an empty well holds. */
 export const EMPTY_WELL_STATE: WellState = { volume: { value: '0', unit: 'uL' }, components: [] };
+
+/**
+ * What is wrong with components as given: a concentration must be per volume (or a percent), an
+ * amount must be an amount (mol, g, U, cells, CFU or a volume), and neither may be negative.
+ */
+export function componentProblems(components: Component[]): string[] {
+  const problems: string[] = [];
+  for (const c of components) {
+    if (c.concentration) {
+      const unit = known(c.concentration.unit);
+      if (!unit) problems.push(`${c.source}: unknown unit "${c.concentration.unit}"`);
+      else if (!MIXABLE[unit.dimension])
+        problems.push(
+          `${c.source}: ${unit.symbol} is not a concentration (give it per volume, or as a percent)`,
+        );
+      if (new LabDecimal(c.concentration.value).isNegative())
+        problems.push(`${c.source}: a concentration can't be negative`);
+    }
+    if (c.amount) {
+      const unit = known(c.amount.unit);
+      if (!unit) problems.push(`${c.source}: unknown unit "${c.amount.unit}"`);
+      else if (!DISSOLVED[unit.dimension])
+        problems.push(`${c.source}: ${unit.symbol} is not an amount (mol, g, U, cells or CFU)`);
+      if (new LabDecimal(c.amount.value).isNegative())
+        problems.push(`${c.source}: an amount can't be negative`);
+    }
+  }
+  return problems;
+}
+
+function known(code: string) {
+  return isUnit(code) ? getUnit(code) : undefined;
+}
 
 /** A portion of liquid on its way from one well to another: its volume and what it carries. */
 export interface Portion {

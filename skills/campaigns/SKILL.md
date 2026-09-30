@@ -32,6 +32,11 @@ A **campaign** is a lab project with a goal and aims. An **experiment** is one q
 - `runs.finish` `{status: done | failed | aborted, note?}`. Done needs every step ticked or skipped.
 - In a run a person started, your records go in directly; otherwise they are proposals. Filling a run from notes or a photo: tick only what the notes say, and put anything unclear in a deviation rather than guessing.
 
+## Concluding and handing hits on
+
+- `experiments.conclude` `{id, expectedVersion, summary, verdicts: [{hypothesis, verdict: supported | refuted | inconclusive, evidence: [{record, note}]}], runs?}` concludes a running or analysing experiment once its runs are finished. Give a verdict for every hypothesis and cite the runs, files or analyses; take numbers from analyses, not your own arithmetic. From an agent it is a proposal a person confirms.
+- `sets.create` `{label, members: [{record, note}], criterion, from: {experiment, run?}}` makes the list of hits one experiment hands on; put the value that qualified each member in its note. A follow-up experiment lists the set in `subjects`. `sets.get` `{id}` names the members and the experiments testing the set.
+
 ## Newer SOP versions
 
 When an SOP or bound record an experiment pins has a newer confirmed version, readiness says so (`protocol_current`). Tell the person what changed (`records.history` of the SOP), then `experiments.adopt_versions` `{id, expectedVersion}` moves every pin to the latest confirmed version. Never re-pin silently.
