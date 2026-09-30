@@ -341,3 +341,53 @@ export const transfersReserved = defineContract({
     ),
   }),
 });
+
+export const transfersDraftFromPlateMap = defineContract({
+  id: 'transfers.draft_from_plate_map',
+  summary:
+    "Draft a transfer plan that makes a plate map's concentrations: code dispenses each well's compound straight from its source well when that is within tolerance and the solvent limit, else from intermediate wells it plans with the dilution optimizer, then backfills every well to the same solvent volume. Give where each subject's stock is, the solvent well, the dispensing instrument with why, the final volume and the solvent limit. Refused, with the points no route reaches, when the settings can't make every well; try other settings with transfers.optimize_dilution",
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1),
+    map: recordIdOf('pmp').describe('The plate map; its current version is pinned'),
+    sourcePlates: z
+      .array(PlanPlate.omit({ role: true, plateMap: true }))
+      .min(1)
+      .max(50)
+      .describe('The plates the stocks and the solvent are in'),
+    sources: z
+      .array(
+        z.strictObject({
+          subject: z.string().min(1).describe('A subject of the plate map (its record ID)'),
+          plate: LocalId,
+          well: WellName,
+          stock: Quantity.describe('e.g. 10 mM'),
+        }),
+      )
+      .min(1),
+    solvent: z
+      .strictObject({ plate: LocalId, well: WellName })
+      .describe('Where the backfill and intermediate diluent come from, e.g. a DMSO well'),
+    finalVolume: LiquidVolume.describe("Each well's volume when everything is in"),
+    maxSolventPercent: Percent,
+    tolerance: Fraction.optional().describe('Default ±5%'),
+    instrument: Instrument,
+    why: z.string().min(1).describe('Why this instrument'),
+    intermediatePlate: LabwareTypeId.optional().describe(
+      'The plate type for intermediate dilutions, when some points need them',
+    ),
+    experiment: recordIdOf('exp').optional(),
+    reason: Reason,
+  }),
+  output: z.object({
+    plan: RecordEnvelope,
+    summary: z.object({
+      wells: z.number().int(),
+      fromSource: z.number().int(),
+      fromIntermediates: z.number().int(),
+      intermediateWells: z.number().int(),
+      backfilled: z.number().int(),
+      notes: z.array(z.string()),
+    }),
+  }),
+});

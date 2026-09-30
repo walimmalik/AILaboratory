@@ -13,6 +13,7 @@ import {
   type OperationError,
   type OperationRegistry,
 } from '../operations/index.ts';
+import { plateMapKinds } from '../platemaps/kinds.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -46,6 +47,7 @@ beforeEach(async () => {
     ...entityKinds,
     ...inventoryKinds,
     ...transferKinds,
+    ...plateMapKinds,
   ]) {
     kinds.register(kind);
   }
@@ -655,5 +657,145 @@ describe('transfer plans', () => {
       run(otherLab, 'transfers.reserved', { container: other.id }),
     );
     expect(hiddenReserved).toMatchObject({ code: 'not_found' });
+  });
+});
+
+describe('transfers.draft_from_plate_map', () => {
+  async function setup() {
+    const { echo, pp } = await lab();
+    const plate96 = await create('Assay 96', 'labware_type', {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 8, columns: 12 },
+      maxVolume: uL('300'),
+    });
+    const layout = await confirm(
+      await run<RecordEnvelope>(agent, 'layouts.draft', {
+        label: '4-point curve',
+        wells: 96,
+        subjectRole: 'compound',
+        subjectRegion: ['rows A-B'],
+        subjectSeries: { top: { value: '10', unit: 'uM' }, factor: '10', points: 4 },
+        fixed: [{ id: 'dmso', role: 'neutral_control', label: 'DMSO', region: ['H1:H2'] }],
+      }),
+    );
+    const kind = await run<RecordEnvelope>(agent, 'entities.draft_kind', {
+      label: 'Compound',
+      attributes: { base: 'chemical', prefix: 'CPD', fields: [] },
+    });
+    const a = await run<RecordEnvelope>(agent, 'entities.draft', {
+      label: 'Staurosporine',
+      entityKind: kind.id,
+    });
+    const b = await run<RecordEnvelope>(agent, 'entities.draft', {
+      label: 'Imatinib',
+      entityKind: kind.id,
+    });
+    const map = await run<RecordEnvelope>(agent, 'platemaps.draft', {
+      label: 'Two compounds',
+      layout: layout.id,
+      labware: { id: plate96.id, version: plate96.version },
+      subjects: [{ record: a.id }, { record: b.id }],
+    });
+    const input = {
+      label: 'Two compounds, 4 points',
+      map: map.id,
+      sourcePlates: [{ id: 'src', labwareType: { id: pp.id, version: pp.version } }],
+      sources: [
+        { subject: a.id, plate: 'src', well: 'A1', stock: { value: '10', unit: 'mM' } },
+        { subject: b.id, plate: 'src', well: 'A2', stock: { value: '10', unit: 'mM' } },
+      ],
+      solvent: { plate: 'src', well: 'P24' },
+      finalVolume: uL('25'),
+      maxSolventPercent: '1',
+      instrument: { instrument: echo.id },
+      why: 'Nanolitre DMSO transfers without tips',
+      intermediatePlate: pp.id,
+    };
+    return { input, a, map };
+  }
+
+  type Drafted = {
+    plan: RecordEnvelope;
+    summary: {
+      wells: number;
+      fromSource: number;
+      fromIntermediates: number;
+      intermediateWells: number;
+      backfilled: number;
+    };
+  };
+
+  it('dispenses from the source or intermediates, and backfills every well to the same solvent', async () => {
+    const { input } = await setup();
+    const out = await run<Drafted>(agent, 'transfers.draft_from_plate_map', input);
+    expect(out.summary).toMatchObject({ wells: 8, fromSource: 4, fromIntermediates: 4 });
+    expect(out.summary.intermediateWells).toBeGreaterThan(0);
+    const groups = (
+      out.plan.attributes as {
+        groups: {
+          id: string;
+          transfers: {
+            to: { plate: string; well: string };
+            volume: { value: string; unit: string };
+          }[];
+        }[];
+      }
+    ).groups;
+    expect(groups.map((g) => g.id)).toEqual([
+      'intermediate_solvent',
+      'intermediate_stock',
+      'compounds',
+      'backfill',
+    ]);
+    // 10 µM from 10 mM into 25 µL is 25 nL, ten droplets.
+    expect(groups[2]?.transfers[0]?.volume).toEqual(nL('25'));
+    // The DMSO wells get the full solvent volume by backfill.
+    const h1 = groups[3]?.transfers.find((t) => t.to.well === 'H1');
+    expect(h1?.volume).toEqual(nL('25'));
+    const ready = await run<Readiness>(person, 'records.readiness', { id: out.plan.id });
+    const failing = ready.checks.filter((c) => !c.passed).map((c) => c.id);
+    // Echo volumes fit; the intermediate diluent is too much for it, which readiness says.
+    expect(ready.checks.find((c) => c.id === 'volumes_fit')?.message).toMatch(
+      /^Solvent into the intermediate wells: 2 transfers: .* is above the maximum of 10 µL$/,
+    );
+    expect(ready.checks.find((c) => c.id === 'intermediates_first')?.passed).toBe(true);
+    expect(out.summary.backfilled).toBe(6);
+    const flex = (
+      await run<{ options: { instrument: { id: string } }[] }>(agent, 'transfers.options', {
+        volume: uL('15'),
+      })
+    ).options[0]?.instrument.id;
+    const switched = await run<RecordEnvelope>(agent, 'transfers.set_instrument', {
+      id: out.plan.id,
+      expectedVersion: out.plan.version,
+      group: 'intermediate_solvent',
+      instrument: { instrument: flex },
+      why: 'Microlitres of DMSO',
+    });
+    const after = await run<Readiness>(person, 'records.readiness', { id: switched.id });
+    expect(after.checks.find((c) => c.id === 'volumes_fit')?.passed).toBe(true);
+  });
+
+  it('refuses missing stocks, unreachable points and other labs', async () => {
+    const { input, a } = await setup();
+    const missing = await refused(
+      run(agent, 'transfers.draft_from_plate_map', { ...input, sources: input.sources.slice(1) }),
+    );
+    expect(missing.message).toContain('Say where the stock is for');
+    const tight = await refused(
+      run(agent, 'transfers.draft_from_plate_map', { ...input, intermediatePlate: undefined }),
+    );
+    expect(tight.message).toContain('give the intermediatePlate type');
+    const low = await refused(
+      run(agent, 'transfers.draft_from_plate_map', {
+        ...input,
+        sources: input.sources.map((s) =>
+          s.subject === a.id ? { ...s, stock: { value: '1', unit: 'uM' } } : s,
+        ),
+      }),
+    );
+    expect(low.message).toContain('No route reaches');
+    const hidden = await refused(run(otherLab, 'transfers.draft_from_plate_map', input));
+    expect(hidden).toMatchObject({ code: 'not_found' });
   });
 });
