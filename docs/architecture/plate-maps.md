@@ -36,6 +36,28 @@ Every write runs the rules with one subject (`apps/api/src/platemaps/spec.ts` tu
 
 Changes and confirmation use the record operations (`records.update`, `records.confirm_section`) like every design. The seed drafts five layouts from `seed/layouts.yaml`: IL-6 ELISA 96 (40 samples in duplicate), single-point 384 (320 compounds), dose-response 384 (16 compounds, 10 points in duplicate), pNPP 96 and Dual-Glo 384.
 
+## Plate maps (014a-3)
+
+A `plate_map` record (`pmp_`, `PMP-0001`) applies a layout to real subjects (P1, M3):
+
+| Section | Fields |
+| --- | --- |
+| What goes on the plates | `layout` pinned as `{id, version}` (ADR 0039), `experiment` or `purpose`, `labware` (a pinned labware type whose well count must match the layout), `subjects` in placement order (entities, samples, lots or containers), `controls` (a record for each of the layout's fixed regions) |
+| Placement and hand edits | `strategy` (instead of the layout's), `seed`, `overrides` (plate, well, role, subject, note), `notes` |
+
+The wells are never stored. `apps/api/src/platemaps/generate.ts` works them out from the pinned layout version, the subjects, the seed and the overrides every time, so they always match the record and a map rebuilds exactly (M1). Every write does the same, so a map the layout can't place is refused. `platemaps.draft` pins the layout's current version unless given one, and sets a seed for randomized or balanced placement.
+
+Readiness: it places something and its layout version is confirmed (blockers); a newer confirmed layout version, control regions that name nothing, and hand edits that no longer land on a plate (warnings).
+
+| Operation | What it does | Agents |
+| --- | --- | --- |
+| `platemaps.draft` | Drafts a plate map from a layout and subjects | direct |
+| `platemaps.wells` | Every planned well, plate by plate, with each subject's name; hand edits that no longer land | read |
+| `platemaps.override` | Hand edits to wells (P4, M5), or clears them | direct on drafts, proposed on confirmed maps |
+| `platemaps.export` | CSV: plate, well, role, subject, name, replicate, point, concentration, unit | read |
+
+Subjects, controls and strategy change through `records.update`; confirming is `records.confirm_section`, like every design.
+
 ## Not yet
 
-The plate map record and its operations with CSV export (014a-3); the plate editor and layout library (014b).
+The plate editor and layout library (014b). Real barcoded plates come with the transfer plan (016).

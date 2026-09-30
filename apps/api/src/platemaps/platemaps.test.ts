@@ -15,6 +15,7 @@ let registry: OperationRegistry;
 let person: RecordContext;
 let agent: RecordContext;
 let otherLab: RecordContext;
+let kinds: KindRegistry;
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -28,7 +29,7 @@ beforeEach(async () => {
     orgId: other.orgId,
     labId: other.labId,
   };
-  const kinds = new KindRegistry();
+  kinds = new KindRegistry();
   for (const kind of [...entityKinds, ...plateMapKinds]) kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus());
 });
@@ -177,6 +178,221 @@ describe('layouts', () => {
     const layout = await run(agent, 'layouts.draft', screen);
     await expect(
       registry.execute(otherLab, 'layouts.preview', { layout: layout.id, subjects: 10 }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
+/** A person confirms every section of a draft, which activates it. */
+async function confirm(record: RecordEnvelope): Promise<RecordEnvelope> {
+  let current = record;
+  for (const section of kinds.get(record.kind).sections ?? []) {
+    current = await run(person, 'records.confirm_section', {
+      id: current.id,
+      expectedVersion: current.version,
+      section: section.id,
+    });
+  }
+  return current;
+}
+
+let kindCount = 0;
+async function samples(n: number) {
+  kindCount += 1;
+  const kind = await run(agent, 'entities.draft_kind', {
+    label: `Supernatant ${kindCount}`,
+    attributes: {
+      base: 'chemical',
+      prefix: `SU${String.fromCharCode(64 + kindCount)}`,
+      fields: [],
+    },
+  });
+  const out: RecordEnvelope[] = [];
+  for (let i = 1; i <= n; i++)
+    out.push(await run(agent, 'entities.draft', { label: `Donor ${i}`, entityKind: kind.id }));
+  return out;
+}
+
+interface Wells {
+  perPlate: number;
+  plates: {
+    plate: number;
+    wells: { well: string; role: string; subject?: string; label?: string; override?: true }[];
+  }[];
+  staleOverrides: unknown[];
+}
+
+describe('plate maps', () => {
+  it('applies a confirmed layout to samples, works the wells out and exports them', async () => {
+    const layout = await confirm(await run(agent, 'layouts.draft', elisa));
+    const [a, b, c] = await samples(3);
+    const map = await run(agent, 'platemaps.draft', {
+      label: 'IL-6, three donors',
+      layout: layout.id,
+      subjects: [a, b, c].map((s) => ({ record: s?.id })),
+    });
+    expect(map).toMatchObject({ kind: 'plate_map', status: 'draft' });
+    expect(map.name).toMatch(/^PMP-\d{4}$/);
+    expect(map.attributes).toMatchObject({ layout: { id: layout.id, version: layout.version } });
+    expect(map.attributes).not.toHaveProperty('seed');
+
+    const wells = await run<Wells>(agent, 'platemaps.wells', { id: map.id });
+    expect(wells.plates).toHaveLength(1);
+    const plate = wells.plates[0]?.wells ?? [];
+    expect(plate.find((w) => w.well === 'A3')).toMatchObject({
+      role: 'sample',
+      subject: a?.id,
+      label: `${a?.name} Donor 1`,
+    });
+    expect(plate.filter((w) => w.subject === c?.id)).toHaveLength(2);
+
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: map.id });
+    expect(readiness.checks.find((x) => x.id === 'layout_confirmed')?.passed).toBe(true);
+    expect(readiness.checks.find((x) => x.id === 'has_subjects')?.passed).toBe(true);
+
+    const exported = await run<{ filename: string; csv: string }>(agent, 'platemaps.export', {
+      id: map.id,
+    });
+    expect(exported.filename).toBe(`${map.name}.csv`);
+    const lines = exported.csv.trim().split('\n');
+    expect(lines[0]).toBe('plate,well,role,subject,name,replicate,point,concentration,unit');
+    expect(lines).toContain('1,A1,standard,standard,IL-6 standard,1,1,500,pg/mL');
+    expect(lines.some((l) => l.startsWith(`1,A3,sample,${a?.id},`))).toBe(true);
+  });
+
+  it('keeps a seed for randomized placement, so the map rebuilds exactly', async () => {
+    const layout = await confirm(
+      await run(agent, 'layouts.draft', { ...elisa, strategy: 'randomized_within_plate' }),
+    );
+    const subjects = (await samples(10)).map((s) => ({ record: s.id }));
+    const map = await run(agent, 'platemaps.draft', {
+      label: 'Random',
+      layout: layout.id,
+      subjects,
+    });
+    expect(typeof (map.attributes as { seed?: number }).seed).toBe('number');
+    const first = await run<Wells>(agent, 'platemaps.wells', { id: map.id });
+    const again = await run<Wells>(agent, 'platemaps.wells', { id: map.id });
+    expect(again).toEqual(first);
+    const inOrder = await run(agent, 'platemaps.draft', {
+      label: 'In order',
+      layout: layout.id,
+      subjects,
+      strategy: 'in_order',
+    });
+    expect(inOrder.attributes).not.toHaveProperty('seed');
+  });
+
+  it('changes wells by hand, flags edits that no longer land, and clears them', async () => {
+    const layout = await confirm(await run(agent, 'layouts.draft', elisa));
+    const [a, b] = await samples(2);
+    let map = await run(agent, 'platemaps.draft', {
+      label: 'Hand edits',
+      layout: layout.id,
+      subjects: [{ record: a?.id }],
+    });
+    map = await run(agent, 'platemaps.override', {
+      id: map.id,
+      expectedVersion: map.version,
+      overrides: [
+        { plate: 1, well: 'H12', role: 'sample', subject: b?.id, note: 'Spare well for a repeat' },
+        { plate: 2, well: 'A1', role: 'blank' },
+      ],
+    });
+    const wells = await run<Wells>(agent, 'platemaps.wells', { id: map.id });
+    expect(wells.plates[0]?.wells.find((w) => w.well === 'H12')).toMatchObject({
+      subject: b?.id,
+      override: true,
+    });
+    expect(wells.staleOverrides).toHaveLength(1);
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: map.id });
+    expect(readiness.checks.find((x) => x.id === 'overrides_apply')).toMatchObject({
+      passed: false,
+      message: expect.stringContaining('plate 2 A1'),
+    });
+    map = await run(agent, 'platemaps.override', {
+      id: map.id,
+      expectedVersion: map.version,
+      clear: [{ plate: 2, well: 'A1' }],
+    });
+    expect((map.attributes as { overrides: unknown[] }).overrides).toHaveLength(1);
+    await expect(
+      registry.execute(agent, 'platemaps.override', {
+        id: map.id,
+        expectedVersion: map.version,
+        clear: [{ plate: 1, well: 'A1' }],
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('No hand edit on plate 1 A1') });
+
+    const confirmed = await confirm(map);
+    const proposed = await registry.execute(agent, 'platemaps.override', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      overrides: [{ plate: 1, well: 'H11', role: 'empty' }],
+    });
+    expect(proposed.status).not.toBe('done');
+  });
+
+  it('says when the layout is not confirmed or controls name nothing', async () => {
+    const layout = await run(agent, 'layouts.draft', screen);
+    const [a] = await samples(1);
+    const map = await run(agent, 'platemaps.draft', {
+      label: 'Draft layout',
+      layout: layout.id,
+      subjects: [{ record: a?.id }],
+    });
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: map.id });
+    expect(readiness.checks.find((x) => x.id === 'layout_confirmed')?.passed).toBe(false);
+    expect(readiness.checks.find((x) => x.id === 'controls_named')).toMatchObject({
+      passed: false,
+      message: expect.stringContaining('DMSO'),
+    });
+  });
+
+  it('refuses maps that do not fit their layout', async () => {
+    const layout = await confirm(await run(agent, 'layouts.draft', elisa));
+    const [a] = await samples(1);
+    const draft = (extra: object) =>
+      registry.execute(agent, 'platemaps.draft', {
+        label: 'Bad',
+        layout: layout.id,
+        subjects: [{ record: a?.id }],
+        ...extra,
+      });
+    await expect(draft({ layout: a?.id })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(draft({ subjects: [{ record: a?.id }, { record: a?.id }] })).rejects.toMatchObject(
+      { message: expect.stringContaining('placed twice') },
+    );
+    await expect(draft({ subjects: [{ record: layout.id }] })).rejects.toMatchObject({
+      message: expect.stringContaining('is not an entity, sample, lot or container'),
+    });
+    await expect(draft({ controls: [{ region: 'dmso', record: a?.id }] })).rejects.toMatchObject({
+      message: expect.stringContaining('The layout has no region dmso'),
+    });
+    await expect(draft({ layoutVersion: 9 })).rejects.toMatchObject({ code: 'not_found' });
+    const many = (await samples(41)).map((s) => ({ record: s.id }));
+    const two = await run<Wells>(agent, 'platemaps.wells', {
+      id: (await run(agent, 'platemaps.draft', { label: '41', layout: layout.id, subjects: many }))
+        .id,
+    });
+    expect(two.plates).toHaveLength(2);
+  });
+
+  it('keeps plate maps to their lab', async () => {
+    const layout = await confirm(await run(agent, 'layouts.draft', elisa));
+    const map = await run(agent, 'platemaps.draft', {
+      label: 'Mine',
+      layout: layout.id,
+      subjects: [],
+    });
+    await expect(
+      registry.execute(otherLab, 'platemaps.wells', { id: map.id }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      registry.execute(otherLab, 'platemaps.draft', {
+        label: 'Theirs',
+        layout: layout.id,
+        subjects: [],
+      }),
     ).rejects.toMatchObject({ code: 'not_found' });
   });
 });

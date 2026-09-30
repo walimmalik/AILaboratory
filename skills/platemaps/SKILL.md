@@ -1,9 +1,9 @@
 ---
 name: ailab-platemaps
-description: Work with plate layouts in AILaboratory through its MCP tools: draft a layout template (what goes in which wells, controls, standards, replicates, placement, edges, analysis groups) and preview how many subjects fit and how many plates they need.
+description: Work with plate layouts and plate maps in AILaboratory through its MCP tools: draft a layout template (what goes in which wells, controls, standards, replicates, placement, edges, analysis groups), preview how many subjects fit, apply a layout to real samples or compounds as a plate map, edit wells by hand and export the map as CSV.
 ---
 
-# Plate layouts in AILaboratory
+# Plate layouts and plate maps in AILaboratory
 
 A **layout template** is the lab's reusable plate pattern for one format: which wells hold subjects, which hold controls, blanks or a standard curve, how replicates sit, how subjects are placed and how analysis groups the wells. It never names samples; a plate map applies it to real subjects. Plan 014; see docs/architecture/plate-maps.md.
 
@@ -28,3 +28,10 @@ A layout that can't work on its plate (a region off the plate, two regions shari
 ## Changing and confirming
 
 A layout is a design: change it with `records.update` and a person confirms it section by section (`records.confirm_section`). Only confirmed layouts are used downstream.
+
+## Plate maps
+
+- `platemaps.draft` `{label, layout, subjects: [{record, label?}], experiment?, purpose?, labware?: {id, version}, controls?: [{region, record}], strategy?}` applies a layout to real subjects in the order given. The layout's current version is pinned (`layoutVersion` to pin another). Use a confirmed layout; a draft one blocks confirming the map. Name what goes in each control region with `controls` (the region is the layout's fixed region id, e.g. `dmso`).
+- `platemaps.wells` `{id}` returns every well, plate by plate, with role, subject and its name, replicate, series point and concentration. Read it rather than working positions out yourself.
+- `platemaps.override` `{id, expectedVersion, overrides: [{plate, well, role, subject?, note}]}` changes wells by hand; `clear: [{plate, well}]` removes hand edits. Say why in `note`. On a confirmed map it is a proposal.
+- `platemaps.export` `{id}` gives the CSV (`filename`, `csv`). Hand big exports over as a file, not pasted in chat.
