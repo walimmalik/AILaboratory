@@ -265,3 +265,27 @@ export function waitingForYou(
   }
   return { drafts: [...drafts.values()].filter((d) => d !== undefined), changes };
 }
+
+/**
+ * Folds runs of the same failure (the same operation failing for the same reason, one after the
+ * other) into their newest line with the others counted, so 18 documents that can't be read yet
+ * are one line, not 18 red ones.
+ */
+export function foldRepeats(entries: readonly ActivityEntry[]) {
+  const lines: { entry: ActivityEntry; more: ActivityEntry[] }[] = [];
+  for (const entry of entries) {
+    const last = lines.at(-1);
+    if (
+      last &&
+      entry.outcome === 'failed' &&
+      last.entry.outcome === 'failed' &&
+      last.entry.operationId === entry.operationId &&
+      last.entry.error?.message === entry.error?.message
+    ) {
+      last.more.push(entry);
+    } else {
+      lines.push({ entry, more: [] });
+    }
+  }
+  return lines;
+}

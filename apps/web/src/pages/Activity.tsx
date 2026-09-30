@@ -5,6 +5,7 @@ import { Fragment, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
 import {
   actorLabel,
+  foldRepeats,
   formatWhen,
   isAgent,
   operationVerb,
@@ -63,10 +64,11 @@ export function ActivityPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((entry) => (
+                  {foldRepeats(entries).map(({ entry, more }) => (
                     <Fragment key={entry.id}>
                       <Row
                         entry={entry}
+                        more={more}
                         fresh={live.fresh.has(entry.id)}
                         open={open === entry.id}
                         onToggle={() => setOpen(open === entry.id ? undefined : entry.id)}
@@ -86,16 +88,19 @@ export function ActivityPage() {
 
 function Row({
   entry,
+  more,
   fresh,
   open,
   onToggle,
 }: {
   entry: ActivityEntry;
+  more: ActivityEntry[];
   fresh: boolean;
   open: boolean;
   onToggle: () => void;
 }) {
   const me = useMe();
+  const touched = [...new Set([entry, ...more].flatMap((e) => e.recordIds))];
   return (
     <tr
       className={`clickable ${fresh ? 'fresh' : ''}`}
@@ -115,7 +120,7 @@ function Row({
       </td>
       <td>
         {operationVerb(entry.operationId)}{' '}
-        {entry.recordIds.map((id, i) => (
+        {touched.slice(0, 4).map((id, i) => (
           <Fragment key={id}>
             {i > 0 && ', '}
             <Link
@@ -124,13 +129,20 @@ function Row({
               className="mono"
               onClick={(e) => e.stopPropagation()}
             >
-              {entry.recordNames[id] ?? 'record'}
+              {[entry, ...more].find((e) => e.recordNames[id])?.recordNames[id] ?? 'record'}
             </Link>
           </Fragment>
         ))}
+        {touched.length > 4 && <span className="muted"> and {touched.length - 4} more</span>}
         {entry.recordIds.length === 0 && inputLabel(entry) && <span>“{inputLabel(entry)}”</span>}
       </td>
-      <td className={`mono ${outcomeTone(entry.outcome)}`}>{outcomeLabel(entry.outcome)}</td>
+      <td>
+        <span className={`mono ${outcomeTone(entry.outcome)}`}>
+          {outcomeLabel(entry.outcome)}
+          {more.length > 0 && ` ×${more.length + 1}`}
+        </span>
+        {entry.error && <span className="muted"> · {entry.error.message}</span>}
+      </td>
     </tr>
   );
 }

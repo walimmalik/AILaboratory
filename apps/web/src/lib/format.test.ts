@@ -5,6 +5,7 @@ import {
   describeEntry,
   describeToolStep,
   diffRecords,
+  foldRepeats,
   formatValue,
   waitingForYou,
 } from './format.ts';
@@ -157,5 +158,38 @@ describe('waitingForYou', () => {
         { operationId: 'records.update', outcome: 'failed', result: undefined },
       ]),
     ).toEqual({ drafts: [], changes: [] });
+  });
+});
+
+describe('foldRepeats', () => {
+  const entry = (id: string, outcome: ActivityEntry['outcome'], message?: string) =>
+    ({
+      id,
+      at: '2026-09-30T00:00:00.000Z',
+      actor: { type: 'user', userId: 'usr_1' },
+      operationId: 'library.parse',
+      outcome,
+      recordIds: [],
+      recordNames: {},
+      input: {},
+      durationMs: 1,
+      ...(message ? { error: { code: 'invalid_state', message } } : {}),
+    }) as ActivityEntry;
+
+  it('folds a run of the same failure and keeps everything else apart', () => {
+    const lines = foldRepeats([
+      entry('a', 'failed', 'needs Docling'),
+      entry('b', 'failed', 'needs Docling'),
+      entry('c', 'failed', 'needs Docling'),
+      entry('d', 'failed', 'file is empty'),
+      entry('e', 'succeeded'),
+      entry('f', 'succeeded'),
+    ]);
+    expect(lines.map((l) => [l.entry.id, l.more.length])).toEqual([
+      ['a', 2],
+      ['d', 0],
+      ['e', 0],
+      ['f', 0],
+    ]);
   });
 });
