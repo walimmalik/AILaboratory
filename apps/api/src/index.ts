@@ -5,6 +5,8 @@ import { modelFromEnv } from './assistant/config.ts';
 import { markInterrupted } from './assistant/store.ts';
 import { connect } from './db/client.ts';
 import { entityKinds } from './entities/kinds.ts';
+import { fileKinds } from './files/kinds.ts';
+import { fileStoreFromEnv } from './files/store.ts';
 import { instrumentKinds } from './instruments/kinds.ts';
 import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
@@ -30,6 +32,7 @@ for (const kind of [
   ...reagentKinds,
   ...entityKinds,
   ...inventoryKinds,
+  ...fileKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);
@@ -46,7 +49,12 @@ console.log(
 
 const port = Number(process.env.API_PORT ?? 3001);
 serve(
-  { fetch: createApp({ db: connection.db, kinds, assistant }).fetch, port, hostname: '0.0.0.0' },
+  {
+    fetch: createApp({ db: connection.db, kinds, assistant, files: fileStoreFromEnv(process.env) })
+      .fetch,
+    port,
+    hostname: '0.0.0.0',
+  },
   (info) => {
     console.log(`api listening on http://localhost:${info.port}`);
   },

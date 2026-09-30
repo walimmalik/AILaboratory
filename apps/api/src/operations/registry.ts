@@ -8,6 +8,7 @@ import { RecordId } from '@ailab/schema';
 import { z } from 'zod';
 import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
+import type { FileStore } from '../files/store.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { type ActivityBus, recordActivity } from './activity.ts';
@@ -20,6 +21,8 @@ export interface OperationDeps {
   registry: OperationRegistry;
   bus: ActivityBus;
   assistant: Assistant;
+  /** Where file bytes live (plan 011a). */
+  files: FileStore;
 }
 
 type Policy = 'direct' | 'propose';

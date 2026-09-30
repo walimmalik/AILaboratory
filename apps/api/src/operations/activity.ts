@@ -96,8 +96,16 @@ export async function listActivity(
   }));
 }
 
-/** The input as the ledger keeps it: attached files by name and size, not their whole text. */
+/** The input as the ledger keeps it: attached and uploaded files by size, not their whole content. */
 function ledgerInput(input: unknown): unknown {
+  const upload = input as
+    | { mediaType?: unknown; base64?: unknown; text?: unknown }
+    | null
+    | undefined;
+  if (upload?.mediaType && (typeof upload.base64 === 'string' || typeof upload.text === 'string')) {
+    const { base64, text, ...rest } = upload as { base64?: string; text?: string };
+    return { ...rest, characters: (base64 ?? text ?? '').length };
+  }
   const files = (input as { attachments?: unknown } | null | undefined)?.attachments;
   if (!Array.isArray(files)) return input;
   return {

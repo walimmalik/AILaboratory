@@ -1,6 +1,7 @@
 export * from './assistant.ts';
 export * from './contents.ts';
 export * from './entities.ts';
+export * from './files.ts';
 export * from './instruments.ts';
 export * from './inventory.ts';
 export * from './labware.ts';

@@ -1,6 +1,8 @@
 import { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
 import { entityOperations } from '../entities/operations.ts';
+import { fileOperations } from '../files/operations.ts';
+import { type FileStore, MemoryFileStore } from '../files/store.ts';
 import { instrumentOperations } from '../instruments/operations.ts';
 import { contentsOperations } from '../inventory/contents.ts';
 import { inventoryOperations } from '../inventory/operations.ts';
@@ -25,8 +27,9 @@ export function createRegistry(
   kinds: KindRegistry,
   bus = new ActivityBus(),
   assistant = new Assistant({ reason: 'No model is set up' }),
+  files: FileStore = new MemoryFileStore(),
 ) {
-  return new OperationRegistry({ db, kinds, bus, assistant }).register(
+  return new OperationRegistry({ db, kinds, bus, assistant, files }).register(
     ...recordOperations,
     ...proposalOperations,
     ...reviewOperations,
@@ -37,6 +40,7 @@ export function createRegistry(
     ...entityOperations,
     ...inventoryOperations,
     ...contentsOperations,
+    ...fileOperations,
     ...assistantOperations,
   );
 }

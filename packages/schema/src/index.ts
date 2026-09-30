@@ -3,6 +3,7 @@ export * from './assistant.ts';
 export * from './contents.ts';
 export * from './design.ts';
 export * from './entities.ts';
+export * from './files.ts';
 export * from './ids.ts';
 export * from './instruments.ts';
 export * from './inventory.ts';

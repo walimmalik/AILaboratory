@@ -1,4 +1,4 @@
-import type { OperationErrorBody } from '@ailab/schema';
+import type { FileAttributes, OperationErrorBody, RecordEnvelope } from '@ailab/schema';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -9,6 +9,8 @@ import { findConversation, toSummary } from './assistant/store.ts';
 import { resolveContext, resolveSession, SESSION_DAYS, signIn, signOut } from './auth.ts';
 import type { Db } from './db/client.ts';
 import { labs, users } from './db/schema.ts';
+import { readBytes } from './files/operations.ts';
+import { type FileStore, MemoryFileStore } from './files/store.ts';
 import { describeOperation, openApiDocument } from './operations/describe.ts';
 import { httpStatus, toErrorBody } from './operations/errors.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
@@ -22,6 +24,8 @@ export interface AppDependencies {
   bus?: ActivityBus;
   /** The in-app assistant and its model; without one, asking it is refused with a message. */
   assistant?: Assistant;
+  /** Where file bytes live; in memory unless given (tests). */
+  files?: FileStore;
 }
 
 type Env = { Variables: { ctx: RecordContext } };
@@ -39,8 +43,9 @@ export function createApp({
   kinds = new KindRegistry(),
   bus = new ActivityBus(),
   assistant = new Assistant({ reason: 'No model is set up' }),
+  files = new MemoryFileStore(),
 }: AppDependencies) {
-  const registry = createRegistry(db, kinds, bus, assistant);
+  const registry = createRegistry(db, kinds, bus, assistant, files);
   const app = new Hono<Env>();
 
   app.get('/health', (c) => c.json({ status: 'ok', service: 'api' }));
@@ -107,6 +112,42 @@ export function createApp({
   app.get('/v1/operations', (c) => c.json({ operations: registry.list().map(describeOperation) }));
 
   app.get('/v1/openapi.json', (c) => c.json(openApiDocument(registry.list())));
+
+  /**
+   * A stored file's bytes, for people to open or download (plan 011a). Types a browser would run
+   * (HTML, SVG) are served sandboxed so a file can never act as the app.
+   */
+  app.get('/v1/files/:id', async (c) => {
+    try {
+      const result = await registry.execute(c.get('ctx'), 'files.get', {
+        id: c.req.param('id'),
+        as: 'none',
+      });
+      const { file } = (result as { output: { file: RecordEnvelope } }).output;
+      const attributes = file.attributes as FileAttributes;
+      const bytes = await readBytes(file, registry.deps.files);
+      const viewable =
+        attributes.mediaType === 'application/pdf' ||
+        /^image\/(png|jpeg|gif|webp)$/.test(attributes.mediaType);
+      const disposition = c.req.query('download') === '1' ? 'attachment' : 'inline';
+      return new Response(bytes.slice().buffer as ArrayBuffer, {
+        headers: {
+          'Content-Type': attributes.mediaType.startsWith('text/')
+            ? `${attributes.mediaType}; charset=utf-8`
+            : attributes.mediaType,
+          'Content-Length': String(bytes.byteLength),
+          'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(attributes.originalName)}`,
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'private, max-age=31536000, immutable',
+          ...(viewable ? {} : { 'Content-Security-Policy': "sandbox; default-src 'none'" }),
+        },
+      });
+    } catch (error) {
+      const body = toErrorBody(error);
+      if (body.code === 'internal') console.error(error);
+      return c.json(body, httpStatus(body.code));
+    }
+  });
 
   app.post('/v1/ops/:operationId', async (c) => {
     let input: unknown = {};

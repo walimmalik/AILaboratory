@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d so far). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a so far). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -42,6 +42,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0030](../decisions/0030-locations-and-containers.md) | Locations as a tree; containers named by their labware family (`PLT-000001`), held in a location or a rack position, with external barcodes that also scan |
 | [0031](../decisions/0031-well-contents.md) | Well contents as components (samples, lots) with concentrations, or amounts when dry; exact mixing math; unknowns stay unknown |
 | [0032](../decisions/0032-inherited-handling-rules.md) | A container inherits the handling rules of its contents; per rule type the strictest wins, enforced if any source is, every source listed |
+| [0033](../decisions/0033-file-store.md) | Files: bytes in a content-addressed store (a folder now, S3-compatible later), one `fil_` record per lab per hash, bytes never change, risky types served sandboxed |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 
