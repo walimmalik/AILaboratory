@@ -1,11 +1,11 @@
 import { type EvidenceInput, type RecordEnvelope, recordsUpdate } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { fieldLabel } from './RecordReview.tsx';
-import { sopItemEditors } from './SopEditors.tsx';
+import { sopItemEditors, sopListEditors } from './SopEditors.tsx';
 
 type Source = 'person' | 'measured' | 'datasheet' | 'calculated';
 const sources: [Source, string][] = [
@@ -45,6 +45,12 @@ export function SectionEditor({
   const [source, setSource] = useState<Source>('person');
   const [reference, setReference] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+  // Values also change without a typed change event (a pick, a suggested fix), so validity is read
+  // again after every change; fields set their own validity first, in their effects.
+  useEffect(() => {
+    if (values && form.current) setInvalid(!form.current.checkValidity());
+  }, [values]);
   const [note, setNote] = useState('');
   const queryClient = useQueryClient();
 
@@ -102,9 +108,12 @@ export function SectionEditor({
       kindOfPrefix={kindOfPrefix}
       hidden={new Set(notApplicable)}
       document={{ ...base.attributes, ...values }}
-      {...(record.kind === 'sop' ? { itemEditors: sopItemEditors } : {})}
+      {...(record.kind === 'sop'
+        ? { itemEditors: sopItemEditors, listEditors: sopListEditors }
+        : {})}
     >
       <form
+        ref={form}
         className="editor"
         // A field whose text can't be a value (not a number, not JSON) holds Save until it is fixed.
         onChange={(e) => setInvalid(!e.currentTarget.checkValidity())}

@@ -674,31 +674,42 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(page).toHaveURL(new RegExp(`/records/${drafted.output.id}`));
   const procedure = page.getByRole('region', { name: 'At the bench' });
   await expect(procedure).toContainText('Coat.');
-  await expect(procedure).toContainText('volume 100 µL (Well volume)');
+  await expect(procedure).toContainText('volume 100 µL');
+  // A number that comes from a value reads as that value: hover says which, and Names shows it.
+  await procedure.getByRole('button', { name: '100 µL' }).first().hover();
+  await expect(page.getByRole('tooltip')).toContainText('Well volume');
+  await expect(page.getByRole('tooltip')).toContainText('usual value');
+  await procedure.getByRole('button', { name: 'Names' }).click();
+  await expect(procedure).toContainText('volume Well volume');
+  await procedure.getByRole('button', { name: 'Numbers' }).click();
   await procedure.getByText('Values for a run').click();
   await expect(procedure.getByRole('row', { name: /Coating solution/ })).toContainText(/9\.60* mL/);
 
-  // Variables are edited one per row, a value as a line of text, not as JSON.
+  // A value is its name and one box: what is written there decides its kind.
   const variables = page.getByRole('region', { name: 'Variables' });
   await variables.getByRole('button', { name: 'Edit variables' }).click();
-  await variables.locator('summary').filter({ hasText: 'Well volume' }).click();
-  await variables.getByRole('textbox', { name: 'Value', exact: true }).fill('150 uL');
-  // A formula is written with the values' lab names, picked as they are typed, and worked out live.
-  await variables.locator('summary').filter({ hasText: 'Coating solution' }).click();
-  const formula = variables.getByRole('textbox', { name: 'Formula' });
-  await expect(formula).toHaveValue('[Wells] × [Well volume]');
-  await formula.fill('[Wells] × well vol');
+  await variables.getByRole('textbox', { name: 'Well volume: value or formula' }).fill('150 uL');
+  const formula = variables.getByRole('textbox', { name: 'Coating solution: value or formula' });
+  await expect(formula).toHaveValue('Wells × Well volume');
+  await expect(variables).toContainText('worked out');
+  // Names are recognized as they are typed, and picked from a list under the caret.
+  await formula.fill('Wells × well vol');
   await variables
-    .getByRole('list', { name: 'Matching values' })
-    .getByRole('button', { name: 'Well volume' })
+    .getByRole('listbox', { name: 'Matching names' })
+    .getByRole('option', { name: /Well volume/ })
     .click();
-  await expect(formula).toHaveValue('[Wells] × [Well volume]');
+  await expect(formula).toHaveValue('Wells × Well volume');
   await formula.press('End');
-  await formula.pressSequentially(' × 1.1');
+  await formula.pressSequentially(' * 1.1');
   await expect(variables).toContainText(/= 15\.840* mL/);
+  // A name that is not one is marked, with the likely one offered.
+  await formula.fill('Wells × Well vol × 1.1');
+  await expect(variables).toContainText('Did you mean Well volume?');
+  await variables.getByRole('button', { name: 'Use Well volume' }).click();
+  await expect(formula).toHaveValue('Wells × Well volume × 1.1');
   await variables.getByRole('button', { name: 'Save' }).click();
   await expect(variables.getByRole('button', { name: 'Edit variables' })).toBeVisible();
-  await expect(procedure).toContainText('volume 150 µL (Well volume)');
+  await expect(procedure).toContainText('volume 150 µL');
   await procedure
     .locator('details')
     .filter({ hasText: 'Values for a run' })
@@ -709,14 +720,20 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
     /15\.840* mL/,
   );
 
-  // A step reads as its action, words and settings, a value named by its lab name.
+  // A step's words mark its values and materials; what it uses and its settings are read from them.
   const steps = page.getByRole('region', { name: 'Procedure' });
   await steps.getByRole('button', { name: 'Edit procedure' }).click();
   await steps.locator('summary').filter({ hasText: 'Coat' }).click();
   await expect(steps.getByRole('combobox', { name: 'Action' })).toHaveValue('add');
-  await expect(steps.getByRole('combobox', { name: 'volume value' })).toHaveValue('[Well volume]');
-  await expect(steps.getByRole('checkbox', { name: 'Coating plate' })).toBeChecked();
-  await steps.getByRole('button', { name: 'Cancel' }).click();
+  await steps
+    .getByRole('textbox', { name: 'Step 1: what to do' })
+    .fill('Add Well volume of coating solution to the Coating plate. Incubate 2 h.');
+  const read = steps.locator('.step-read');
+  await expect(read).toContainText('Uses Coating plate');
+  await expect(read).toContainText('volume = Well volume');
+  await expect(read).toContainText('duration = 2 h');
+  await steps.getByRole('button', { name: 'Save' }).click();
+  await expect(procedure).toContainText('Add 150 µL of coating solution to the Coating plate.');
 
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');
