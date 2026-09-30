@@ -16,7 +16,8 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 | [002 Core records](../plans/002-core-records.md) | Record envelope, IDs and names, units, history, links, actors | Built (PR #2) |
 | [003 Operation registry](../plans/003-operation-registry.md) | Operations, REST, MCP, proposals, activity ledger, typed client | Built (PR #3) |
 | [004 Agent shell](../plans/004-agent-shell.md) | 004a web shell, sign-in, ledger, records (PR #4); 004b assistant panel and model adapters (PR #5); 004c draft and confirm (PR #7, refined in PR #9); 004d one Review page (PRs #10, #11) | Built |
-| 005 Lab memory | Conventions, quirks, lessons; scoped, linked, agent-proposed and person-confirmed; search and page context | Not started |
+| [004e Review v2 and agent context](../plans/004e-review-v2-and-agent-context.md) | Review in tiers with addressees, change sets and batch confirm; evidence by path; honest counts and plain words; "what changed since I last looked"; skills and a smaller toolset for agents; people parity | In planning (added 2026-09-30 after the human interaction review); goes before 013c, 014a, 016a and 017 |
+| 005 Lab memory | Conventions, quirks, lessons; scoped, linked, agent-proposed and person-confirmed; search and page context | Not started; moved before 017 (Wali, 2026-09-30) |
 | [006 Seed lab](../plans/006-seed-lab.md) | The Demo Lab as YAML in `seed/`: 33 labware types, 16 instrument kinds and 18 instruments, 28 products, entities, lots and containers, 11 SOPs, 6 assay templates | Built (PR #6); each registry adds its loader |
 
 ## Registries
@@ -52,4 +53,4 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 ## Build order
 
-007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
+007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. 004e (review v2 and agent context) goes before 013c, 014a, 016a and 017, and 005 lab memory before 017 (Wali, 2026-09-30). The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
