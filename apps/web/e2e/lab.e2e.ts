@@ -324,6 +324,8 @@ test("an editor open while an agent changes the record doesn't write over the ag
   await expect(volumes.getByRole('button', { name: 'Save' })).toBeDisabled();
   await volumes.getByRole('button', { name: 'Load the new values' }).click();
   await volumes.getByRole('button', { name: 'Save' }).click();
+  // The editor closes once the save is written.
+  await expect(volumes.getByRole('button', { name: 'Edit volumes' })).toBeVisible();
 
   const saved = await asAgent(request, 'records.get', { id });
   expect(saved.output.version).toBe(3);
