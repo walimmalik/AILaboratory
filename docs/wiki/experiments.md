@@ -35,7 +35,7 @@ Locked 2026-09-29, all four rounds as recommended: [014](../plans/014-plate-map-
 
 ### Plate maps (plan 014)
 
-Building: 014a placement rules, layout templates and plate maps are built ([plate-maps.md](../architecture/plate-maps.md), [ADR 0043](../decisions/0043-layout-templates.md)); the editor (014b) is next.
+Building: 014a placement rules, layout templates and plate maps are built ([plate-maps.md](../architecture/plate-maps.md), [ADR 0043](../decisions/0043-layout-templates.md)); 014b shows them on screen, where a person changes wells by hand and saves a map as a layout. Plan 014 is built.
 
 - Every placement strategy: in order (row-wise or column-wise), randomized within a plate, balanced across plates, and edge wells left out or filled with buffer. Each stores its seed and settings so the map rebuilds exactly.
 - The lab makes its own layout templates, from scratch or by saving a plate map as a template. Seed templates come from `seed/assays.yaml`.
@@ -46,6 +46,8 @@ Building: 014a placement rules, layout templates and plate maps are built ([plat
 - Wells carry analysis groups (curve per compound, Z' per plate), so analysis doesn't guess.
 
 ### Transfers (plan 016)
+
+Building: 016a-1 transfer math and the dilution optimizer are built ([transfers.md](../architecture/transfers.md)); the calculator operations are next.
 
 - Code in `packages/domain/transfers` solves targets and sources into exact transfers; the agent picks the method per group (direct dispense with backfill, serial dilution, intermediate plates) and explains it.
 - **Deterministic tools, so agents compute instead of guessing:** `transfers.options` (every feasible instrument and device with rounding error, liquid class and whether it is verified, dead volume, tips, rough time, ranked), `transfers.dilution_options` (is a concentration reachable within the DMSO limit, directly or through an intermediate plate), `transfers.source_volumes` (what each source needs against stock after reservations) and `transfers.check` (every rule on a finished plan). The UI uses the same operations. They are lab calculators (ADR 0024).

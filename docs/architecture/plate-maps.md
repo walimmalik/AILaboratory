@@ -33,6 +33,7 @@ Every write runs the rules with one subject (`apps/api/src/platemaps/spec.ts` tu
 | --- | --- | --- |
 | `layouts.draft` | Drafts a layout | direct |
 | `layouts.preview` | Calculator: per plate, plates and every planned well for a saved layout (or attributes to try) and a number of subjects | read |
+| `layouts.save_from_map` | A new layout draft from a plate map: its layout with the map's strategy, and plate 1's hand edits that change what wells are for (controls, blanks, empty) as fixed regions; wells they take leave the regions that held them. Hand edits naming samples are left out | direct |
 
 Changes and confirmation use the record operations (`records.update`, `records.confirm_section`) like every design. The seed drafts five layouts from `seed/layouts.yaml`: IL-6 ELISA 96 (40 samples in duplicate), single-point 384 (320 compounds), dose-response 384 (16 compounds, 10 points in duplicate), pNPP 96 and Dual-Glo 384.
 
@@ -58,6 +59,10 @@ Readiness: it places something and its layout version is confirmed (blockers); a
 
 Subjects, controls and strategy change through `records.update`; confirming is `records.confirm_section`, like every design.
 
+## Screens (014b)
+
+Layouts and Plate maps sit in the Experiments menu group. A layout's record page shows its plate full, with how many subjects fit per plate and a count to try ("41 samples → 2 plates"), from `layouts.preview`. A plate map's page shows its plates (a strip moves between them), a key by role with counts, the wells by role, a series shaded from its top point, hand edits marked, a well's details on select, and the CSV to save. **Change wells** lets a person select wells (or a whole row or column by its label), give them a role and optionally one of the map's subjects or control records, with why; each becomes a hand edit (`platemaps.override`), and hand edits on selected wells can be undone. **Save as layout** runs `layouts.save_from_map` and opens the new draft. See [web-app.md](web-app.md).
+
 ## Not yet
 
-The plate editor and layout library (014b). Real barcoded plates come with the transfer plan (016).
+Dragging a selection to move it (M5) goes through the agent for now. Real barcoded plates come with the transfer plan (016).

@@ -36,6 +36,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 - Each module owns its tables. Other modules go through operations.
 - Every operation has tests for valid input, invalid input and permission.
 - Every record carries `org_id` and `lab_id`.
+- A module that owns outcome data (runs, run logs, ledgers, schedules, results) ships detectors that report to lab memory through `memory.observe`, or its plan says why it has none (plan 005).
 - Small PRs, one plan step each. CI green before review.
 - Seed data lives in `seed/` (from plan 006) so every agent and developer works against the same realistic lab.
 

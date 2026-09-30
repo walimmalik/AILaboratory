@@ -1,7 +1,7 @@
 # 017: Experiment designer
 
 - Status: accepted. Round 4 (D1 to D7) accepted by Wali 2026-09-29, all as recommended. Ready to build after 013d, 014 and 016a. Shares round 1 (P1 to P6) with 014 and 016, see `014-plate-map-designer.md`.
-- Depends on: 005 (lab memory), 008 (what the lab's instruments can do), 010 (stock on hand, sets), 012 (digital SOPs, roles, input variables), 013 (the experiment record this designer fills; E6 split), 014 (plate maps), 016 (transfer plans)
+- Depends on: 005 (lab memory: 005a and 005b; values filled from memory carry `memory` evidence, 005-M8), 008 (what the lab's instruments can do), 010 (stock on hand, sets), 012 (digital SOPs, roles, input variables), 013 (the experiment record this designer fills; E6 split), 014 (plate maps), 016 (transfer plans)
 - Feeds: 018 (workflows), 019 (scheduling), 020 (analysis plan and quality criteria)
 
 ## What this plan delivers

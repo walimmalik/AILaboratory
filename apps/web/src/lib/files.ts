@@ -1,7 +1,15 @@
-import { labwareExportOpentrons, type OperationContract, type OutputFile } from '@ailab/schema';
+import {
+  labwareExportOpentrons,
+  type OperationContract,
+  type OutputFile,
+  platemapsExport,
+} from '@ailab/schema';
 
 /** Operations whose output is a file a person saves, by operation ID. */
-const withFiles: OperationContract[] = [labwareExportOpentrons as OperationContract];
+const withFiles: OperationContract[] = [
+  labwareExportOpentrons as OperationContract,
+  platemapsExport as OperationContract,
+];
 const byId = new Map(withFiles.map((c) => [c.id, c]));
 
 /** The file an operation's output holds, or undefined when it isn't one (or doesn't parse). */

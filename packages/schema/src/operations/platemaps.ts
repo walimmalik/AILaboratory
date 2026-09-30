@@ -100,8 +100,22 @@ export const platemapsOverride = defineContract({
 export const platemapsExport = defineContract({
   id: 'platemaps.export',
   summary:
-    'The plate map as a CSV file (plate, well, role, subject, name, replicate, point, concentration, unit), for people and for instruments that take a plate map file',
+    "The plate map as a CSV file (plate, well, role, subject, name, replicate, point, concentration, unit), for people and for instruments that take a plate map file. The app offers it to the person as a file to download; don't copy it into your reply",
   effect: 'read',
   input: z.strictObject({ id: PlateMapId, version: z.number().int().positive().optional() }),
   output: z.object({ filename: z.string(), csv: z.string() }),
+  file: ({ filename, csv }) => ({ name: filename, mediaType: 'text/csv', text: csv }),
+});
+
+export const layoutsSaveFromMap = defineContract({
+  id: 'layouts.save_from_map',
+  summary:
+    "Save a plate map's pattern as a new layout draft: its layout with the map's strategy, and the hand edits on plate 1 that change what a well is for (controls, blanks, empty wells) as regions repeated on every plate. Hand edits that place a particular sample are left out, since a layout never names samples. A person confirms the new layout",
+  effect: 'write',
+  input: z.strictObject({
+    map: PlateMapId,
+    label: z.string().min(1).describe('e.g. "IL-6 ELISA 96, blanks in H11:H12"'),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
 });

@@ -377,6 +377,62 @@ describe('plate maps', () => {
     expect(two.plates).toHaveLength(2);
   });
 
+  it('saves a plate map as a layout, keeping hand edits that change what wells are for', async () => {
+    const layout = await confirm(
+      await run(agent, 'layouts.draft', { ...elisa, subjectRegion: ['columns 3-12'] }),
+    );
+    const [a, b] = await samples(2);
+    let map = await run(agent, 'platemaps.draft', {
+      label: 'With spare blanks',
+      layout: layout.id,
+      subjects: [{ record: a?.id }],
+    });
+    map = await run(agent, 'platemaps.override', {
+      id: map.id,
+      expectedVersion: map.version,
+      overrides: [
+        { plate: 1, well: 'H11', role: 'blank', label: 'Extra blank' },
+        { plate: 1, well: 'H12', role: 'blank', label: 'Extra blank' },
+        { plate: 1, well: 'H10', role: 'empty' },
+        { plate: 1, well: 'C5', role: 'sample', subject: b?.id },
+        { plate: 2, well: 'A1', role: 'blank' },
+      ],
+    });
+    const saved = await run(agent, 'layouts.save_from_map', {
+      map: map.id,
+      label: 'ELISA 96, extra blanks',
+    });
+    expect(saved).toMatchObject({ kind: 'layout', status: 'draft' });
+    const attrs = saved.attributes as {
+      fixed: { id: string; role: string; region: string[] }[];
+      subjectRegion: string[];
+      notes: string;
+    };
+    expect(attrs.fixed.find((f) => f.id === 'edit_1')).toMatchObject({
+      role: 'blank',
+      region: ['H11', 'H12'],
+    });
+    expect(attrs.fixed.find((f) => f.id === 'edit_2')).toMatchObject({
+      role: 'empty',
+      region: ['H10'],
+    });
+    expect(attrs.subjectRegion).not.toContain('H11');
+    expect(attrs.subjectRegion).toContain('C5');
+    expect(attrs.notes).toContain(map.name);
+    const preview = await run<Preview>(agent, 'layouts.preview', { layout: saved.id, subjects: 1 });
+    expect(preview.perPlate).toBe(38);
+
+    // A hand edit that breaks the standard curve can't become a layout.
+    map = await run(agent, 'platemaps.override', {
+      id: map.id,
+      expectedVersion: map.version,
+      overrides: [{ plate: 1, well: 'G1', role: 'empty' }],
+    });
+    await expect(
+      registry.execute(agent, 'layouts.save_from_map', { map: map.id, label: 'Broken' }),
+    ).rejects.toMatchObject({ message: expect.stringContaining('IL-6 standard has 7 points') });
+  });
+
   it('keeps plate maps to their lab', async () => {
     const layout = await confirm(await run(agent, 'layouts.draft', elisa));
     const map = await run(agent, 'platemaps.draft', {
