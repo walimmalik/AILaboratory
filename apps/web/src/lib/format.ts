@@ -4,6 +4,7 @@ import {
   type Actor,
   type Me,
   operationContracts,
+  type Proposal,
   type Quantity,
 } from '@ailab/schema';
 
@@ -292,4 +293,12 @@ export function pathLabel(path: string): string {
   const [, list = '', key = ''] = path.split('/');
   const one = list.endsWith('ies') ? `${list.slice(0, -3)}y` : list.replace(/s$/, '');
   return `${fieldLabel(one)} ${key}`;
+}
+
+/** Whether a proposed change would change this record, alone or as a step of a change set (ADR 0051). */
+export function proposalTouches(proposal: Pick<Proposal, 'operationId' | 'input'>, id: string) {
+  const idOf = (input: unknown) => (input as { id?: unknown } | undefined)?.id;
+  if (proposal.operationId !== 'changes.apply') return idOf(proposal.input) === id;
+  const steps = (proposal.input as { steps?: { input?: unknown }[] } | undefined)?.steps ?? [];
+  return steps.some((step) => idOf(step.input) === id);
 }

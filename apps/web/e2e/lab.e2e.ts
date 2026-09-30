@@ -89,6 +89,47 @@ test('an agent proposes a change, a person confirms it on the Review page, and t
   ).toBeVisible();
 });
 
+test('an agent proposes several changes as one, and a person confirms them together', async ({
+  page,
+  request,
+}) => {
+  const label = `Rack ${Date.now()}`;
+  await signIn(page);
+  const rack = await asPerson(page, 'records.create', {
+    kind: 'widget',
+    label,
+    attributes,
+    status: 'active',
+  });
+  const result = await asAgent(request, 'changes.apply', {
+    reason: 'Add the reservoir to the rack',
+    steps: [
+      {
+        operation: 'records.create',
+        input: { kind: 'widget', label: `${label} reservoir`, attributes },
+      },
+      {
+        operation: 'records.update',
+        input: { id: rack.id, expectedVersion: 1, label: `${label} (full)` },
+      },
+    ],
+  });
+  expect(result.status).toBe('proposed');
+
+  await page.goto(`/records/${rack.id}`);
+  await expect(page.getByText('change waiting')).toBeVisible();
+  await page.getByRole('link', { name: 'Review it' }).click();
+  const proposal = page
+    .getByRole('article', { name: 'Change: make a set of changes' })
+    .filter({ hasText: 'Add the reservoir to the rack' });
+  await expect(proposal).toContainText('wants to make 2 changes together, all or none');
+  await expect(proposal.getByRole('cell', { name: `${label} (full)` })).toBeVisible();
+  await proposal.getByRole('button', { name: 'Confirm all 2' }).click();
+  await expect(proposal).toHaveCount(0);
+  await page.goto(`/records/${rack.id}`);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(`${label} (full)`);
+});
+
 test('agents edit drafts directly, with no review', async ({ page, request }) => {
   await signIn(page);
   const created = await asAgent(request, 'records.create', {

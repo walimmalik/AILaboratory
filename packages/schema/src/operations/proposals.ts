@@ -41,3 +41,33 @@ export const activityList = defineContract({
   }),
   output: z.object({ entries: z.array(ActivityEntry) }),
 });
+
+/** One operation in a change set; string values `$N.path` read step N's output (1-based). */
+export const ChangeStep = z.strictObject({
+  operation: z.string().min(1).describe('An operation ID, e.g. records.create'),
+  input: z
+    .record(z.string(), z.unknown())
+    .describe('Its input. "$1.id" anywhere in it is replaced by the id step 1 returned'),
+});
+
+export const changesApply = defineContract({
+  id: 'changes.apply',
+  verbs: { done: 'made a set of changes', intent: 'make a set of changes' },
+  summary:
+    'Run several operations as one change, in order and all or nothing (plan 004e R2, ADR 0051). Later steps can use earlier outputs as "$1.id". When any step needs a person, an agent gets one proposal for the whole set',
+  effect: 'write',
+  input: z.object({
+    steps: z.array(ChangeStep).min(1).max(50),
+    reason: z.string().min(1).optional().describe('Why, in a sentence, for the person reviewing'),
+  }),
+  output: z.object({
+    results: z.array(
+      z.object({
+        operation: z.string(),
+        /** The input as run, with references filled in. */
+        input: z.unknown(),
+        output: z.unknown(),
+      }),
+    ),
+  }),
+});

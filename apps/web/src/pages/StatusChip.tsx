@@ -1,5 +1,6 @@
 import type { RecordEnvelope } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
+import { proposalTouches } from '../lib/format.ts';
 import { reviewQuery } from '../queries.ts';
 
 /**
@@ -16,8 +17,7 @@ export function StatusChip({
 }) {
   const items = useQuery(reviewQuery).data?.items ?? [];
   const changeWaiting = items.some(
-    (i) =>
-      i.type === 'change' && (i.proposal.input as { id?: unknown } | undefined)?.id === record.id,
+    (i) => i.type === 'change' && proposalTouches(i.proposal, record.id),
   );
   const note =
     record.status === 'draft'

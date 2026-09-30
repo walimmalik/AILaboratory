@@ -46,7 +46,11 @@ export interface OperationImplementation<
   agentPolicy?: AgentPolicy<z.infer<I>>;
   run(ctx: RecordContext, input: z.infer<I>, deps: OperationDeps): Promise<z.infer<O>>;
   /** Records this call touched, for the ledger. Defaults to `input.id` and `output.id`. */
-  touches?(input: z.infer<I>, output: z.infer<O> | undefined): string[];
+  touches?(
+    input: z.infer<I>,
+    output: z.infer<O> | undefined,
+    registry: OperationRegistry,
+  ): string[];
   /** Ledger outcome for a successful call. Defaults to "succeeded". */
   outcome?(output: z.infer<O>): ActivityEntry['outcome'];
   /** Runs after a write is committed and logged, e.g. to start background work. Never on previews or proposals. */
@@ -121,18 +125,7 @@ export class OperationRegistry {
     db: Db = this.deps.db,
   ): Promise<OperationResult<unknown>> {
     const operation = this.get(id);
-    const parsed = operation.contract.input.safeParse(rawInput ?? {});
-    if (!parsed.success) {
-      throw new OperationError(
-        'invalid_input',
-        `Invalid input for ${id}:\n${z.prettifyError(parsed.error)}`,
-        parsed.error.issues,
-      );
-    }
-    const input = parsed.data;
-    if (operation.actors === 'people' && ctx.actor.type === 'agent') {
-      throw new OperationError('forbidden', `Only a person can call ${id}`);
-    }
+    const input = this.#accept(operation, ctx, rawInput);
     const deps = { ...this.deps, db };
 
     if (operation.contract.effect === 'read') {
@@ -163,7 +156,7 @@ export class OperationRegistry {
         await recordActivity(db, this.deps.bus, ctx, {
           operationId: id,
           outcome: 'proposed',
-          recordIds: touched(operation, input, preview),
+          recordIds: touched(operation, input, preview, this),
           nameHints: nameHints(preview),
           proposalId: proposal.id,
           input,
@@ -181,7 +174,7 @@ export class OperationRegistry {
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: operation.outcome?.(output) ?? 'succeeded',
-        recordIds: touched(operation, input, output),
+        recordIds: touched(operation, input, output, this),
         nameHints: nameHints(output),
         ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
         input,
@@ -193,7 +186,7 @@ export class OperationRegistry {
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: 'failed',
-        recordIds: touched(operation, input, undefined),
+        recordIds: touched(operation, input, undefined, this),
         ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
         input,
         error: toErrorBody(error),
@@ -201,6 +194,61 @@ export class OperationRegistry {
       });
       throw error;
     }
+  }
+
+  /**
+   * One step of a change set (ADR 0051): runs inside the caller's transaction, with no ledger entry
+   * or proposal of its own. The change set decides the policy and logs the whole.
+   */
+  async runStep(
+    ctx: RecordContext,
+    id: string,
+    rawInput: unknown,
+    db: Db,
+  ): Promise<{ input: unknown; output: unknown }> {
+    const operation = this.get(id);
+    if (id === 'changes.apply') {
+      throw new OperationError('invalid_input', 'A change set cannot hold another change set');
+    }
+    const input = this.#accept(operation, ctx, rawInput);
+    return { input, output: await this.#run(operation, ctx, input, { ...this.deps, db }) };
+  }
+
+  /** Whether an agent's call of this operation would run now or be proposed. */
+  async policyFor(ctx: RecordContext, id: string, rawInput: unknown, db: Db): Promise<Policy> {
+    const operation = this.get(id);
+    if (operation.contract.effect === 'read' || ctx.actor.type !== 'agent') return 'direct';
+    const input = this.#accept(operation, ctx, rawInput);
+    return typeof operation.agentPolicy === 'function'
+      ? operation.agentPolicy(ctx, input, { ...this.deps, db })
+      : (operation.agentPolicy ?? 'propose');
+  }
+
+  /** The records a call touched, as its ledger entry names them. */
+  touchedBy(id: string, input: unknown, output: unknown): RecordIdType[] {
+    return touched(this.get(id), input, output, this);
+  }
+
+  /** Runs an operation's after-commit work for a step that was committed as part of a change set. */
+  afterStep(ctx: RecordContext, id: string, input: unknown, output: unknown): void {
+    this.get(id).after?.(ctx, input, output, this.deps);
+  }
+
+  /** Validates the input and who may call; returns the parsed input. */
+  #accept(operation: OperationImplementation, ctx: RecordContext, rawInput: unknown): unknown {
+    const { id } = operation.contract;
+    const parsed = operation.contract.input.safeParse(rawInput ?? {});
+    if (!parsed.success) {
+      throw new OperationError(
+        'invalid_input',
+        `Invalid input for ${id}:\n${z.prettifyError(parsed.error)}`,
+        parsed.error.issues,
+      );
+    }
+    if (operation.actors === 'people' && ctx.actor.type === 'agent') {
+      throw new OperationError('forbidden', `Only a person can call ${id}`);
+    }
+    return parsed.data;
   }
 
   async #run(
@@ -243,9 +291,10 @@ function touched(
   operation: OperationImplementation,
   input: unknown,
   output: unknown,
+  registry: OperationRegistry,
 ): RecordIdType[] {
   const ids = operation.touches
-    ? operation.touches(input, output)
+    ? operation.touches(input, output, registry)
     : [(input as { id?: unknown })?.id, (output as { id?: unknown } | undefined)?.id];
   return [...new Set(ids.filter((id): id is string => RecordId.safeParse(id).success))];
 }
