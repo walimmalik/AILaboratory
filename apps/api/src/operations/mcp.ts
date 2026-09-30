@@ -8,6 +8,7 @@ import type { OperationRegistry } from './registry.ts';
 
 const instructions = `AILaboratory: every capability is an operation.
 Call describe_operations to see what exists (optionally filtered by namespace, e.g. "records"), then run_operation with its ID and input.
+Volumes, concentrations and amounts come from the lab calculators (describe_operations with calculators: true), never from your own arithmetic.
 Use preview: true to see what a change would do without making it.
 Some changes by agents are proposed rather than applied: the result then has status "proposed" and a person approves or rejects it.
 Errors come back as { code, message } with a message that says what to fix.`;
@@ -28,14 +29,21 @@ export function createMcpServer(registry: OperationRegistry, ctx: RecordContext)
           .optional()
           .describe('Only operations whose ID starts with this, e.g. "records"'),
         ids: z.array(z.string()).optional().describe('Only these operation IDs, with full schemas'),
+        calculators: z
+          .boolean()
+          .optional()
+          .describe(
+            'Only the lab calculators: volumes, concentrations and amounts to use instead of your own arithmetic',
+          ),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ namespace, ids }) => {
+    async ({ namespace, ids, calculators }) => {
       const contracts = registry
         .list()
         .filter((c) => !namespace || c.id.startsWith(`${namespace}.`))
-        .filter((c) => !ids || ids.includes(c.id));
+        .filter((c) => !ids || ids.includes(c.id))
+        .filter((c) => !calculators || c.calculator);
       const operations = contracts.map(describeOperation);
       return {
         content: [{ type: 'text', text: JSON.stringify({ operations }, null, 2) }],

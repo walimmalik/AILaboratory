@@ -1,6 +1,6 @@
 # Inventory
 
-What things are, and (from 010b) where they are and how much is left. Plan: [010](../plans/010-inventory.md). Decisions: [ADR 0029](../decisions/0029-entity-kinds-as-records.md), [ADR 0030](../decisions/0030-locations-and-containers.md).
+What things are, and (from 010b) where they are and how much is left. Plan: [010](../plans/010-inventory.md). Decisions: [ADR 0029](../decisions/0029-entity-kinds-as-records.md), [ADR 0030](../decisions/0030-locations-and-containers.md), [ADR 0031](../decisions/0031-well-contents.md).
 
 ## Where things live
 
@@ -15,7 +15,9 @@ What things are, and (from 010b) where they are and how much is left. Plan: [010
 | Their operation contracts | `packages/schema/src/operations/inventory.ts` |
 | Location and container kinds and their rules | `apps/api/src/inventory/kinds.ts` |
 | Locations, registering, moving, scanning | `apps/api/src/inventory/operations.ts` |
-| Agent skills | `skills/entities/SKILL.md`, `skills/inventory/SKILL.md` |
+| Well contents schema | `packages/schema/src/contents.ts` |
+| Mixing math | `packages/domain/src/contents.ts` |
+| Agent skills | `skills/entities/SKILL.md`, `skills/inventory/SKILL.md`, `skills/calculators/SKILL.md` |
 
 ## Entity kinds (010a, V1)
 
@@ -54,6 +56,10 @@ A `container` (`lw_`) is a barcoded plate, reservoir, tube, rack or box, tip rac
 
 A container sits in a location or in a position of a rack or box (`{container, position: "B3"}`), so moving a box moves what is in it. Rules on every write: the holder is a rack-family container whose type has that position; one container per position (discarded ones don't count); a box can't end up inside itself; the labware type exists and its family doesn't change. A draft labware type is a readiness warning. Status is in use, empty or discarded; containers are never deleted. Links: `is_a` the type, `stored_in` a location or `held_in` a box.
 
+## Well contents (010c, V2 to V4)
+
+A well holds a volume (or `"unknown"`) and components: samples (`smp_`) and lots (`lot_`), each with a concentration in the unit it came in, or an amount in a dry well. Mixing converts concentrations to amounts (concentration × volume), adds the same source in the same dimension, and divides by the new volume, in exact decimals. Molar, mass, activity, cell, colony, % v/v and % w/v concentrations mix; % w/w and anything without a concentration stay "present, concentration unknown". Taking more than a well holds is refused. Estimated contents are marked `assumed`, and the mark travels with the liquid. See ADR 0031.
+
 ## Operations
 
 | Operation | Does | Agents |
@@ -63,6 +69,7 @@ A container sits in a location or in a position of a rack or box (`{container, p
 | `inventory.move` | Moves a container to a location or a box position; returns its place path | proposed |
 | `inventory.scan` | Resolves a readable name (`plt000001`, `PLT-1` and `PLT-000001` all work) or an external code, with its place path | read |
 | `inventory.list_place` | What is directly in a location or box, or everything under it with `deep` | read |
+| `inventory.calculate_transfer` | Calculator: two wells after moving a volume between them | read |
 | `entities.draft_kind` | Drafts an entity kind | direct (drafts) |
 | `entities.draft` | Drafts an entity of a kind | direct (drafts) |
 | `entities.search` | By text (name, readable name, synonym, text fields), kind, base, a field value, or a stretch of sequence (either DNA strand, across the origin of a circular one) | read |
@@ -77,4 +84,4 @@ The seed (`pnpm --filter @ailab/api seed`) turns the rooms and storage locations
 
 ## Not yet
 
-GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, contents and the ledger (010c), handling-rule inheritance (010d), screens (010e).
+GenBank and FASTA import and export and molecular weight from SMILES (science service, V9), samples, printing labels (a barcode library, and a check that the lab's readers accept the dash), flask and dish families, the ledger with fill, transfer, stamp, consume and correct, samples (rest of 010c), handling-rule inheritance (010d), screens (010e).

@@ -19,6 +19,11 @@ export interface OperationContract<
   /** One line, written for a person or an agent choosing what to call. */
   summary: string;
   effect: OperationEffect;
+  /**
+   * A lab calculator (ADR 0024): a read that computes numbers agents rely on (volumes,
+   * concentrations, amounts) from `@ailab/domain`, listed in the calculators skill.
+   */
+  calculator?: true;
   input: I;
   output: O;
   /**

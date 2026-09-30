@@ -1,5 +1,6 @@
 export * from './actor.ts';
 export * from './assistant.ts';
+export * from './contents.ts';
 export * from './design.ts';
 export * from './entities.ts';
 export * from './ids.ts';

@@ -22,3 +22,7 @@ All of these are proposals from an agent: a person approves them.
 - `inventory.move` with `{container, expectedVersion, to, reason?}`. Moving a box moves what is in it.
 
 Refused, with the reason: a position the box doesn't have, a position already holding something, a holder that isn't a rack or box, a box inside itself, an external code already on another container, a location loop, a labware type or location from another lab. Look first (`inventory.list_place` on the box) before picking a position.
+
+## Contents
+
+What a well holds is a `WellState` (see `skills/calculators`). To know what a transfer leaves behind, call `inventory.calculate_transfer`; don't work concentrations out yourself.
