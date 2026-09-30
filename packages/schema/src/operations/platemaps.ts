@@ -106,3 +106,16 @@ export const platemapsExport = defineContract({
   output: z.object({ filename: z.string(), csv: z.string() }),
   file: ({ filename, csv }) => ({ name: filename, mediaType: 'text/csv', text: csv }),
 });
+
+export const layoutsSaveFromMap = defineContract({
+  id: 'layouts.save_from_map',
+  summary:
+    "Save a plate map's pattern as a new layout draft: its layout with the map's strategy, and the hand edits on plate 1 that change what a well is for (controls, blanks, empty wells) as regions repeated on every plate. Hand edits that place a particular sample are left out, since a layout never names samples. A person confirms the new layout",
+  effect: 'write',
+  input: z.strictObject({
+    map: PlateMapId,
+    label: z.string().min(1).describe('e.g. "IL-6 ELISA 96, blanks in H11:H12"'),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});

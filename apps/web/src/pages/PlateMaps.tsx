@@ -1,16 +1,19 @@
 import {
   type LayoutAttributes,
   layoutsPreview,
+  layoutsSaveFromMap,
   type PlateMapAttributes,
   type PlatePlan,
   platemapsExport,
+  platemapsOverride,
   platemapsWells,
   type RecordEnvelope,
   type WellPlan,
+  WellRole,
 } from '@ailab/schema';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { type CSSProperties, Fragment, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { type CSSProperties, type FormEvent, Fragment, useState } from 'react';
 import { api } from '../api.ts';
 import { fileOf } from '../lib/files.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
@@ -85,8 +88,24 @@ export function PlateMapsPage() {
   );
 }
 
-/** Plates with a strip to move between them, the plate itself, its key and a well's details. */
-export function PlateView({ plates, title }: { plates: PlatePlan[]; title: string }) {
+/** A well on a plate of a map, as selections hold it: "1:A1". */
+export const wellKey = (plate: number, well: string) => `${plate}:${well}`;
+
+/**
+ * Plates with a strip to move between them, the plate itself, its key and a well's details. With
+ * `onToggle`, selecting a well (or a row or column label) adds it to or takes it from `selected`.
+ */
+export function PlateView({
+  plates,
+  title,
+  selected,
+  onToggle,
+}: {
+  plates: PlatePlan[];
+  title: string;
+  selected?: ReadonlySet<string>;
+  onToggle?: (keys: string[]) => void;
+}) {
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<WellPlan>();
   const [pointed, setPointed] = useState<string>();
@@ -131,27 +150,63 @@ export function PlateView({ plates, title }: { plates: PlatePlan[]; title: strin
         style={{ '--cols': grid.columns } as CSSProperties}
       >
         <span className="axis" />
-        {Array.from({ length: grid.columns }, (_, c) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
-          <span key={c} className="axis">
-            {c + 1}
-          </span>
-        ))}
+        {Array.from({ length: grid.columns }, (_, c) =>
+          onToggle ? (
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+              key={c}
+              type="button"
+              className="axis"
+              aria-label={`Select column ${c + 1}`}
+              onClick={() =>
+                onToggle(grid.rowLabels.map((r) => wellKey(plate.plate, `${r}${c + 1}`)))
+              }
+            >
+              {c + 1}
+            </button>
+          ) : (
+            // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+            <span key={c} className="axis">
+              {c + 1}
+            </span>
+          ),
+        )}
         {grid.rowLabels.map((row) => (
           <Fragment key={row}>
-            <span className="axis">{row}</span>
+            {onToggle ? (
+              <button
+                type="button"
+                className="axis"
+                aria-label={`Select row ${row}`}
+                onClick={() =>
+                  onToggle(
+                    Array.from({ length: grid.columns }, (_, c) =>
+                      wellKey(plate.plate, `${row}${c + 1}`),
+                    ),
+                  )
+                }
+              >
+                {row}
+              </button>
+            ) : (
+              <span className="axis">{row}</span>
+            )}
             {Array.from({ length: grid.columns }, (_, c) => {
               const name = `${row}${c + 1}`;
               const w = byWell.get(name) ?? { well: name, role: 'empty' };
               const level = shade(w, w.subject ? (points.get(w.subject) ?? 0) : 0);
+              const chosen = selected?.has(wellKey(plate.plate, name));
               return (
                 <button
                   key={name}
                   type="button"
-                  className={`well ${roleClass(w.role)} shade-${level}${w.override ? ' override' : ''}`}
-                  aria-pressed={picked?.well === name}
+                  className={`well ${roleClass(w.role)} shade-${level}${w.override ? ' override' : ''}${chosen ? ' chosen' : ''}`}
+                  aria-pressed={onToggle ? chosen : picked?.well === name}
                   aria-label={text(w)}
-                  onClick={() => setPicked(w)}
+                  onClick={() => {
+                    setPicked(w);
+                    onToggle?.([wellKey(plate.plate, name)]);
+                  }}
                   onMouseEnter={() => setPointed(name)}
                   onFocus={() => setPointed(name)}
                   onMouseLeave={() => setPointed(undefined)}
@@ -277,6 +332,19 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
   });
   const file = exported.data ? fileOf(platemapsExport.id, exported.data) : undefined;
   const plates = wells.data?.plates ?? [];
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // A row or column label adds all its wells, or takes them all out when all are chosen.
+  const toggle = (keys: string[]) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      const all = keys.every((k) => next.has(k));
+      for (const k of keys) {
+        if (all) next.delete(k);
+        else next.add(k);
+      }
+      return next;
+    });
   return (
     <section className="block" aria-label="Plates">
       <header>
@@ -296,7 +364,34 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
           {a.seed !== undefined && <>, seed {a.seed}</>}.
         </p>
         {wells.error && <p className="error-text">{wells.error.message}</p>}
-        {wells.data && <PlateView plates={plates} title={record.label} />}
+        {wells.data && (
+          <PlateView
+            plates={plates}
+            title={record.label}
+            {...(editing ? { selected, onToggle: toggle } : {})}
+          />
+        )}
+        {editing ? (
+          <EditBar
+            record={record}
+            plates={plates}
+            selected={selected}
+            onClear={() => setSelected(new Set())}
+            onDone={() => {
+              setEditing(false);
+              setSelected(new Set());
+            }}
+          />
+        ) : (
+          record.status !== 'archived' && (
+            <div className="actions">
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                Change wells
+              </button>
+              <SaveAsLayout record={record} />
+            </div>
+          )
+        )}
         {(wells.data?.staleOverrides.length ?? 0) > 0 && (
           <p className="warn-text">
             {wells.data?.staleOverrides.length} hand edit
@@ -307,5 +402,184 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
         {file && <FileCard file={file} />}
       </div>
     </section>
+  );
+}
+
+/** Roles offered for hand edits, in the order people reach for them. */
+const EDIT_ROLES = WellRole.options;
+
+/**
+ * Hand edits (M5): the chosen wells get a role and, optionally, one of the map's subjects or control
+ * records, with why. Hand edits on chosen wells can be undone, so they follow the layout again.
+ */
+function EditBar({
+  record,
+  plates,
+  selected,
+  onClear,
+  onDone,
+}: {
+  record: RecordEnvelope;
+  plates: PlatePlan[];
+  selected: ReadonlySet<string>;
+  onClear: () => void;
+  onDone: () => void;
+}) {
+  const a = mapOf(record);
+  const queryClient = useQueryClient();
+  const [role, setRole] = useState<WellRole>('blank');
+  const [subject, setSubject] = useState('');
+  const [note, setNote] = useState('');
+  const keys = [...selected].map((k) => {
+    const [plate, well] = k.split(':');
+    return { plate: Number(plate), well: well as string };
+  });
+  const edited = keys.filter((k) =>
+    (a.overrides ?? []).some((o) => o.plate === k.plate && o.well === k.well),
+  );
+  const names = new Map<string, string>();
+  for (const p of plates)
+    for (const w of p.wells)
+      if (w.subject && w.label && !names.has(w.subject)) names.set(w.subject, w.label);
+  const records = [
+    ...new Set([...a.subjects.map((s) => s.record), ...(a.controls ?? []).map((c) => c.record)]),
+  ];
+  const save = useMutation({
+    mutationFn: (clear: boolean) =>
+      api.run(platemapsOverride, {
+        id: record.id,
+        expectedVersion: record.version,
+        ...(clear
+          ? { clear: edited }
+          : {
+              overrides: keys.map((k) => ({
+                ...k,
+                role,
+                ...(subject ? { subject } : {}),
+                ...(note.trim() ? { note: note.trim() } : {}),
+              })),
+            }),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['record', record.id] });
+      onClear();
+      setNote('');
+    },
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save.mutate(false);
+  };
+  return (
+    <form className="edit-bar" aria-label="Change wells" onSubmit={submit}>
+      <p className="edit-hint">
+        {keys.length === 0
+          ? 'Select wells, or a row or column label, to change them.'
+          : `${keys.length} well${keys.length === 1 ? '' : 's'} selected.`}
+      </p>
+      {keys.length > 0 && (
+        <div className="edit-fields">
+          <label>
+            Make them
+            <select
+              className="field"
+              value={role}
+              onChange={(e) => setRole(e.target.value as WellRole)}
+            >
+              {EDIT_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {roleText(r)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Holding
+            <select className="field" value={subject} onChange={(e) => setSubject(e.target.value)}>
+              <option value="">Nothing named</option>
+              {records.map((id) => (
+                <option key={id} value={id}>
+                  {names.get(id) ?? id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Why
+            <input
+              className="field"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. spare wells for a repeat"
+            />
+          </label>
+        </div>
+      )}
+      {save.error && <p className="error-text">{save.error.message}</p>}
+      <div className="actions">
+        {keys.length > 0 && (
+          <button type="submit" className="btn primary" disabled={save.isPending}>
+            Change {keys.length} well{keys.length === 1 ? '' : 's'}
+          </button>
+        )}
+        {edited.length > 0 && (
+          <button
+            type="button"
+            className="btn"
+            disabled={save.isPending}
+            onClick={() => save.mutate(true)}
+          >
+            Undo {edited.length} hand edit{edited.length === 1 ? '' : 's'}
+          </button>
+        )}
+        {keys.length > 0 && (
+          <button type="button" className="btn" onClick={onClear}>
+            Clear selection
+          </button>
+        )}
+        <button type="button" className="btn" onClick={onDone}>
+          Done
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Saves the map's pattern, with its hand edits, as a new layout draft (P3). */
+function SaveAsLayout({ record }: { record: RecordEnvelope }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState(`${record.label} layout`);
+  const save = useMutation({
+    mutationFn: () => api.run(layoutsSaveFromMap, { map: record.id, label: label.trim() }),
+    onSuccess: (layout) => navigate({ to: '/records/$id', params: { id: layout.id } }),
+  });
+  if (!open)
+    return (
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        Save as layout
+      </button>
+    );
+  return (
+    <form
+      className="edit-fields"
+      aria-label="Save as layout"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <label>
+        Layout name
+        <input className="field" value={label} onChange={(e) => setLabel(e.target.value)} />
+      </label>
+      <button type="submit" className="btn primary" disabled={save.isPending || !label.trim()}>
+        Save
+      </button>
+      <button type="button" className="btn" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {save.error && <p className="error-text">{save.error.message}</p>}
+    </form>
   );
 }

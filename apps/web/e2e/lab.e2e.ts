@@ -837,4 +837,23 @@ test('a layout previews its plate, and a plate map shows real samples well by we
     plates.getByRole('button', { name: /^A1: IL-6 standard, standard, point 1 of 7, 600 pg\/mL/ }),
   ).toBeVisible();
   await expect(plates.getByText(`${map.name}.csv`)).toBeVisible();
+
+  // Two spare blanks by hand, then the pattern saved as a layout of its own.
+  await plates.getByRole('button', { name: 'Change wells' }).click();
+  await plates.getByRole('button', { name: /^H11: / }).click();
+  await plates.getByRole('button', { name: /^H12: / }).click();
+  const edit = plates.getByRole('form', { name: 'Change wells' });
+  await expect(edit).toContainText('2 wells selected');
+  await edit.getByLabel('Why').fill('Spare blanks');
+  await edit.getByRole('button', { name: 'Change 2 wells' }).click();
+  await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Blank 4');
+  await expect(plates.getByRole('button', { name: 'H12: Blank, changed by hand' })).toBeVisible();
+  await edit.getByRole('button', { name: 'Done' }).click();
+  await plates.getByRole('button', { name: 'Save as layout' }).click();
+  await plates.getByLabel('Layout name').fill(`ELISA 96 spare blanks ${stamp}`);
+  await plates.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('heading', { name: `ELISA 96 spare blanks ${stamp}` })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Plate', exact: true })).toContainText(
+    '39 samples per plate',
+  );
 });
