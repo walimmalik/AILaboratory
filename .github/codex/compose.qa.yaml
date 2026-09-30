@@ -1,0 +1,11 @@
+# Overrides compose.yaml for the browser QA run (.github/workflows/ui-qa.yml).
+# The file store is a host folder so the seed loader (run on the host) and the API share it.
+# The assistant is off unless the repo has a QA_OPENROUTER_API_KEY secret.
+services:
+  api:
+    environment:
+      AGENT_PROVIDER: ${QA_AGENT_PROVIDER:-}
+      OPENROUTER_API_KEY: ${QA_OPENROUTER_API_KEY:-}
+      AGENT_MODEL: ${QA_AGENT_MODEL:-}
+    volumes:
+      - ${QA_FILES_DIR:?set QA_FILES_DIR}:/data/files
