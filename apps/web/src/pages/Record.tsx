@@ -14,6 +14,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { DocumentBlocks } from './Documents.tsx';
+import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import type { JsonSchema } from './FieldEditor.tsx';
 import { InstrumentBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks } from './Inventory.tsx';
@@ -112,6 +113,10 @@ export function RecordPage() {
               <LiquidClassBlocks record={r} />
             ) : r.kind === 'sop' ? (
               <SopBlocks record={r} />
+            ) : r.kind === 'campaign' ? (
+              <CampaignBlocks record={r} />
+            ) : r.kind === 'experiment' ? (
+              <ExperimentBlocks record={r} />
             ) : undefined
           }
         />
@@ -154,6 +159,8 @@ export function RecordPage() {
         </section>
       )}
 
+      {r.kind === 'run' && <RunBlocks record={r} />}
+      {r.kind === 'set' && <SetBlocks record={r} />}
       {r.kind === 'container' && <ContainerBlocks record={r} />}
       {r.kind === 'entity' && <EntityBlocks record={r} />}
       {r.kind === 'document' && <DocumentBlocks record={r} />}
