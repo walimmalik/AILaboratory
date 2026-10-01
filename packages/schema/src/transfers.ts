@@ -119,9 +119,21 @@ export const TransferGroup = z.strictObject({
 });
 export type TransferGroup = z.infer<typeof TransferGroup>;
 
+export const TransferRunId = recordIdOf('trn');
+
+/** What a rerun plan redoes (016b-2b): the exceptions of one execution of an earlier plan. */
+export const RerunOf = z.strictObject({
+  plan: pinOf(TransferPlanId).describe('The plan whose execution this redoes, at that version'),
+  run: TransferRunId.describe('The execution whose exceptions this plan redoes'),
+});
+export type RerunOf = z.infer<typeof RerunOf>;
+
 export const TransferPlanAttributes = z.strictObject({
   experiment: recordIdOf('exp').optional(),
   purpose: z.string().min(1).optional(),
+  rerunOf: RerunOf.optional().describe(
+    'Set by transfers.import_report on the plan it drafts to redo failed and short transfers',
+  ),
   plates: z.array(PlanPlate).min(1).max(200),
   groups: z.array(TransferGroup).max(100).describe('Run in this order'),
   notes: z.string().min(1).optional(),
@@ -206,3 +218,58 @@ export type ProtocolCheck = z.infer<typeof ProtocolCheck>;
 
 export const FlexProtocolResult = z.object({ protocol: z.string(), check: ProtocolCheck });
 export type FlexProtocolResult = z.infer<typeof FlexProtocolResult>;
+/** A transfer that did not go as planned in an execution, and what its rerun moves. */
+export const TransferException = z.strictObject({
+  group: LocalId,
+  index: z.number().int().nonnegative().describe("Its place in the group's transfers, from 0"),
+  from: PlanWell,
+  to: PlanWell,
+  outcome: z
+    .enum(['short', 'failed', 'not_run'])
+    .describe('Moved less than planned; moved nothing; or not in the report at all'),
+  planned: LiquidVolume,
+  actual: LiquidVolume.optional().describe('What the instrument says it moved'),
+  rerun: LiquidVolume.optional().describe(
+    'What the rerun plan moves for it: all of it, or for a short one the rest in whole steps. Absent when it is not rerun',
+  ),
+  note: z.string().min(1).optional().describe('Why it is not rerun, or what the instrument said'),
+});
+export type TransferException = z.infer<typeof TransferException>;
+
+/**
+ * One execution of a confirmed transfer plan (016b-2b, ADR 0060), recorded from the instrument's
+ * report: which transfers were done, which were not, and the plan drafted to redo them. Made only
+ * by transfers.import_report; it is the outcome, never edited into a different one.
+ */
+export const TransferRunAttributes = z.strictObject({
+  plan: pinOf(TransferPlanId),
+  report: recordIdOf('fil').describe('The instrument report it was read from'),
+  at: z.iso.datetime().describe('When the report was read'),
+  status: z.enum(['complete', 'with_exceptions']),
+  containers: z
+    .array(z.strictObject({ plate: LocalId, container: ContainerId }))
+    .describe("The containers the plan's plates were on the day"),
+  counts: z.strictObject({
+    planned: z.number().int().nonnegative(),
+    done: z.number().int().nonnegative(),
+    short: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    notRun: z.number().int().nonnegative(),
+    unplanned: z.number().int().nonnegative(),
+  }),
+  exceptions: z.array(TransferException).max(20000),
+  unplanned: z
+    .array(
+      z.strictObject({
+        from: z.strictObject({ plate: z.string(), well: z.string() }),
+        to: z.strictObject({ plate: z.string(), well: z.string() }),
+        actual: LiquidVolume,
+      }),
+    )
+    .max(20000)
+    .describe(
+      'Transfers the instrument reports that the plan does not have; reported, never rerun',
+    ),
+  rerun: TransferPlanId.optional().describe('The plan drafted to redo the exceptions'),
+});
+export type TransferRunAttributes = z.infer<typeof TransferRunAttributes>;
