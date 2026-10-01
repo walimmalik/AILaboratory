@@ -26,6 +26,7 @@ import { reviewOperations } from './review-operations.ts';
 
 export { ActivityBus } from './activity.ts';
 
+import { designerOperations } from '../assays/designer.ts';
 import { assayOperations } from '../assays/operations.ts';
 import { conclusionOperations } from '../campaigns/conclusions.ts';
 import { campaignOperations } from '../campaigns/operations.ts';
@@ -93,6 +94,7 @@ export function createRegistry(
       ...plateMapOperations,
       ...memoryOperations,
       ...assayOperations,
+      ...designerOperations,
       ...candidateOperations,
       ...transferCalculators,
       ...transferPlanOperations,

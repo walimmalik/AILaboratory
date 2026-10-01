@@ -23,6 +23,7 @@ const noScreen: Record<string, string> = {
   'library.propose_mentions': notYet(
     'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
   ),
+  'designer.start': notYet('the design page comes with the 017b screens'),
   'assays.draft_template': notYet(
     'assay template screens come with the experiment designer (017b)',
   ),

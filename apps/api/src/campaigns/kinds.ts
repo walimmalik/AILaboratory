@@ -125,6 +125,7 @@ export const experiment = defineKind({
       (toId) => ({ toId, relation: 'control' }),
     ),
     ...[...new Set(a.protocol.map((p) => p.sop.id))].map((toId) => ({ toId, relation: 'follows' })),
+    ...(a.template ? [{ toId: a.template.id, relation: 'from_template' }] : []),
     ...(a.documents ?? []).map((d) => ({
       toId: d.document,
       relation: d.use === 'follows' ? 'follows' : 'references',
@@ -143,7 +144,7 @@ export const experiment = defineKind({
       fields: ['campaign', 'aim', 'question', 'hypotheses', 'followsUp', 'owner', 'contributors'],
     },
     { id: 'subjects', title: 'What is tested', fields: ['subjects'] },
-    { id: 'protocol', title: 'Protocol', fields: ['protocol', 'documents'] },
+    { id: 'protocol', title: 'Protocol', fields: ['protocol', 'template', 'documents'] },
     { id: 'conditions', title: 'Conditions and controls', fields: ['conditions', 'controls'] },
     { id: 'readouts', title: 'Readouts', fields: ['readouts', 'successCriteria', 'notes'] },
   ],
@@ -166,6 +167,12 @@ export const experiment = defineKind({
       ...(a.controls ?? []).flatMap((c) => (c.subject ? [c.subject] : [])),
     ])) {
       if (!(await get(id))) invalid.push(`${id} is not a record in this lab`);
+    }
+    if (a.template) {
+      const pin = await checkPin(context, a.template, 'assay_template', 'an assay template');
+      if (pin.invalid) invalid.push(pin.invalid);
+      else if (pin.unconfirmed)
+        invalid.push(`${pin.unconfirmed}; an experiment is designed from a confirmed template`);
     }
     for (const d of a.documents ?? []) {
       if ((await get(d.document))?.kind !== 'document')

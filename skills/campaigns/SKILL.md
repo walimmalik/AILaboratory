@@ -10,7 +10,7 @@ A **campaign** is a lab project with a goal and aims. An **experiment** is one q
 ## Drafting
 
 - `campaigns.draft` with `label`, `goal`, `aims: [{id: "aim_1", text, success}]`, and optionally `background`, `owner`, `about` (entity ids) and `references` (document ids). It starts as proposed.
-- `experiments.draft` with `label`, `campaign`, `aim` (an aim id of that campaign), `question`, `hypotheses: [{id, statement, prediction?: {readout, measure, comparison, threshold}}]`, `subjects: [{record}]`, `protocol`, `conditions`, `controls: [{id, label, role}]`, `readouts: [{id, label}]` and `successCriteria`. A prediction's `readout` must be one of the readout ids.
+- `experiments.draft` with `label`, `campaign`, `aim` (an aim id of that campaign), `question`, `hypotheses: [{id, statement, prediction?: {readout, measure, comparison, threshold}}]`, `subjects: [{record}]`, `protocol`, `conditions`, `controls: [{id, label, role}]`, `readouts: [{id, label}]` and `successCriteria`. A prediction's `readout` must be one of the readout ids. To design from one of the lab's assay templates, use `designer.start` (assays skill) instead: it fills all of this from the template and pins it as `template`.
 - `protocol: [{id: "coating", sop: {id: "sop_…", version: 4}}]` pins an SOP version. Pin the version a person confirmed (the SOP's current version when its status is active). A draft SOP's version can be pinned while designing, but it blocks planning. A document that isn't digitized goes in `documents: [{document, use: "follows"}]`, and nothing computes from it.
 - Mark your own estimates assumed in `evidence`, and check `records.readiness`.
 

@@ -177,6 +177,9 @@ export const ExperimentAttributes = z.strictObject({
     )
     .optional(),
   protocol: z.array(ProtocolStep),
+  template: pinOf(recordIdOf('asy'))
+    .optional()
+    .describe('The confirmed assay template version it was designed from (plan 017b)'),
   documents: z
     .array(
       z.strictObject({
