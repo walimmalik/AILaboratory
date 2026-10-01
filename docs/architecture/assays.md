@@ -75,7 +75,9 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 - **Totals.** Plates and wells come from `workOut`, with the experiment's subjects and inputs as the answers. They wait for subjects given as records.
 - **Amounts.** `experiments.calculate` supplies its problems.
 
-It is feasible when every need is ready and every amount works out. Stock on hand against reagent volumes comes with reservations.
+- **Stock.** For every variable of a pinned SOP that names the material it is drawn from (`drawsFrom`), it takes the worked-out amount and the record bound to that role. When that record is a product, lot or sample, it adds up the wells holding it (`inventory.where_is`), less what confirmed transfer plans reserve from them (`transfers.reserved`). The arithmetic is `checkStock` in `packages/domain/src/stock.ts`, volumes only. The verdict is enough or short. It is unknown when no record is bound, the amount isn't worked out, or wells hold it with no volume recorded.
+
+It is feasible when every need is ready, every amount works out and no material is short.
 
 Values copied from the template carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way.
 
@@ -95,4 +97,4 @@ The parts (and roles, when bound) carry `record` evidence from the experiment ve
 
 ## Not yet
 
-Stock in feasibility and the design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+The design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.
