@@ -9,6 +9,7 @@ import * as inventory from './inventory.ts';
 import * as labware from './labware.ts';
 import * as library from './library.ts';
 import * as liquids from './liquids.ts';
+import * as memory from './memory.ts';
 import * as platemaps from './platemaps.ts';
 import * as proposals from './proposals.ts';
 import * as reagents from './reagents.ts';
@@ -42,6 +43,7 @@ export const operationContracts: ReadonlyMap<string, OperationContract> = new Ma
     labware,
     library,
     liquids,
+    memory,
     platemaps,
     proposals,
     reagents,

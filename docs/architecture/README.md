@@ -9,7 +9,7 @@ The system-level architecture is in [plan 000](../plans/000-foundation-architect
 | Web app: shell, sign-in, live ledger, proposals, records | [web-app.md](web-app.md) | 004a |
 | In-app assistant: model adapters, tool loop, conversations, panel | [assistant.md](assistant.md) | 004b |
 | Draft and confirm (evidence, sections, readiness, Review page) | [core-records.md](core-records.md), ADRs 0021 and 0022 | 004c, 004d |
-| Lab memory | not yet written | 005 |
+| Lab memory: memory records, operations, memory evidence, seed | [memory.md](memory.md) | 005 |
 | Labware types, vendors, Opentrons import and export, seed loader | [labware.md](labware.md) | 007 |
 | Instrument and equipment kinds, capability catalog, configuration resolver | [instruments.md](instruments.md) | 008 |
 | Products, kits, lots, liquid types and classes | [reagents.md](reagents.md) | 009 |

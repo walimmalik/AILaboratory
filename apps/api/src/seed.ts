@@ -21,6 +21,7 @@ import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
 import { memoryKinds } from './memory/kinds.ts';
+import { loadSeedMemories, readSeedMemories } from './memory/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { plateMapKinds } from './platemaps/kinds.ts';
 import { loadSeedLayouts, readSeedLayouts } from './platemaps/seed.ts';
@@ -362,6 +363,17 @@ async function loadOnce() {
   );
   for (const line of worklists.created) console.log(`  + ${line}`);
   for (const line of worklists.waiting) console.log(`  … ${line}`);
+  const memories = await loadSeedMemories(
+    registry,
+    ctx,
+    readSeedMemories(await seedFile('memory.yaml')),
+    'Seed lab (plan 006), loaded by plan 005a',
+  );
+  console.log(
+    `Lab memory: ${memories.created.length} drafted, ${memories.existing.length} already there, ${memories.waiting.length} waiting for their records.`,
+  );
+  for (const line of memories.created) console.log(`  + ${line}`);
+  for (const line of memories.waiting) console.log(`  … ${line}`);
   await settle();
 }
 

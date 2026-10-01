@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { UserId } from './actor.ts';
 import { RecordId, recordIdOf } from './ids.ts';
-import { CapabilityId } from './instruments.ts';
+import { CapabilityId, Celsius } from './instruments.ts';
 import { LiquidVolume } from './labware.ts';
 import { DispenseMode } from './liquids.ts';
 import { WellRole } from './platemaps.ts';
@@ -51,7 +51,9 @@ export const MemoryConditions = z
     mode: DispenseMode.optional(),
     volume: Range(LiquidVolume).optional().describe('Transfer volumes in this range'),
     liquidType: recordIdOf('lqt').optional(),
-    temperature: Range(Quantity).optional().describe('e.g. {"min": {"value": "37", "unit": "C"}}'),
+    temperature: Range(Celsius)
+      .optional()
+      .describe('e.g. {"min": {"value": "37", "unit": "degC"}}'),
     sop: recordIdOf('sop').optional(),
     layout: recordIdOf('lyt').optional(),
     samples: Range(z.number().int().min(0)).optional().describe('How many samples the work has'),

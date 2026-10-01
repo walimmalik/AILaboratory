@@ -64,7 +64,7 @@ Run from the repo root unless noted.
 | Apply migrations | `pnpm --filter @ailab/api db:migrate` (needs `DATABASE_URL`; the API also migrates on start) |
 | First-run setup (org, lab, user, token) | `pnpm --filter @ailab/api bootstrap` |
 | Set or reset your web sign-in | `pnpm --filter @ailab/api password --email you@example.org` |
-| Load the seed lab in one run, with no approvals (labware, instruments, reagents and lots, liquid classes, entities, library documents, the lab's own SOPs, locations, containers, samples, contents, the demo campaigns, worklist formats; confirmed as you, ADR 0044; it lists anything left for Review) | `pnpm --filter @ailab/api seed` |
+| Load the seed lab in one run, with no approvals (labware, instruments, reagents and lots, liquid classes, entities, library documents, the lab's own SOPs, locations, containers, samples, contents, the demo campaigns, worklist formats, lab memories; confirmed as you, ADR 0044; it lists anything left for Review) | `pnpm --filter @ailab/api seed` |
 | Import a folder of documents into the library (a `manifest.json` folder, or Markdown SOPs with `--license`) | `pnpm --filter @ailab/api library:import --folder <path>` |
 | Score the SOPs digitized from the benchmark documents in `seed/sop-benchmark` (prints a Markdown table; `--out <file>` saves it) | `pnpm --filter @ailab/api sop:benchmark` |
 | Token for an agent (MCP at `http://localhost:3001/mcp`) | `pnpm --filter @ailab/api token --agent "Claude Code"` |
