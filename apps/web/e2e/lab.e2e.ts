@@ -691,6 +691,7 @@ test('a file added on the documents page becomes a draft document with its file'
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: 'Documents' })
     .click();
+  await page.getByRole('button', { name: 'Add documents' }).click();
   const add = page.getByRole('region', { name: 'Add documents' });
   await add.getByLabel('Files').setInputFiles({
     name: `Coating ${stamp}.md`,

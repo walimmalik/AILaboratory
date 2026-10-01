@@ -5,7 +5,7 @@ import {
   type FileAttributes,
 } from '@ailab/schema';
 
-const PLAN = 'Library (plan 011)';
+const PLAN = '(plan 011, library)';
 
 const check = (
   id: string,

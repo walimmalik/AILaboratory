@@ -10,7 +10,7 @@ import {
   SampleAttributes,
 } from '@ailab/schema';
 
-const PLAN = 'Inventory (plan 010), V5 and V6';
+const PLAN = '(plan 010 V5 and V6, inventory)';
 
 /** A place that doesn't move (V6): a room, fridge, freezer, shelf, incubator or automated store. */
 export const location = defineKind({

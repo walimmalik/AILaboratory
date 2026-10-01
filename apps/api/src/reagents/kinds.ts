@@ -8,14 +8,14 @@ import {
 
 import { liquidKinds } from './liquid-kinds.ts';
 
-const PLAN = 'Reagents and liquids (plan 009)';
+const PLAN = '(plan 009, reagents and liquids)';
 
 const productChecks: KindCheck<ProductAttributes>[] = [
   {
     id: 'made_has_recipe',
     label: 'A lab-made product has its recipe; a bought one has none',
     severity: 'blocker',
-    source: `${PLAN}, R3: lab-made solutions trace back to the lots they were made from`,
+    source: `Lab-made solutions trace back to the lots they were made from (plan 009 R3, reagents and liquids)`,
     section: 'contents',
     fix: 'Add the recipe (what goes into a batch and what it yields), or set it to bought',
     test: (a) =>
@@ -27,7 +27,7 @@ const productChecks: KindCheck<ProductAttributes>[] = [
     id: 'lot_fields_unique',
     label: 'Lot fields have unique keys',
     severity: 'blocker',
-    source: `${PLAN}, R9: SOP variables link to a lot field by its key`,
+    source: `SOP variables link to a lot field by its key (plan 009 R9, reagents and liquids)`,
     section: 'contents',
     fix: 'Rename the repeated key',
     test: (a) => {
@@ -40,7 +40,7 @@ const productChecks: KindCheck<ProductAttributes>[] = [
     id: 'vendor_known',
     label: 'Vendor and catalog number are known',
     severity: 'warning',
-    source: `${PLAN}: reordering and datasheets go by vendor and catalog number`,
+    source: `Reordering and datasheets go by vendor and catalog number ${PLAN}`,
     section: 'identity',
     fix: 'Add the vendor and at least one catalog number',
     test: (a) =>
@@ -52,7 +52,7 @@ const productChecks: KindCheck<ProductAttributes>[] = [
     id: 'storage_known',
     label: 'Storage temperature is known',
     severity: 'warning',
-    source: `${PLAN}: inventory (010) places containers by storage temperature`,
+    source: `Inventory places containers by storage temperature ${PLAN}`,
     section: 'handling',
     fix: 'Add the storage temperature from the datasheet',
     test: (a) => a.storage !== undefined || 'Not given',
@@ -61,7 +61,7 @@ const productChecks: KindCheck<ProductAttributes>[] = [
     id: 'liquid_type_known',
     label: 'Liquid type is set',
     severity: 'warning',
-    source: `${PLAN}, R4: the liquid type picks the liquid class on every instrument`,
+    source: `The liquid type picks the liquid class on every instrument (plan 009 R4, reagents and liquids)`,
     section: 'handling',
     fix: 'Choose how it pipettes (aqueous, DMSO, glycerol…)',
     test: (a) =>
@@ -75,7 +75,7 @@ const productChecks: KindCheck<ProductAttributes>[] = [
     id: 'hazards_known',
     label: 'Hazards are known',
     severity: 'warning',
-    source: `${PLAN}: GHS codes and the safety data sheet`,
+    source: `GHS codes and the safety data sheet ${PLAN}`,
     section: 'handling',
     fix: 'Add the GHS codes or a summary, and the SDS link',
     test: (a) => a.origin === 'made' || a.hazards !== undefined || 'Not given',
@@ -146,7 +146,7 @@ export const lot = defineKind({
       id: 'expiry_known',
       label: 'Expiry date is known',
       severity: 'warning',
-      source: `${PLAN}, R10: expired lots need a reason to be used`,
+      source: `Expired lots need a reason to be used (plan 009 R10, reagents and liquids)`,
       fix: 'Add the expiry date from the label or certificate',
       test: (a) => a.expiry !== undefined || 'Not given',
     },

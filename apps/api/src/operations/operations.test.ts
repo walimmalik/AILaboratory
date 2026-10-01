@@ -726,10 +726,23 @@ describe('review inbox', () => {
       record: { id: draft.id, name: 'WDG-0001' },
       sectionsToConfirm: ['Volume'],
       missing: ['Volume is not confirmed'],
+      blockers: [],
       ready: false,
       assumed: 1,
       byAgent: true,
       batchable: false,
+    });
+  });
+
+  it('names what blocks each draft, apart from the sections left to confirm', async () => {
+    const empty = await create(agent, {
+      label: 'Empty',
+      attributes: { ...attributes, volume: { value: '0', unit: 'uL' } },
+    });
+    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(items.find((i) => i.type === 'draft' && i.record.id === empty.id)).toMatchObject({
+      blockers: ['Volume is 0 uL'],
+      missing: ['Appearance is not confirmed', 'Volume is not confirmed', 'Volume is 0 uL'],
     });
   });
 

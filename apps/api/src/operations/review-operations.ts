@@ -40,12 +40,27 @@ export const reviewOperations = [
       const draftTotal = Object.values(draftCounts).reduce((sum, n) => sum + n, 0);
       const me = addressee(ctx.actor);
       const items: ReviewItem[] = [
-        ...drafts.flatMap((record): ReviewItem[] => {
-          const kind = kinds.get(record.kind);
-          if (!kind) return [];
-          const state = readiness(record, kind);
-          // The stored summary includes checks that read other records (ADR 0050); older rows
-          // written before it existed fall back to the kind's own checks.
+        ...(
+          await Promise.all(
+            drafts.map(async (record) => {
+              const kind = kinds.get(record.kind);
+              if (!kind) return undefined;
+              const own = readiness(record, kind);
+              // The stored summary includes checks that read other records (ADR 0050); only a
+              // draft where one of those fails is read again, to name what fails.
+              const failing = (s: typeof own) =>
+                s.checks.filter((c) => c.severity === 'blocker' && !c.passed).length;
+              const state =
+                record.readiness && record.readiness.blockers > failing(own)
+                  ? await service.readiness(ctx, record.id)
+                  : own;
+              return { record, state };
+            }),
+          )
+        ).flatMap((found): ReviewItem[] => {
+          if (!found) return [];
+          const { record, state } = found;
+          // Older rows written before the stored summary existed fall back to the kind's checks.
           const summary = record.readiness ?? summarizeReadiness(state);
           const item: ReviewItem = {
             type: 'draft',
@@ -71,6 +86,9 @@ export const reviewOperations = [
             warnings: summary.warnings,
             sectionsToConfirm: summary.sectionsLeft,
             missing: state.missing,
+            blockers: state.checks
+              .filter((c) => c.severity === 'blocker' && !c.passed)
+              .map((c) => c.message ?? c.label),
             ready: summary.ready,
             assumed: summary.assumed,
             unchecked: state.unchecked.length,

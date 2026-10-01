@@ -16,7 +16,7 @@ import {
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery } from '../queries.ts';
@@ -78,19 +78,44 @@ export function DocumentsPage() {
   for (const m of confirmed.data?.mentions ?? [])
     counts.set(m.document, (counts.get(m.document) ?? 0) + 1);
   const of = (r: RecordEnvelope) => r.attributes as Partial<DocumentAttributes>;
+  const [words, setWords] = useState('');
+  const [query, setQuery] = useState('');
+  const [adding, setAdding] = useState(false);
   return (
     <>
       <Head
         page={page}
         lede="SOPs, vendor manuals, papers and protocol code as published, searchable by their text, with what each one mentions."
+        actions={
+          <button
+            type="button"
+            className="btn"
+            aria-expanded={adding}
+            onClick={() => setAdding(!adding)}
+          >
+            Add documents
+          </button>
+        }
       />
-      <LibrarySearch />
-      <AddDocuments />
+      {adding && <AddDocuments onClose={() => setAdding(false)} />}
       <RecordList
         title="Documents"
         kind="document"
-        placeholder="Find by title or name, e.g. ELISA or DOC-0001"
-        empty="No documents yet. Add files above, or load the seed lab."
+        placeholder='Find by title, or search the text for words or "a phrase"'
+        empty="No documents yet. Add files, or load the seed lab."
+        onSearch={setWords}
+        noMatch="No title has those words."
+        searchAction={
+          <button
+            type="button"
+            className="btn"
+            disabled={!words.trim()}
+            onClick={() => setQuery(words.trim())}
+          >
+            Search the text
+          </button>
+        }
+        toolbar={query ? <Passages query={query} onClear={() => setQuery('')} /> : undefined}
         columns={[
           {
             header: 'Type',
@@ -119,68 +144,49 @@ export function DocumentsPage() {
   );
 }
 
-function LibrarySearch() {
-  const [text, setText] = useState('');
-  const [query, setQuery] = useState('');
+/** Passages of the library's text with every word searched, under the find box. */
+function Passages({ query, onClear }: { query: string; onClear: () => void }) {
   const hits = useQuery({
     queryKey: ['library', 'search', query],
     queryFn: () => api.run(librarySearch, { text: query, limit: 20 }),
-    enabled: query !== '',
   });
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setQuery(text.trim());
-  };
   return (
-    <section className="block" aria-label="Search the library">
-      <header>
-        <h2>Search the text</h2>
-        {query && hits.data && (
-          <span className="state muted num">{hits.data.hits.length} passages</span>
-        )}
-      </header>
-      <div className="body">
-        <form className="toolbar" onSubmit={submit}>
-          <input
-            className="field grow"
-            type="search"
-            aria-label="Words to find"
-            placeholder='Words or "a phrase", e.g. blocking hours or "reagent diluent"'
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <button type="submit" className="btn" disabled={!text.trim()}>
-            Search
-          </button>
-        </form>
-        {hits.error && <p className="error-text">{hits.error.message}</p>}
-        {query && hits.data?.hits.length === 0 && (
-          <p className="empty">
-            No passage has all those words. Try the words the source would use, or "or" between
-            alternatives.
-          </p>
-        )}
-        {hits.data && hits.data.hits.length > 0 && (
-          <ol className="hits">
-            {hits.data.hits.map((hit) => (
-              <li key={hit.passage.id}>
-                <p className="hit-doc">
-                  <Link to="/records/$id" params={{ id: hit.document.id }}>
-                    {hit.document.label}
-                  </Link>{' '}
-                  <span className="muted">
-                    {hit.passage.heading.join(' › ')}
-                    {hit.passage.page ? `, page ${hit.passage.page}` : ''}
-                  </span>
-                </p>
-                <p className="snippet">
-                  <Snippet text={hit.snippet} />
-                </p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+    <section className="passages" aria-label="Passages found">
+      <p className="muted">
+        {hits.data
+          ? `${hits.data.hits.length} ${hits.data.hits.length === 1 ? 'passage' : 'passages'} with “${query}”`
+          : `Searching for “${query}”…`}{' '}
+        <button type="button" className="link-btn" onClick={onClear}>
+          Clear
+        </button>
+      </p>
+      {hits.error && <p className="error-text">{hits.error.message}</p>}
+      {query && hits.data?.hits.length === 0 && (
+        <p className="empty">
+          No passage has all those words. Try the words the source would use, or "or" between
+          alternatives.
+        </p>
+      )}
+      {hits.data && hits.data.hits.length > 0 && (
+        <ol className="hits">
+          {hits.data.hits.map((hit) => (
+            <li key={hit.passage.id}>
+              <p className="hit-doc">
+                <Link to="/records/$id" params={{ id: hit.document.id }}>
+                  {hit.document.label}
+                </Link>{' '}
+                <span className="muted">
+                  {hit.passage.heading.join(' › ')}
+                  {hit.passage.page ? `, page ${hit.passage.page}` : ''}
+                </span>
+              </p>
+              <p className="snippet">
+                <Snippet text={hit.snippet} />
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -196,7 +202,7 @@ function base64Of(file: File): Promise<string> {
 }
 
 /** Upload files, each as a draft document, and make the readable ones searchable. */
-function AddDocuments() {
+function AddDocuments({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<File[]>([]);
   const [type, setType] = useState<DocumentType>('sop');
@@ -299,6 +305,9 @@ function AddDocuments() {
             disabled={files.length === 0 || add.isPending}
           >
             {add.isPending ? 'Adding…' : files.length > 1 ? `Add ${files.length}` : 'Add'}
+          </button>
+          <button type="button" className="btn" onClick={onClose}>
+            Close
           </button>
         </form>
         <p className="muted">

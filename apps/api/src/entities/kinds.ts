@@ -13,7 +13,7 @@ import {
   recordIdPattern,
 } from '@ailab/schema';
 
-const PLAN = 'Inventory (plan 010), V1';
+const PLAN = '(plan 010 V1, inventory)';
 
 const kindWords = (kind: string) => kind.replaceAll('_', ' ');
 

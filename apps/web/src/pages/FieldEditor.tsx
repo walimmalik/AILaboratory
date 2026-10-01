@@ -6,11 +6,13 @@ import {
   type JsonSchema,
   parseTyped,
   resolve,
+  shapeKeys,
   typedByText,
   valueText,
 } from '../lib/json-schema.ts';
 import { recordsQuery } from '../queries.ts';
 import { fieldLabel } from './RecordReview.tsx';
+import { RecordSearch } from './RecordSearch.tsx';
 
 /**
  * Editing a record's values by hand. The form is drawn from the kind's JSON Schema (`records.kinds`),
@@ -179,7 +181,69 @@ export function ValueEditor({
       />
     );
   }
+  if (s.type === 'array' && s.items && isQuantity(resolve(s.items, root))) {
+    return (
+      <QuantityListEditor
+        schema={resolve(s.items, root)}
+        value={value}
+        onChange={onChange}
+        label={label}
+      />
+    );
+  }
   return <JsonEditor value={value} onChange={onChange} label={label} />;
+}
+
+/** A list of amounts (target concentrations): one value and unit per row. */
+function QuantityListEditor({
+  schema,
+  value,
+  onChange,
+  label,
+}: {
+  schema: JsonSchema;
+  value: unknown;
+  onChange: Change;
+  label: string;
+}) {
+  // Rows still being filled in stay on screen; only filled ones are the value.
+  const [rows, setRows] = useState<unknown[]>(() =>
+    Array.isArray(value) && value.length > 0 ? value : [undefined],
+  );
+  const items = rows;
+  const set = (next: unknown[]) => {
+    setRows(next);
+    const filled = next.filter((v) => v !== undefined);
+    onChange(filled.length > 0 ? filled : undefined);
+  };
+  return (
+    <div className="quantity-list">
+      {items.map((item, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: rows have no identity beyond their place
+        <div key={i} className="quantity-row">
+          <QuantityEditor
+            schema={schema}
+            value={item}
+            label={`${label} ${i + 1}`}
+            onChange={(next) => set(items.map((v, j) => (j === i ? next : v)))}
+          />
+          {items.length > 1 && (
+            <button
+              type="button"
+              className="btn small"
+              aria-label={`Remove ${label} ${i + 1}`}
+              onClick={() => set(items.filter((_, j) => j !== i))}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+      <button type="button" className="btn small" onClick={() => set([...items, undefined])}>
+        Add
+      </button>
+    </div>
+  );
 }
 
 function StringEditor({
@@ -232,24 +296,15 @@ function RecordPicker({
   label: string;
 }) {
   const { data = [] } = useQuery(recordsQuery({ kind }));
-  const records = data.filter((r) => r.status !== 'archived');
+  const records = data.filter((r) => r.status !== 'archived' || r.id === value);
   return (
-    <select
-      className="field"
-      aria-label={label}
-      value={typeof value === 'string' ? value : ''}
-      onChange={(e) => onChange(e.target.value || undefined)}
-    >
-      <option value="">—</option>
-      {typeof value === 'string' && !records.some((r) => r.id === value) && (
-        <option value={value}>{value}</option>
-      )}
-      {records.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.label} ({r.name})
-        </option>
-      ))}
-    </select>
+    <RecordSearch
+      records={records}
+      value={typeof value === 'string' ? value : undefined}
+      onChange={onChange}
+      label={label}
+      empty="type to search"
+    />
   );
 }
 
@@ -421,7 +476,20 @@ function VariantEditor({
   path: string;
 }) {
   const key = discriminator(variants);
-  if (!key) return <JsonEditor value={value} onChange={onChange} label={label} />;
+  if (!key) {
+    const shapes = shapeKeys(variants);
+    if (!shapes) return <JsonEditor value={value} onChange={onChange} label={label} />;
+    return (
+      <ShapeEditor
+        variants={variants}
+        shapes={shapes}
+        value={value}
+        onChange={onChange}
+        label={label}
+        path={path}
+      />
+    );
+  }
   const current = (value && typeof value === 'object' ? value : undefined) as
     | Record<string, unknown>
     | undefined;
@@ -459,6 +527,56 @@ function VariantEditor({
           }
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Variants told apart by what they hold (an instrument, or limits): a choice of which, then the
+ * chosen variant's fields.
+ */
+function ShapeEditor({
+  variants,
+  shapes,
+  value,
+  onChange,
+  label,
+  path,
+}: {
+  variants: JsonSchema[];
+  shapes: string[];
+  value: unknown;
+  onChange: Change;
+  label: string;
+  path: string;
+}) {
+  const current = (value && typeof value === 'object' ? value : undefined) as
+    | Record<string, unknown>
+    | undefined;
+  const found = shapes.findIndex((key) => current?.[key] !== undefined);
+  const [picked, setPicked] = useState(found);
+  const index = found >= 0 ? found : picked;
+  const chosen = variants[index];
+  return (
+    <div className="variant">
+      <select
+        className="field"
+        aria-label={label}
+        value={index >= 0 ? String(index) : ''}
+        onChange={(e) => {
+          const next = e.target.value === '' ? -1 : Number(e.target.value);
+          setPicked(next);
+          if (next !== index) onChange(undefined);
+        }}
+      >
+        <option value="">—</option>
+        {shapes.map((key, i) => (
+          <option key={key} value={i}>
+            {fieldLabel(key)}
+          </option>
+        ))}
+      </select>
+      {chosen && <ObjectEditor schema={chosen} value={current} path={path} onChange={onChange} />}
     </div>
   );
 }

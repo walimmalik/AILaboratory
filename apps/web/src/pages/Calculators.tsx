@@ -1,4 +1,10 @@
-import { type OperationContract, operationContracts, operationsDescribe } from '@ailab/schema';
+import {
+  CALCULATOR_GROUPS,
+  type CalculatorGroup,
+  type OperationContract,
+  operationContracts,
+  operationsDescribe,
+} from '@ailab/schema';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api.ts';
@@ -7,13 +13,21 @@ import { kindsQuery } from '../queries.ts';
 import { EditorScope, ValueEditor } from './FieldEditor.tsx';
 import { renderValue } from './Value.tsx';
 
-/** Every lab calculator, in the order a person meets them: by module, then by name. */
+const groupOrder = Object.keys(CALCULATOR_GROUPS) as CalculatorGroup[];
+
+/** Every lab calculator, grouped as the page lists them (bench dilutions first), then by title. */
 const calculators: OperationContract[] = [...operationContracts.values()]
   .filter((c) => c.calculator)
-  .sort((a, b) => a.id.localeCompare(b.id));
+  .sort(
+    (a, b) =>
+      groupOrder.indexOf(a.calculator?.group ?? 'protocols') -
+        groupOrder.indexOf(b.calculator?.group ?? 'protocols') ||
+      titleOf(a).localeCompare(titleOf(b)),
+  );
 
-const titleOf = (c: OperationContract) =>
-  c.verbs.intent.charAt(0).toUpperCase() + c.verbs.intent.slice(1);
+function titleOf(c: OperationContract) {
+  return c.calculator?.title ?? c.id;
+}
 
 /**
  * The lab calculators (plan 004e R11): the same operations agents call for volumes, dilutions and
@@ -46,10 +60,16 @@ export function CalculatorsPage() {
             value={id}
             onChange={(e) => setId(e.target.value)}
           >
-            {calculators.map((c) => (
-              <option key={c.id} value={c.id}>
-                {titleOf(c)}
-              </option>
+            {groupOrder.map((group) => (
+              <optgroup key={group} label={CALCULATOR_GROUPS[group]}>
+                {calculators
+                  .filter((c) => c.calculator?.group === group)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {titleOf(c)}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
           {contract && <p className="muted">{contract.summary}</p>}

@@ -119,7 +119,7 @@ export const inventoryListPlace = defineContract({
 export const inventoryCalculateTransfer = defineContract({
   id: 'inventory.calculate_transfer',
   verbs: { done: 'calculated a transfer', intent: 'calculate a transfer' },
-  calculator: true,
+  calculator: { title: 'Transfer between containers', group: 'dilutions' },
   summary:
     'Work out what two wells hold after moving a volume from one to the other: the volumes left and the concentration of every component after mixing (e.g. 25 nL of a 10 mM stock into 25 µL of medium). Use this rather than your own arithmetic; it changes nothing',
   effect: 'read',

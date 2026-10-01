@@ -13,7 +13,7 @@ import {
  * confirmed workcell (I9), and is standalone otherwise.
  */
 
-const SOURCE = 'Workcells (plan 008d)';
+const SOURCE = '(plan 008d, workcells)';
 
 const check = (
   id: string,

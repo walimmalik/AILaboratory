@@ -27,7 +27,7 @@ export const vendor = defineKind({
 
 type Attributes = LabwareTypeAttributes;
 
-const LIBRARY = 'Labware library (plan 007)';
+const LIBRARY = '(plan 007, labware library)';
 const holdsLiquid = (a: Attributes) =>
   a.family === 'plate' || a.family === 'reservoir' || a.family === 'tube';
 
@@ -38,7 +38,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'footprint_known',
     label: 'Outer size is known',
     severity: 'blocker',
-    source: `${LIBRARY}: needed to place it on a deck or in a rack`,
+    source: `Needed to place it on a deck or in a rack ${LIBRARY}`,
     section: 'geometry',
     fix: 'Add the length, width and height (for tubes: diameter and height) from the datasheet',
     test: (a) => {
@@ -53,7 +53,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'wells_known',
     label: 'Wells are laid out',
     severity: 'blocker',
-    source: `${LIBRARY}: plate maps and transfers address wells by name`,
+    source: `Plate maps and transfers address wells by name ${LIBRARY}`,
     section: 'geometry',
     fix: 'Give the rows and columns, or list each well',
     applies: (a) => a.family !== 'lid',
@@ -63,7 +63,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'max_volume_known',
     label: 'Maximum volume is known',
     severity: 'blocker',
-    source: `${LIBRARY}: transfers check that liquid fits`,
+    source: `Transfers check that liquid fits ${LIBRARY}`,
     section: 'volumes',
     fix: 'Add the well volume (for tip racks, the tip volume) from the datasheet',
     applies: (a) => a.family !== 'lid' && a.family !== 'rack',
@@ -120,7 +120,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'wells_placed',
     label: 'Well positions are known',
     severity: 'warning',
-    source: `${LIBRARY}: robots and plate map drawings need them`,
+    source: `Robots and plate map drawings need them ${LIBRARY}`,
     section: 'geometry',
     fix: 'Add the pitch and the A1 offset from the left and back edges (datasheet drawing)',
     // A tube is its own single well; lids have none.
@@ -160,7 +160,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'well_shape_known',
     label: 'Well size and depth are known',
     severity: 'warning',
-    source: `${LIBRARY}: liquid height and pipetting depth come from them`,
+    source: `Liquid height and pipetting depth come from them ${LIBRARY}`,
     section: 'geometry',
     fix: 'Add the well opening, depth and bottom shape',
     applies: holdsLiquid,
@@ -176,7 +176,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'capacity_fits',
     label: 'Maximum volume fits the well',
     severity: 'warning',
-    source: `${LIBRARY}: computed from the well size and depth`,
+    source: `Computed from the well size and depth ${LIBRARY}`,
     section: 'volumes',
     fix: 'Check the maximum volume and the well size',
     applies: holdsLiquid,
@@ -199,7 +199,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'dead_volume_known',
     label: 'Dead volume is known',
     severity: 'warning',
-    source: `${LIBRARY}: digital SOPs add it to what they prepare`,
+    source: `Digital SOPs add it to what they prepare ${LIBRARY}`,
     section: 'volumes',
     fix: 'Add the dead volume from the datasheet or from your own measurements',
     applies: holdsLiquid,
@@ -209,7 +209,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'tip_known',
     label: 'Tip length is known',
     severity: 'warning',
-    source: `${LIBRARY}: needed for pipetting heights`,
+    source: `Needed for pipetting heights ${LIBRARY}`,
     section: 'geometry',
     fix: 'Add the tip length from the datasheet',
     applies: (a) => a.family === 'tip_rack',
@@ -219,7 +219,7 @@ const checks: KindCheck<Attributes>[] = [
     id: 'catalog_known',
     label: 'Manufacturer and catalog number are known',
     severity: 'warning',
-    source: `${LIBRARY}: needed to order it and to match it to a datasheet`,
+    source: `Needed to order it and to match it to a datasheet ${LIBRARY}`,
     section: 'identity',
     fix: 'Add the manufacturer and their catalog number',
     test: (a) =>

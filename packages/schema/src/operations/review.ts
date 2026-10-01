@@ -47,8 +47,10 @@ export const ReviewDraft = z.object({
   warnings: z.number().int().nonnegative(),
   /** Titles of the sections still to confirm. */
   sectionsToConfirm: z.array(z.string()),
-  /** What stands in the way, in plain words. */
+  /** What stands in the way, in plain words: the sections left, then the failing blockers. */
   missing: z.array(z.string()),
+  /** The failing blocker checks alone, in plain words, including checks that read other records. */
+  blockers: z.array(z.string()),
   ready: z.boolean(),
   /** How many values are an agent's unconfirmed estimate. */
   assumed: z.number().int().nonnegative(),

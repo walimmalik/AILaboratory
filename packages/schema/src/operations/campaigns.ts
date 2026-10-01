@@ -117,7 +117,7 @@ export const experimentsBindProtocol = defineContract({
 export const experimentsCalculate = defineContract({
   id: 'experiments.calculate',
   verbs: { done: 'calculated the amounts for', intent: 'calculate the amounts for' },
-  calculator: true,
+  calculator: { title: 'Experiment amounts', group: 'protocols' },
   summary:
     "Work out every protocol part of an experiment as it is pinned: each SOP at its pinned version, with the experiment's bindings (read at their pinned versions) and inputs. Says where every value came from and what is still missing or does not fit, which planning needs cleared",
   effect: 'read',
