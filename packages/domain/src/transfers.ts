@@ -278,27 +278,34 @@ export function sourceVolumes(
 
 /**
  * How a method handles tips (T5). `none`: acoustic or non-contact (Echo, Mantis). `new_each`: a new
- * tip for every transfer. `per_source`: one tip per source, reused. `lab_default`: a new tip for
- * every transfer into a well that already holds liquid, one tip per source otherwise.
+ * tip for every transfer. `per_source`: one tip per run of transfers from the same source.
+ * `lab_default`: as `per_source`, but a tip that has touched liquid in a destination well is
+ * dropped, so every transfer into a well that already holds liquid gets a new one.
  */
 export type TipRule = 'none' | 'new_each' | 'per_source' | 'lab_default';
+
+/**
+ * Whether each transfer, in order, starts with a new tip under a rule. One pipette channel carries
+ * one tip, so a tip is reused only by the next transfer, never after another source.
+ */
+export function tipChanges(
+  transfers: readonly { source: string; intoLiquid?: boolean }[],
+  rule: TipRule,
+): boolean[] {
+  return transfers.map((t, i) => {
+    if (rule === 'none') return false;
+    const before = transfers[i - 1];
+    if (rule === 'new_each' || !before || before.source !== t.source) return true;
+    if (rule === 'per_source') return false;
+    return !!t.intoLiquid || !!before.intoLiquid;
+  });
+}
 
 export function countTips(
   transfers: readonly { source: string; intoLiquid?: boolean }[],
   rule: TipRule,
 ): number {
-  switch (rule) {
-    case 'none':
-      return 0;
-    case 'new_each':
-      return transfers.length;
-    case 'per_source':
-      return new Set(transfers.map((t) => t.source)).size;
-    case 'lab_default': {
-      const dry = new Set(transfers.filter((t) => !t.intoLiquid).map((t) => t.source)).size;
-      return dry + transfers.filter((t) => t.intoLiquid).length;
-    }
-  }
+  return tipChanges(transfers, rule).filter(Boolean).length;
 }
 
 export interface DeviceOption {

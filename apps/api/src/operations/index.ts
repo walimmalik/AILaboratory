@@ -35,6 +35,7 @@ import { exportOperations } from '../transfers/export.ts';
 import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
 import { reportOperations } from '../transfers/reports.ts';
+import { noProtocolWriter, type ProtocolWriter } from '../transfers/simulator.ts';
 import { OperationError } from './errors.ts';
 
 export { OperationError } from './errors.ts';
@@ -56,9 +57,10 @@ export function createRegistry(
   {
     files = new MemoryFileStore(),
     converter = noConverter,
-  }: { files?: FileStore; converter?: Converter } = {},
+    protocols = noProtocolWriter,
+  }: { files?: FileStore; converter?: Converter; protocols?: ProtocolWriter } = {},
 ) {
-  return new OperationRegistry({ db, kinds, bus, assistant, files, converter }).register(
+  return new OperationRegistry({ db, kinds, bus, assistant, files, converter, protocols }).register(
     ...recordOperations,
     ...proposalOperations,
     ...changeSetOperations,

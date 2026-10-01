@@ -11,7 +11,7 @@ Plan [016](../plans/016-transfer-designer.md): how the liquid gets there. Code w
 - **Backfill.** `backfill` tops every well up to the fullest well's solvent volume, in whole steps, so every well has the same solvent.
 - **Dilution options** (`transfers.dilution_options`). `dilutionOptions` tries each target straight from the stock, then through an intermediate diluted 10, 100 or 1000 fold in the same solvent, and gives the first that works. A target no route reaches is marked unreachable.
 - **Source volumes** (`transfers.source_volumes`). `sourceVolumes` sums what is drawn per source and adds its dead volume on the device and an overage fraction.
-- **Tips** (T5). `countTips` follows the method's tip rule: none (acoustic and non-contact), a new tip each transfer, one per source, or the lab default (one per source into dry wells, a new tip for every transfer into liquid).
+- **Tips** (T5). `tipChanges` says, transfer by transfer, whether the rule takes a new tip: never (acoustic and non-contact), every transfer, when the source changes, or the lab default (when the source changes, and for every transfer into a well that already holds liquid, since that tip has touched it). One channel carries one tip, so a tip is reused only by the next transfer. `countTips` counts them.
 - **Ranking devices** (`transfers.options`). `rankDevices` orders devices for a volume: those that can move it first, then a verified liquid class, then the smaller error, then no tips.
 
 ## Dilution optimizer (016a-1, O1)
@@ -60,6 +60,18 @@ A transfer report is matched row by row, in order, to the plan's Echo transfers:
 
 Detectors for lab memory (`memory.observe`, plan 005) are not built: lab memory comes before 017, and the report outcomes above are what they will read (repeat failures per source plate type, liquid class or well).
 
+## Opentrons protocols (016b-3, ADR 0058)
+
+A group on an Opentrons Flex (instrument kind model `Opentrons Flex`) is exported as a Python protocol. `apps/api/src/transfers/opentrons.ts` works out its data and the science service writes and checks it (`POST /opentrons/protocol`, `apps/science/src/science/opentrons/`):
+
+- **Pipette:** the group's node, or the instrument's only pipette, by its equipment kind's model (Flex 1- or 8-channel, 50 or 1000 µL) and mount. An 8-channel pipette uses one nozzle.
+- **Trash:** the trash bin in the configuration, else the waste chute; neither is refused.
+- **Tips:** `tipChanges` with the group's rule over the plan's order (a well filled by an earlier transfer holds liquid); a rule of none is refused. The tip rack is the lab's confirmed `opentrons_flex_96_*` tip rack the pipette takes, smallest that holds the largest transfer, one per 96 tips.
+- **Deck:** the plates the group uses in plan order, then tip racks, on free slots D1, D2, D3, C1 … A3, skipping what the configuration claims. Too few slots is refused. Labels read as the plan's plate label and the container's barcode. Labware without an Opentrons load name is loaded from its written definition (`toOpentrons`); a type that can't be written is refused with what is missing.
+- **Check:** the protocol is run in Opentrons' simulator (opentrons 10.0.0, API 2.20) in its own process. A file is stored only when it passes; the export returns the simulator's command and tip counts and the deck, slot by slot. A group that can't be written or doesn't pass is skipped with why, or refused when it is the `group` asked for.
+
+The request and the protocol it becomes are golden files in `apps/science/tests/fixtures/`, checked from both sides. `seed/worklists/opentrons-flex-elisa-standards.py` stays the hand-written mock of what a person would write.
+
 ## Not yet
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, Opentrons protocols and deck layouts (016b), the lab's CSV formats (016c), screens (016d).
+Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, deck layouts stored on the plan with a loading list (016b-4), liquid classes in Opentrons protocols, 96-channel and column-wise 8-channel protocols, the lab's CSV formats (016c), screens (016d).

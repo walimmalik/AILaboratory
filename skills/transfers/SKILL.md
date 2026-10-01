@@ -38,7 +38,7 @@ A transfer plan (`TFP-0001`) is a design: plates and groups of transfers that co
 
 ## Instrument files
 
-`transfers.export {id, group?}` writes the files for a confirmed plan: an Echo pick list for each group on an Echo, stored as a file record (hand it over as the file, not pasted). Groups done by hand or on instruments without a writer yet come back under `skipped` with why. A draft plan is refused: a person confirms it first. When the Echo source plate type is ambiguous, set the group's liquid class (`transfers.set_instrument`); when a plate has no Echo type, the labware type needs `echoPlateTypes`.
+`transfers.export {id, group?}` writes the files for a confirmed plan: an Echo pick list for each group on an Echo, and an Opentrons protocol for each group on an Opentrons Flex, stored as file records (hand them over as files, not pasted). A Flex protocol is run in Opentrons' simulator first; the answer gives its `check` (commands, tips) and `deck` (what goes on each slot), so tell the person where to put each plate and tip rack, and say it was checked in the simulator, not on the robot. Groups done by hand or on instruments without a writer yet come back under `skipped` with why. A draft plan is refused: a person confirms it first. A Flex group is skipped with why when the instrument has no trash bin or waste chute, the group says no tips, the deck is too small, a labware type has no Opentrons load name and not enough geometry for a definition, or there is no confirmed Flex tip rack in the library. When the Echo source plate type is ambiguous, set the group's liquid class (`transfers.set_instrument`); when a plate has no Echo type, the labware type needs `echoPlateTypes`.
 
 ## Echo reports
 

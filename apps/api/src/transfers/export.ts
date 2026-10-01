@@ -5,6 +5,7 @@ import {
   type LabwareTypeAttributes,
   type LiquidClassAttributes,
   type PlanPlate,
+  type ProtocolCheck,
   type RecordEnvelope,
   type TransferGroup,
   type TransferPlanAttributes,
@@ -15,10 +16,11 @@ import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { run } from './calculators.ts';
 import { type EchoPlate, echoPickList } from './echo.ts';
+import { flexRequest, isFlex } from './opentrons.ts';
 
 /**
- * Instrument files from confirmed transfer plans (plan 016b). Echo pick lists first; Opentrons
- * protocols and the lab's own CSV formats follow (016b, 016c).
+ * Instrument files from confirmed transfer plans (plan 016b): Echo pick lists, and Opentrons Flex
+ * protocols checked in Opentrons' simulator. The lab's own CSV formats follow (016c).
  */
 
 const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
@@ -113,18 +115,67 @@ export const exportOperations = [
 
       const files: {
         group: string;
-        format: 'echo_pick_list';
+        format: 'echo_pick_list' | 'opentrons_protocol';
         file: RecordEnvelope;
         filename: string;
         rows: number;
+        check?: ProtocolCheck;
+        deck?: { slot: string; holds: string }[];
       }[] = [];
       const skipped: { group: string; why: string }[] = [];
+      const upload = (name: string, mediaType: string, text: string, what: string) =>
+        run<{ file: RecordEnvelope }>(deps, ctx, 'files.upload', {
+          name,
+          mediaType,
+          text,
+          source: { from: 'export', record: plan.id, version: plan.version },
+          reason: `${what}, from ${plan.name} version ${plan.version}`,
+        });
       for (const group of groups) {
         if (!group.instrument) {
           skipped.push({ group: group.id, why: 'Done by hand; no instrument file' });
           continue;
         }
         const { instrument, kind } = await instrumentKindOf(deps, ctx, group.instrument.instrument);
+        if (isFlex(kind)) {
+          // A group that can't be written is skipped with why, or refused when asked for alone.
+          const cannot = (why: string) => {
+            if (input.group) throw new OperationError('invalid_state', `${group.label}: ${why}`);
+            skipped.push({ group: group.id, why });
+          };
+          let flex: Awaited<ReturnType<typeof flexRequest>>;
+          try {
+            flex = await flexRequest(deps, ctx, plan, group, instrument);
+          } catch (e) {
+            if (!(e instanceof OperationError) || e.code !== 'invalid_state') throw e;
+            cannot(e.message);
+            continue;
+          }
+          const { protocol, check } = await deps.protocols.flex(flex.request);
+          if (!check.ok) {
+            cannot(
+              `The Opentrons simulator stopped the protocol: ${check.problem ?? 'no reason given'}`,
+            );
+            continue;
+          }
+          const filename = `${plan.name} v${plan.version} ${group.id} Opentrons protocol.py`;
+          const { file } = await upload(
+            filename,
+            'text/x-python',
+            protocol,
+            `Opentrons protocol for ${group.label}`,
+          );
+          files.push({
+            group: group.id,
+            format: 'opentrons_protocol',
+            file,
+            filename,
+            rows: group.transfers.length,
+            check,
+            deck: flex.deck,
+          });
+          continue;
+        }
         if (kind.category !== 'acoustic_dispenser') {
           skipped.push({
             group: group.id,
@@ -143,13 +194,12 @@ export const exportOperations = [
           })),
         );
         const filename = `${plan.name} v${plan.version} ${group.id} Echo pick list.csv`;
-        const { file } = await run<{ file: RecordEnvelope }>(deps, ctx, 'files.upload', {
-          name: filename,
-          mediaType: 'text/csv',
-          text: csv,
-          source: { from: 'export', record: plan.id, version: plan.version },
-          reason: `Echo pick list for ${group.label}, from ${plan.name} version ${plan.version}`,
-        });
+        const { file } = await upload(
+          filename,
+          'text/csv',
+          csv,
+          `Echo pick list for ${group.label}`,
+        );
         files.push({
           group: group.id,
           format: 'echo_pick_list',

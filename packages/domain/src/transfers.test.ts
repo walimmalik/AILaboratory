@@ -9,6 +9,7 @@ import {
   rankDevices,
   sourceVolumes,
   TransferError,
+  tipChanges,
 } from './transfers.ts';
 
 const q = (value: string, unit: string) => ({ value, unit });
@@ -165,6 +166,16 @@ describe('tips and devices', () => {
     expect(countTips(moves, 'new_each')).toBe(4);
     expect(countTips(moves, 'per_source')).toBe(2);
     expect(countTips(moves, 'lab_default')).toBe(3);
+  });
+
+  it('reuses a tip only for the next transfer from the same source, into a dry well', () => {
+    expect(tipChanges(moves, 'lab_default')).toEqual([true, false, true, true]);
+    expect(tipChanges(moves, 'per_source')).toEqual([true, false, false, true]);
+    expect(tipChanges(moves, 'none')).toEqual([false, false, false, false]);
+    const back = [{ source: 'a' }, { source: 'b' }, { source: 'a' }];
+    expect(tipChanges(back, 'per_source')).toEqual([true, true, true]);
+    const afterWet = [{ source: 'a', intoLiquid: true }, { source: 'a' }];
+    expect(tipChanges(afterWet, 'lab_default')).toEqual([true, true]);
   });
 
   it('ranks devices: what fits, a verified class, less error, no tips', () => {

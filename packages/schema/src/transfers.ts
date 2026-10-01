@@ -97,3 +97,77 @@ export const TransferPlanAttributes = z.strictObject({
   notes: z.string().min(1).optional(),
 });
 export type TransferPlanAttributes = z.infer<typeof TransferPlanAttributes>;
+
+// Opentrons Flex protocols (016b-3): what the API sends the science service, which writes the
+// protocol from one fixed program and checks it in Opentrons' simulator. Data only, never code.
+
+const FlexSlot = z.string().regex(/^[A-D][1-3]$/, 'must be a Flex deck slot like D1');
+const OpentronsName = z.string().regex(/^[a-z0-9_.]+$/, 'must be an Opentrons load name');
+
+export const FlexPipetteName = z.enum([
+  'flex_1channel_50',
+  'flex_1channel_1000',
+  'flex_8channel_50',
+  'flex_8channel_1000',
+]);
+export type FlexPipetteName = z.infer<typeof FlexPipetteName>;
+
+export const FlexProtocolRequest = z.strictObject({
+  name: z.string().min(1).max(2000),
+  description: z.string().min(1).max(2000),
+  pipette: z.strictObject({
+    loadName: FlexPipetteName,
+    mount: z.enum(['left', 'right']),
+    nozzles: z
+      .enum(['all', 'single'])
+      .describe('single: an 8-channel pipette picks up one tip, at its H1 nozzle'),
+  }),
+  trash: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('trash_bin'), slot: FlexSlot }),
+    z.strictObject({ kind: z.literal('waste_chute') }),
+  ]),
+  tipRacks: z
+    .array(z.strictObject({ loadName: OpentronsName, slot: FlexSlot }))
+    .min(1)
+    .max(11),
+  labware: z
+    .array(
+      z.strictObject({
+        id: LocalId,
+        label: z.string().min(1).max(2000),
+        slot: FlexSlot,
+        loadName: OpentronsName,
+        definition: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("A custom definition, for labware Opentrons doesn't name"),
+      }),
+    )
+    .min(1)
+    .max(11),
+  transfers: z
+    .array(
+      z.strictObject({
+        from: z.strictObject({ labware: LocalId, well: WellName }),
+        to: z.strictObject({ labware: LocalId, well: WellName }),
+        volume: z.number().positive().describe('Microlitres'),
+        newTip: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(20000),
+});
+export type FlexProtocolRequest = z.infer<typeof FlexProtocolRequest>;
+
+/** What Opentrons' simulator made of a protocol. */
+export const ProtocolCheck = z.object({
+  ok: z.boolean(),
+  simulator: z.string().describe('The Opentrons package version that simulated it'),
+  commands: z.number().int().describe('Commands in the simulated run'),
+  tips: z.number().int().describe('Tips the simulated run picked up'),
+  problem: z.string().nullish().describe('Why the simulator stopped, when it did'),
+});
+export type ProtocolCheck = z.infer<typeof ProtocolCheck>;
+
+export const FlexProtocolResult = z.object({ protocol: z.string(), check: ProtocolCheck });
+export type FlexProtocolResult = z.infer<typeof FlexProtocolResult>;

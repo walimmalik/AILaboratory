@@ -8,7 +8,7 @@ import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { LiquidTypeId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
-import { PlanPlate, TransferGroup, TransferPlanId } from '../transfers.ts';
+import { PlanPlate, ProtocolCheck, TransferGroup, TransferPlanId } from '../transfers.ts';
 
 /**
  * The transfer calculators (plan 016, T2; ADR 0024): read operations over
@@ -409,7 +409,7 @@ export const transfersExport = defineContract({
   id: 'transfers.export',
   verbs: { done: 'exported a worklist from', intent: 'export a worklist from' },
   summary:
-    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo. Each file is stored in the file store with the plan version it came from. Groups done by hand, or on instruments without a writer yet, are listed as skipped with why. Give `group` to write one group's file only",
+    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo, and an Opentrons protocol (Python) for each group on an Opentrons Flex, checked in Opentrons' simulator first, with where each plate and tip rack goes on the deck. Each file is stored in the file store with the plan version it came from. Groups done by hand, on instruments without a writer yet, or stopped by the simulator are listed as skipped with why. Give `group` to write one group's file only",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -421,10 +421,17 @@ export const transfersExport = defineContract({
     files: z.array(
       z.object({
         group: z.string(),
-        format: z.enum(['echo_pick_list']),
+        format: z.enum(['echo_pick_list', 'opentrons_protocol']),
         file: RecordEnvelope,
         filename: z.string(),
         rows: z.number().int(),
+        check: ProtocolCheck.optional().describe(
+          'Opentrons protocols: what the simulator made of it',
+        ),
+        deck: z
+          .array(z.object({ slot: z.string(), holds: z.string() }))
+          .optional()
+          .describe('Opentrons protocols: what goes on each deck slot'),
       }),
     ),
     skipped: z.array(z.object({ group: z.string(), why: z.string() })),

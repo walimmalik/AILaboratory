@@ -19,6 +19,7 @@ import { KindRegistry } from './records/kinds.ts';
 import { widget } from './records/test-kinds.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { transferKinds } from './transfers/kinds.ts';
+import { protocolWriterFromEnv } from './transfers/simulator.ts';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -67,6 +68,7 @@ serve(
       assistant,
       files: fileStoreFromEnv(process.env),
       converter: converterFromEnv(process.env),
+      protocols: protocolWriterFromEnv(process.env),
     }).fetch,
     port,
     hostname: '0.0.0.0',

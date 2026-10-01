@@ -15,6 +15,7 @@ import type { Converter } from '../library/convert.ts';
 import { saveCalculation } from '../records/calculations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import type { ProtocolWriter } from '../transfers/simulator.ts';
 import { type ActivityBus, recordActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
 import { createProposal } from './proposal-store.ts';
@@ -29,6 +30,8 @@ export interface OperationDeps {
   files: FileStore;
   /** Turns library files into text (plan 011b): the science service. */
   converter: Converter;
+  /** Writes and simulates Opentrons protocols (plan 016b-3): the science service. */
+  protocols: ProtocolWriter;
 }
 
 type Policy = 'direct' | 'propose';

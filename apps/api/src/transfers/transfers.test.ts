@@ -761,7 +761,10 @@ describe('transfer plans', () => {
       skipped: { group: string; why: string }[];
     }>(agent, 'transfers.export', { id: active.id });
     expect(out.skipped).toEqual([
-      { group: 'buffer', why: 'No file writer for Flex 1 yet' },
+      {
+        group: 'buffer',
+        why: 'Flex 1 has no trash bin or waste chute installed; add one with instruments.change_configuration',
+      },
       { group: 'mix', why: 'Done by hand; no instrument file' },
     ]);
     expect(out.files).toMatchObject([
@@ -789,7 +792,9 @@ describe('transfer plans', () => {
     const onlyFlex = await refused(
       run(agent, 'transfers.export', { id: active.id, group: 'buffer' }),
     );
-    expect(onlyFlex.message).toBe('No file writer for Flex 1 yet');
+    expect(onlyFlex.message).toBe(
+      'Flex: buffer into the assay plate: Flex 1 has no trash bin or waste chute installed; add one with instruments.change_configuration',
+    );
     const noGroup = await refused(run(agent, 'transfers.export', { id: active.id, group: 'x' }));
     expect(noGroup.message).toBe('TFP-0001 has no group x');
     const hidden = await refused(run(otherLab, 'transfers.export', { id: active.id }));
