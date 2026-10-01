@@ -957,6 +957,71 @@ describe('recording runs (013c)', () => {
   });
 });
 
+describe('runs keep their record whatever writes them (ADR 0041)', () => {
+  it('refuses generic writes that change the checklist, reopen a finished run or skip runs.correct', async () => {
+    const experiment = await plannedExperiment();
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
+    type Steps = { planned: { name: string; value: unknown }[]; status: string }[];
+    const update = (target: RecordEnvelope, change: (a: Record<string, unknown>) => object) =>
+      registry.execute(person, 'records.update', {
+        id: target.id,
+        expectedVersion: target.version,
+        attributes: change(target.attributes as Record<string, unknown>),
+      });
+    const replan = (a: Record<string, unknown>) => ({
+      ...a,
+      steps: (a.steps as Steps).map((s, i) => (i === 0 ? { ...s, planned: [] } : s)),
+    });
+    await expect(update(started, replan)).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('keeps the steps and planned values'),
+    });
+
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    const finished = await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    await expect(
+      update(finished, (a) => ({ ...a, status: 'in_progress', steps: [] })),
+    ).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('runs.correct'),
+    });
+    await expect(
+      update(finished, (a) => ({
+        ...a,
+        steps: (a.steps as Steps).map((s, i) => (i === 0 ? { ...s, status: 'skipped' } : s)),
+      })),
+    ).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('changed after the run finished'),
+    });
+    await expect(
+      update(finished, (a) => ({ ...a, deviations: [{ what: 'Late note', why: 'Forgot' }] })),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    // Notes are still anyone's to add, and runs.correct still corrects.
+    const noted = await update(finished, (a) => ({ ...a, notes: 'Reader was warm' }));
+    expect(noted.status).toBe('done');
+    const corrected = await registry.execute(person, 'runs.correct', {
+      id: finished.id,
+      expectedVersion: finished.version + 1,
+      part: 'coating',
+      step: 'coat',
+      changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      why: 'Coating solution ran short',
+    });
+    expect(corrected.status).toBe('done');
+  });
+});
+
 describe('conclusions and sets (013c)', () => {
   it('concludes from finished runs with a verdict per hypothesis, and hands hits on as a set', async () => {
     const experiment = await plannedExperiment();

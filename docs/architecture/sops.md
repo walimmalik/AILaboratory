@@ -56,7 +56,7 @@ A record variable reads its `readFrom` field from the role's record: a lot's cer
 
 ## Open questions and citations (012c)
 
-An open question (G6) blocks confirming until a person settles it with `sops.answer_question`: an `answer` in their words (status `answered`) or `acceptSuggestion` (status `accepted_suggestion`, the suggestion becomes the answer). Agents can't call it. It is an ordinary record update, so the change is in the SOP's history.
+An open question (G6) blocks confirming until a person settles it with `sops.answer_question`: an `answer` in their words (status `answered`) or `acceptSuggestion` (status `accepted_suggestion`, the suggestion becomes the answer). Agents can't call it, and the SOP kind refuses any other agent write (an update, a restore, a draft, approved or not) that settles a question or changes its answer. It is an ordinary record update, so the change is in the SOP's history.
 
 `sops.check_citations` reads each cited document's passages through `library.read` and looks for each quote, ignoring spacing and case: `matches` (in the cited passage, or anywhere when no passage is named), `found_elsewhere` (in another passage, named in `foundIn`), `not_found`, or `unparsed` (the document has no text yet). It is how a digitizer or reviewer checks its own quotes before a person reads the draft. `library.read` takes `passages` (ids) to read cited passages back.
 

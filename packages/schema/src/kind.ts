@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { Actor } from './actor.ts';
 import type { CheckResult, KindCheck, KindSection } from './design.ts';
 import type { RecordEnvelope, RecordLink } from './record.ts';
 
@@ -65,6 +66,11 @@ export interface RelatedContext {
   list: (kind: string) => Promise<RecordEnvelope[]>;
   /** The record being written, when it exists already. */
   current?: RecordEnvelope | undefined;
+  /**
+   * Who is writing, for rules only some actors may cross (a person answers an SOP's questions).
+   * Absent when the rules run outside a write, e.g. checking a draft in memory.
+   */
+  actor?: Actor | undefined;
   /** Name prefixes registered by kinds in code (PRD, LOT…). */
   reservedPrefixes: string[];
 }
