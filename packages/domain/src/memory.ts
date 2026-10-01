@@ -371,6 +371,14 @@ export function memoryEvidence(
   };
 }
 
+/**
+ * Whether a report shows a pattern counted over many items (wells, transfers): at least `min` of
+ * them, and at least `share` of the ones that could show it. One stray well in a run is noise.
+ */
+export function showsPattern(hits: number, total: number, min = 2, share = 0.05): boolean {
+  return total > 0 && hits >= min && hits >= share * total;
+}
+
 /** How many different records and days the observations cover. */
 export function coverage(observations: readonly { evidence: string; day: string }[]) {
   return {
