@@ -72,3 +72,27 @@ export const protocol = defineKind({
   items: { steps: 'id' },
   sections: [{ id: 'steps', title: 'Steps', fields: ['steps'] }],
 });
+
+/**
+ * A test-only kind with a composite key and a keyed list inside a keyed list (ADR 0065): hand
+ * edits keyed by plate and well, and groups keyed by id whose transfers are keyed by source and
+ * destination well.
+ */
+export const layoutPlan = defineKind({
+  kind: 'layout_plan',
+  idPrefix: 'lpl',
+  namePrefix: 'LPL',
+  nameWidth: 4,
+  attributes: z.object({
+    overrides: z.array(z.object({ plate: z.string(), well: z.string(), content: z.string() })),
+    groups: z.array(
+      z.object({
+        id: z.string(),
+        head: z.string(),
+        transfers: z.array(z.object({ from: z.string(), to: z.string(), volume: Quantity })),
+      }),
+    ),
+  }),
+  items: { overrides: 'plate+well', groups: 'id', 'groups/transfers': 'from+to' },
+  sections: [{ id: 'plan', title: 'Plan', fields: ['overrides', 'groups'] }],
+});
