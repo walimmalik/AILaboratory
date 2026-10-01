@@ -53,6 +53,8 @@ export interface OperationImplementation<
   ): string[];
   /** Ledger outcome for a successful call. Defaults to "succeeded". */
   outcome?(output: z.infer<O>): ActivityEntry['outcome'];
+  /** False for writes that change nothing in the lab (a person's seen marker): no ledger entry. */
+  ledger?: false;
   /** Runs after a write is committed and logged, e.g. to start background work. Never on previews or proposals. */
   after?(ctx: RecordContext, input: z.infer<I>, output: z.infer<O>, deps: OperationDeps): void;
 }
@@ -171,6 +173,7 @@ export class OperationRegistry {
       const output = await db.transaction((tx) =>
         this.#run(operation, ctx, input, { ...deps, db: tx }),
       );
+      if (operation.ledger === false) return { status: 'done', output };
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: operation.outcome?.(output) ?? 'succeeded',
@@ -183,6 +186,7 @@ export class OperationRegistry {
       operation.after?.(ctx, input, output, deps);
       return { status: 'done', output };
     } catch (error) {
+      if (operation.ledger === false) throw error;
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: 'failed',
@@ -257,7 +261,8 @@ export class OperationRegistry {
     input: unknown,
     deps: OperationDeps,
   ): Promise<unknown> {
-    const output = await operation.run(ctx, input, deps);
+    // Versions the call writes name it (ADR 0053); an operation run inside another keeps its own name.
+    const output = await operation.run({ ...ctx, via: operation.contract.id }, input, deps);
     const checked = operation.contract.output.safeParse(output);
     if (!checked.success) {
       throw new Error(

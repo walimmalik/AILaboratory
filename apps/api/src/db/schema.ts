@@ -130,9 +130,30 @@ export const recordVersions = pgTable(
     actor: jsonb('actor').$type<Actor>().notNull(),
     reason: text('reason'),
     at: timestamp('at', { withTimezone: true }).notNull(),
+    /** The operation that made this version (ADR 0053). */
+    via: text('via'),
     snapshot: jsonb('snapshot').$type<RecordEnvelope>().notNull(),
   },
   (t) => [primaryKey({ columns: [t.recordId, t.version] })],
+);
+
+/** The version of a record each person last looked at (plan 004e R8, ADR 0053). */
+export const recordSeen = pgTable(
+  'record_seen',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    recordId: text('record_id')
+      .notNull()
+      .references(() => records.id, { onDelete: 'cascade' }),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    version: integer('version').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.recordId] })],
 );
 
 /** Typed references between records, kept in sync by the record service (ADR 0014). */

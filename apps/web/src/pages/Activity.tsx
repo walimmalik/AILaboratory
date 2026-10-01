@@ -13,12 +13,23 @@ import {
   outcomeTone,
 } from '../lib/format.ts';
 import { useLive } from '../live.tsx';
-import { activityQuery } from '../queries.ts';
+import { type ActivityFilter, activityQuery, filteredActivityQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
 /** The lab's ledger: every change people and agents made, live. */
+const views: { key: string; label: string; filter?: ActivityFilter }[] = [
+  { key: 'all', label: 'Everything' },
+  { key: 'mine', label: 'Mine', filter: { mine: true } },
+  { key: 'agents', label: 'Agents', filter: { actor: 'agents' } },
+  { key: 'people', label: 'People', filter: { actor: 'people' } },
+];
+
 export function ActivityPage() {
-  const { data: entries = [], isPending, error } = useQuery(activityQuery);
+  const [view, setView] = useState('all');
+  const filter = views.find((v) => v.key === view)?.filter;
+  const everything = useQuery({ ...activityQuery, enabled: !filter });
+  const narrowed = useQuery({ ...filteredActivityQuery(filter ?? {}), enabled: Boolean(filter) });
+  const { data: entries = [], isPending, error } = filter ? narrowed : everything;
   const live = useLive();
   const [open, setOpen] = useState<string>();
 
@@ -45,6 +56,19 @@ export function ActivityPage() {
           </span>
         </header>
         <div className="body">
+          <fieldset className="filters">
+            <legend className="sr-only">Show</legend>
+            {views.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                aria-pressed={view === v.key}
+                onClick={() => setView(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </fieldset>
           {error && <p className="error-text">{error.message}</p>}
           {isPending ? (
             <p className="empty">Loading…</p>

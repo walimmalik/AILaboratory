@@ -20,7 +20,7 @@ export function SignInPage() {
       await api.signIn(String(form.get('email')), String(form.get('password')));
       // Refetch now: the route guard reads this cache and would still see "signed out".
       await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
-      await navigate({ to: '/activity' });
+      await navigate({ to: '/' });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not reach the API');
     } finally {

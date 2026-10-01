@@ -22,6 +22,16 @@ export const activityQuery = queryOptions({
     (await api.run(activityList, { limit: 100 })).entries,
 });
 
+/** The ledger narrowed (ADR 0053): what I did or agents did for me, only agents, only people. */
+export type ActivityFilter = { mine?: boolean; actor?: 'people' | 'agents'; since?: string };
+
+export const filteredActivityQuery = (filter: ActivityFilter) =>
+  queryOptions({
+    queryKey: ['activity', 'filtered', filter],
+    queryFn: async (): Promise<ActivityEntry[]> =>
+      (await api.run(activityList, { limit: 100, ...filter })).entries,
+  });
+
 export const pendingProposalsQuery = queryOptions({
   queryKey: ['proposals', 'pending'],
   queryFn: async () => (await api.run(proposalsList, { status: 'pending' })).proposals,

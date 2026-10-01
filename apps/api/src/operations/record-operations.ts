@@ -1,3 +1,4 @@
+import { diffValues } from '@ailab/domain';
 import {
   recordsActivate,
   recordsArchive,
@@ -6,17 +7,20 @@ import {
   recordsConfirmSection,
   recordsCreate,
   recordsDeleteDraft,
+  recordsDiff,
   recordsGet,
   recordsHistory,
   recordsKinds,
   recordsLinks,
   recordsList,
+  recordsMarkSeen,
   recordsReadiness,
   recordsRestore,
   recordsUnarchive,
   recordsUpdate,
 } from '@ailab/schema';
 import { z } from 'zod';
+import { markSeen, seenVersion } from '../records/seen.ts';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
 import { OperationError } from './errors.ts';
@@ -196,6 +200,65 @@ export const recordOperations = [
     run: async (ctx, input, deps) => {
       await service(deps).deleteDraft(ctx, input.id, { expectedVersion: input.expectedVersion });
       return { deleted: true as const, id: input.id };
+    },
+  }),
+  implement(recordsDiff, {
+    run: async (ctx, input, deps) => {
+      const records = service(deps);
+      const current = await records.get(ctx, input.id);
+      const to = input.to ?? current.version;
+      const seen =
+        input.from === undefined ? await seenVersion(deps.db, ctx, current.id) : undefined;
+      const from = input.from ?? Math.min(seen ?? 1, to);
+      if (from > to || to > current.version) {
+        throw new OperationError(
+          'invalid_input',
+          `${current.name} has versions 1 to ${current.version}; compare an earlier version with a later one`,
+        );
+      }
+      const history = await records.history(ctx, current.id);
+      const at = (v: number) => history.find((h) => h.version === v)?.snapshot;
+      const before = at(from);
+      const after = at(to);
+      const items = deps.kinds.get(current.kind).items ?? {};
+      const top = (e: typeof before) => ({ label: e?.label, status: e?.status });
+      return {
+        from,
+        to,
+        since:
+          input.from !== undefined
+            ? ('given' as const)
+            : seen === undefined
+              ? ('first_drafted' as const)
+              : ('seen' as const),
+        changes: [
+          ...diffValues(top(before), top(after)),
+          ...diffValues(before?.attributes, after?.attributes, items),
+        ],
+        versions: history
+          .filter((h) => h.version > from && h.version <= to)
+          .map((h) => ({
+            version: h.version,
+            actor: h.actor,
+            at: h.at,
+            ...(h.via ? { via: h.via } : {}),
+            ...(h.reason ? { reason: h.reason } : {}),
+          })),
+      };
+    },
+  }),
+  implement(recordsMarkSeen, {
+    actors: 'people',
+    agentPolicy: 'direct',
+    // Looking at a record changes nothing in the lab, so it isn't in the ledger.
+    ledger: false,
+    run: async (ctx, input, deps) => {
+      const record = await service(deps).get(ctx, input.id);
+      if (input.version > record.version) {
+        throw new OperationError('invalid_input', `${record.name} has no version ${input.version}`);
+      }
+      const at = await markSeen(deps.db, ctx, record.id, input.version);
+      return { id: record.id, version: input.version, at: at.toISOString() };
     },
   }),
   implement(recordsHistory, {

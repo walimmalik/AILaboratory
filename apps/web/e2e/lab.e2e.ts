@@ -11,7 +11,12 @@ async function signIn(page: Page) {
   await page.getByLabel('Email').fill(process.env.E2E_EMAIL ?? '');
   await page.getByLabel('Password').fill(process.env.E2E_PASSWORD ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/activity$/);
+  await expect(page).toHaveURL(/:5173\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Today');
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Activity' })
+    .click();
   await expect(page.getByText('● live')).toBeVisible();
 }
 
@@ -128,6 +133,44 @@ test('an agent proposes several changes as one, and a person confirms them toget
   await expect(proposal).toHaveCount(0);
   await page.goto(`/records/${rack.id}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${label} (full)`);
+});
+
+test('a record says what changed since you last looked, and Today lists what agents did for you', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const label = `Trough ${Date.now()}`;
+  const drafted = await asAgent(request, 'records.create', { kind: 'widget', label, attributes });
+  const record = drafted.output;
+  await page.goto(`/records/${record.id}`);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(label);
+  // Opening it marks it seen; nothing has changed since.
+  const since = page.getByRole('region', { name: 'Changed since you last looked' });
+  await expect(since).toHaveCount(0);
+
+  await asAgent(request, 'records.update', {
+    id: record.id,
+    expectedVersion: 1,
+    attributes: { ...attributes, volume: { value: '250', unit: 'uL' } },
+  });
+  await page.reload();
+  await expect(since).toContainText('v1 to v2');
+  await expect(since.locator('.was')).toHaveText('200 µL');
+  await expect(since.locator('.now')).toHaveText('250 µL');
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(label);
+  await expect(since).toHaveCount(0);
+
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Today' })
+    .click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Done today' })
+      .getByRole('row', { name: new RegExp(record.name) }),
+  ).toContainText('E2E agent for you');
 });
 
 test('agents edit drafts directly, with no review', async ({ page, request }) => {

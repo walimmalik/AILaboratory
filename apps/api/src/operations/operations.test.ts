@@ -799,3 +799,81 @@ describe('change sets (ADR 0051)', () => {
     ).toMatch(/cannot hold another change set/);
   });
 });
+
+describe('what changed (ADR 0053)', () => {
+  type Diff = {
+    from: number;
+    to: number;
+    since: string;
+    changes: { path: string; change: string; before?: unknown; after?: unknown }[];
+    versions: { version: number; via?: string }[];
+  };
+
+  it('names the operation on each version', async () => {
+    const w = await create(agent);
+    await run(agent, 'records.update', { id: w.id, expectedVersion: 1, label: 'Rack' });
+    const { versions } = await run<{ versions: { via?: string }[] }>(person, 'records.history', {
+      id: w.id,
+    });
+    expect(versions.map((v) => v.via)).toEqual(['records.create', 'records.update']);
+  });
+
+  it('diffs since the person last looked, or since first drafted', async () => {
+    const w = await create(agent);
+    await run(agent, 'records.update', {
+      id: w.id,
+      expectedVersion: 1,
+      attributes: { ...attributes, color: 'red' },
+    });
+    const first = await run<Diff>(person, 'records.diff', { id: w.id });
+    expect(first).toMatchObject({ from: 1, to: 2, since: 'first_drafted' });
+    expect(first.changes).toEqual([
+      { path: '/color', change: 'changed', before: 'teal', after: 'red' },
+    ]);
+
+    await run(person, 'records.mark_seen', { id: w.id, version: 2 });
+    expect((await run<Diff>(person, 'records.diff', { id: w.id })).changes).toEqual([]);
+    await run(agent, 'records.update', { id: w.id, expectedVersion: 2, label: 'Rack' });
+    // The agent reads the same marker, as the person it works for.
+    const since = await run<Diff>(agent, 'records.diff', { id: w.id });
+    expect(since).toMatchObject({ from: 2, to: 3, since: 'seen' });
+    expect(since.changes).toEqual([
+      { path: '/label', change: 'changed', before: 'Tip box', after: 'Rack' },
+    ]);
+    expect(since.versions).toMatchObject([{ version: 3, via: 'records.update' }]);
+    expect(
+      (await refused(registry.execute(person, 'records.diff', { id: w.id, from: 3, to: 2 }))).code,
+    ).toBe('invalid_input');
+  });
+
+  it('keeps the seen marker to people and out of the ledger', async () => {
+    const w = await create(person);
+    expect(
+      (await refused(registry.execute(agent, 'records.mark_seen', { id: w.id, version: 1 }))).code,
+    ).toBe('forbidden');
+    await run(person, 'records.mark_seen', { id: w.id, version: 1 });
+    expect((await ledger()).map((e) => e.operationId)).toEqual(['records.create']);
+    expect(
+      (await refused(registry.execute(person, 'records.mark_seen', { id: w.id, version: 5 }))).code,
+    ).toBe('invalid_input');
+  });
+
+  it('filters the ledger by record, actor, mine and time', async () => {
+    const a = await create(person);
+    const before = new Date().toISOString();
+    const b = await create(agent);
+    const list = async (input: Record<string, unknown>) =>
+      (
+        await run<{ entries: { operationId: string; recordIds: string[] }[] }>(
+          person,
+          'activity.list',
+          input,
+        )
+      ).entries;
+    expect((await list({ record: a.id })).map((e) => e.recordIds)).toEqual([[a.id]]);
+    expect((await list({ actor: 'agents' })).map((e) => e.recordIds)).toEqual([[b.id]]);
+    expect((await list({ actor: 'people' })).map((e) => e.recordIds)).toEqual([[a.id]]);
+    expect(await list({ mine: true })).toHaveLength(2);
+    expect((await list({ since: before })).map((e) => e.recordIds)).toEqual([[b.id]]);
+  });
+});

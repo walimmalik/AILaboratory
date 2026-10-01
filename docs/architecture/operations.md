@@ -27,6 +27,7 @@ Every capability is an **operation**. People (through the web app) and agents (t
    - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
 5. Output is checked against the contract before it leaves the server.
 6. An implementation may declare `after`, which runs once a write is committed and logged (never on previews or proposals). `assistant.ask` uses it to start the assistant in the background.
+7. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
 
 ## Agent policies
 
@@ -53,6 +54,8 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `assistant.ask` | people only |
 
 Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.
+
+`activity.list` filters the ledger by `since`, `record`, `conversation`, `actor` (`people` or `agents`) and `mine` (ADR 0053).
 
 **Change sets** (ADR 0051). `changes.apply {steps: [{operation, input}], reason?}` runs up to 50 operations in order on one transaction, all or nothing. `"$N.path"` string values read step N's output (`"$1.id"`). The registry's `runStep` runs a step inside the set's transaction with no ledger entry of its own, `policyFor` asks a step's policy, and `touchedBy` names what it touched, so the set's single ledger entry lists every record. For an agent, the steps are tried in a rolled-back transaction: if any step would be proposed, the whole set is one proposal, which approval applies as one. Steps' `after` work runs once the set commits (`afterStep`).
 

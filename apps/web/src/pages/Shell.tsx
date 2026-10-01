@@ -77,7 +77,7 @@ function ShellLayout() {
             {pending > 0 && <span className="count num agent-ink"> {pending}</span>}
           </button>
         )}
-        <Link to="/activity" className="brand">
+        <Link to="/" className="brand">
           ai<span>lab</span>
         </Link>
         <AskBar />
@@ -111,6 +111,11 @@ function ShellLayout() {
         <section>
           <h2>Lab</h2>
           <ul>
+            <li>
+              <Link to="/" activeOptions={{ exact: true }}>
+                Today
+              </Link>
+            </li>
             <li>
               <Link to="/activity">
                 <span className={`lamp ${live.connected ? 'on' : 'off'}`} aria-hidden="true" />

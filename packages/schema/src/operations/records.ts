@@ -235,3 +235,61 @@ export const recordsKinds = defineContract({
     ),
   }),
 });
+
+/** One value that differs between two versions, by JSON pointer; keyed list items by their key. */
+export const RecordChange = z.object({
+  path: z
+    .string()
+    .describe(
+      "An attribute, e.g. /volume or /steps/coat/duration; /label and /status are the record's own",
+    ),
+  change: z.enum(['changed', 'added', 'removed']),
+  before: z.unknown().optional(),
+  after: z.unknown().optional(),
+});
+export type RecordChange = z.infer<typeof RecordChange>;
+
+export const recordsDiff = defineContract({
+  id: 'records.diff',
+  verbs: { done: 'compared versions of', intent: 'compare versions of' },
+  summary:
+    'What changed in a record between two versions, value by value (ADR 0053). By default, since the person (or the person you work for) last looked; if they never have, since it was first drafted',
+  effect: 'read',
+  input: z.strictObject({
+    id: RecordId,
+    from: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Default: the version last seen, or 1 if never seen'),
+    to: z.number().int().positive().optional().describe('Default: the current version'),
+  }),
+  output: z.object({
+    from: z.number().int().positive(),
+    to: z.number().int().positive(),
+    /** Why `from` is what it is. */
+    since: z.enum(['seen', 'first_drafted', 'given']),
+    changes: z.array(RecordChange),
+    /** The versions after `from` up to `to`: who changed it, through which operation, and why. */
+    versions: z.array(
+      z.object({
+        version: z.number().int().positive(),
+        actor: RecordVersion.shape.actor,
+        via: z.string().optional(),
+        reason: z.string().optional(),
+        at: z.iso.datetime(),
+      }),
+    ),
+  }),
+});
+
+export const recordsMarkSeen = defineContract({
+  id: 'records.mark_seen',
+  verbs: { done: 'looked at', intent: 'mark as seen' },
+  summary:
+    'Remember that you have seen a record at a version, so records.diff can say what changed since (people only; the record page does it when it opens)',
+  effect: 'write',
+  input: z.strictObject({ id: RecordId, version: z.number().int().positive() }),
+  output: z.object({ id: RecordId, version: z.number().int().positive(), at: z.iso.datetime() }),
+});
