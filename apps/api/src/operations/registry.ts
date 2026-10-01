@@ -214,13 +214,19 @@ export class OperationRegistry {
     id: string,
     rawInput: unknown,
     db: Db,
-  ): Promise<{ input: unknown; output: unknown }> {
+  ): Promise<{ input: unknown; output: unknown; calculation?: string }> {
     const operation = this.get(id);
     if (id === 'changes.apply') {
       throw new OperationError('invalid_input', 'A change set cannot hold another change set');
     }
     const input = this.#accept(operation, ctx, rawInput);
-    return { input, output: await this.#run(operation, ctx, input, { ...this.deps, db }) };
+    const output = await this.#run(operation, ctx, input, { ...this.deps, db });
+    // A calculator inside a set keeps its result under a handle too, so a later step can mark a
+    // value calculated from it ("$1.calculation"); a rolled-back set takes the handle with it.
+    if (operation.contract.calculator) {
+      return { input, output, calculation: await saveCalculation(db, ctx, id, input, output) };
+    }
+    return { input, output };
   }
 
   /** Whether an agent's call of this operation would run now or be proposed. */

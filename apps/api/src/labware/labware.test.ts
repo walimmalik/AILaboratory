@@ -212,15 +212,21 @@ describe('labware.use_standard_positions', () => {
   it('offers the fix on the failing check and fills the standard pitch and A1 offset', async () => {
     const record = await sbsPlate({ rows: 8, columns: 12 });
     const before = await run<Readiness>(person, 'records.readiness', { id: record.id });
-    expect(before.checks.find((c) => c.id === 'wells_placed')?.quickFix).toEqual({
-      operation: 'labware.use_standard_positions',
+    const [option, ...others] = before.checks.find((c) => c.id === 'wells_placed')?.options ?? [];
+    expect(others).toEqual([]);
+    expect(option).toEqual({
       label: 'Use the standard SBS positions',
+      consequence: expect.stringContaining('pitch to 9 mm'),
+      operation: 'labware.use_standard_positions',
+      input: { id: record.id, expectedVersion: record.version },
     });
 
-    const updated = await run<RecordEnvelope>(agent, 'labware.use_standard_positions', {
-      id: record.id,
-      expectedVersion: record.version,
-    });
+    // The option is the whole call: its operation with its input.
+    const updated = await run<RecordEnvelope>(
+      agent,
+      option?.operation ?? '',
+      option?.input as Record<string, unknown>,
+    );
     expect(updated.attributes.wells).toEqual({
       layout: 'grid',
       rows: 8,
@@ -234,7 +240,7 @@ describe('labware.use_standard_positions', () => {
     });
     const after = await run<Readiness>(person, 'records.readiness', { id: updated.id });
     expect(after.checks.find((c) => c.id === 'wells_placed')).toMatchObject({ passed: true });
-    expect(after.checks.find((c) => c.id === 'wells_placed')?.quickFix).toBeUndefined();
+    expect(after.checks.find((c) => c.id === 'wells_placed')?.options).toBeUndefined();
   });
 
   it('refuses grids the standard does not place, and a pitch that disagrees', async () => {
@@ -245,7 +251,7 @@ describe('labware.use_standard_positions', () => {
     expect(odd).toMatchObject({ code: 'invalid_input' });
     expect(odd.message).toContain('not 2 × 3');
     const state = await run<Readiness>(person, 'records.readiness', { id: six.id });
-    expect(state.checks.find((c) => c.id === 'wells_placed')?.quickFix).toBeUndefined();
+    expect(state.checks.find((c) => c.id === 'wells_placed')?.options).toBeUndefined();
 
     const wide = await sbsPlate({ rows: 8, columns: 12, pitch: { value: '9.5', unit: 'mm' } });
     const pitch = await refused(

@@ -387,8 +387,17 @@ a.btn {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.quick-fix {
-  margin-top: 6px;
+.fix-options {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.fix-options li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }
 .file-card {
   display: flex;
