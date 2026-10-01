@@ -11,6 +11,7 @@ import {
 } from '../inventory.ts';
 import { LiquidVolume } from '../labware.ts';
 import { defineContract } from '../operation.ts';
+import { Quantity } from '../quantity.ts';
 import { LotId, ProductId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
 
@@ -164,3 +165,80 @@ export const inventoryWhereIs = defineContract({
     ),
   }),
 });
+
+/** A record as the inventory view names it: by label, with its code and state. */
+const InventoryRef = z.object({
+  id: z.string(),
+  kind: z.string(),
+  name: z.string(),
+  label: z.string(),
+  status: z.enum(['draft', 'active', 'archived']),
+  version: z.number().int().describe('The version to pass as expectedVersion when moving it'),
+  agentDraft: z
+    .boolean()
+    .describe('A draft an agent made or last changed that no person has confirmed yet'),
+});
+
+/** One batch (a lot or a sample) and the containers holding it. */
+const InventoryBatch = z.object({
+  batch: InventoryRef,
+  number: z.string().optional().describe("A lot's number as its vendor printed it"),
+  state: z.string().optional().describe('A lot\'s status in words: "unopened", "in use"…'),
+  expiry: z.string().optional().describe("A lot's expiry date (YYYY-MM-DD)"),
+  amount: Quantity.optional().describe(
+    'Liquid holding it across its containers, from the volume ledger; left out when unknown',
+  ),
+  containers: z.array(
+    z.object({
+      container: InventoryRef,
+      path: PlacePath.describe(
+        'Where the container is, from the room down, the container left out',
+      ),
+      wells: z.number().int().describe('Wells or positions of it holding the batch'),
+      amount: Quantity.optional(),
+    }),
+  ),
+});
+
+export const inventoryOverview = defineContract({
+  id: 'inventory.overview',
+  verbs: { done: 'looked over the inventory', intent: 'look over the inventory' },
+  summary:
+    'The inventory as one list (plan 004f N2, N3): each reagent or material with its lots or samples, the containers holding them and where they are, how much is left and the earliest expiry. Filter by place (everything in it, however deep), by type, or by text. Things with nothing in stock are listed apart',
+  effect: 'read',
+  input: z.strictObject({
+    place: LocationId.optional().describe('Only what is somewhere inside this location'),
+    type: z
+      .enum(['reagents', 'materials'])
+      .optional()
+      .describe(
+        'Reagents and kits (products) or biological materials (entities); both if left out',
+      ),
+    text: z.string().min(1).optional().describe('Matches the label or readable name of the thing'),
+    today: z.string().optional().describe("YYYY-MM-DD; defaults to the server's date"),
+  }),
+  output: z.object({
+    rows: z.array(
+      z.object({
+        thing: InventoryRef.describe('The product or entity'),
+        type: z.enum(['reagent', 'material']),
+        category: z.string().describe('A product category or entity kind, in words'),
+        linked: z
+          .array(InventoryRef)
+          .describe('Products and entities linked to it (an entity naming its product)'),
+        batches: z.array(InventoryBatch),
+        amount: Quantity.optional().describe('All its batches together, when they add up'),
+        earliestExpiry: z
+          .string()
+          .optional()
+          .describe('The earliest expiry among its lots in stock, past or not'),
+        expired: z.boolean().describe('True when that earliest expiry has passed'),
+      }),
+    ),
+    notInStock: z
+      .array(InventoryRef.extend({ type: z.enum(['reagent', 'material']) }))
+      .describe('Products and entities with nothing in a container; empty when filtered by place'),
+  }),
+});
+export type InventoryRef = z.infer<typeof InventoryRef>;
+export type InventoryOverview = z.infer<typeof inventoryOverview.output>;

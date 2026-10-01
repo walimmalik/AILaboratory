@@ -17,6 +17,7 @@ What things are, and (from 010b) where they are and how much is left. Plan: [010
 | Locations, registering, moving, scanning | `apps/api/src/inventory/operations.ts` |
 | Well contents schema | `packages/schema/src/contents.ts` |
 | Mixing math | `packages/domain/src/contents.ts` |
+| The Inventory page as data, `inventory.overview` (004f-4): products and entities with their lots or samples, containers, places, amount left and earliest expiry | `apps/api/src/inventory/stock.ts` |
 | Fill, transfer, consume, correct, wells, history; the ledger tables | `apps/api/src/inventory/contents.ts`, `well_contents`, `inventory_events`, `inventory_lines` |
 | Agent skills | `skills/entities/SKILL.md`, `skills/inventory/SKILL.md`, `skills/calculators/SKILL.md` |
 

@@ -34,6 +34,7 @@ import { ScanPage } from './pages/Scan.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
 import { SopsPage } from './pages/Sops.tsx';
+import { StockPage } from './pages/Stock.tsx';
 import { TodayPage } from './pages/Today.tsx';
 import { WikiPage } from './pages/Wiki.tsx';
 import { meQuery } from './session.ts';
@@ -107,6 +108,11 @@ const equipment = createRoute({
   getParentRoute: () => app,
   path: '/equipment',
   component: EquipmentPage,
+});
+const inventory = createRoute({
+  getParentRoute: () => app,
+  path: '/inventory',
+  component: StockPage,
 });
 const reagents = createRoute({
   getParentRoute: () => app,
@@ -241,6 +247,7 @@ const routeTree = root.addChildren([
     instrumentModels,
     workcells,
     equipment,
+    inventory,
     reagents,
     lots,
     liquidClasses,
