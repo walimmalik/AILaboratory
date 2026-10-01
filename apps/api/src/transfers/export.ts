@@ -10,6 +10,7 @@ import {
   type TransferGroup,
   type TransferPlanAttributes,
   transfersExport,
+  type WorklistFormatAttributes,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
@@ -18,10 +19,13 @@ import { run } from './calculators.ts';
 import { isFlex } from './decks.ts';
 import { type EchoPlate, echoPickList } from './echo.ts';
 import { flexRequest } from './opentrons.ts';
+import { groupTips } from './rules.ts';
+import { type WorklistPlate, type WorklistTransfer, writeWorklist } from './worklists.ts';
 
 /**
  * Instrument files from confirmed transfer plans (plan 016b): Echo pick lists, and Opentrons Flex
- * protocols checked in Opentrons' simulator. The lab's own CSV formats follow (016c).
+ * protocols checked in Opentrons' simulator, and the lab's own CSV formats through the generic
+ * worklist writer (016c).
  */
 
 const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
@@ -95,6 +99,51 @@ async function echoPlates(
   return { source, destination };
 }
 
+/** A group's transfers as the generic worklist writer reads them (016c). */
+async function worklistTransfers(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  a: TransferPlanAttributes,
+  group: TransferGroup,
+  method: WorklistFormatAttributes['tips'],
+): Promise<WorklistTransfer[]> {
+  const records = service(deps);
+  const plates = new Map<string, WorklistPlate>();
+  for (const p of a.plates) {
+    const type = await records.getVersion(ctx, p.labwareType.id, p.labwareType.version);
+    const t = type.snapshot.attributes as LabwareTypeAttributes;
+    const grid = t.wells?.layout === 'grid' ? t.wells : { rows: 1, columns: 1 };
+    plates.set(p.id, {
+      name: p.label ?? p.id,
+      barcode: p.container ? (await records.get(ctx, p.container)).name : '',
+      labware: t.hamiltonLabware ?? type.snapshot.label,
+      type: type.snapshot.label,
+      rows: grid.rows,
+      columns: grid.columns,
+    });
+  }
+  const liquidClass = group.liquidClass
+    ? await records
+        .get(ctx, group.liquidClass)
+        .then((c) => (c.attributes as LiquidClassAttributes).platformName ?? c.label)
+    : '';
+  const liquid = group.liquid ? (await records.get(ctx, group.liquid)).label : undefined;
+  const tips = groupTips(a, group, method);
+  return group.transfers.map((t, i) => {
+    const source = plates.get(t.from.plate) as WorklistPlate;
+    return {
+      source,
+      sourceWell: t.from.well,
+      destination: plates.get(t.to.plate) as WorklistPlate,
+      destinationWell: t.to.well,
+      volume: t.volume,
+      newTip: tips[i] ?? true,
+      liquidClass,
+      liquid: liquid ?? source.name,
+    };
+  });
+}
+
 export const exportOperations = [
   implement(transfersExport, {
     agentPolicy: 'direct',
@@ -116,7 +165,7 @@ export const exportOperations = [
 
       const files: {
         group: string;
-        format: 'echo_pick_list' | 'opentrons_protocol';
+        format: 'echo_pick_list' | 'opentrons_protocol' | 'worklist';
         file: RecordEnvelope;
         filename: string;
         rows: number;
@@ -177,10 +226,33 @@ export const exportOperations = [
           });
           continue;
         }
+        if (group.worklist) {
+          const pinned = await service(deps).getVersion(
+            ctx,
+            group.worklist.id,
+            group.worklist.version,
+          );
+          const format = pinned.snapshot.attributes as WorklistFormatAttributes;
+          const written = writeWorklist(
+            format,
+            await worklistTransfers(deps, ctx, a, group, format.tips),
+          );
+          for (const w of written) {
+            const filename = `${plan.name} v${plan.version} ${group.id}${w.part ? ` ${w.part}` : ''} ${pinned.snapshot.label}.csv`;
+            const { file } = await upload(
+              filename,
+              'text/csv',
+              w.text,
+              `${pinned.snapshot.label} worklist for ${group.label}`,
+            );
+            files.push({ group: group.id, format: 'worklist', file, filename, rows: w.rows });
+          }
+          continue;
+        }
         if (kind.category !== 'acoustic_dispenser') {
           skipped.push({
             group: group.id,
-            why: `No file writer for ${instrument.label} yet`,
+            why: `No worklist format for ${instrument.label}; draft the one its method reads with worklists.draft_format, then pin it with transfers.set_instrument`,
           });
           continue;
         }

@@ -1,0 +1,34 @@
+---
+name: ailab-memory
+description: Read and add to the lab's memory in AILaboratory (conventions, preferences, quirks, lessons and facts no registry has a field for), so agents use what the lab knows and people confirm what agents learn, through its MCP tools.
+---
+
+# Lab memory in AILaboratory
+
+A **lab memory** (`memory`, `MEM-0001`) is what a good lab manager knows but no registry has a field for, in one plain sentence. Agents read the memories that matter to what they are doing, without being asked, and propose new ones; a person confirms them (rule 8).
+
+## Kinds and strengths
+
+- **Kinds:** `convention` (how the lab does something: "we block with 2% BSA in PBS"), `preference` (a choice the lab or a person favours: "use the Flex for under 96 samples"), `quirk` (how an instrument or material misbehaves: "STAR channel 3 drips below 5 uL with the default water class"), `lesson` (learned from results: "edge wells evaporate at 37 C after 48 h"), `fact` (anything else with no home: "Priya owns the FlexPod").
+- **Strengths:** `rule` (followed, or a design that breaks it shows a readiness warning a person accepts with a reason), `default` (fills a value no confirmed record decides), `note` (only informs, never fills a value). Left out, a memory is a note. Propose a rule only when the person said it must always hold.
+- **Effect** (optional, one): `prefer {record}` ranks a record first, `avoid {record}` ranks it last (as a rule, a design using it is flagged), `set {slot, value}` fills a slot a tool declares (e.g. `replicates`). A note has none; a rule may avoid or set, not prefer. Code applies effects; you read statements.
+- **Who:** `appliesTo: {to: "lab"}` (the default) or `{to: "person", user}` for one person's own preference.
+
+## Reading
+
+`memory.search {text?, about?, kind?, strength?, person?, status?}` finds memories, rules first. Check it before designing (an ELISA, a transfer plan) and before proposing a new memory, so the lab doesn't keep the same thing twice. `due: true` means it is past its check-again date: still used, but say so. When you fill a value from a memory, mark it with `memory` evidence: `{source: "memory", from: {id, version}}` of the confirmed memory.
+
+## Writing
+
+- `memory.propose {statement, kind, strength?, about?, when?, conditions?, effect?, appliesTo?, source, checkAgain?}` drafts a memory for a person to confirm. You never make one active. Propose when a person states something general or corrects you in a way that generalizes ("no, we always block with BSA"): ask once in the chat, then propose; never file memories silently, and ask at most once per topic in a conversation.
+  - `about`: the records it is about (an instrument, instrument kind, product, entity kind, labware type, liquid class, SOP, person's records); none for lab-wide.
+  - `conditions`: when code should apply it, as typed keys only: `capability`, `instrumentKind`, `instrument`, `device`, `tip`, `labware`, `mode`, `volume {min?, max?}`, `liquidType`, `temperature {min?, max?}`, `sop`, `layout`, `samples {min?, max?}`, `roles`, `weekdays`. Anything else goes in the `when` line, in words.
+  - `source`: `{from: "stated" | "conversation" | "experiment" | "run" | "analysis", evidence?: [record ids], note?}`.
+  - `checkAgain` is set from the kind when left out: quirks and lessons in 6 months, conventions and facts in 12, preferences never.
+- `memory.remember` is a person's own "remember that…", active at once. People only; when a person asks you to remember something, call `memory.propose` and they confirm it.
+- `memory.update {id, expectedVersion, …changes}` changes a memory: direct on drafts, proposed on an active one.
+- `memory.retire {id, expectedVersion, why}` retires a memory that no longer holds (proposed when you ask). `memory.replace {id, expectedVersion, with, why}` retires an active memory in favour of a new one and links them (proposed when you ask).
+
+## Rules and timing from memory
+
+A handling rule (products, entity kinds, entities) or an SOP timing window that comes from lab memory has `source: {from: "lab_memory", memory}` or `source: "lab_memory", memory` and must name the memory; a lab convention may name its memory too. When a memory implies a typed value ("our HeLa tolerate 20 min out of the incubator"), propose the typed change on the record, citing the memory, rather than keeping the value only in memory.

@@ -12,7 +12,8 @@ import { KindRegistry } from '../records/kinds.ts';
  */
 const draftedByAsking =
   'Not yet a form of its own: a person asks the assistant to draft it, then edits and confirms the draft on its page';
-const transferScreens = 'Transfer plan screens come with 016c and 016d, after the morning review';
+const transferScreens =
+  'Transfer plan and worklist format screens come after the UI fixes land (016 screens)';
 const notYet = (where: string) => `No screen yet; ${where}`;
 
 const noScreen: Record<string, string> = {
@@ -39,6 +40,11 @@ const noScreen: Record<string, string> = {
   'transfers.pick_sources': transferScreens,
   'transfers.set_instrument': transferScreens,
   'transfers.set_deck': transferScreens,
+  'worklists.draft_format': transferScreens,
+  'memory.propose': notYet('the Lab memory page and Remember card come with 005d'),
+  'memory.update': notYet('the Lab memory page comes with 005d'),
+  'memory.retire': notYet('the Lab memory page comes with 005d'),
+  'memory.replace': notYet('the Lab memory page comes with 005d'),
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
   'experiments.adopt_versions': notYet(
     'the experiment page shows the SOP versions it follows, not newer ones',

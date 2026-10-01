@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EvidenceInput } from '../design.ts';
+import { EvidenceInput, pinOf } from '../design.ts';
 import { recordIdOf } from '../ids.ts';
 import { LocalId } from '../instruments.ts';
 import { ContainerId } from '../inventory.ts';
@@ -9,6 +9,7 @@ import { DecimalString, Quantity } from '../quantity.ts';
 import { LiquidTypeId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
 import { DeckSite, PlanPlate, ProtocolCheck, TransferGroup, TransferPlanId } from '../transfers.ts';
+import { WorklistFormatAttributes, WorklistFormatId } from '../worklists.ts';
 
 /**
  * The transfer calculators (plan 016, T2; ADR 0024): read operations over
@@ -290,6 +291,11 @@ export const transfersSetInstrument = defineContract({
     why: z.string().min(1).describe('Why this instrument'),
     liquidClass: recordIdOf('lqc').optional(),
     tips: z.enum(['none', 'new_each', 'per_source', 'lab_default']).optional(),
+    worklist: pinOf(WorklistFormatId)
+      .optional()
+      .describe(
+        "The confirmed worklist format the instrument's method reads (Hamilton, Mantis, PreciseDrop); find it with records.list kind worklist_format",
+      ),
   }),
   output: RecordEnvelope,
 });
@@ -453,7 +459,7 @@ export const transfersExport = defineContract({
   id: 'transfers.export',
   verbs: { done: 'exported a worklist from', intent: 'export a worklist from' },
   summary:
-    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo, and an Opentrons protocol (Python) for each group on an Opentrons Flex, checked in Opentrons' simulator first, placed as the plan's confirmed deck layout says. Each file is stored in the file store with the plan version it came from. Groups done by hand, on instruments without a writer yet, or stopped by the simulator are listed as skipped with why. Give `group` to write one group's file only",
+    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo, and an Opentrons protocol (Python) for each group on an Opentrons Flex, checked in Opentrons' simulator first, placed as the plan's confirmed deck layout says; and the lab's CSV for each group with a worklist format pinned (Hamilton, Mantis, PreciseDrop). Each file is stored in the file store with the plan version it came from. Groups done by hand, on instruments with no worklist format pinned, or stopped by the simulator are listed as skipped with why. Give `group` to write one group's file only",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -465,7 +471,7 @@ export const transfersExport = defineContract({
     files: z.array(
       z.object({
         group: z.string(),
-        format: z.enum(['echo_pick_list', 'opentrons_protocol']),
+        format: z.enum(['echo_pick_list', 'opentrons_protocol', 'worklist']),
         file: RecordEnvelope,
         filename: z.string(),
         rows: z.number().int(),
@@ -538,4 +544,19 @@ export const transfersImportReport = defineContract({
       .describe('The draft plan that redoes the exceptions, waiting for a person to confirm'),
     notes: z.array(z.string()),
   }),
+});
+
+export const worklistsDraftFormat = defineContract({
+  id: 'worklists.draft_format',
+  verbs: { done: 'drafted a worklist format', intent: 'draft a worklist format' },
+  summary:
+    "Draft a worklist format (016c, T1): the CSV the lab's own method on an instrument reads (a Hamilton Venus method, the Mantis or PreciseDrop software), column by column, from an example file the lab exported (upload it with files.upload, read it with files.read). Each column says what fills it: the plate's name, barcode or labware, the well (as A1 or a position number), the volume in the format's unit, the liquid class, a new tip flag, or fixed text. With `example`, code checks the headers against the file's first line (rows) or the grid's labels (grid). A person confirms it with records.confirm; then pin it on a group with transfers.set_instrument and transfers.export writes the file",
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('e.g. "STAR ELISA sample transfer"'),
+    ...WorklistFormatAttributes.shape,
+    evidence: z.record(z.string(), EvidenceInput).optional(),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
 });

@@ -30,7 +30,18 @@ const TemperatureRange = z
 export const RuleSource = z
   .strictObject({
     from: z.enum(['vendor', 'lab_convention', 'lab_memory']),
-    reference: z.url().optional().describe('The datasheet, manual or memory it comes from'),
+    reference: z.url().optional().describe('The datasheet or manual it comes from'),
+    memory: recordIdOf('mem')
+      .optional()
+      .describe('The lab memory it comes from (005a); required for lab_memory'),
+  })
+  .refine((s) => s.from !== 'lab_memory' || s.memory, {
+    message: 'a rule from lab memory names the memory (mem_…)',
+    path: ['memory'],
+  })
+  .refine((s) => s.from !== 'vendor' || !s.memory, {
+    message: "a vendor's rule comes from its datasheet, not lab memory",
+    path: ['memory'],
   })
   .describe('Where the rule comes from; every rule shows its source');
 
