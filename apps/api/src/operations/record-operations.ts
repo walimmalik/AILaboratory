@@ -164,6 +164,8 @@ export const recordOperations = [
           record.version !== target.expectedVersion &&
             `changed since you looked (v${record.version})`,
           state.assumed.length > 0 && `${state.assumed.length} assumed`,
+          state.unchecked.length > 0 &&
+            `${state.unchecked.length} sourced by an agent and not checked`,
           state.checks.some((c) => !c.passed && c.severity === 'blocker') && 'a failing check',
           state.sections.some((s) => s.state === 'needs_review' && s.review) &&
             'values changed since they were confirmed',

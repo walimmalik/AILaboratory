@@ -218,6 +218,11 @@ export const Readiness = z.object({
   /** Fields holding an agent's unconfirmed estimate. */
   assumed: z.array(z.string()),
   /**
+   * Unconfirmed values an agent says came from a datasheet, a measurement or an import: nothing on
+   * the server checked them, so a person confirms them one record at a time, never in a batch.
+   */
+  unchecked: z.array(z.string()),
+  /**
    * Attributes that don't apply to this record as it stands, as dotted paths (e.g. "wells.a1" on a
    * tube). Forms leave them out unless they hold a value.
    */
