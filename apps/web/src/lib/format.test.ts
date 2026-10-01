@@ -6,6 +6,7 @@ import {
   describeToolStep,
   diffRecords,
   foldRepeats,
+  formatDay,
   formatValue,
   partLabel,
   plainError,
@@ -271,5 +272,11 @@ describe('plainError', () => {
       plainError('Invalid widget attributes:\n✖ Expected string, received number\n  → at color'),
     ).toBe('Invalid widget attributes: color: expected string, received number');
     expect(plainError('PLT-0001 is archived')).toBe('PLT-0001 is archived');
+  });
+});
+
+describe('formatDay', () => {
+  it('writes a calendar date the same in every time zone', () => {
+    expect(formatDay('2030-01-05')).toBe('5 Jan 2030');
   });
 });

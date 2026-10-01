@@ -12,7 +12,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
-import { actorLabel, formatWhen, operationIntent, operationVerb } from '../lib/format.ts';
+import {
+  actorLabel,
+  formatDay,
+  formatWhen,
+  operationIntent,
+  operationVerb,
+} from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   decidedProposalsQuery,
@@ -37,6 +43,11 @@ export function ReviewPage() {
   const changes = all.filter((i) => i.type === 'change');
   const drafts = all.filter((i) => i.type === 'draft');
   const mentions = all.filter((i) => i.type === 'mentions');
+  const notices = all.filter((i) => i.type === 'notice');
+  // Yours lead; what waits on others is folded (review 2026-10-01 item 16).
+  const yours = (i: ReviewItem) => i.for === undefined || i.for === me?.user.id;
+  const myChanges = changes.filter(yours);
+  const theirChanges = changes.filter((i) => !yours(i));
   const draftTotal = Object.values(counts?.drafts ?? {}).reduce((sum, n) => sum + n, 0);
   const [show, setShow] = useState('all');
   // One chip per kind of draft waiting, counted over everything waiting rather than the page read.
@@ -58,6 +69,8 @@ export function ReviewPage() {
   ).filter((i): i is DraftItem => i.type === 'draft');
   const expected = shown === 'all' ? draftTotal : (groups.get(shown)?.count ?? 0);
   const leftOut = waiting.data && !(needsOwnPage && ofKind.isPending) ? expected - items.length : 0;
+  const myDrafts = items.filter(yours);
+  const theirDrafts = items.filter((i) => !yours(i));
 
   return (
     <>
@@ -74,7 +87,7 @@ export function ReviewPage() {
       </div>
 
       {waiting.error && <p className="error-text">{waiting.error.message}</p>}
-      {waiting.data && changes.length + draftTotal + mentions.length === 0 && (
+      {waiting.data && changes.length + draftTotal + mentions.length + notices.length === 0 && (
         <p className="empty">
           Nothing waiting. Drafts, proposed changes and library mentions appear here live.
         </p>
@@ -84,16 +97,24 @@ export function ReviewPage() {
         <section className="block" aria-label="Needs you">
           <header>
             <h2>Needs you</h2>
-            <span className="state agent-ink">
-              {changes.length} {changes.length === 1 ? 'change waits' : 'changes wait'} on you
-            </span>
+            {myChanges.length > 0 ? (
+              <span className="state agent-ink">
+                {myChanges.length} {myChanges.length === 1 ? 'change waits' : 'changes wait'} on you
+              </span>
+            ) : (
+              <span className="state muted">none for you</span>
+            )}
           </header>
           <div className="body">
-            {changes.map(
-              (item) =>
-                item.type === 'change' && (
-                  <PendingProposal key={item.proposal.id} proposal={item.proposal} />
-                ),
+            <ProposalList items={myChanges} />
+            {theirChanges.length > 0 && (
+              <details className="others">
+                <summary className="others-summary">
+                  {theirChanges.length}{' '}
+                  {theirChanges.length === 1 ? 'change waits' : 'changes wait'} on others
+                </summary>
+                <ProposalList items={theirChanges} />
+              </details>
             )}
           </div>
         </section>
@@ -126,8 +147,16 @@ export function ReviewPage() {
                 ))}
               </fieldset>
             )}
-            <BatchConfirm items={items} />
-            <DraftTable items={items} me={me} />
+            <BatchConfirm items={myDrafts} />
+            <DraftTable items={myDrafts} me={me} />
+            {theirDrafts.length > 0 && (
+              <details className="others">
+                <summary className="others-summary">
+                  {theirDrafts.length} {theirDrafts.length === 1 ? 'draft' : 'drafts'} others made
+                </summary>
+                <DraftTable items={theirDrafts} me={me} />
+              </details>
+            )}
             {leftOut > 0 && (
               <p className="muted">
                 Showing the newest {items.length} of {expected}.{' '}
@@ -172,7 +201,8 @@ export function ReviewPage() {
                       item.type === 'mentions' && (
                         <tr key={item.document.id} aria-label={`Mentions in ${item.document.name}`}>
                           <td>
-                            <span className="mono">{item.document.name}</span> {item.document.label}
+                            {item.document.label}{' '}
+                            <span className="mono muted">{item.document.name}</span>
                           </td>
                           <td className="num">{item.proposed}</td>
                           <td className="when">{formatWhen(item.at)}</td>
@@ -192,6 +222,31 @@ export function ReviewPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </section>
+      )}
+
+      {notices.length > 0 && (
+        <section className="block" aria-label="For your information">
+          <header>
+            <h2>For your information</h2>
+            <span className="state muted">nothing to confirm</span>
+          </header>
+          <div className="body">
+            <ul className="plain">
+              {notices.map(
+                (item) =>
+                  item.type === 'notice' && (
+                    <li key={item.about.id}>
+                      <Link to="/records/$id" params={{ id: item.about.id }}>
+                        {item.about.label}
+                      </Link>{' '}
+                      <span className="mono muted">{item.about.name}</span> · {item.message}
+                      {item.due && <span className="muted"> ({formatDay(item.due)})</span>}
+                    </li>
+                  ),
+              )}
+            </ul>
           </div>
         </section>
       )}
@@ -251,6 +306,54 @@ export function ReviewPage() {
 function kindWords(kind: string): string {
   const words = kind.replaceAll('_', ' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Items in runs: those one agent made in one conversation sit together under its title, in the
+ * order the first of them comes; the rest stay where they are.
+ */
+function inGroups<T extends ReviewItem>(
+  items: T[],
+): { group?: { id: string; title: string }; items: T[] }[] {
+  const runs: { group?: { id: string; title: string }; items: T[] }[] = [];
+  const open = new Map<string, T[]>();
+  for (const item of items) {
+    const group = item.group;
+    if (!group) {
+      const last = runs.at(-1);
+      if (last && !last.group) last.items.push(item);
+      else runs.push({ items: [item] });
+      continue;
+    }
+    const members = open.get(group.id);
+    if (members) members.push(item);
+    else {
+      const run = { group, items: [item] };
+      open.set(group.id, run.items);
+      runs.push(run);
+    }
+  }
+  return runs;
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+function ProposalList({ items }: { items: ReviewItem[] }) {
+  return inGroups(items).map((run) => (
+    <div key={run.group?.id ?? (run.items[0]?.type === 'change' ? run.items[0].proposal.id : '')}>
+      {run.group && (
+        <p className="group-title">
+          {run.group.title} <span className="muted">· from one conversation</span>
+        </p>
+      )}
+      {run.items.map(
+        (item) =>
+          item.type === 'change' && (
+            <PendingProposal key={item.proposal.id} proposal={item.proposal} />
+          ),
+      )}
+    </div>
+  ));
 }
 
 const decisionWords: Record<Proposal['status'], string> = {
@@ -329,9 +432,21 @@ function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof u
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <DraftRow key={item.record.id} item={item} me={me} />
-          ))}
+          {inGroups(items).flatMap((run) => [
+            ...(run.group
+              ? [
+                  <tr key={run.group.id}>
+                    <td colSpan={4} className="group-cell">
+                      {run.group.title}{' '}
+                      <span className="muted">
+                        · {run.items.length} drafts from one conversation
+                      </span>
+                    </td>
+                  </tr>,
+                ]
+              : []),
+            ...run.items.map((item) => <DraftRow key={item.record.id} item={item} me={me} />),
+          ])}
         </tbody>
       </table>
     </div>
@@ -361,13 +476,18 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
   return (
     <tr aria-label={`Draft ${record.name}`}>
       <td>
-        <Link to="/records/$id" params={{ id: record.id }} className="mono">
-          {record.name}
+        <Link to="/records/$id" params={{ id: record.id }}>
+          {record.label}
         </Link>{' '}
-        {record.label}
+        <span className="mono muted nowrap">{record.name}</span>
         {record.summary && <div className="muted">{record.summary}</div>}
       </td>
       <td>
+        {item.due && (
+          <span className={item.due < today() ? 'warn-ink' : undefined}>
+            Due {formatDay(item.due)} ·{' '}
+          </span>
+        )}
         {item.blockers.join('; ')}
         {item.blockers.length > 0 && toConfirm && ' · '}
         {toConfirm && (
@@ -380,6 +500,17 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
             {' '}
             · {item.unchecked} {item.unchecked === 1 ? 'source' : 'sources'} to check
           </span>
+        )}
+        {item.blocking?.[0] && (
+          <>
+            {' · '}
+            <Link to="/records/$id" params={{ id: item.blocking[0].id }}>
+              {item.blocking[0].label}
+            </Link>
+            {item.blocking.length > 1
+              ? ` and ${item.blocking.length - 1} more wait on it`
+              : ' waits on it'}
+          </>
         )}
       </td>
       <td className="when">

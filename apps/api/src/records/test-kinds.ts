@@ -39,13 +39,25 @@ export const widget = defineKind({
   ],
 });
 
-/** A test-only kind with no sections: records of it are confirmed as a whole. */
+/**
+ * A test-only kind with no sections: records of it are confirmed as a whole. A draft is due by
+ * `due`; a confirmed one past `checkBy` raises a notice in Review.
+ */
 export const gadget = defineKind({
   kind: 'gadget',
   idPrefix: 'gdg',
   namePrefix: 'GDG',
   nameWidth: 4,
-  attributes: z.object({ color: z.string() }),
+  attributes: z.object({
+    color: z.string(),
+    due: z.iso.date().optional(),
+    checkBy: z.iso.date().optional(),
+  }),
+  review: {
+    due: (a) => a.due,
+    notice: (a, today) =>
+      a.checkBy && a.checkBy <= today ? { message: 'Check the color', due: a.checkBy } : undefined,
+  },
 });
 
 /** A test-only kind with a keyed list: a protocol whose steps keep their own evidence (ADR 0049). */

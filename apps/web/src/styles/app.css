@@ -608,6 +608,25 @@ details.tech summary {
 details.tech[open] summary {
   margin-bottom: 6px;
 }
+/* Review (review 2026-10-01 item 16): what others wait on is folded below yours, and an agent's
+   conversation is a titled run of items. */
+details.others {
+  margin-top: 8px;
+}
+.others-summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-3);
+  padding: 4px 0;
+}
+.group-title {
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+.group-cell {
+  font-weight: 600;
+  padding-top: 10px;
+}
 
 /* Changes (before and after) */
 .diff {

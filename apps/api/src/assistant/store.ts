@@ -1,6 +1,6 @@
 import { newId } from '@ailab/domain';
 import type { AssistantMessage, Conversation, ConversationSummary } from '@ailab/schema';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { conversationMessages, conversations } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
@@ -138,6 +138,23 @@ export async function listConversations(
     .orderBy(desc(conversations.updatedAt), desc(conversations.id))
     .limit(limit);
   return rows.map(toSummary);
+}
+
+/**
+ * The titles of these conversations in the lab, whoever had them: Review names the conversation
+ * an agent's drafts came from (review 2026-10-01 item 16).
+ */
+export async function conversationTitles(
+  db: Db,
+  ctx: RecordContext,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: conversations.id, title: conversations.title })
+    .from(conversations)
+    .where(and(eq(conversations.labId, ctx.labId), inArray(conversations.id, ids)));
+  return new Map(rows.map((r) => [r.id, r.title]));
 }
 
 export async function getConversation(

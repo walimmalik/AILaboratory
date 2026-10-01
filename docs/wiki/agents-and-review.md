@@ -61,7 +61,7 @@ A draft is a record in `draft` status. Kinds that people review declare **sectio
 
 ## One place to review
 
-The **Review** page lists everything waiting for a person, grouped by kind: drafts (with the sections left, what is missing and how many values are assumed) and proposed changes to active records (before and after, Confirm change or Reject). The nav shows one count. After an assistant turn that left something waiting, the panel adds a "Waiting for you" line computed by the app, not written by the model. One verb throughout: "Confirm". Record status reads "draft · needs your review", "active", or "active · change waiting".
+The **Review** page lists everything waiting for a person, grouped by kind: drafts (with the sections left, what is missing and how many values are assumed) and proposed changes to active records (before and after, Confirm change or Reject)., then notices for your information, such as a lab memory past its check-again date. Most urgent first: by due date, then drafts other records wait on. What one agent made in one conversation sits together under the conversation's title, and what waits on other people is folded below yours (review 2026-10-01 item 16). The nav shows one count. After an assistant turn that left something waiting, the panel adds a "Waiting for you" line computed by the app, not written by the model. One verb throughout: "Confirm". Record status reads "draft · needs your review", "active", or "active · change waiting".
 
 ## Assumptions, questions and review loops
 

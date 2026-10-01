@@ -48,6 +48,13 @@ export const memory = defineKind({
   nameWidth: 4,
   attributes: MemorySchema,
   links: (a: MemoryAttributes) => named(a).map(({ id, relation }) => ({ toId: id, relation })),
+  // Past its check-again date a memory stays in use and asks for a look (M6).
+  review: {
+    notice: (a: MemoryAttributes, today: string) =>
+      a.checkAgain && a.checkAgain <= today && !a.retired
+        ? { message: 'Check it is still true: its check-again date has passed', due: a.checkAgain }
+        : undefined,
+  },
   sections: [
     {
       id: 'statement',

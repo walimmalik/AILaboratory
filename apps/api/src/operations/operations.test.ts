@@ -12,6 +12,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
+import { users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -714,6 +715,7 @@ describe('review inbox', () => {
       total: 2,
       changes: 1,
       mentions: 0,
+      notices: 0,
       needsYou: 1,
       drafts: { widget: 1 },
     });
@@ -889,16 +891,79 @@ describe('review inbox', () => {
       total: 3,
       changes: 1,
       mentions: 0,
+      notices: 0,
       needsYou: 1,
       drafts: { widget: 2 },
     });
+  });
+
+  it('puts the most urgent first, groups an agent conversation and raises notices', async () => {
+    const gadget = (ctx: RecordContext, label: string, extra: Record<string, unknown> = {}) =>
+      run<RecordEnvelope>(ctx, 'records.create', {
+        kind: 'gadget',
+        label,
+        attributes: { color: 'red', ...extra },
+        ...(ctx === person && extra.checkBy ? { status: 'active' } : {}),
+      });
+    const later = await gadget(person, 'Due later', { due: '2030-02-01' });
+    const sooner = await gadget(person, 'Due sooner', { due: '2030-01-01' });
+    const part = await create(person, { label: 'Part' });
+    await create(person, { label: 'Whole', attributes: { ...attributes, partOf: part.id } });
+    const plain = await create(person, { label: 'Plain' });
+    const stale = await gadget(person, 'Stale', { checkBy: '2020-01-01' });
+    await gadget(person, 'Fresh', { checkBy: '2999-01-01' });
+    const session = { ...agent, actor: { ...agent.actor, sessionRef: 'cnv_test' } as Actor };
+    const first = await create(session, { label: 'First of the ask' });
+    const second = await create(session, { label: 'Second of the ask' });
+    const samId = 'usr_01J9ZS4K8D6W3M5T7V9X1Y2Z3B';
+    await db.insert(users).values({ id: samId, orgId: person.orgId, displayName: 'Sam' });
+    const theirs = await create(
+      { ...person, actor: { type: 'user', userId: samId } },
+      {
+        label: 'Theirs',
+      },
+    );
+
+    const { items, counts } = await run<{ items: ReviewItem[]; counts: { notices: number } }>(
+      person,
+      'review.list',
+      {},
+    );
+    const ids = items.map((i) =>
+      i.type === 'draft' ? i.record.id : i.type === 'notice' ? i.about.id : i.type,
+    );
+    // Due dates first, earliest first; then drafts others wait on; then the newest; notices last.
+    expect(ids.slice(0, 3)).toEqual([sooner.id, later.id, part.id]);
+    expect(ids.at(-1)).toBe(stale.id);
+    expect(ids.indexOf(theirs.id)).toBeLessThan(ids.indexOf(plain.id));
+    expect(items[0]).toMatchObject({ due: '2030-01-01' });
+    expect(items[2]).toMatchObject({ blocking: [{ label: 'Whole', kind: 'widget' }] });
+    expect(items.at(-1)).toMatchObject({
+      type: 'notice',
+      tier: 'fyi',
+      due: '2020-01-01',
+      about: { id: stale.id, name: stale.name, label: 'Stale' },
+      message: 'Check the color',
+    });
+    expect(counts.notices).toBe(1);
+    const group = { id: 'cnv_test', title: 'Work by Claude in one session' };
+    for (const id of [first.id, second.id])
+      expect(items.find((i) => i.type === 'draft' && i.record.id === id)).toMatchObject({ group });
+    expect(
+      items.find((i) => i.type === 'draft' && i.record.id === plain.id)?.group,
+    ).toBeUndefined();
+    // Only yours, with the lab's notices kept.
+    const mine = await run<{ items: ReviewItem[] }>(person, 'review.list', { mine: true });
+    expect(mine.items.some((i) => i.type === 'draft' && i.record.id === theirs.id)).toBe(false);
+    expect(mine.items.some((i) => i.type === 'notice')).toBe(true);
+    expect(() => reviewList.output.parse({ items, counts })).not.toThrow();
   });
 
   it('is empty when nothing waits, and refuses unknown input', async () => {
     await create(person, { status: 'active' });
     expect(await run(agent, 'review.list', {})).toEqual({
       items: [],
-      counts: { total: 0, changes: 0, mentions: 0, needsYou: 0, drafts: {} },
+      counts: { total: 0, changes: 0, mentions: 0, notices: 0, needsYou: 0, drafts: {} },
     });
     expect((await refused(registry.execute(person, 'review.list', { x: 1 }))).code).toBe(
       'invalid_input',

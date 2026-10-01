@@ -6,18 +6,35 @@ import { RecordStatus } from '../record.ts';
 
 /**
  * How urgent an item is (plan 004e R1, ADR 0050): "needs_you" blocks someone (an agent waiting on a
- * proposed change); "to_confirm" has no deadline (drafts); "fyi" needs nothing (reserved for re-plans
- * and drift notes). Only "needs_you" counts in the nav.
+ * proposed change); "to_confirm" waits for a person (drafts, library mentions); "fyi" needs nothing
+ * but a look (a memory due for a check; later re-plans and drift notes). Only "needs_you" counts in
+ * the nav.
  */
 export const ReviewTier = z.enum(['needs_you', 'to_confirm', 'fyi']);
 export type ReviewTier = z.infer<typeof ReviewTier>;
+
+/** A record named in an item, as people read it. */
+const RecordRef = z.object({ id: RecordId, kind: z.string(), name: RecordName, label: z.string() });
 
 const addressed = {
   tier: ReviewTier,
   for: z
     .string()
     .optional()
-    .describe('The user the item is for: the person the agent worked for, or who made the draft'),
+    .describe(
+      'The user the item is for: the person the agent worked for, or who made the draft. Left out: the whole lab',
+    ),
+  group: z
+    .object({ id: z.string(), title: z.string() })
+    .optional()
+    .describe(
+      'Items one agent made in one conversation, listed together; set when there are two or more',
+    ),
+  due: z.iso.date().optional().describe('The date it has to be decided by'),
+  blocking: z
+    .array(RecordRef)
+    .optional()
+    .describe('Records that wait on it: they point to this draft, which is not confirmed yet'),
 };
 
 /** A draft waiting for a person to review and confirm it. */
@@ -91,14 +108,28 @@ export const ReviewMentions = z.object({
   proposed: z.number().int().positive().describe('Mentions waiting in this document'),
 });
 
-export const ReviewItem = z.discriminatedUnion('type', [ReviewDraft, ReviewChange, ReviewMentions]);
+/** Something to know about a confirmed record, with nothing to confirm (the "fyi" tier). */
+export const ReviewNotice = z.object({
+  type: z.literal('notice'),
+  ...addressed,
+  at: z.iso.datetime().describe('When the record last changed'),
+  about: RecordRef,
+  message: z.string().describe('What to know, in plain words'),
+});
+
+export const ReviewItem = z.discriminatedUnion('type', [
+  ReviewDraft,
+  ReviewChange,
+  ReviewMentions,
+  ReviewNotice,
+]);
 export type ReviewItem = z.infer<typeof ReviewItem>;
 
 export const reviewList = defineContract({
   id: 'review.list',
   verbs: { done: 'looked at what is waiting for you', intent: 'look at what is waiting for you' },
   summary:
-    'Everything waiting for a person: drafts to review and confirm, proposed changes to confirm or reject, and documents whose library mentions need checking, newest first',
+    'Everything waiting for a person: proposed changes to confirm or reject, drafts to review and confirm, documents whose library mentions need checking, and notices to know about. Most urgent first: by tier, then the earliest due date, then items that block other records, then the newest',
   effect: 'read',
   input: z.strictObject({
     kind: z
@@ -128,6 +159,7 @@ export const reviewList = defineContract({
           .int()
           .nonnegative()
           .describe('Library mentions waiting, across all documents'),
+        notices: z.number().int().nonnegative().describe('Notices for your information'),
         needsYou: z
           .number()
           .int()
@@ -141,7 +173,7 @@ export const reviewList = defineContract({
     items: z
       .array(ReviewItem)
       .describe(
-        'Newest first; at most 200 drafts and at most limit items, so compare with counts to see what was left out',
+        'Most urgent first; at most 200 drafts and at most limit items, so compare with counts to see what was left out',
       ),
   }),
 });
