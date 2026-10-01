@@ -1,5 +1,10 @@
-import { readFileSync } from 'node:fs';
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import { readdirSync, readFileSync } from 'node:fs';
+import {
+  type Actor,
+  AssayTemplateAttributes,
+  type Readiness,
+  type RecordEnvelope,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { campaignKinds } from '../campaigns/kinds.ts';
@@ -22,6 +27,7 @@ import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from '../sops/kinds.ts';
+import { readSeedSops } from '../sops/seed.ts';
 import { assayKinds } from './kinds.ts';
 import { readSeedAssayTemplates } from './seed.ts';
 
@@ -365,14 +371,32 @@ describe('assay templates', () => {
   it('reads the seed templates with their records named by label', () => {
     const file = (name: string) =>
       readFileSync(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
-    const [elisa] = readSeedAssayTemplates(file('assay-templates.yaml'), {
-      sops: new Map([['sop-elisa-il6', 'Human IL-6 sandwich ELISA (DuoSet), 96-well']]),
+    const folder = new URL('../../../../seed/sops/own/', import.meta.url);
+    const sops = readSeedSops(
+      readdirSync(folder)
+        .filter((n) => n.endsWith('.md'))
+        .map((name) => ({ name, text: readFileSync(new URL(name, folder), 'utf8') })),
+      {
+        labware: file('labware.yaml'),
+        reagentLibrary: file('reagent-library.yaml'),
+        entityLibrary: file('entity-library.yaml'),
+        instrumentLibrary: file('instrument-library.yaml'),
+      },
+    );
+    const templates = readSeedAssayTemplates(file('assay-templates.yaml'), {
+      sops: new Map(sops.map((s) => [s.key, s.label])),
       layouts: file('layouts.yaml'),
       labware: file('labware.yaml'),
       instrumentLibrary: file('instrument-library.yaml'),
     });
-    expect(elisa).toMatchObject({
-      label: 'IL-6 sandwich ELISA',
+    expect(templates.map((t) => t.label)).toEqual([
+      'IL-6 sandwich ELISA',
+      'Compound single-point viability screen',
+      'Compound dose-response (CellTiter-Glo or HiBiT)',
+      'Alkaline phosphatase kinetic screen (pNPP)',
+      'Dual-Glo reporter gene expression',
+    ]);
+    expect(templates[0]).toMatchObject({
       sops: [{ part: 'assay', label: 'Human IL-6 sandwich ELISA (DuoSet), 96-well' }],
       layout: 'IL-6 ELISA, 96 wells',
       preferred: [
@@ -381,6 +405,33 @@ describe('assay templates', () => {
       ],
       records: [{ role: 2, kind: 'labware_type' }],
     });
+    // Every role is a material of its part's SOP, and every variable asked for is one the SOP has.
+    for (const t of templates) {
+      const sopOf = (part: string) => {
+        const label = t.sops.find((s) => s.part === part)?.label;
+        return sops.find((s) => s.label === label)?.attributes;
+      };
+      const a = t.attributes as {
+        roles: { part: string; role: string }[];
+        essentials: { input: string; part?: string; variable?: string }[];
+      };
+      for (const r of a.roles)
+        expect(
+          sopOf(r.part)?.materials.map((m) => m.role),
+          `${t.key} ${r.role}`,
+        ).toContain(r.role);
+      for (const e of a.essentials.filter((e) => e.input === 'variable'))
+        expect(
+          sopOf(e.part as string)?.variables.find((v) => v.name === e.variable)?.kind,
+          `${t.key} ${e.variable}`,
+        ).toMatch(/^(input|default)$/);
+      const { roles: _, ...rest } = t.attributes;
+      expect(
+        AssayTemplateAttributes.omit({ parts: true, layout: true, roles: true }).safeParse(rest)
+          .error,
+        t.key,
+      ).toBeUndefined();
+    }
   });
 });
 

@@ -59,3 +59,240 @@ templates:
       - { measure: R² of the 4PL standard curve, comparison: ">=", threshold: "0.98", per: plate }
       - { measure: CV of duplicate wells (%), comparison: "<=", threshold: "20", per: plate }
     analysis: Subtract the 570 nm reading, then the blank; fit a four-parameter logistic curve to the standards and read samples off it, multiplied by the sample dilution
+
+  - key: assay-compound-single-point
+    label: Compound single-point viability screen
+    purpose: Cell viability (CellTiter-Glo, luminescence) of HEK293 cells after one 10 µM dose of each compound, to pick hits for dose-response
+    assays: [CellTiter-Glo]
+    parts:
+      - { id: seeding, sop: sop-cell-seeding-384 }
+      - { id: treatment, sop: sop-compound-screen }
+      - { id: readout, sop: sop-celltiter-glo }
+    layout: layout-single-point-384
+    roles:
+      - part: seeding
+        role: formulatrix_mantis
+        capability: dispense
+        preferred: [formulatrix-mantis]
+        reason: Any bulk dispenser that fills 384-well plates
+      - part: seeding
+        role: thermo_cytomat_10
+        capability: incubate
+        preferred: [thermo-cytomat-10]
+        reason: Any 37 °C, 5% CO2 incubator
+      - part: treatment
+        role: echo_650
+        capability: transfer
+        preferred: [echo-650]
+        reason: Compounds go in as nanolitre droplets so DMSO stays at or below 0.1%
+      - part: treatment
+        role: beckman_001_14555
+        record: beckman-001-14555
+        reason: The compound library source plate
+      - part: treatment
+        role: corning_3570
+        record: corning-3570
+        reason: White, tissue-culture treated, for luminescence
+      - part: readout
+        role: tecan_spark_cyto
+        capability: read_luminescence
+        preferred: [tecan-spark-cyto]
+        reason: Any luminescence reader that takes 384-well plates
+    essentials:
+      - { input: subjects, id: compounds, label: Which compounds, kinds: [sample, container] }
+      - { input: variable, id: dose, label: Compound concentration, part: treatment, variable: single_point_conc }
+    factors:
+      - { id: compound, label: Compound, from: compounds }
+    controls:
+      - id: dmso
+        label: DMSO
+        role: neutral_control
+        wells: 32
+        per: plate
+        reason: Columns 1-2, full viability, for Z' and percent viability on every plate
+      - id: staurosporine
+        label: Staurosporine 1 µM
+        role: positive_control
+        wells: 32
+        per: plate
+        reason: Columns 23-24, full kill, for Z' on every plate
+    replicates:
+      technical: 1
+      reason: One well per compound in a primary screen; hits are confirmed by dose-response
+    readouts:
+      - { id: luminescence, label: Luminescence (CellTiter-Glo), capability: read_luminescence, part: readout, mode: endpoint }
+    quality:
+      - { measure: "Z'", comparison: ">=", threshold: "0.5", per: plate }
+    analysis: Percent viability per well against the plate's DMSO (100%) and staurosporine (0%) controls
+    hitRule: Viability below 3 SD of the plate's DMSO controls
+    notes: Hits go on to the compound dose-response template
+
+  - key: assay-compound-dose-response
+    label: Compound dose-response (CellTiter-Glo or HiBiT)
+    purpose: IC50 of each compound on HEK293 viability (CellTiter-Glo), or DC50 on a HiBiT-tagged protein, from a 10-point 3-fold series
+    assays: [CellTiter-Glo, HiBiT]
+    parts:
+      - { id: seeding, sop: sop-cell-seeding-384 }
+      - { id: treatment, sop: sop-compound-screen }
+      - { id: readout, sop: sop-celltiter-glo, note: For a HiBiT-tagged protein, the HiBiT lytic SOP replaces this part }
+    layout: layout-dose-response-384
+    roles:
+      - part: seeding
+        role: formulatrix_mantis
+        capability: dispense
+        preferred: [formulatrix-mantis]
+        reason: Any bulk dispenser that fills 384-well plates
+      - part: seeding
+        role: thermo_cytomat_10
+        capability: incubate
+        preferred: [thermo-cytomat-10]
+        reason: Any 37 °C, 5% CO2 incubator
+      - part: treatment
+        role: echo_650
+        capability: transfer
+        preferred: [echo-650]
+        reason: The series is dispensed directly in droplets, so no intermediate plate is needed
+      - part: treatment
+        role: beckman_001_12782
+        record: beckman-001-12782
+        reason: Low dead volume source plate for cherry-picked hits
+      - part: treatment
+        role: corning_3570
+        record: corning-3570
+        reason: White, tissue-culture treated, for luminescence
+      - part: readout
+        role: tecan_spark_cyto
+        capability: read_luminescence
+        preferred: [tecan-spark-cyto]
+        reason: Any luminescence reader that takes 384-well plates
+    essentials:
+      - { input: subjects, id: compounds, label: Which compounds, kinds: [sample, container] }
+    factors:
+      - { id: compound, label: Compound, from: compounds }
+      - id: concentration
+        label: Concentration
+        series: { top: { value: "10", unit: uM }, factor: "3", points: 10 }
+    controls:
+      - id: dmso
+        label: DMSO
+        role: neutral_control
+        wells: 32
+        per: plate
+        reason: Columns 1-2, top of the curve and Z' on every plate
+      - id: positive
+        label: Positive control
+        role: positive_control
+        wells: 32
+        per: plate
+        reason: Columns 23-24, bottom of the curve and Z' on every plate
+    replicates:
+      technical: 2
+      reason: Duplicate curves, 16 compounds per 384-well plate
+    readouts:
+      - { id: luminescence, label: Luminescence, capability: read_luminescence, part: readout, mode: endpoint }
+    quality:
+      - { measure: "Z'", comparison: ">=", threshold: "0.5", per: plate }
+    analysis: Normalize to the plate's DMSO and positive controls, fit a four-parameter logistic curve per compound and report the IC50 (DC50 for HiBiT) with its confidence interval
+
+  - key: assay-enzyme-kinetic
+    label: Alkaline phosphatase kinetic screen (pNPP)
+    purpose: Inhibition of shrimp alkaline phosphatase by each compound, from the rate of pNPP turnover read at 405 nm
+    assays: [pNPP kinetic]
+    parts:
+      - { id: assay, sop: sop-pnpp-kinetic }
+    layout: layout-pnpp-96
+    roles:
+      - part: assay
+        role: hamilton_star
+        capability: transfer
+        preferred: [hamilton-star]
+        reason: Any liquid handler that adds enzyme and substrate across a 96-well plate
+      - part: assay
+        role: tecan_spark_cyto
+        capability: read_absorbance
+        preferred: [tecan-spark-cyto]
+        reason: Any absorbance reader with 405 nm that reads kinetically at 25 °C
+      - part: assay
+        role: greiner_655101
+        record: greiner-655101
+        reason: Clear flat bottom for absorbance
+    essentials:
+      - { input: subjects, id: compounds, label: Which compounds, kinds: [sample, container] }
+      - { input: variable, id: dose, label: Compound concentration, part: assay, variable: compound_conc }
+    factors:
+      - { id: compound, label: Compound, from: compounds }
+    controls:
+      - id: no_enzyme
+        label: No enzyme
+        role: negative_control
+        wells: 8
+        per: plate
+        reason: Column 1, background rate of pNPP without enzyme
+      - id: full_activity
+        label: DMSO (full activity)
+        role: neutral_control
+        wells: 8
+        per: plate
+        reason: Column 2, the uninhibited rate each compound is compared with
+    replicates:
+      technical: 1
+      reason: One well per compound in a screen; hits are retested
+    readouts:
+      - id: od405
+        label: Absorbance 405 nm, every 30 s for 20 min
+        capability: read_absorbance
+        part: assay
+        mode: kinetic
+        wavelengths:
+          - { use: measure, wavelength: { value: "405", unit: nm } }
+        interval: { value: "30", unit: s }
+        duration: { value: "20", unit: min }
+    analysis: Initial rate (mOD/min) per well from the linear part of the read, minus the no-enzyme rate, as percent of the DMSO rate
+
+  - key: assay-dual-glo
+    label: Dual-Glo reporter gene expression
+    purpose: Reporter gene expression in HEK293 cells as firefly over Renilla luciferase, fold change over untreated
+    assays: [Dual-Glo]
+    parts:
+      - { id: culture, sop: sop-hek293-passaging }
+      - { id: assay, sop: sop-dual-glo-reporter }
+    layout: layout-dual-glo-384
+    roles:
+      - part: assay
+        role: formulatrix_mantis
+        capability: dispense
+        preferred: [formulatrix-mantis]
+        reason: Any bulk dispenser that adds both reagents across a 384-well plate
+      - part: assay
+        role: tecan_spark_cyto
+        capability: read_luminescence
+        preferred: [tecan-spark-cyto]
+        reason: Any luminescence reader that takes 384-well plates
+    essentials:
+      - { input: subjects, id: treatments, label: Which treatments, kinds: [sample, container] }
+    factors:
+      - { id: treatment, label: Treatment, from: treatments }
+    controls:
+      - id: untreated
+        label: Untreated
+        role: neutral_control
+        wells: 32
+        per: plate
+        reason: Columns 1-2, the baseline each fold change is taken over
+      - id: empty_vector
+        label: Empty vector
+        role: negative_control
+        wells: 32
+        per: plate
+        reason: Columns 23-24, firefly background without the reporter
+    replicates:
+      technical: 4
+      reason: Quadruplicates, since transfection varies well to well
+    readouts:
+      - id: dual
+        label: Firefly, then Renilla luminescence
+        capability: read_luminescence
+        part: assay
+        mode: sequential
+        sequence: [firefly, renilla]
+    analysis: Firefly over Renilla per well, then the mean ratio of each treatment over the untreated mean
