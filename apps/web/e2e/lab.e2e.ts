@@ -143,21 +143,27 @@ test('a record says what changed since you last looked, and Today lists what age
   const label = `Trough ${Date.now()}`;
   const drafted = await asAgent(request, 'records.create', { kind: 'widget', label, attributes });
   const record = drafted.output;
+  const markedSeen = () =>
+    page.waitForResponse((r) => r.url().includes('/records.mark_seen') && r.ok());
+  let marked = markedSeen();
   await page.goto(`/records/${record.id}`);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(label);
   // Opening it marks it seen; nothing has changed since.
   const since = page.getByRole('region', { name: 'Changed since you last looked' });
   await expect(since).toHaveCount(0);
+  await marked;
 
   await asAgent(request, 'records.update', {
     id: record.id,
     expectedVersion: 1,
     attributes: { ...attributes, volume: { value: '250', unit: 'uL' } },
   });
+  marked = markedSeen();
   await page.reload();
   await expect(since).toContainText('v1 to v2');
   await expect(since.locator('.was')).toHaveText('200 µL');
   await expect(since.locator('.now')).toHaveText('250 µL');
+  await marked;
   await page.reload();
   await expect(page.getByRole('heading', { level: 1 })).toContainText(label);
   await expect(since).toHaveCount(0);

@@ -26,10 +26,12 @@ export function SinceYouLooked({ record }: { record: RecordEnvelope }) {
     mutationFn: (version: number) => api.run(recordsMarkSeen, { id: record.id, version }),
   });
   const { mutate } = seen;
-  const ready = diff.isSuccess;
+  // Marks the version the comparison was read at, once: a change that arrives live while the page
+  // is open stays unseen until the next visit shows it.
+  const shown = diff.data?.to;
   useEffect(() => {
-    if (person && ready) mutate(record.version);
-  }, [person, ready, record.version, mutate]);
+    if (person && shown !== undefined) mutate(shown);
+  }, [person, shown, mutate]);
   const [all, setAll] = useState(false);
 
   const data = diff.data;
