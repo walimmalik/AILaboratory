@@ -58,12 +58,20 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 22. **An agent never destroys a person's work directly.** Deleting a draft a person wrote or confirmed any of is a proposal.
 23. **Evidence that names a source is checked against it.**
 
+Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md), after Wali asked for fewer, linked views (ADR 0058):
+
+24. **An area per kind of work, a tab per kind of thing.** Eight menu entries; a kind and its items are one view. A new capability's plan says whether it is a menu entry, a tab in an area, a tab on a record page, or a fact on the Overview.
+25. **Every record leads with what it is and where.** An identity line and a few key facts chosen per kind, then its picture, then the tabs Overview · the kind's tabs · History · Connections · All fields.
+26. **Confirmed content is open.** Nothing folds to bookkeeping; nothing filled reads "none" or "not chosen yet", never "empty · confirmed".
+27. **A source is said once.** Sources per section in All fields; a value nobody sourced is marked wherever it shows.
+28. **Three state vocabularies, never mixed:** the record's review state in the header, the physical thing's state in the identity line, a value's source beside values.
+
 ## Language
 
 - Plain lab language on screen. Record IDs, operation IDs and JSON sit under "technical details".
 - One verb for agreeing to agent work: **Confirm** ("Confirm change" for a proposal; "Confirm LWT-0032" on a draft, which confirms every part nothing blocks).
 - Record status in words: "draft · needs your review", "active", "active · change waiting".
-- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it.
+- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it; on a confirmed record it reads "no source given" (004f N8).
 - An SOP value's type, in words: **protocol default** (fixed by the SOP, may be overridden for a run), **set per run**, **calculated** (from a formula), **from <material>** (read from the selected lot or record; a **nominal value** stands in until one is selected).
 
 ## Pages so far

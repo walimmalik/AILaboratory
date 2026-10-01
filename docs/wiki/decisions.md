@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6, 0058 for 004f). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -62,6 +62,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0055](../decisions/0055-assistant-core-toolset-and-page-context.md) | The assistant names a core toolset, the calculators and the page's modules, and runs the rest with `run_operation` after `operations.describe`; `records.kinds` has summary and filter modes; page context names the record and version |
 | [0056](../decisions/0056-a-persons-own-edits-are-confirmed.md) | A person's own edit confirms the sections it changes unless an agent's unconfirmed value is left in them; editing never activates a draft |
 | [0057](../decisions/0057-people-parity.md) | Archive, Unarchive, Discard draft and Restore on the record page, a generic Calculators page, and a test that every agent write has a web caller or a stated reason |
+| [0058](../decisions/0058-areas-and-record-pages.md) | Eight menu areas with tabs, one inventory view, record pages that lead with an identity line and key facts, three state vocabularies (plan 004f) |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 
@@ -84,6 +85,7 @@ Agents act directly on drafts and propose the rest (0016); two MCP tools, `descr
 - **Round 6, 004c (C1 to C6, all A):** a draft is a record with evidence and section reviews; anything an agent sets is assumed unless it names a source; an edited section goes back to review; highlight against the last confirmed values; readiness checks per kind in code; build against the test widget kind first (0021).
 - **After first use:** a value the person told the agent is `stated`, not assumed; approving a proposal confirms the sections it touched.
 - **Round 7, 004d (R1 to R6, all A):** one Review page; agent changes to active records stay proposals; one nav count; a "Waiting for you" line after assistant turns; one verb, "Confirm"; the last section's confirm activates (0022).
+- **004f (N1 to N5, N7, N8, all A; 2026-10-01):** eight menu areas with tabs, and a new capability's plan says where it goes; one Inventory view of everything physical and what it is; reagents and materials in one list, merged only when linked; record pages lead with an identity line, key facts and the record's picture, then fixed tabs; plate maps live in experiments and layouts; sources once per section; three state vocabularies (0058). N6, the names of the Connections columns, is open.
 
 [Plan 004](../plans/004-agent-shell.md)
 
