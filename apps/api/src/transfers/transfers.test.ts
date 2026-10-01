@@ -211,6 +211,15 @@ describe('transfers.dilution_options', () => {
       }),
     );
     expect(units).toMatchObject({ code: 'invalid_input' });
+    const unknown = await refused(
+      run(agent, 'transfers.dilution_options', {
+        ...input,
+        device: { limits: { min: nL('2.5'), max: nL('500'), step: nL('2.5') } },
+        stock: { value: '10', unit: 'undefined' },
+      }),
+    );
+    expect(unknown).toMatchObject({ code: 'invalid_input' });
+    expect(unknown.message).toContain('Unknown unit "undefined"');
   });
 
   it("does not read another lab's instruments", async () => {
