@@ -18,6 +18,7 @@ import type {
   RelatedContext,
   TransferGroup,
   TransferPlanAttributes,
+  WorklistFormatAttributes,
 } from '@ailab/schema';
 import { checkPin } from '../records/pins.ts';
 
@@ -98,6 +99,8 @@ export interface PlanRules {
   invalid: string[];
   rules: Rule[];
   labware: Map<string, RecordEnvelope>;
+  /** How each group's method handles tips, for the groups with a worklist format. */
+  methods: Map<string, MethodTips>;
 }
 
 export async function planRules(
@@ -226,6 +229,8 @@ export async function planRules(
     .filter((p) => p.role === 'source' && !p.container)
     .map((p) => p.label ?? p.id);
   const decks = await deckRules(a, context, invalid, unconfirmed);
+  const methods = new Map<string, MethodTips>();
+  const worklists = await worklistRules(a, context, invalid, unconfirmed, newer, methods);
   const rules: Rule[] = [
     {
       id: 'has_transfers',
@@ -269,7 +274,7 @@ export async function planRules(
     },
     {
       id: 'inputs_confirmed',
-      label: 'Labware and plate maps are confirmed',
+      label: 'Labware, plate maps and worklist formats are confirmed',
       severity: 'blocker',
       section: 'plates',
       problems: unconfirmed,
@@ -277,36 +282,59 @@ export async function planRules(
     },
     {
       id: 'inputs_current',
-      label: 'It uses the latest labware and plate maps',
+      label: 'It uses the latest labware, plate maps and worklist formats',
       severity: 'warning',
       section: 'plates',
       problems: newer,
       fix: 'Look at what changed, then adopt the newer version or keep this one',
     },
     decks,
+    ...worklists,
   ];
-  return { invalid, rules, labware };
+  return { invalid, rules, labware, methods };
 }
 
-/** Whether each transfer of a group takes a new tip, over the plan's order (T5). */
-export function groupTips(a: TransferPlanAttributes, group: TransferGroup): boolean[] {
+/** A group's transfers in order: each one's source, and whether it goes into liquid already there. */
+function groupMoves(a: TransferPlanAttributes, group: TransferGroup) {
   const wet = new Set<string>();
   for (const g of a.groups) {
     if (g.id === group.id) break;
     for (const t of g.transfers) wet.add(`${t.to.plate}|${t.to.well}`);
   }
-  const moves = group.transfers.map((t) => {
+  return group.transfers.map((t) => {
     const to = `${t.to.plate}|${t.to.well}`;
     const intoLiquid = wet.has(to);
     wet.add(to);
     return { source: `${t.from.plate}|${t.from.well}`, intoLiquid };
   });
-  return tipChanges(moves, group.tips ?? 'lab_default');
 }
 
-/** How many tips the plan uses, from each group's tip rule (estimated until methods declare it). */
-export function tipsOf(a: TransferPlanAttributes): number {
-  return a.groups.reduce((n, g) => n + groupTips(a, g).filter(Boolean).length, 0);
+/** How a group's method handles tips, from its worklist format (T5); absent, the group's own rule. */
+export type MethodTips = WorklistFormatAttributes['tips'];
+
+/**
+ * Whether each transfer of a group takes a new tip, over the plan's order (T5). A worklist format
+ * that fixes the tips (none, new each, per source) decides; one with a new tip column, or none,
+ * leaves it to the group's rule.
+ */
+export function groupTips(
+  a: TransferPlanAttributes,
+  group: TransferGroup,
+  method?: MethodTips,
+): boolean[] {
+  const rule = method && method !== 'column' ? method : (group.tips ?? 'lab_default');
+  return tipChanges(groupMoves(a, group), rule);
+}
+
+/** How many tips the plan uses, from each group's method or tip rule. */
+export function tipsOf(
+  a: TransferPlanAttributes,
+  methods: ReadonlyMap<string, MethodTips> = new Map(),
+): number {
+  return a.groups.reduce(
+    (n, g) => n + groupTips(a, g, methods.get(g.id)).filter(Boolean).length,
+    0,
+  );
 }
 
 /** The plates a group uses, in the plan's order. */
@@ -366,4 +394,97 @@ async function deckRules(
     problems,
     fix: 'Lay the deck out again with transfers.set_deck (left out, code lays it out), then confirm it',
   };
+}
+
+/**
+ * Each group's worklist format (016c): a format record, for the kind of instrument the group runs
+ * on. Its confirmation counts with the other inputs.
+ */
+async function worklistRules(
+  a: TransferPlanAttributes,
+  context: Pick<RelatedContext, 'get' | 'getVersion'>,
+  invalid: string[],
+  unconfirmed: string[],
+  newer: string[],
+  methods: Map<string, MethodTips>,
+): Promise<Rule[]> {
+  const problems: string[] = [];
+  const clashes: string[] = [];
+  for (const g of a.groups) {
+    if (!g.worklist) continue;
+    const pin = await checkPin(context, g.worklist, 'worklist_format', 'a worklist format');
+    if (pin.invalid || !pin.pinned) {
+      invalid.push(`${g.label}: ${pin.invalid}`);
+      continue;
+    }
+    if (pin.unconfirmed) unconfirmed.push(`${g.label}: ${pin.unconfirmed}`);
+    if (pin.newer && pin.record)
+      newer.push(`${g.label}: ${pin.record.name} v${pin.newer} is newer`);
+    const format = pin.pinned.attributes as WorklistFormatAttributes;
+    methods.set(g.id, format.tips);
+    if (!g.instrument) {
+      problems.push(`${g.label} is done by hand, but names the worklist format ${pin.pinned.name}`);
+      continue;
+    }
+    const instrument = await context.get(g.instrument.instrument);
+    const kind = (instrument?.attributes as { kind?: string } | undefined)?.kind;
+    if (kind && kind !== format.instrumentKind) {
+      const k = await context.get(format.instrumentKind);
+      problems.push(
+        `${g.label}: ${pin.pinned.name} is read by ${k?.label ?? format.instrumentKind}, not by ${instrument?.label}`,
+      );
+    }
+    clashes.push(...tipClashes(a, g, format.tips, pin.pinned.label));
+  }
+  return [
+    {
+      id: 'worklists_fit',
+      label: "Every worklist format is for its group's instrument",
+      severity: 'blocker',
+      section: 'transfers',
+      problems,
+      fix: "Set the group's worklist format with transfers.set_instrument, or draft one for that instrument with worklists.draft_format",
+    },
+    {
+      id: 'worklist_tips',
+      label: "The methods' tip handling suits what they move",
+      severity: 'warning',
+      section: 'transfers',
+      problems: clashes,
+      fix: "Use a method that takes a new tip where the tip touches liquid, or set the group's tip rule to match the method",
+    },
+  ];
+}
+
+/**
+ * Where a method's fixed tip handling (T5) clashes with a group: a tip carried on after touching
+ * liquid in a well, or a tip rule on the group that the method doesn't follow.
+ */
+export function tipClashes(
+  a: TransferPlanAttributes,
+  group: TransferGroup,
+  method: MethodTips,
+  name: string,
+): string[] {
+  if (method === 'column') return [];
+  const out: string[] = [];
+  const rule = group.tips ?? 'lab_default';
+  const said =
+    method === 'none'
+      ? 'uses no tips'
+      : method === 'new_each'
+        ? 'takes a new tip every row'
+        : 'keeps one tip per source';
+  if (group.tips && group.tips !== 'lab_default' && rule !== method)
+    out.push(`${group.label}: ${name} ${said}, not the group's rule (${rule.replace('_', ' ')})`);
+  if (method === 'per_source') {
+    const moves = groupMoves(a, group);
+    const tips = tipChanges(moves, 'per_source');
+    const carried = moves.filter((m, i) => !tips[i] && (m.intoLiquid || moves[i - 1]?.intoLiquid));
+    if (carried.length)
+      out.push(
+        `${group.label}: ${name} keeps one tip per source, and ${carried.length} ${carried.length === 1 ? 'transfer reuses a tip' : 'transfers reuse a tip'} that touched liquid already in a well`,
+      );
+  }
+  return out;
 }

@@ -23,6 +23,7 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | `campaigns.yaml` | Two demo campaigns (BRD4 degraders, IL-6 reporter panel) with four experiments that follow the assay templates' SOPs | 013 |
 | `layouts.yaml` | Layout templates for the assay templates' plates (ELISA 96, single-point and dose-response 384, pNPP 96, Dual-Glo 384) | 014 |
 | `opentrons/` | Opentrons labware definitions the labware entries name, so well positions load offline | 007 |
+| `worklist-formats.yaml` | The worklist format of each mock CSV in `worklists/` (STAR, Vantage, Mantis, PreciseDrop), marked assumed, each checked against its example | 016c |
 | `worklists/` | Mock worklist and instrument report examples, one per instrument, until real exports exist | 016 (golden-file tests) |
 
 Public SOPs, papers and vendor protocol PDFs for the SOP library are gathered separately (the SOP and literature test set) and kept in the project files, not here.

@@ -32,6 +32,7 @@ import { type SettleReport, settleSeed } from './seed-settle.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { loadSeedSops, readSeedSops } from './sops/seed.ts';
 import { transferKinds } from './transfers/kinds.ts';
+import { loadSeedWorklistFormats, readSeedWorklistFormats } from './transfers/seed.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) in one run, with no approvals (ADR 0044): labware types,
@@ -344,6 +345,21 @@ async function loadOnce() {
     `Layout templates: ${layouts.created.length} drafted, ${layouts.existing.length} already there.`,
   );
   for (const line of layouts.created) console.log(`  + ${line}`);
+  const worklists = await loadSeedWorklistFormats(
+    registry,
+    ctx,
+    readSeedWorklistFormats(
+      await seedFile('worklist-formats.yaml'),
+      await seedFile('instrument-library.yaml'),
+    ),
+    (name) => seedFile(`worklists/${name}`),
+    'Seed lab (plan 006), loaded by plan 016c',
+  );
+  console.log(
+    `Worklist formats: ${worklists.created.length} drafted, ${worklists.existing.length} already there, ${worklists.waiting.length} waiting for their instrument kind.`,
+  );
+  for (const line of worklists.created) console.log(`  + ${line}`);
+  for (const line of worklists.waiting) console.log(`  … ${line}`);
   await settle();
 }
 

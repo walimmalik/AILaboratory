@@ -74,7 +74,8 @@ const KIND_NAMESPACES: Record<string, string[]> = {
   layout: ['platemaps', 'layouts', 'transfers'],
   plate_map: ['platemaps', 'layouts', 'transfers'],
   sop: ['sops'],
-  transfer_plan: ['transfers'],
+  transfer_plan: ['transfers', 'worklists'],
+  worklist_format: ['worklists', 'transfers', 'files'],
 };
 
 /** The namespaces of the page a message was sent from. */

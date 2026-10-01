@@ -37,6 +37,7 @@ import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
 import { reportOperations } from '../transfers/reports.ts';
 import { noProtocolWriter, type ProtocolWriter } from '../transfers/simulator.ts';
+import { worklistOperations } from '../transfers/worklist-operations.ts';
 import { OperationError } from './errors.ts';
 
 export { OperationError } from './errors.ts';
@@ -88,6 +89,7 @@ export function createRegistry(
     draftFromPlateMap,
     ...deckOperations,
     ...exportOperations,
+    ...worklistOperations,
     ...reportOperations,
     ...assistantOperations,
   );
