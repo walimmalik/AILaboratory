@@ -930,12 +930,14 @@ table.checks td.source {
 table.review-fields tr.changed td {
   background: var(--warn-soft);
 }
-table.review-fields .was {
+table.review-fields .was,
+.part .values .was {
   color: var(--ink-3);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--ink-3) 60%, transparent);
 }
-table.review-fields .now {
+table.review-fields .now,
+.part .values .now {
   font-weight: 600;
 }
 /* A diff as rows of what changed: the part's name, before, after. */
@@ -2310,4 +2312,200 @@ span.row-actions {
 }
 .calculator-result {
   margin-top: 12px;
+}
+
+/* Record pages (plan 004f N4): name with its code as a tag, identity line, key facts, then tabs. */
+.record-page {
+  max-width: 1200px;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.code {
+  font: 500 12px var(--font-mono);
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.linked-name .code {
+  font-size: 11px;
+  margin-left: 2px;
+  vertical-align: 1px;
+}
+.page-head h1 .code {
+  vertical-align: 4px;
+  margin-left: 4px;
+}
+.record-head {
+  align-items: flex-start;
+}
+.record-head .head-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.record-head .head-side .record-actions {
+  margin: 0;
+}
+.record-page .identity {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  max-width: 96ch;
+}
+.identity .ref {
+  color: var(--accent);
+  text-decoration: none;
+}
+.identity .ref:hover {
+  text-decoration: underline;
+}
+
+.record-page .tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.tabs .tab {
+  padding: 7px 12px 8px;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabs .tab:hover {
+  color: var(--ink);
+}
+.tabs .tab.on {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+.record-page .tabs .count {
+  font: 11px var(--font-mono);
+  color: var(--ink-3);
+  margin-left: 5px;
+}
+.record-page .tabs .count.warn-ink {
+  color: var(--warn);
+}
+
+.record-page .facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 22px;
+  margin: 0;
+}
+.record-page .fact dt {
+  font: 11px var(--font-mono);
+  color: var(--ink-3);
+}
+.record-page .fact dd {
+  margin: 1px 0 0;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.fact .ref {
+  color: var(--accent);
+  text-decoration: none;
+}
+.record-page .fact dd small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 1px;
+}
+.unsourced {
+  color: var(--agent);
+  font: 11px var(--font-mono);
+  margin-left: 6px;
+  cursor: help;
+}
+
+/* All fields (N7): one block, each part a heading, its sources said once, values in two columns. */
+.record-page .all-fields .body {
+  gap: 18px;
+}
+.record-page .part {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.record-page .part-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.part-head .part-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.record-page .part-head .part-state {
+  font: 12px var(--font-mono);
+}
+.record-page .part-head .link-btn {
+  margin-left: auto;
+}
+.record-page .part .sources {
+  margin: 0;
+  font-size: 12px;
+  max-width: 110ch;
+}
+.record-page .part .values {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  margin: 0;
+}
+.record-page .part .values dt,
+.record-page .part .values dd {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule);
+  margin: 0;
+  min-width: 0;
+}
+.record-page .part .values dt {
+  font: 12px var(--font-mono);
+  color: var(--ink-3);
+  padding-right: 12px;
+}
+.record-page .part .values dd {
+  overflow-wrap: anywhere;
+}
+.record-page .part .values dd.changed {
+  background: var(--warn-soft);
+}
+.record-page .part .empty {
+  margin: 0;
+  font-size: 12px;
+}
+
+.record-page .connection-columns {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 28px;
+}
+.connection-columns .column-title {
+  margin: 0 0 6px;
+  font: 500 12px / 1.2 var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.record-page .connections li {
+  padding: 3px 0;
+}
+@media (max-width: 560px) {
+  .record-page .part .values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .record-page .part .values dt {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
 }

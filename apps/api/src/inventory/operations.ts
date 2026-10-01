@@ -31,7 +31,7 @@ async function find(service: RecordService, ctx: RecordContext, id: string) {
 }
 
 /** Where a container or location is, from the outermost location down to the record itself. */
-async function pathOf(
+export async function pathOf(
   service: RecordService,
   ctx: RecordContext,
   record: RecordEnvelope,

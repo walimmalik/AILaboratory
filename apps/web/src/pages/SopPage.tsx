@@ -5,31 +5,32 @@ import {
   recordsConfirm,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { api } from '../api.ts';
 import { kindsQuery, readinessQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
-import { Checks, Estimates, fieldLabel, SettledDetails } from './RecordReview.tsx';
+import { Checks, Estimates, fieldLabel } from './RecordReview.tsx';
 import { EditForm, SaveBar, useFieldEdits } from './SectionEditor.tsx';
 import { GuessContext, type Guesses, sopListEditors } from './SopEditors.tsx';
 import { SopBlocks } from './Sops.tsx';
 
 /**
- * An SOP's page (ADR 0046): what is left to do and one Confirm, the procedure as read at the bench,
- * and its parts folded below. Edit opens the whole SOP as one form with one Save. Each part still
+ * An SOP's Overview (ADR 0046, plan 004f): what is left to do and one Confirm, and the procedure as
+ * read at the bench; its parts are on the All fields tab. Edit opens the whole SOP as one form with one Save. Each part still
  * gets its own confirmation record; they show under technical details.
  */
 export function SopPage({
   record,
   readiness,
-  renderValue,
+  editing,
+  onEdit: setEditing,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
-  renderValue: (value: unknown) => ReactNode;
+  /** The part to open the editor at, or undefined when reading; the record page holds it. */
+  editing: string | undefined;
+  onEdit: (part: string | undefined) => void;
 }) {
-  // The part to open the editor at, or undefined when reading.
-  const [editing, setEditing] = useState<string>();
   const titles = Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]));
   if (editing)
     return <SopEditor record={record} focus={editing} onDone={() => setEditing(undefined)} />;
@@ -42,14 +43,6 @@ export function SopPage({
         onEdit={(part) => setEditing(part)}
       />
       <SopBlocks record={record} />
-      <SettledDetails
-        record={record}
-        readiness={readiness}
-        titles={titles}
-        renderValue={renderValue}
-        onEdit={(part) => setEditing(part)}
-        checks={false}
-      />
     </>
   );
 }

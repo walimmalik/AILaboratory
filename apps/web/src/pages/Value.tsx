@@ -113,8 +113,15 @@ function ItemsTable({ items }: { items: Record<string, unknown>[] }) {
 export function LinkedName({ id }: { id: string }) {
   const { data } = useQuery(recordQuery(id));
   return (
-    <Link to="/records/$id" params={{ id }} className="mono">
-      {data ? `${data.name} ${data.label}` : id}
+    // The name first, its code as a tag after it (plan 004f: codes are never prefixes).
+    <Link to="/records/$id" params={{ id }} className="linked-name">
+      {data ? (
+        <>
+          {data.label} <span className="code">{data.name}</span>
+        </>
+      ) : (
+        <span className="mono">{id}</span>
+      )}
     </Link>
   );
 }

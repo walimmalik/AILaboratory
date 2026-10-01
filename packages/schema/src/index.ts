@@ -16,6 +16,7 @@ export * from './liquids.ts';
 export * from './memory.ts';
 export * from './operation.ts';
 export * from './operations/index.ts';
+export * from './overview.ts';
 export * from './platemaps.ts';
 export * from './quantity.ts';
 export * from './reagents.ts';

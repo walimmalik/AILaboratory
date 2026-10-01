@@ -121,6 +121,16 @@ export function formatWhen(iso: string, now = new Date()): string {
       });
 }
 
+/** "1 Oct", or "1 Oct 2025" in another year, in the reader's time zone. */
+export function formatShortDay(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  return at.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
 /** A calendar date, "2030-01-05", as "5 Jan 2030", the same in every time zone. */
 export function formatDay(date: string): string {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {

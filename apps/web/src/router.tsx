@@ -202,6 +202,9 @@ const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
   component: RecordPage,
+  // The tab a record page opens on (plan 004f N4); none is the Overview.
+  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
+    typeof search.tab === 'string' ? { tab: search.tab } : {},
 });
 const newRecord = createRoute({
   getParentRoute: () => app,

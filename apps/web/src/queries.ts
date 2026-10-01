@@ -10,6 +10,7 @@ import {
   recordsKinds,
   recordsLinks,
   recordsList,
+  recordsOverview,
   recordsReadiness,
   reviewList,
 } from '@ailab/schema';
@@ -90,6 +91,13 @@ export const historyQuery = (id: string) =>
   queryOptions({
     queryKey: ['record', id, 'history'],
     queryFn: async () => (await api.run(recordsHistory, { id })).versions,
+  });
+
+/** What a record's page leads with (plan 004f N4): the identity line and key facts. */
+export const overviewQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['record', id, 'overview'],
+    queryFn: () => api.run(recordsOverview, { id }),
   });
 
 export const readinessQuery = (id: string) =>

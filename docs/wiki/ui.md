@@ -32,7 +32,7 @@ Instead: **one outline per top-level block**, and state said in words, lamps or 
 Added 2026-09-30 with [plan 004e](../plans/004e-review-v2-and-agent-context.md), after the human interaction review. The rule behind them is Wali's: keep all information available, but design what shows first.
 
 1. **What you confirm is what you read.** Each kind renders a section in its lab form (steps, plate, table, graph), never as a field dump, and any ID at any depth shows as a linked name.
-2. **Up front: blockers, guesses and what changed since you last looked.** Everything confirmed or derived folds to one line, and empty fields hide.
+2. **Up front: blockers, guesses and what changed since you last looked.** Derived content folds to one line and empty fields are named in one line; confirmed content stays open (rule 27).
 3. **Agent ink is rare.** Only values an agent guessed or was told show in agent ink; values from confirmed records, templates, memory or calculators say where they came from in normal ink.
 4. **One queue, one count.** Everything waiting for a person is a Review item with an addressee; only what blocks something is counted, and a truncated list always says its total.
 5. **One intent, one confirm.** What an agent does for one ask is confirmed or rejected as one; a group with no guesses and no failing checks can be confirmed together.
@@ -59,12 +59,20 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 23. **Evidence that names a source is checked against it.**
 24. **A person starts a common record from its registry page.** Products, lots, places, labware types and vendors have a "New …" form drawn from the kind's schema (required fields first, the rest folded); it saves a draft through the same `records.create` an agent calls. Other kinds are drafted by asking the assistant.
 
+Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md), after Wali asked for fewer, linked views (ADR 0063):
+
+25. **An area per kind of work, a tab per kind of thing.** Eight menu entries; a kind and its items are one view. A new capability's plan says whether it is a menu entry, a tab in an area, a tab on a record page, or a fact on the Overview.
+26. **Every record leads with what it is and where.** An identity line and a few key facts chosen per kind, then its picture, then the tabs Overview · the kind's tabs · History · Connections · All fields.
+27. **Confirmed content is open.** Nothing folds to bookkeeping; nothing filled reads "none" or "not chosen yet", never "empty · confirmed".
+28. **A source is said once.** Sources per section in All fields; a value nobody sourced is marked wherever it shows.
+29. **Three state vocabularies, never mixed:** the record's review state in the header, the physical thing's state in the identity line, a value's source beside values.
+
 ## Language
 
 - Plain lab language on screen. Record IDs, operation IDs and JSON sit under "technical details".
 - One verb for agreeing to agent work: **Confirm** ("Confirm change" for a proposal; "Confirm LWT-0032" on a draft, which confirms every part nothing blocks).
-- Record status in words: "draft · needs your review", "active", "active · change waiting".
-- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it.
+- Record status in words: "draft · needs your review", "confirmed", "confirmed · change waiting", "archived" (the stored status "active" reads "confirmed", 004f N8).
+- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it; on a confirmed record it reads "no source given" (004f N8).
 - An SOP value's type, in words: **protocol default** (fixed by the SOP, may be overridden for a run), **set per run**, **calculated** (from a formula), **from <material>** (read from the selected lot or record; a **nominal value** stands in until one is selected).
 
 ## Pages so far
@@ -72,7 +80,7 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 - **Nav:** Lab (Today, Activity, Review) and Library (one page per registry, each with its draft count), with All records at the foot.
 - **Library pages:** Labware (family filter; type, manufacturer, catalog number, maximum volume), Vendors, Documents and SOPs. More registries get a page as they land. An SOP's page reads as a procedure at the bench first (steps with run values, questions to settle, checks against the source), with the editable sections below.
 - **Review:** "Needs you" (changes agents proposed) first, each as rows of what would change with the agent's estimates marked and counted ("Confirming accepts 2 estimates of the agent's"), then drafts to confirm as dense rows with kind chips, Discard, and "Confirm all" or "Confirm the N ready ones" for the drafts that hold no guess and nothing blocks (ADR 0050). The nav counts only what needs you.
-- **Record review:** a readiness block with the agent's estimates by name (each opening where it is edited), failing checks with their source, fix and a "Fix in …" link, passing checks folded under "N checks pass", and one Confirm. Then one block per section with each value and where it came from, Edit, and "confirm only this part" for the rare partial confirm.
+- **Record pages (004f-1):** the name with its code as a tag, an identity line and key facts from `records.overview`, then the tabs Overview · History · Connections · All fields. The Overview holds the readiness block when something is left to do (the agent's unsourced values by name, failing checks with their fix and a "Fix in …" link that opens the part on All fields, one Confirm), the key facts, and the kind's own picture and blocks. All fields is one block, a heading per part, its sources said once ("Confirmed by you on 1 Oct. Volume from the datasheet per Claude (p. 2); color entered by Claude with no source given (marked ◦)"), its values, "Not filled: …", Edit and "confirm only this part". Connections lists "Based on" and "Used in"; History lists every version with Restore. A missing record says so and links to All records.
 - **Labware drawings:** a labware type drawn to scale from above with named wells, and one well cut through its centre filled to the maximum volume. Values the record doesn't give are drawn dashed and listed, so a draft has a picture without the picture claiming values nobody entered.
 
 ## Interaction

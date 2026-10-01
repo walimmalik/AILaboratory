@@ -1,7 +1,15 @@
-import type { Configuration, RecordEnvelope, RecordLink } from '@ailab/schema';
+import type {
+  Configuration,
+  OverviewFact,
+  OverviewPart,
+  Readiness,
+  RecordEnvelope,
+  RecordLink,
+  RecordVersion,
+} from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from '@tanstack/react-router';
-import { type ReactNode, useState } from 'react';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import {
   actorLabel,
   diffRecords,
@@ -14,16 +22,16 @@ import {
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
-  kindsQuery,
   linksQuery,
+  overviewQuery,
   pendingProposalsQuery,
   readinessQuery,
   recordQuery,
 } from '../queries.ts';
 import { useMe } from '../session.ts';
+import { AllFields } from './AllFields.tsx';
 import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
-import type { JsonSchema } from './FieldEditor.tsx';
 import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
@@ -32,8 +40,7 @@ import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LayoutBlocks, PlateMapBlocks } from './PlateMaps.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
 import { RecordActions, RestoreVersion } from './RecordActions.tsx';
-import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
-import { SectionEditor } from './SectionEditor.tsx';
+import { fieldLabel, ReadinessBlock } from './RecordReview.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
@@ -49,29 +56,84 @@ const operationWords: Record<string, string> = {
   restore: 'restored an earlier version',
 };
 
-/** One record: its fields, full history (who changed what and why) and where it is used. */
+/**
+ * One record (plan 004f N4): its name with the code as a tag, an identity line and its key facts,
+ * then tabs in a fixed order: Overview (what needs doing, the record's own picture and blocks),
+ * History, Connections and All fields.
+ */
 export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
+  const { tab = 'overview' } = useSearch({ from: '/app/records/$id' });
+  const navigate = useNavigate({ from: '/records/$id' });
   const record = useQuery(recordQuery(id));
+  const overview = useQuery(overviewQuery(id)).data;
   const history = useQuery(historyQuery(id));
   const readiness = useQuery(readinessQuery(id)).data;
+  const from = useQuery(linksQuery(id, 'from')).data ?? [];
+  const to = useQuery(linksQuery(id, 'to')).data ?? [];
   const pending = (useQuery(pendingProposalsQuery).data ?? []).filter((p) =>
     proposalTouches(p, id),
   );
-  const me = useMe();
-  const kinds = useQuery(kindsQuery).data;
-  const [editing, setEditing] = useState(false);
+  // The part open in an editor: on All fields, or the SOP editor on the Overview.
+  const [editing, setEditing] = useState<string>();
+  const [scrollTo, setScrollTo] = useState<string>();
+  useEffect(() => {
+    if (!scrollTo) return;
+    const part = document.getElementById(`section-${scrollTo}`);
+    part?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    part?.querySelector<HTMLElement>('input, select, textarea')?.focus({ preventScroll: true });
+    setScrollTo(undefined);
+  }, [scrollTo]);
 
-  if (record.error) {
-    return <p className="error-text">{record.error.message}</p>;
-  }
+  if (record.error) return <RecordMissing id={id} error={record.error} />;
   const r = record.data;
   if (!r) return <p className="empty">Loading…</p>;
   const versions = [...(history.data ?? [])].sort((a, b) => b.version - a.version);
+  const isSop = r.kind === 'sop' && (readiness?.sections.length ?? 0) > 0;
+  const open = (next: string) =>
+    navigate({ search: next === 'overview' ? {} : { tab: next }, replace: true });
+  // "Fix in …" and an estimate's name open the part where it is edited.
+  const fix = (section: string) => {
+    setEditing(section);
+    if (!isSop) {
+      void open('fields');
+      setScrollTo(section);
+    }
+  };
+  const failing = readiness?.checks.some((c) => !c.passed) ?? false;
+  const toReview = readiness
+    ? readiness.sections.length > 0
+      ? readiness.sections.filter((s) => s.state === 'needs_review').length
+      : r.status === 'draft'
+        ? 1
+        : 0
+    : 0;
+  const showReadiness = readiness && !isSop && (r.status === 'draft' || toReview > 0 || failing);
+  const render = (value: unknown, field?: string) => {
+    const view = field ? fieldViews[`${r.kind}/${field}`] : undefined;
+    return view ? view(value, r) : renderValue(value, field);
+  };
+  const tabs: { id: string; label: string; count?: string; warn?: boolean }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'history', label: 'History', count: String(versions.length) },
+    { id: 'connections', label: 'Connections', count: String(from.length + to.length) },
+    {
+      id: 'fields',
+      label: 'All fields',
+      ...(toReview > 0
+        ? {
+            // A kind without parts is reviewed as a whole: no count to give.
+            count: readiness?.sections.length ? `${toReview} to review` : 'to review',
+            warn: true,
+          }
+        : {}),
+    },
+  ];
+  const current = tabs.some((t) => t.id === tab) ? tab : 'overview';
 
   return (
-    <>
-      <div className="page-head">
+    <div className="record-page">
+      <div className="page-head record-head">
         <div>
           <div className="crumbs">
             lab /{' '}
@@ -85,190 +147,272 @@ export function RecordPage() {
             / <b>{r.name}</b>
           </div>
           <h1>
-            <span className="mono">{r.name}</span> {r.label}
+            {r.label} <span className="code">{r.name}</span>
           </h1>
-          <p className="lede">
-            {kindNoun(r.kind)} · version {r.version} · changed {formatWhen(r.updatedAt)} by{' '}
-            <span className={isAgent(r.updatedBy) ? 'agent-ink' : undefined}>
-              {actorLabel(r.updatedBy, me)}
-            </span>
-          </p>
+          <Identity parts={overview?.identity} fallback={kindNoun(r.kind)} />
+        </div>
+        <div className="head-side">
+          <StatusChip record={r} />
           <RecordActions record={r} />
         </div>
-        <StatusChip record={r} />
       </div>
 
-      {pending.length > 0 && (
-        <p className="agent-ink">
-          {pending.length === 1
-            ? 'An agent has proposed a change'
-            : `Agents have proposed ${pending.length} changes`}{' '}
-          to this record. <Link to="/review">Review it</Link>
-        </p>
-      )}
+      <nav className="tabs" aria-label="Parts of this record">
+        {tabs.map((t) => (
+          <Link
+            key={t.id}
+            to="/records/$id"
+            params={{ id }}
+            search={t.id === 'overview' ? {} : { tab: t.id }}
+            replace
+            className={t.id === current ? 'tab on' : 'tab'}
+            aria-current={t.id === current ? 'page' : undefined}
+          >
+            {t.label}
+            {t.count && <span className={t.warn ? 'count warn-ink' : 'count'}>{t.count}</span>}
+          </Link>
+        ))}
+      </nav>
 
-      <SinceYouLooked key={r.id} record={r} />
-
-      {(r.kind === 'lot' || r.kind === 'sample' || r.kind === 'product') && (
-        <WhereIsBlock record={r} />
-      )}
-
-      {readiness && r.kind === 'sop' && readiness.sections.length > 0 ? (
-        <SopPage record={r} readiness={readiness} renderValue={renderValue} />
-      ) : readiness && readiness.sections.length > 0 ? (
-        <ReviewBlocks
-          record={r}
-          readiness={readiness}
-          renderValue={(value, field) => {
-            const view = field ? fieldViews[`${r.kind}/${field}`] : undefined;
-            return view ? view(value, r) : renderValue(value, field);
-          }}
-          aside={
-            r.kind === 'labware_type' ? (
-              <>
-                <LabwareDrawing attributes={r.attributes} />
-                <OpentronsBlock record={r} />
-              </>
-            ) : r.kind === 'instrument' ? (
-              <InstrumentBlocks record={r} />
-            ) : r.kind === 'workcell' ? (
-              <WorkcellBlocks record={r} />
-            ) : r.kind === 'product' ? (
-              <ProductBlocks record={r} />
-            ) : r.kind === 'liquid_class' ? (
-              <LiquidClassBlocks record={r} />
-            ) : r.kind === 'campaign' ? (
-              <CampaignBlocks record={r} />
-            ) : r.kind === 'experiment' ? (
-              <ExperimentBlocks record={r} />
-            ) : r.kind === 'layout' ? (
-              <LayoutBlocks record={r} />
-            ) : r.kind === 'plate_map' ? (
-              <PlateMapBlocks record={r} />
-            ) : undefined
-          }
-        />
-      ) : (
+      {current === 'overview' && (
         <>
-          {readiness && r.status === 'draft' && (
-            // Kinds without sections are confirmed as a whole, here (the Review page sends people here).
+          {pending.length > 0 && (
+            <p className="agent-ink">
+              {pending.length === 1
+                ? 'An agent has proposed a change'
+                : `Agents have proposed ${pending.length} changes`}{' '}
+              to this record. <Link to="/review">Review it</Link>
+            </p>
+          )}
+          <SinceYouLooked key={r.id} record={r} />
+          {showReadiness && (
             <ReadinessBlock
               record={r}
               readiness={readiness}
-              titles={{ fields: 'the fields' }}
-              onFix={() => setEditing(true)}
-              editing={editing ? 'fields' : undefined}
+              titles={
+                readiness.sections.length > 0
+                  ? Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]))
+                  : { fields: 'the fields' }
+              }
+              onFix={fix}
+              editing={editing}
             />
           )}
-          <section className="block">
-            <header>
-              <h2>Fields</h2>
-            </header>
-            <div className="body">
-              {editing ? (
-                <SectionEditor
-                  record={r}
-                  fields={Object.keys(
-                    (kinds?.find((k) => k.kind === r.kind)?.attributes as JsonSchema | undefined)
-                      ?.properties ?? r.attributes,
-                  )}
-                  onDone={() => setEditing(false)}
-                />
-              ) : Object.keys(r.attributes).length === 0 ? (
-                <p className="empty">No fields.</p>
-              ) : (
-                <dl className="kv">
-                  {Object.entries(r.attributes).map(([key, value]) =>
-                    r.kind === 'lot' && key === 'values' ? (
-                      <LotValues key={key} record={r} />
-                    ) : (
-                      <Field key={key} name={key} value={value} />
-                    ),
-                  )}
-                </dl>
-              )}
-              {!editing && r.status !== 'archived' && (
-                <div className="actions">
-                  <button type="button" className="btn" onClick={() => setEditing(true)}>
-                    Edit fields
-                  </button>
-                </div>
-              )}
-              <details className="tech">
-                <summary>technical details</summary>
-                <pre className="json">{JSON.stringify(r, null, 2)}</pre>
-              </details>
-            </div>
-          </section>
+          {overview && overview.facts.length > 0 && (
+            <KeyFacts facts={overview.facts} marked={unsourcedFields(r, readiness)} />
+          )}
+          {isSop && readiness ? (
+            <SopPage record={r} readiness={readiness} editing={editing} onEdit={setEditing} />
+          ) : (
+            <KindBlocks record={r} />
+          )}
+          {r.kind !== 'document' && <MentionedIn record={r} />}
         </>
       )}
 
+      {current === 'history' && <History record={r} versions={versions} />}
+
+      {current === 'connections' && <Connections from={from} to={to} />}
+
+      {current === 'fields' && readiness && (
+        <AllFields
+          record={r}
+          readiness={readiness}
+          renderValue={render}
+          editing={isSop ? undefined : editing}
+          onEdit={(part) => {
+            if (isSop && part) {
+              setEditing(part);
+              void open('overview');
+            } else setEditing(part);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The record's own picture and the blocks its kind adds, shown on the Overview. */
+function KindBlocks({ record: r }: { record: RecordEnvelope }) {
+  return (
+    <>
+      {r.kind === 'labware_type' && (
+        <>
+          <LabwareDrawing attributes={r.attributes} />
+          <OpentronsBlock record={r} />
+        </>
+      )}
+      {(r.kind === 'lot' || r.kind === 'sample' || r.kind === 'product') && (
+        <WhereIsBlock record={r} />
+      )}
+      {r.kind === 'instrument' && <InstrumentBlocks record={r} />}
+      {r.kind === 'workcell' && <WorkcellBlocks record={r} />}
+      {r.kind === 'product' && <ProductBlocks record={r} />}
+      {r.kind === 'liquid_class' && <LiquidClassBlocks record={r} />}
+      {r.kind === 'campaign' && <CampaignBlocks record={r} />}
+      {r.kind === 'experiment' && <ExperimentBlocks record={r} />}
+      {r.kind === 'layout' && <LayoutBlocks record={r} />}
+      {r.kind === 'plate_map' && <PlateMapBlocks record={r} />}
       {r.kind === 'run' && <RunBlocks record={r} />}
       {r.kind === 'set' && <SetBlocks record={r} />}
       {r.kind === 'container' && <ContainerBlocks record={r} />}
       {r.kind === 'entity' && <EntityBlocks record={r} />}
       {r.kind === 'document' && <DocumentBlocks record={r} />}
-      {r.kind !== 'document' && <MentionedIn record={r} />}
-
-      <section className="block">
-        <header>
-          <h2>History</h2>
-          <span className="state muted num">{versions.length} versions</span>
-        </header>
-        <div className="body">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Version</th>
-                  <th>When</th>
-                  <th>Who</th>
-                  <th>What changed</th>
-                  <th>
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {versions.map((v) => {
-                  const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
-                  const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
-                  return (
-                    <tr key={v.version}>
-                      <td className="q">v{v.version}</td>
-                      <td className="when">{formatWhen(v.at)}</td>
-                      <td className={isAgent(v.actor) ? 'agent-ink' : undefined}>
-                        {actorLabel(v.actor, me)}
-                      </td>
-                      <td>
-                        {v.via && !v.via.startsWith('records.')
-                          ? operationVerb(v.via)
-                          : (operationWords[v.operation] ?? v.operation)}
-                        {v.operation === 'confirm_section' && (
-                          <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
-                        )}
-                        {v.operation === 'confirm_section' &&
-                          previous?.status === 'draft' &&
-                          v.snapshot.status === 'active' && <span> and activated</span>}
-                        {v.operation !== 'create' && changed.length > 0 && (
-                          <span className="muted"> ({changed.join(', ')})</span>
-                        )}
-                        {v.reason && <span className="muted"> · “{v.reason}”</span>}
-                      </td>
-                      <td>
-                        <RestoreVersion record={r} version={v.version} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <Links id={id} />
     </>
+  );
+}
+
+/** "Tube, 1.5 mL · in Freezer -20 1 · in use", each linked part opening its record. */
+function Identity({ parts, fallback }: { parts: OverviewPart[] | undefined; fallback: string }) {
+  const shown = parts ?? [{ text: fallback[0]?.toUpperCase() + fallback.slice(1) }];
+  return (
+    <p className="identity">
+      {shown.map((p, i) => (
+        <Fragment key={`${p.text}-${p.record ?? ''}`}>
+          {i > 0 && ' · '}
+          {p.record ? (
+            <Link to="/records/$id" params={{ id: p.record }} className="ref">
+              {p.text}
+            </Link>
+          ) : (
+            p.text
+          )}
+        </Fragment>
+      ))}
+    </p>
+  );
+}
+
+/** The few facts a person needs first, chosen per kind by the API (N4); unsourced ones marked (N7). */
+function KeyFacts({ facts, marked }: { facts: OverviewFact[]; marked: Set<string> }) {
+  return (
+    <section className="block" aria-label="Key facts">
+      <div className="body">
+        <dl className="facts">
+          {facts.map((f) => (
+            <div key={`${f.label}-${f.value}`} className="fact">
+              <dt>{f.label}</dt>
+              <dd
+                className={
+                  f.tone === 'crit' ? 'crit-ink' : f.tone === 'warn' ? 'warn-ink' : undefined
+                }
+              >
+                {f.record ? (
+                  <Link to="/records/$id" params={{ id: f.record }} className="ref">
+                    {f.value}
+                  </Link>
+                ) : (
+                  f.value
+                )}
+                {f.field && marked.has(f.field) && (
+                  <span className="unsourced" title="entered by an agent, no source given">
+                    ◦
+                  </span>
+                )}
+                {f.detail && <small>{f.detail}</small>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
+/** Top-level fields holding a value an agent gave with no source, confirmed or not. */
+function unsourcedFields(record: RecordEnvelope, readiness: Readiness | undefined): Set<string> {
+  const fields = new Set<string>();
+  for (const path of readiness?.assumed ?? []) {
+    fields.add(path.startsWith('/') ? (path.split('/')[1] ?? path) : path);
+  }
+  for (const [field, e] of Object.entries(record.evidence)) {
+    if (!field.startsWith('/') && e.source === 'assumed' && e.by.type === 'agent')
+      fields.add(field);
+  }
+  return fields;
+}
+
+/** A record that isn't there: a mistyped code, another lab's record, or one that was discarded. */
+function RecordMissing({ id, error }: { id: string; error: Error }) {
+  const missing = (error as { code?: string }).code === 'not_found';
+  return (
+    <div className="record-page">
+      <div className="page-head">
+        <div>
+          <div className="crumbs">
+            lab / <Link to="/records">records</Link>
+          </div>
+          <h1>{missing ? 'No such record' : 'This record can’t be shown'}</h1>
+          <p className="lede">
+            {missing
+              ? `Nothing in this lab has the code ${id}. It may have been a draft that was discarded, or a record of another lab.`
+              : error.message}
+          </p>
+        </div>
+      </div>
+      <p>
+        <Link to="/records">Find it in all records</Link>
+      </p>
+    </div>
+  );
+}
+
+/** Every version: who changed what, when and why, with Restore. */
+function History({ record: r, versions }: { record: RecordEnvelope; versions: RecordVersion[] }) {
+  const me = useMe();
+  return (
+    <section className="block" aria-label="History">
+      <div className="body">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>When</th>
+                <th>Who</th>
+                <th>What changed</th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((v) => {
+                const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
+                const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
+                return (
+                  <tr key={v.version}>
+                    <td className="q">v{v.version}</td>
+                    <td className="when">{formatWhen(v.at)}</td>
+                    <td className={isAgent(v.actor) ? 'agent-ink' : undefined}>
+                      {actorLabel(v.actor, me)}
+                    </td>
+                    <td>
+                      {v.via && !v.via.startsWith('records.')
+                        ? operationVerb(v.via)
+                        : (operationWords[v.operation] ?? v.operation)}
+                      {v.operation === 'confirm_section' && (
+                        <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
+                      )}
+                      {v.operation === 'confirm_section' &&
+                        previous?.status === 'draft' &&
+                        v.snapshot.status === 'active' && <span> and activated</span>}
+                      {v.operation !== 'create' && changed.length > 0 && (
+                        <span className="muted"> ({changed.join(', ')})</span>
+                      )}
+                      {v.reason && <span className="muted"> · “{v.reason}”</span>}
+                    </td>
+                    <td>
+                      <RestoreVersion record={r} version={v.version} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -280,6 +424,7 @@ const fieldViews: Record<string, (value: unknown, record: RecordEnvelope) => Rea
   'instrument/configuration': (value) => (
     <InstalledEquipment configuration={value as Configuration | undefined} />
   ),
+  'lot/values': (_, record) => <LotValues record={record} />,
 };
 
 /** The sections a confirmation added or refreshed, by their ID. */
@@ -292,20 +437,6 @@ function confirmedSections(
     .map(([id]) => fieldLabel(id));
 }
 
-function Field({ name, value }: { name: string; value: unknown }) {
-  return (
-    <>
-      <dt>{fieldLabel(name)}</dt>
-      {/* A choice like in_use reads as words; names and IDs are left as they are. */}
-      <dd className="mono">
-        {typeof value === 'string' && /^[a-z]+(_[a-z]+)+$/.test(value) && name !== 'name'
-          ? value.replaceAll('_', ' ')
-          : renderValue(value)}
-      </dd>
-    </>
-  );
-}
-
 /**
  * A lot's certificate values by the names its product gives them ("Working concentration 0.5 mg/mL"),
  * not by their keys (QA 2026-10-01 Q6).
@@ -316,46 +447,43 @@ function LotValues({ record }: { record: RecordEnvelope }) {
   const fields = (product?.attributes.lotFields ?? []) as { key: string; label: string }[];
   return (
     <>
-      <dt>certificate values</dt>
-      <dd>
-        {(a.values ?? []).map((v) => (
-          <div key={v.field}>
-            {fields.find((f) => f.key === v.field)?.label ?? fieldLabel(v.field)}{' '}
-            <span className="num">{formatValue(v.value)}</span>
-          </div>
-        ))}
-      </dd>
+      {(a.values ?? []).map((v) => (
+        <div key={v.field}>
+          {fields.find((f) => f.key === v.field)?.label ?? fieldLabel(v.field)}{' '}
+          <span className="num">{formatValue(v.value)}</span>
+        </div>
+      ))}
     </>
   );
 }
 
-function Links({ id }: { id: string }) {
-  const from = useQuery(linksQuery(id, 'from')).data ?? [];
-  const to = useQuery(linksQuery(id, 'to')).data ?? [];
-  if (from.length === 0 && to.length === 0) return null;
-  const row = (link: RecordLink, other: string, direction: string) => (
-    <tr key={`${direction}-${link.fromId}-${link.toId}-${link.relation}`}>
-      <td className="muted">{direction}</td>
-      <td className="mono">{link.relation.replaceAll('_', ' ')}</td>
-      <td>
-        <LinkedName id={other} />
-      </td>
-    </tr>
+/**
+ * What the record is based on and what uses it, in two columns (N6). Relation words and dates come
+ * in 004f-2; until then each link names its relation.
+ */
+function Connections({ from, to }: { from: RecordLink[]; to: RecordLink[] }) {
+  const column = (title: string, links: RecordLink[], other: (l: RecordLink) => string) => (
+    <div>
+      <h3 className="column-title">{title}</h3>
+      {links.length === 0 ? (
+        <p className="empty">Nothing.</p>
+      ) : (
+        <ul className="plain connections">
+          {links.map((l) => (
+            <li key={`${l.fromId}-${l.toId}-${l.relation}`}>
+              <span className="muted">{l.relation.replaceAll('_', ' ')}</span>{' '}
+              <LinkedName id={other(l)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
   return (
-    <section className="block">
-      <header>
-        <h2>Links</h2>
-      </header>
-      <div className="body">
-        <div className="table-wrap">
-          <table>
-            <tbody>
-              {from.map((l) => row(l, l.toId, 'points to'))}
-              {to.map((l) => row(l, l.fromId, 'used by'))}
-            </tbody>
-          </table>
-        </div>
+    <section className="block" aria-label="Connections">
+      <div className="body connection-columns">
+        {column('Based on', from, (l) => l.toId)}
+        {column('Used in', to, (l) => l.fromId)}
       </div>
     </section>
   );

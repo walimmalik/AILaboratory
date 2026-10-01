@@ -18,6 +18,7 @@ import { skillOperations } from '../skills/skills.ts';
 import { ActivityBus } from './activity.ts';
 import { assistantOperations } from './assistant-operations.ts';
 import { changeSetOperations } from './change-set.ts';
+import { overviewOperations } from './overview.ts';
 import { proposalOperations } from './proposal-operations.ts';
 import { recordOperations } from './record-operations.ts';
 import { OperationRegistry } from './registry.ts';
@@ -68,6 +69,7 @@ export function createRegistry(
   return new OperationRegistry({ db, kinds, bus, assistant, files, converter, protocols })
     .register(
       ...recordOperations,
+      ...overviewOperations,
       ...proposalOperations,
       ...changeSetOperations,
       ...reviewOperations,

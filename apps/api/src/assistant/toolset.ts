@@ -17,6 +17,7 @@ import type { ModelTool } from './model.ts';
  */
 const CORE = new Set([
   'records.get',
+  'records.overview',
   'records.list',
   'records.readiness',
   'records.history',
