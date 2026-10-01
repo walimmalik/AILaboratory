@@ -278,27 +278,34 @@ export function sourceVolumes(
 
 /**
  * How a method handles tips (T5). `none`: acoustic or non-contact (Echo, Mantis). `new_each`: a new
- * tip for every transfer. `per_source`: one tip per source, reused. `lab_default`: a new tip for
- * every transfer into a well that already holds liquid, one tip per source otherwise.
+ * tip for every transfer. `per_source`: one tip per run of transfers from the same source.
+ * `lab_default`: as `per_source`, but a tip that has touched liquid in a destination well is
+ * dropped, so every transfer into a well that already holds liquid gets a new one.
  */
 export type TipRule = 'none' | 'new_each' | 'per_source' | 'lab_default';
+
+/**
+ * Whether each transfer, in order, starts with a new tip under a rule. One pipette channel carries
+ * one tip, so a tip is reused only by the next transfer, never after another source.
+ */
+export function tipChanges(
+  transfers: readonly { source: string; intoLiquid?: boolean }[],
+  rule: TipRule,
+): boolean[] {
+  return transfers.map((t, i) => {
+    if (rule === 'none') return false;
+    const before = transfers[i - 1];
+    if (rule === 'new_each' || !before || before.source !== t.source) return true;
+    if (rule === 'per_source') return false;
+    return !!t.intoLiquid || !!before.intoLiquid;
+  });
+}
 
 export function countTips(
   transfers: readonly { source: string; intoLiquid?: boolean }[],
   rule: TipRule,
 ): number {
-  switch (rule) {
-    case 'none':
-      return 0;
-    case 'new_each':
-      return transfers.length;
-    case 'per_source':
-      return new Set(transfers.map((t) => t.source)).size;
-    case 'lab_default': {
-      const dry = new Set(transfers.filter((t) => !t.intoLiquid).map((t) => t.source)).size;
-      return dry + transfers.filter((t) => t.intoLiquid).length;
-    }
-  }
+  return tipChanges(transfers, rule).filter(Boolean).length;
 }
 
 export interface DeviceOption {
@@ -557,4 +564,89 @@ function subsets<T>(items: readonly T[]): T[][] {
   const out: T[][] = [[]];
   for (const item of items) for (const s of [...out]) out.push([...s, item]);
   return out.sort((a, b) => a.length - b.length);
+}
+
+// Deck layouts (016b-4, T6): where a group's plates and tip racks go on an instrument.
+
+/** Opentrons Flex working slots in the order plates and tip racks are placed: front row first. */
+export const FLEX_SLOTS = [
+  'D1',
+  'D2',
+  'D3',
+  'C1',
+  'C2',
+  'C3',
+  'B1',
+  'B2',
+  'B3',
+  'A1',
+  'A2',
+  'A3',
+] as const;
+
+/** Tips in one Flex rack. */
+export const TIPS_PER_RACK = 96;
+
+export const racksFor = (tips: number) => Math.ceil(tips / TIPS_PER_RACK);
+
+export interface DeckPlacement {
+  slot: string;
+  plate?: string;
+  tipRack?: unknown;
+}
+
+/**
+ * A layout: the plates in the order given, then the tip racks, on the free slots in placement
+ * order. Refused when there are too few slots.
+ */
+export function draftDeck(
+  free: readonly string[],
+  plates: readonly string[],
+  racks: number,
+  order: readonly string[] = FLEX_SLOTS,
+): { slot: string; plate?: string; rack?: true }[] {
+  const slots = order.filter((s) => free.includes(s));
+  if (plates.length + racks > slots.length)
+    throw new TransferError(
+      `It needs ${plates.length} plates and ${racks} tip racks on the deck, but only ${slots.length} slots are free (${slots.join(', ') || 'none'}); split the group`,
+    );
+  return [
+    ...plates.map((plate, i) => ({ slot: slots[i] as string, plate })),
+    ...Array.from({ length: racks }, (_, i) => ({
+      slot: slots[plates.length + i] as string,
+      rack: true as const,
+    })),
+  ];
+}
+
+/**
+ * What is wrong with a layout for a group: a slot that isn't free or holds two things, a plate
+ * the group uses that isn't on the deck or one it doesn't use, a plate placed twice, too few
+ * tip racks for the tips the group takes.
+ */
+export function deckProblems(
+  sites: readonly DeckPlacement[],
+  free: readonly string[],
+  used: readonly string[],
+  tips: number,
+): string[] {
+  const problems: string[] = [];
+  const slots = sites.map((s) => s.slot);
+  for (const slot of new Set(slots.filter((s, i) => slots.indexOf(s) !== i)))
+    problems.push(`${slot} holds more than one thing`);
+  for (const slot of new Set(slots.filter((s) => !free.includes(s))))
+    problems.push(`${slot} is not a free slot on the instrument`);
+  const placed = sites.flatMap((s) => (s.plate ? [s.plate] : []));
+  for (const plate of new Set(placed.filter((p, i) => placed.indexOf(p) !== i)))
+    problems.push(`${plate} is placed twice`);
+  for (const plate of used.filter((p) => !placed.includes(p)))
+    problems.push(`${plate} is used but not on the deck`);
+  for (const plate of new Set(placed.filter((p) => !used.includes(p))))
+    problems.push(`${plate} is on the deck but the group doesn't use it`);
+  const racks = sites.filter((s) => s.tipRack !== undefined).length;
+  if (racks < racksFor(tips))
+    problems.push(
+      `It takes ${tips} tips, ${racksFor(tips)} racks, but the deck has ${racks} tip rack${racks === 1 ? '' : 's'}`,
+    );
+  return problems;
 }

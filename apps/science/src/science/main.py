@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from science.convert import Converted, UnsupportedMediaType, convert
+from science.opentrons import ProtocolRequest, ProtocolResult, check, render
 
 app = FastAPI(title="AILaboratory science service")
 
@@ -43,3 +44,11 @@ def convert_file(request: ConvertRequest) -> Converted:
         return convert(request.media_type, request.name, data)
     except UnsupportedMediaType as error:
         raise HTTPException(status_code=415, detail=str(error)) from error
+
+
+@app.post("/opentrons/protocol", response_model_by_alias=True)
+def opentrons_protocol(request: ProtocolRequest) -> ProtocolResult:
+    """An Opentrons Flex protocol for one group of a transfer plan, checked in the simulator
+    (plan 016b-3). The request is data only; the protocol is written from a fixed program."""
+    protocol = render(request)
+    return ProtocolResult(protocol=protocol, check=check(protocol))

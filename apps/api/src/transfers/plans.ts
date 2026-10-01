@@ -17,6 +17,7 @@ import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { deviceOf, deviceOut, run } from './calculators.ts';
+import { deckChanged, draftDecks, flexSetup } from './decks.ts';
 import { drawsOf, reservations, totalOf } from './reservations.ts';
 import { limitsOf, moveProblem, planRules, type Rule, tipsOf } from './rules.ts';
 
@@ -66,10 +67,12 @@ export const transferPlanOperations = [
     run: async (ctx, { label, evidence, reason, groups, ...rest }, deps) => {
       const withDevices: TransferGroup[] = [];
       for (const g of groups) withDevices.push(await withDevice(deps, ctx, g));
+      const attributes: TransferPlanAttributes = { ...rest, groups: withDevices };
+      const decks = await draftDecks(deps, ctx, attributes);
       return service(deps).create(ctx, {
         kind: 'transfer_plan',
         label,
-        attributes: { ...rest, groups: withDevices } satisfies TransferPlanAttributes,
+        attributes: { ...attributes, ...(decks.length ? { decks } : {}) },
         ...(evidence ? { evidence } : {}),
         reason: reason ?? `Drafted the transfer plan ${label}`,
       });
@@ -98,9 +101,11 @@ export const transferPlanOperations = [
         ...(input.tips ? { tips: input.tips } : {}),
       });
       const groups = a.groups.map((g, i) => (i === at ? group : g));
+      const { decks: _decks, ...rest } = a;
+      const decks = await draftDecks(deps, ctx, { ...a, groups }, [group.id]);
       return service(deps).update(ctx, record.id, {
         expectedVersion: input.expectedVersion,
-        attributes: { ...a, groups },
+        attributes: { ...rest, groups, ...(decks.length ? { decks } : {}) },
         reason: `${keep.label}: ${group.device ? `now on ${group.device.label}` : 'now by hand'}. ${input.why}`,
       });
     },
@@ -179,6 +184,25 @@ export const transferPlanOperations = [
           if (misfit) changed.push(`${g.label}: ${misfit} transfers no longer fit`);
         }
       }
+      // Each deck layout against its Flex now.
+      const decksNow: string[] = [];
+      for (const deck of a.decks ?? []) {
+        const g = a.groups.find((x) => x.id === deck.group);
+        if (!g) continue;
+        const now = await flexSetup(deps, ctx, g).catch((e: unknown) =>
+          e instanceof OperationError ? e.message : Promise.reject(e),
+        );
+        if (typeof now === 'string') decksNow.push(`${g.label}: ${now}`);
+        else if (now) decksNow.push(...deckChanged(deck, now).map((p) => `${g.label}: ${p}`));
+      }
+      live.push({
+        id: 'decks_now',
+        label: 'The deck layouts fit the instruments as installed now',
+        severity: 'warning',
+        section: 'decks',
+        problems: decksNow,
+        fix: 'Lay the deck out again with transfers.set_deck, or change the instrument back',
+      });
       live.push({
         id: 'instruments_now',
         label: 'The instruments are ready as planned',

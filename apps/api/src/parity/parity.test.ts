@@ -38,6 +38,7 @@ const noScreen: Record<string, string> = {
   'transfers.import_report': transferScreens,
   'transfers.pick_sources': transferScreens,
   'transfers.set_instrument': transferScreens,
+  'transfers.set_deck': transferScreens,
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
   'experiments.adopt_versions': notYet(
     'the experiment page shows the SOP versions it follows, not newer ones',
