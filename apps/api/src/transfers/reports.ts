@@ -1,19 +1,25 @@
 import { compare, convert, formatQuantity, subtract } from '@ailab/domain';
 import {
+  type LiquidVolume,
   type PlannedTransfer,
   type Quantity,
   type RecordEnvelope,
+  type TransferException,
   type TransferPlanAttributes,
+  type TransferRunAttributes,
   transfersImportReport,
   type WellState,
 } from '@ailab/schema';
+import { and, eq, sql } from 'drizzle-orm';
 import type { z } from 'zod';
+import { records as recordsTable } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { run } from './calculators.ts';
 import { EchoReportError, type EchoReportPlate, readEchoReport } from './echo.ts';
 import { instrumentKindOf } from './export.ts';
+import { rerunOf, rerunPlan } from './reruns.ts';
 
 /**
  * Instrument reports read back against confirmed transfer plans (plan 016b-2, T4). Echo transfer
@@ -160,13 +166,40 @@ export const reportOperations = [
         return out({ report: 'echo_survey', recorded: 0 });
       }
 
+      // A report is read once (ADR 0060): its execution is on record.
+      const [already] = await deps.db
+        .select({ name: recordsTable.name })
+        .from(recordsTable)
+        .where(
+          and(
+            eq(recordsTable.labId, ctx.labId),
+            eq(recordsTable.kind, 'transfer_run'),
+            sql`${recordsTable.attributes}->>'report' = ${file.id}`,
+          ),
+        );
+      if (already)
+        throw new OperationError(
+          'invalid_state',
+          `${file.name} was already read as ${already.name}; a report is read once`,
+        );
+
       // Planned Echo transfers, matched to report rows in order.
-      const planned: { group: string; t: PlannedTransfer; seen: boolean }[] = [];
+      const planned: {
+        group: string;
+        index: number;
+        t: PlannedTransfer;
+        seen: boolean;
+        outcome?: TransferException['outcome'] | 'done';
+        actual?: LiquidVolume;
+        status?: string;
+      }[] = [];
       for (const g of a.groups) {
         if (!g.instrument) continue;
         const { kind } = await instrumentKindOf(deps, ctx, g.instrument.instrument);
         if (kind.category !== 'acoustic_dispenser') continue;
-        for (const t of g.transfers) planned.push({ group: g.id, t, seen: false });
+        g.transfers.forEach((t, index) => {
+          planned.push({ group: g.id, index, t, seen: false });
+        });
       }
       if (!planned.length)
         throw new OperationError('invalid_input', `${plan.name} has no Echo transfers`);
@@ -208,8 +241,12 @@ export const reportOperations = [
           continue;
         }
         match.seen = true;
+        match.actual = actual as LiquidVolume;
+        if (row.status) match.status = row.status;
         if (Number(row.actual) > 0) moved.push({ from: source, to: destination, volume: actual });
         const target = compare(requested, match.t.volume) === 0 ? requested : match.t.volume;
+        match.outcome =
+          Number(row.actual) === 0 ? 'failed' : compare(actual, target) < 0 ? 'short' : 'done';
         if (Number(row.actual) === 0) {
           counts.failed++;
           problems.push({
@@ -233,6 +270,7 @@ export const reportOperations = [
         } else counts.done++;
       }
       for (const p of planned.filter((p) => !p.seen)) {
+        p.outcome = 'not_run';
         counts.notInReport++;
         problems.push({
           kind: 'not_in_report',
@@ -252,25 +290,110 @@ export const reportOperations = [
         );
         return out({ report: 'echo_transfer', recorded: 0 });
       }
-      if (!moved.length) return out({ report: 'echo_transfer', recorded: 0 });
       const ref = (w: { plate: string; well: string }) => ({
         container: (containerOf.get(w.plate) as RecordEnvelope).id,
         well: w.well,
       });
-      const changed = await run<{ event: { id: string }; warnings: string[] }>(
-        deps,
-        ctx,
-        'inventory.transfer',
-        {
-          transfers: moved.map((m) => ({ from: ref(m.from), to: ref(m.to), volume: m.volume })),
-          runLog: file.id,
-          reason:
-            input.reason ??
-            `From the Echo transfer report ${file.name} (${file.label}) for ${plan.name}`,
+      let event: string | undefined;
+      if (moved.length) {
+        const changed = await run<{ event: { id: string }; warnings: string[] }>(
+          deps,
+          ctx,
+          'inventory.transfer',
+          {
+            transfers: moved.map((m) => ({ from: ref(m.from), to: ref(m.to), volume: m.volume })),
+            runLog: file.id,
+            reason:
+              input.reason ??
+              `From the Echo transfer report ${file.name} (${file.label}) for ${plan.name}`,
+          },
+        );
+        notes.push(...changed.warnings);
+        event = changed.event.id;
+      }
+
+      // The execution (ADR 0060): which transfers didn't go as planned, and what a rerun redoes.
+      const groupOf = new Map(a.groups.map((g) => [g.id, g]));
+      const exceptions = planned.flatMap((p): TransferException[] => {
+        if (p.outcome === 'done' || !p.outcome) return [];
+        const g = groupOf.get(p.group) as (typeof a.groups)[number];
+        const redo = rerunOf(p.outcome, p.t, g, p.actual);
+        const note = [p.status, redo.note].filter(Boolean).join('; ');
+        return [
+          {
+            group: p.group,
+            index: p.index,
+            from: p.t.from,
+            to: p.t.to,
+            outcome: p.outcome,
+            planned: p.t.volume,
+            ...(p.actual ? { actual: p.actual } : {}),
+            ...(redo.rerun ? { rerun: redo.rerun } : {}),
+            ...(note ? { note } : {}),
+          },
+        ];
+      });
+      const containers = [...containerOf].map(([plate, c]) => ({ plate, container: c.id }));
+      const attributes: TransferRunAttributes = {
+        plan: { id: plan.id, version: plan.version },
+        report: file.id,
+        at: new Date().toISOString(),
+        status: exceptions.length ? 'with_exceptions' : 'complete',
+        containers,
+        counts: {
+          planned: planned.length,
+          done: counts.done,
+          short: counts.short,
+          failed: counts.failed,
+          notRun: counts.notInReport,
+          unplanned: counts.notInPlan,
         },
+        exceptions,
+        unplanned: problems.flatMap((x) =>
+          x.kind === 'not_in_plan' && x.source && x.destination && x.actual
+            ? [{ from: x.source, to: x.destination, actual: x.actual as LiquidVolume }]
+            : [],
+        ),
+      };
+      let execution = await records.create(ctx, {
+        kind: 'transfer_run',
+        label: `${plan.label}, ${attributes.at.slice(0, 10)}`,
+        status: 'active',
+        attributes,
+        reason: input.reason ?? `Read from the Echo transfer report ${file.name}`,
+      });
+      const redo = rerunPlan(
+        a,
+        exceptions,
+        new Map(containers.map((c) => [c.plate, c.container])),
+        { plan: { id: plan.id, version: plan.version }, run: execution.id },
+        execution.name,
       );
-      notes.push(...changed.warnings);
-      return out({ report: 'echo_transfer', recorded: moved.length, event: changed.event.id });
+      let rerun: RecordEnvelope | undefined;
+      if (redo) {
+        rerun = await records.create(ctx, {
+          kind: 'transfer_plan',
+          label: `Rerun of ${plan.label}`,
+          attributes: redo,
+          reason: `Redoes what ${execution.name} did not complete`,
+        });
+        execution = await records.update(ctx, execution.id, {
+          expectedVersion: execution.version,
+          attributes: { ...attributes, rerun: rerun.id },
+          reason: `${rerun.name} redoes what it did not complete`,
+        });
+        const n = redo.groups.reduce((sum, g) => sum + g.transfers.length, 0);
+        notes.push(`${rerun.name} redoes ${n} transfers; it is a draft for a person to confirm`);
+      }
+      const notRerun = exceptions.filter((e) => !e.rerun).length;
+      if (notRerun) notes.push(`${notRerun} not rerun; ${execution.name} says why for each`);
+      return out({
+        report: 'echo_transfer',
+        recorded: moved.length,
+        ...(event ? { event } : {}),
+        execution: { id: execution.id, name: execution.name },
+        ...(rerun ? { rerun: { id: rerun.id, name: rerun.name } } : {}),
+      });
     },
   }),
 ];

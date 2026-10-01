@@ -488,7 +488,7 @@ export const transfersImportReport = defineContract({
   id: 'transfers.import_report',
   verbs: { done: 'read an instrument report for', intent: 'read an instrument report for' },
   summary:
-    'Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report says which planned transfers were done, short, failed or not run, and records what really moved in the inventory ledger as from a run log (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export',
+    "Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report records the execution (a TRN record: which planned transfers were done, short, failed or not run), records what really moved in the inventory ledger as from a run log, ends the plan's reservations, and drafts a rerun plan for the short, failed and missing transfers for a person to confirm (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -528,6 +528,14 @@ export const transfersImportReport = defineContract({
     ),
     recorded: z.number().int().describe('Transfers written to the inventory ledger'),
     event: z.string().optional().describe('The inventory event they were written in'),
+    execution: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The execution recorded from a transfer report'),
+    rerun: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The draft plan that redoes the exceptions, waiting for a person to confirm'),
     notes: z.array(z.string()),
   }),
 });
