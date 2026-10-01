@@ -26,7 +26,7 @@ A labware type is a record of kind `labware_type` (readable names like `LWT-0001
 ## Standard well positions
 
 - `labware.use_standard_positions` with `{id, expectedVersion}` sets the pitch and A1 offset of an SBS plate or reservoir to ANSI/SLAS 4-2004 (96, 384 or 1536 wells; 12- or 24-trough reservoirs). Use it when the datasheet gives no drawing and the type is marked SBS; it refuses other grids, non-SBS labware and a pitch that disagrees with the standard. The values are marked calculated from the standard, so a person still checks them against the datasheet.
-- A failing check that can be fixed this way carries `quickFix` in `records.readiness`, naming the operation.
+- A failing check that can be fixed this way lists it in `options` in `records.readiness`, with the operation's whole input.
 
 ## Wells
 

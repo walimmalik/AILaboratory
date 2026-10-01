@@ -48,9 +48,6 @@ const noScreen: Record<string, string> = {
   'memory.observe':
     'Detectors and agents reading results report observations; a person states a memory with memory.remember instead',
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
-  'experiments.adopt_versions': notYet(
-    'the experiment page shows the SOP versions it follows, not newer ones',
-  ),
   'experiments.bind_protocol': notYet('the experiment page shows the protocol only'),
   'instruments.change_configuration': notYet('the instrument page shows it read-only'),
   'instruments.log_service': notYet('the instrument page lists service read-only'),

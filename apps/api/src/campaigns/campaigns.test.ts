@@ -236,7 +236,12 @@ describe('experiments pin the SOP versions they follow (ADR 0039)', () => {
     expect(byId('protocol_current')).toMatchObject({
       passed: false,
       message: expect.stringContaining(`${sop.name} v${edited.version}`),
-      quickFix: { operation: 'experiments.adopt_versions' },
+      options: [
+        expect.objectContaining({
+          operation: 'experiments.adopt_versions',
+          input: expect.objectContaining({ id: experiment.id }),
+        }),
+      ],
     });
     const current = await run(person, 'records.get', { id: experiment.id });
     const adopted = await run(agent, 'experiments.adopt_versions', {

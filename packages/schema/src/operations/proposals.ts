@@ -78,6 +78,8 @@ export const changesApply = defineContract({
         /** The input as run, with references filled in. */
         input: z.unknown(),
         output: z.unknown(),
+        /** A calculator step's handle, for `calculated` evidence in a later step ("$1.calculation"). */
+        calculation: z.string().optional(),
       }),
     ),
   }),

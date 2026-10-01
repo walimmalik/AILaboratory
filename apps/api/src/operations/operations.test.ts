@@ -940,6 +940,84 @@ describe('change sets (ADR 0051)', () => {
     expect(listed.records).toHaveLength(0);
   });
 
+  it('keep a calculator step result, so a later step marks a value calculated from it', async () => {
+    const dilution = {
+      operation: 'transfers.dilution_options',
+      input: {
+        stock: { value: '10', unit: 'mM' },
+        targets: [{ value: '10', unit: 'uM' }],
+        finalVolume: { value: '50', unit: 'uL' },
+        device: {
+          limits: { min: { value: '2.5', unit: 'nL' }, step: { value: '2.5', unit: 'nL' } },
+        },
+      },
+    };
+    const calculated = {
+      source: 'calculated',
+      calculation: '$1.calculation',
+      output: '/points/0/direct/volume/achieved',
+    };
+    const result = await run<{ results: { output: RecordEnvelope; calculation?: string }[] }>(
+      agent,
+      'changes.apply',
+      {
+        steps: [
+          dilution,
+          {
+            operation: 'records.create',
+            input: {
+              kind: 'widget',
+              label: 'Compound well',
+              attributes: { color: 'clear', volume: { value: '50', unit: 'nL' } },
+              evidence: { volume: calculated },
+            },
+          },
+        ],
+      },
+    );
+    const [step1, step2] = result.results;
+    expect(step1?.calculation).toMatch(/^calc_/);
+    expect(step2?.output.evidence.volume).toMatchObject({
+      source: 'calculated',
+      calculation: step1?.calculation,
+    });
+    // A value the calculation did not give is refused, and nothing in the set is kept.
+    const wrong = await refused(
+      registry.execute(agent, 'changes.apply', {
+        steps: [
+          dilution,
+          {
+            operation: 'records.create',
+            input: {
+              kind: 'widget',
+              label: 'Wrong well',
+              attributes: { color: 'clear', volume: { value: '60', unit: 'nL' } },
+              evidence: { volume: calculated },
+            },
+          },
+        ],
+      }),
+    );
+    expect(wrong.message).toMatch(/^Step 2 \(records.create\)/);
+    const notCalculator = await refused(
+      registry.execute(agent, 'changes.apply', {
+        steps: [
+          { operation: 'records.create', input: { kind: 'widget', label: 'A', attributes } },
+          {
+            operation: 'records.create',
+            input: {
+              kind: 'widget',
+              label: 'B',
+              attributes,
+              evidence: { volume: { source: 'calculated', calculation: '$1.calculation' } },
+            },
+          },
+        ],
+      }),
+    );
+    expect(notCalculator.message).toMatch(/step 1 is not a calculator/);
+  });
+
   it('refuse references to later steps and missing outputs', async () => {
     const forward = await refused(
       registry.execute(person, 'changes.apply', {

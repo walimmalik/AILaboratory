@@ -60,7 +60,7 @@ Approving (`proposals.approve`, people only) runs the stored input as the propos
 
 `activity.list` filters the ledger by `since`, `record`, `conversation`, `actor` (`people` or `agents`) and `mine` (ADR 0053).
 
-**Change sets** (ADR 0051). `changes.apply {steps: [{operation, input}], reason?}` runs up to 50 operations in order on one transaction, all or nothing. `"$N.path"` string values read step N's output (`"$1.id"`). The registry's `runStep` runs a step inside the set's transaction with no ledger entry of its own, `policyFor` asks a step's policy, and `touchedBy` names what it touched, so the set's single ledger entry lists every record. For an agent, the steps are tried in a rolled-back transaction: if any step would be proposed, the whole set is one proposal, which approval applies as one. Steps' `after` work runs once the set commits (`afterStep`).
+**Change sets** (ADR 0051). `changes.apply {steps: [{operation, input}], reason?}` runs up to 50 operations in order on one transaction, all or nothing. `"$N.path"` string values read step N's output (`"$1.id"`). A calculator step saves its calculation like a direct call, and `"$N.calculation"` is that handle, so a later step's evidence can cite it (review 2026-10-01 item 17); naming it on a step that is not a calculator is refused. The registry's `runStep` runs a step inside the set's transaction with no ledger entry of its own, `policyFor` asks a step's policy, and `touchedBy` names what it touched, so the set's single ledger entry lists every record. For an agent, the steps are tried in a rolled-back transaction: if any step would be proposed, the whole set is one proposal, which approval applies as one. Steps' `after` work runs once the set commits (`afterStep`).
 
 ## Doors
 

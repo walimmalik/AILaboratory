@@ -34,7 +34,7 @@ const check = (
   problem: string | undefined,
   fix: string,
   section: string,
-  quickFix?: CheckResult['quickFix'],
+  options?: CheckResult['options'],
 ): CheckResult => ({
   id,
   label,
@@ -44,7 +44,7 @@ const check = (
   passed: problem === undefined,
   ...(problem ? { message: problem } : {}),
   fix,
-  ...(problem && quickFix ? { quickFix } : {}),
+  ...(problem && options ? { options } : {}),
 });
 
 const duplicates = (names: readonly string[]) => [
@@ -301,7 +301,15 @@ export const experiment = defineKind({
           newer.length ? `Newer confirmed versions: ${newer.join('; ')}` : undefined,
           'Look at what changed, then adopt the newer versions or keep these',
           'protocol',
-          { operation: 'experiments.adopt_versions', label: 'Use the newer versions' },
+          [
+            {
+              label: 'Use the newer versions',
+              consequence:
+                'Moves every pinned SOP and record to its latest confirmed version; values the new versions no longer have are dropped and named',
+              operation: 'experiments.adopt_versions',
+              input: { reason: 'Adopted the newer confirmed versions' },
+            },
+          ],
         ),
         check(
           'documents_compute',

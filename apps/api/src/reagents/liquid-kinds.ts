@@ -5,8 +5,6 @@ import {
   VerificationAttributes,
 } from '@ailab/schema';
 
-const PLAN = '(plan 009, reagents and liquids)';
-
 const classChecks: KindCheck<LiquidClassAttributes>[] = [
   {
     id: 'platform_fits',

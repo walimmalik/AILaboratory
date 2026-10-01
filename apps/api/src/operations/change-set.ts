@@ -10,8 +10,17 @@ type Result = z.infer<typeof changesApply.output>['results'][number];
 
 const reference = /^\$(\d+)((?:\.[A-Za-z0-9_]+)*)$/;
 
-/** Replaces every string "$N.path" in a step's input with that value from step N's output. */
-export function resolveReferences(value: unknown, outputs: unknown[], step: number): unknown {
+/** What a later step can refer to: an earlier step's output, and a calculator step's handle. */
+export interface StepRef {
+  output: unknown;
+  calculation?: string | undefined;
+}
+
+/**
+ * Replaces every string "$N.path" in a step's input with that value from step N's output;
+ * "$N.calculation" is a calculator step's handle.
+ */
+export function resolveReferences(value: unknown, steps: StepRef[], step: number): unknown {
   if (typeof value === 'string') {
     const match = reference.exec(value);
     if (!match) return value;
@@ -22,8 +31,17 @@ export function resolveReferences(value: unknown, outputs: unknown[], step: numb
         `Step ${step} refers to ${value}, but a step can only use the steps before it`,
       );
     }
-    let found: unknown = outputs[from - 1];
-    for (const key of (match[2] ?? '').split('.').filter(Boolean)) {
+    const keys = (match[2] ?? '').split('.').filter(Boolean);
+    const earlier = steps[from - 1];
+    if (keys[0] === 'calculation' && keys.length === 1) {
+      if (earlier?.calculation) return earlier.calculation;
+      throw new OperationError(
+        'invalid_input',
+        `Step ${step} refers to ${value}, but step ${from} is not a calculator`,
+      );
+    }
+    let found: unknown = earlier?.output;
+    for (const key of keys) {
       found =
         found && typeof found === 'object' ? (found as Record<string, unknown>)[key] : undefined;
     }
@@ -35,10 +53,10 @@ export function resolveReferences(value: unknown, outputs: unknown[], step: numb
     }
     return found;
   }
-  if (Array.isArray(value)) return value.map((v) => resolveReferences(v, outputs, step));
+  if (Array.isArray(value)) return value.map((v) => resolveReferences(v, steps, step));
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, resolveReferences(v, outputs, step)]),
+      Object.entries(value).map(([k, v]) => [k, resolveReferences(v, steps, step)]),
     );
   }
   return value;
@@ -56,11 +74,7 @@ async function runSteps(
   for (const [index, step] of input.steps.entries()) {
     const number = index + 1;
     try {
-      const filled = resolveReferences(
-        step.input,
-        results.map((r) => r.output),
-        number,
-      );
+      const filled = resolveReferences(step.input, results, number);
       await each?.(step.operation, filled);
       const ran = await deps.registry.runStep(ctx, step.operation, filled, db);
       results.push({ operation: step.operation, ...ran });
