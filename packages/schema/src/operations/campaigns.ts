@@ -196,6 +196,13 @@ export const runsStart = defineContract({
   effect: 'write',
   input: z.strictObject({
     experiment: ExperimentId,
+    expectedVersion: z
+      .number()
+      .int()
+      .positive()
+      .describe(
+        'The experiment version you looked at; the run follows exactly that version, and the start is refused if the experiment changed since',
+      ),
     label: z.string().min(1).optional().describe('e.g. "Day 1"; defaults to the date'),
     date: z.iso.date().optional().describe('Defaults to today'),
     operator: UserId.optional(),
