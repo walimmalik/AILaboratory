@@ -19,3 +19,4 @@ The system-level architecture is in [plan 000](../plans/000-foundation-architect
 | Campaigns, experiments, runs, pinned inputs | [campaigns.md](campaigns.md) | 013 |
 | Layout templates and plate maps | [plate-maps.md](plate-maps.md) | 014 |
 | Transfer plans, transfer math, dilution optimizer, worklists | [transfers.md](transfers.md) | 016 |
+| Assay templates, design math, the experiment designer | [assays.md](assays.md) | 017 |
