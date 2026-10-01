@@ -38,9 +38,9 @@ export const ReviewDraft = z.object({
   /** Made by an agent, so a person may discard it from Review. */
   byAgent: z.boolean(),
   /**
-   * Nothing in it is a guess, no blocker fails and no confirmed value changed, so it may be
-   * confirmed with others in one step (R3, `records.confirm_many`); warnings are counted, not
-   * refused.
+   * Nothing in it is a guess or an unchecked source, no blocker fails and no
+   * confirmed value changed, so it may be confirmed with others in one step (R3,
+   * `records.confirm_many`); warnings are counted, not refused.
    */
   batchable: z.boolean(),
   /** How many warning checks fail: shown with a batch confirm, which lets them pass. */
@@ -91,13 +91,15 @@ export const reviewList = defineContract({
       .optional()
       .describe('Only drafts of this kind; proposed changes and mentions are left out'),
     mine: z.boolean().optional().describe('Only items addressed to you'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('List at most this many items; counts still cover everything'),
   }),
   output: z.object({
-    items: z
-      .array(ReviewItem)
-      .describe(
-        'Newest first; at most 200 drafts, so compare with counts to see what was left out',
-      ),
     counts: z
       .object({
         total: z
@@ -121,5 +123,10 @@ export const reviewList = defineContract({
           .describe('Drafts waiting per kind, all of them, not only those listed'),
       })
       .describe('Counts over everything waiting, whatever the filter and limit'),
+    items: z
+      .array(ReviewItem)
+      .describe(
+        'Newest first; at most 200 drafts and at most limit items, so compare with counts to see what was left out',
+      ),
   }),
 });

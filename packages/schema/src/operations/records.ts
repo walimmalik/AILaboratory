@@ -40,8 +40,18 @@ export const recordsGet = defineContract({
   verbs: { done: 'looked at', intent: 'look at' },
   summary: 'Read a record by ID',
   effect: 'read',
-  input: z.object({ id: RecordId }),
-  output: RecordEnvelope,
+  input: z.object({
+    id: RecordId,
+    brief: z
+      .boolean()
+      .optional()
+      .describe(
+        'Leave out the section confirmations and the evidence of each list item (an SOP step, a value), which a long record repeats per item; attributes, field evidence and readiness stay',
+      ),
+  }),
+  output: RecordEnvelope.extend({
+    reviews: RecordEnvelope.shape.reviews.optional().describe('Left out when brief'),
+  }),
 });
 
 export const recordsList = defineContract({

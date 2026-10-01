@@ -116,7 +116,9 @@ export function createApp({
     return c.json({ ...ctx, user, lab });
   });
 
-  app.get('/v1/operations', (c) => c.json({ operations: registry.list().map(describeOperation) }));
+  app.get('/v1/operations', (c) =>
+    c.json({ operations: registry.list().map((op) => describeOperation(op)) }),
+  );
 
   app.get('/v1/openapi.json', (c) => c.json(openApiDocument(registry.list())));
 

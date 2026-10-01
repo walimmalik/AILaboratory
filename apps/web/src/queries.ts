@@ -77,7 +77,14 @@ export const recordsQuery = (filters: {
   });
 
 export const recordQuery = (id: string) =>
-  queryOptions({ queryKey: ['record', id], queryFn: () => api.run(recordsGet, { id }) });
+  queryOptions({
+    queryKey: ['record', id],
+    // Not brief, so the confirmations are always there.
+    queryFn: async () => {
+      const record = await api.run(recordsGet, { id });
+      return { ...record, reviews: record.reviews ?? {} };
+    },
+  });
 
 export const historyQuery = (id: string) =>
   queryOptions({

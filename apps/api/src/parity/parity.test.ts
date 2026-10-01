@@ -17,8 +17,11 @@ const notYet = (where: string) => `No screen yet; ${where}`;
 
 const noScreen: Record<string, string> = {
   'assistant.send': 'The assistant panel itself; agents do not call it',
-  'changes.apply': 'Runs other operations together; each step has its own screen',
-  'library.propose_mentions': 'Agents propose mentions; people review them in Review',
+  'changes.apply':
+    'Bundles other operations so an agent asks once; a person makes the same changes one by one, on the screens of the steps that have one',
+  'library.propose_mentions': notYet(
+    'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
+  ),
   'records.create': draftedByAsking,
   'campaigns.draft': draftedByAsking,
   'experiments.draft': draftedByAsking,
@@ -37,7 +40,9 @@ const noScreen: Record<string, string> = {
   'transfers.pick_sources': transferScreens,
   'transfers.set_instrument': transferScreens,
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
-  'experiments.adopt_versions': notYet('the experiment page shows newer versions only'),
+  'experiments.adopt_versions': notYet(
+    'the experiment page shows the SOP versions it follows, not newer ones',
+  ),
   'experiments.bind_protocol': notYet('the experiment page shows the protocol only'),
   'instruments.change_configuration': notYet('the instrument page shows it read-only'),
   'instruments.log_service': notYet('the instrument page lists service read-only'),

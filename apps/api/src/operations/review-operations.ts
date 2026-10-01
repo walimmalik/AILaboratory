@@ -98,8 +98,9 @@ export const reviewOperations = [
           }),
         ),
       ].filter((item) => !input.mine || item.for === me);
+      items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+      // Counts come first, so an agent whose view of a long result is cut still has the totals.
       return {
-        items: items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)),
         counts: {
           total: draftTotal + changes.length + mentions.length,
           changes: changes.length,
@@ -107,6 +108,7 @@ export const reviewOperations = [
           needsYou: changes.filter((p) => addressee(p.proposedBy) === me).length,
           drafts: draftCounts,
         },
+        items: input.limit ? items.slice(0, input.limit) : items,
       };
     },
   }),

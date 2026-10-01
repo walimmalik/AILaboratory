@@ -1,5 +1,5 @@
 import type { PageContext } from '@ailab/schema';
-import { describeOperation } from '../operations/describe.ts';
+import { operationSchemas } from '../operations/describe.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { ModelTool } from './model.ts';
@@ -10,7 +10,10 @@ import type { ModelTool } from './model.ts';
  * already used, and `run_operation` for anything else, found with `operations_describe`.
  */
 
-/** Always offered: reading records and what waits for people, discovery, and drafting records. */
+/**
+ * Always offered: reading records and what waits for people, discovery, drafting records, change sets
+ * and the proposals the assistant left.
+ */
 const CORE = new Set([
   'records.get',
   'records.list',
@@ -22,6 +25,8 @@ const CORE = new Set([
   'records.create',
   'records.update',
   'review.list',
+  'changes.apply',
+  'proposals.list',
   'skills.list',
   'skills.get',
   'operations.describe',
@@ -131,7 +136,7 @@ export function toolsFor(registry: OperationRegistry, namespaces: Iterable<strin
       CORE.has(contract.id) || contract.calculator || wanted.has(contract.id.split('.')[0] ?? '');
     if (!named) continue;
     const name = toolName(contract.id);
-    const { $schema: _, ...inputSchema } = describeOperation(contract).input;
+    const { $schema: _, ...inputSchema } = operationSchemas(contract).input;
     list.push({
       name,
       description:

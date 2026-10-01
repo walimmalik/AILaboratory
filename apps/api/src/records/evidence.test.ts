@@ -191,6 +191,32 @@ describe("a person's own edits (ADR 0056)", () => {
     expect(edited.reviews.steps?.version).toBe(3);
   });
 
+  it("keeps an assistant's suggestion a person saved untouched as assumed, to review", async () => {
+    const draft = await service.create(person, {
+      kind: 'protocol',
+      label: 'ELISA',
+      attributes: { steps: [steps[0]] },
+    });
+    // The editor saves the person's step and the assistant's, with the assistant's reason on it.
+    const saved = await service.update(person, draft.id, {
+      expectedVersion: 1,
+      attributes: { steps: [steps[0], steps[1]] },
+      evidence: {
+        '/steps/wash': {
+          source: 'assumed',
+          note: 'suggested by the assistant (m): step 4 says so',
+        },
+      },
+    });
+    expect(saved.evidence['/steps/wash']).toMatchObject({
+      source: 'assumed',
+      by: person.actor,
+      note: 'suggested by the assistant (m): step 4 says so',
+    });
+    expect(section(saved)?.state).toBe('needs_review');
+    expect(readiness(saved, protocol).assumed).toEqual(['/steps/wash']);
+  });
+
   it("still sends an agent's edit back to review", async () => {
     const draft = await service.create(person, {
       kind: 'protocol',

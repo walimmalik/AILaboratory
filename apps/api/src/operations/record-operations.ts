@@ -104,7 +104,18 @@ export const recordOperations = [
     },
   }),
   implement(recordsGet, {
-    run: (ctx, input, deps) => service(deps).get(ctx, input.id),
+    run: async (ctx, input, deps) => {
+      const record = await service(deps).get(ctx, input.id);
+      if (!input.brief) return record;
+      // Item evidence is keyed "/list/key"; a field's own evidence has no slash.
+      const { reviews: _, ...rest } = record;
+      return {
+        ...rest,
+        evidence: Object.fromEntries(
+          Object.entries(record.evidence).filter(([key]) => !key.startsWith('/')),
+        ),
+      };
+    },
   }),
   implement(recordsList, {
     run: async (ctx, input, deps) => ({ records: await service(deps).list(ctx, input) }),
@@ -213,14 +224,17 @@ export const recordOperations = [
       service(deps).restore(ctx, id, { version, ...transition(input) }),
   }),
   implement(recordsDeleteDraft, {
-    // Deleting takes the history with it, so an agent does it directly only to a draft that agents
-    // working for the same person made alone, with nothing confirmed. A person's work is a proposal.
+    // Deleting takes the history with it, so an agent does it directly only to its own draft: one
+    // the same agent, working for the same person, made alone, with nothing confirmed (C5, Wali
+    // 2026-10-01). Anyone else's work, a person's included, is a proposal.
     agentPolicy: async (ctx, input, deps) => {
       const records = service(deps);
       const record = await records.get(ctx, input.id);
-      const principal = ctx.actor.type === 'agent' ? ctx.actor.onBehalfOf : undefined;
+      const me = ctx.actor.type === 'agent' ? ctx.actor : undefined;
       const ours = (actor: RecordEnvelope['createdBy']) =>
-        actor.type === 'agent' && actor.onBehalfOf === principal;
+        actor.type === 'agent' &&
+        actor.onBehalfOf === me?.onBehalfOf &&
+        actor.agentName === me?.agentName;
       if (Object.keys(record.reviews).length > 0) return 'propose';
       const versions = await records.history(ctx, record.id);
       return versions.every((v) => ours(v.actor)) ? 'direct' : 'propose';

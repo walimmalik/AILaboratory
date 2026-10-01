@@ -1116,6 +1116,13 @@ describe('sops.suggest', () => {
       code: 'invalid_state',
       message: expect.stringContaining('No usable'),
     });
+    // One answer and one retry, so a person in the editor isn't kept waiting on more.
+    const wrong = () => call('sop_value', { kind: 'computed', expression: 'nope', reason: 'x' });
+    const patient = new PlaybackModel([wrong(), wrong(), wrong()]);
+    await expect(suggest(patient, person, { sop: sop.id, value: 'diluent' })).rejects.toMatchObject(
+      { code: 'invalid_state', message: expect.stringContaining('nope') },
+    );
+    expect(patient.requests).toHaveLength(2);
   });
 });
 

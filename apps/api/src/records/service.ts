@@ -726,7 +726,8 @@ function approvalReviews(
 
 /**
  * Whether a section holds an agent's value no person has confirmed: a field, or an item of a keyed
- * list, whose evidence is an agent's and whose value isn't the one last confirmed for the section.
+ * list, whose evidence is an agent's, or is marked assumed by whoever saved it (an assistant's
+ * suggestion a person saved untouched), and whose value isn't the one last confirmed for the section.
  */
 function holdsAgentValues(
   section: KindSection,
@@ -735,7 +736,8 @@ function holdsAgentValues(
   review: SectionReview | undefined,
   items: Readonly<Record<string, string>> = {},
 ): boolean {
-  const byAgent = (key: string) => evidence[key]?.by.type === 'agent';
+  const byAgent = (key: string) =>
+    evidence[key]?.by.type === 'agent' || evidence[key]?.source === 'assumed';
   return section.fields.some((field) => {
     const confirmed = review?.values[field];
     if (review && sameValue(confirmed, values[field])) return false;

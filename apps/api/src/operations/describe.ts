@@ -6,8 +6,8 @@ export interface OperationDescription {
   summary: string;
   effect: OperationContract['effect'];
   calculator?: true;
-  input: Record<string, unknown>;
-  output: Record<string, unknown>;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
 }
 
 const jsonSchema = (schema: z.ZodType, io: 'input' | 'output') =>
@@ -16,13 +16,31 @@ const jsonSchema = (schema: z.ZodType, io: 'input' | 'output') =>
     unknown
   >;
 
-/** An operation as agents and API clients see it: its contract with JSON Schemas. */
-export function describeOperation(contract: OperationContract): OperationDescription {
+/**
+ * An operation as agents and API clients see it: its contract with JSON Schemas, or without them
+ * (`schema: false`) when a namespace's schemas would be too long to read at once.
+ */
+export function describeOperation(
+  contract: OperationContract,
+  { schema = true }: { schema?: boolean } = {},
+): OperationDescription {
   return {
     id: contract.id,
     summary: contract.summary,
     effect: contract.effect,
     ...(contract.calculator ? { calculator: true as const } : {}),
+    ...(schema
+      ? {
+          input: jsonSchema(contract.input, 'input'),
+          output: jsonSchema(contract.output, 'output'),
+        }
+      : {}),
+  };
+}
+
+/** An operation's input and output JSON Schemas. */
+export function operationSchemas(contract: OperationContract) {
+  return {
     input: jsonSchema(contract.input, 'input'),
     output: jsonSchema(contract.output, 'output'),
   };
@@ -32,7 +50,7 @@ export function describeOperation(contract: OperationContract): OperationDescrip
 export function openApiDocument(contracts: OperationContract[]) {
   const paths: Record<string, unknown> = {};
   for (const contract of contracts) {
-    const { input, output } = describeOperation(contract);
+    const { input, output } = operationSchemas(contract);
     paths[`/v1/ops/${contract.id}`] = {
       post: {
         operationId: contract.id,

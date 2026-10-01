@@ -36,6 +36,11 @@ interface EditorContext {
   itemEditors?: Record<string, ItemEditor>;
   /** Editors of their own for some whole lists, by the list's path (an SOP's values). */
   listEditors?: Record<string, ComponentType<ListEditorProps>>;
+  /**
+   * The assistant filled in a list item (`/steps/<id>`, `/variables/<name>`): saved untouched, it
+   * keeps its "assumed" mark and the assistant's reason rather than becoming the person's.
+   */
+  onSuggested?: (path: string, item: unknown, note: string) => void;
 }
 const Context = createContext<EditorContext>({ root: {}, kindOfPrefix: {}, hidden: new Set() });
 
@@ -260,7 +265,11 @@ function QuantityEditor({
   label: string;
 }) {
   const unitSchema = schema.properties?.unit ?? {};
-  const units = (unitSchema.enum ?? [unitSchema.const]).map(String);
+  // A quantity of any unit (a stock, a target concentration) has no list to pick from: its unit is
+  // typed beside the number (QA 2026-10-01 Q2, where "undefined" was sent as the unit).
+  const units = (unitSchema.enum ?? (unitSchema.const === undefined ? [] : [unitSchema.const])).map(
+    String,
+  );
   const current = (value ?? {}) as { value?: string; unit?: string };
   const unit = current.unit ?? units[0] ?? '';
   return (
@@ -292,6 +301,23 @@ function QuantityEditor({
             </option>
           ))}
         </select>
+      ) : units.length === 0 ? (
+        <input
+          className="field short"
+          type="text"
+          aria-label={`${label} unit`}
+          placeholder="unit, e.g. mM"
+          required={current.value !== undefined}
+          value={current.unit ?? ''}
+          onChange={(e) => {
+            const typed = e.target.value.trim();
+            onChange(
+              current.value === undefined && typed === ''
+                ? undefined
+                : { value: current.value ?? '', unit: typed },
+            );
+          }}
+        />
       ) : (
         <span className="muted">{unitWords[unit] ?? unit}</span>
       )}
@@ -452,7 +478,9 @@ function itemTitle(item: unknown): string {
   );
   const action = typeof o.action === 'string' ? fieldLabel(o.action) : undefined;
   const text = typeof o.text === 'string' ? o.text : undefined;
-  const title = words ?? text ?? '';
+  // Items named only by their id (an experiment's protocol parts: seeding, readout) go by it.
+  const id = typeof o.id === 'string' && o.id !== '' ? fieldLabel(o.id) : undefined;
+  const title = words ?? text ?? id ?? '';
   return [action, title].filter(Boolean).join(' · ') || 'new, not filled in yet';
 }
 

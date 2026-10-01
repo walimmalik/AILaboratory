@@ -230,6 +230,7 @@ function SopEditor({
         recordId={record.id}
         document={{ ...edits.base.attributes, ...edits.values }}
         listEditors={sopListEditors}
+        onSuggested={edits.suggest}
       >
         <EditForm edits={edits} className="editor sop-edit">
           {parts.map((part) => (

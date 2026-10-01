@@ -8,7 +8,15 @@ import {
   sopsSuggest,
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { type NamedValue, nameFor, readSetting } from '../lib/formulas.ts';
@@ -94,12 +102,67 @@ type Target = { value: string } | { step: string } | { newStep: string } | { ste
  * the editor shows what comes back in agent ink until a person changes or saves it.
  */
 function useSuggest() {
-  const { document = {}, recordId } = useEditorScope();
+  const { document = {}, recordId, onSuggested } = useEditorScope();
+  const controller = useRef<AbortController>(undefined);
   const ask = useMutation({
-    mutationFn: (target: Target) =>
-      api.run(sopsSuggest, { sop: recordId ?? '', attributes: document, ...target }),
+    mutationFn: (target: Target) => {
+      controller.current = new AbortController();
+      return api.run(
+        sopsSuggest,
+        { sop: recordId ?? '', attributes: document, ...target },
+        { signal: controller.current.signal },
+      );
+    },
   });
-  return { ...ask, available: !!recordId };
+  /** Stops waiting: the editor is free again and nothing the answer holds is taken. */
+  const cancel = () => {
+    controller.current?.abort();
+    ask.reset();
+  };
+  /** Notes items as the assistant filled them, so saving them untouched keeps them assumed. */
+  const taken = (
+    list: 'steps' | 'variables',
+    items: Item[],
+    out: { model: string; reason: string },
+  ) => {
+    for (const item of items) {
+      const key = list === 'steps' ? item.id : item.name;
+      if (typeof key === 'string')
+        onSuggested?.(
+          `/${list}/${key}`,
+          item,
+          `suggested by the assistant (${out.model}): ${out.reason}`,
+        );
+    }
+  };
+  return { ...ask, available: !!recordId, taken, cancel };
+}
+
+/** How long a fill-in may take before the server gives up (sops.suggest's limits). */
+const SUGGEST_LIMIT_S = 45;
+const DRAFT_LIMIT_S = 90;
+
+/** While the assistant is asked: how long it has taken, its limit, and a Cancel. */
+function SuggestWait({ suggest }: { suggest: ReturnType<typeof useSuggest> }) {
+  const [seconds, setSeconds] = useState(0);
+  const limit = suggest.variables && 'steps' in suggest.variables ? DRAFT_LIMIT_S : SUGGEST_LIMIT_S;
+  const pending = suggest.isPending;
+  useEffect(() => {
+    if (!pending) return;
+    setSeconds(0);
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [pending]);
+  if (!pending) return null;
+  return (
+    <span className="muted" role="status">
+      Asking the assistant, {seconds} s (it stops at {limit} s){' '}
+      <button type="button" className="link-btn" onClick={suggest.cancel}>
+        Cancel
+      </button>
+    </span>
+  );
 }
 
 const without = (item: Item) => {
@@ -302,7 +365,9 @@ function ValueRow({
           if (!out.variable) return;
           setDraft(undefined);
           // The whole value as suggested: its kind decides which fields it has.
-          onChange({ ...out.variable });
+          const item = { ...out.variable };
+          onChange(item);
+          suggest.taken('variables', [item], out);
           setSuggested(out.reason);
         },
       },
@@ -315,7 +380,7 @@ function ValueRow({
       disabled={suggest.isPending}
       onClick={fillIn}
     >
-      {suggest.isPending ? 'Asking the assistant…' : words}
+      {words}
     </button>
   );
   return (
@@ -400,6 +465,7 @@ function ValueRow({
             More
           </button>
         </div>
+        <SuggestWait suggest={suggest} />
         {suggest.error && <p className="error-text">{suggest.error.message}</p>}
         {open && (
           <div className="value-more">
@@ -692,14 +758,16 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                           if (!next) return;
                           setDraft(undefined);
                           setRound(round + 1);
-                          onChange(without({ ...value, ...next }));
+                          const item = without({ ...value, ...next });
+                          onChange(item);
+                          suggest.taken('steps', [item], out);
                           setSuggested(out.reason);
                         },
                       },
                     )
                   }
                 >
-                  {suggest.isPending ? 'Asking the assistant…' : 'Fill in with the assistant'}
+                  Fill in with the assistant
                 </button>
               )}
             </p>
@@ -708,6 +776,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                 suggested by the assistant, unverified: {suggested}
               </p>
             )}
+            <SuggestWait suggest={suggest} />
             {suggest.error && <p className="error-text">{suggest.error.message}</p>}
           </div>
         </FormRow>
@@ -846,7 +915,9 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
   const [sentence, setSentence] = useState('');
   // Steps the assistant wrote, by id, with its reason, until a person saves.
   const [drafted, setDrafted] = useState<string>();
-  const take = (steps: Item[], reason: string, replace: boolean) => {
+  const take = (steps: Item[], out: { model: string; reason: string }, replace: boolean) => {
+    const reason = out.reason;
+    suggest.taken('steps', steps, out);
     const base = replace ? [] : items;
     const fresh = steps.map((_, i) => next + i);
     setNext(next + steps.length);
@@ -958,14 +1029,14 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
                     { newStep: sentence.trim() },
                     {
                       onSuccess: (out) => {
-                        take((out.steps ?? []) as Item[], out.reason, false);
+                        take((out.steps ?? []) as Item[], out, false);
                         setSentence('');
                       },
                     },
                   )
                 }
               >
-                {suggest.isPending ? 'Asking the assistant…' : 'Write it with the assistant'}
+                Write it with the assistant
               </button>
               {items.length === 0 && !!document.source && (
                 <button
@@ -975,7 +1046,7 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
                   onClick={() =>
                     suggest.mutate(
                       { steps: true },
-                      { onSuccess: (out) => take((out.steps ?? []) as Item[], out.reason, true) },
+                      { onSuccess: (out) => take((out.steps ?? []) as Item[], out, true) },
                     )
                   }
                 >
@@ -985,6 +1056,12 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
             </>
           )}
         </div>
+        {suggest.available && items.length === 0 && !document.source && (
+          <p className="muted hint">
+            The assistant drafts every step only from a source document, and this SOP has none.
+          </p>
+        )}
+        <SuggestWait suggest={suggest} />
         {suggest.error && <p className="error-text">{suggest.error.message}</p>}
       </li>
     </ol>
