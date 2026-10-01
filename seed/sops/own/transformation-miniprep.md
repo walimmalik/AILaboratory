@@ -16,6 +16,7 @@ variables:
   recovery_time: { value: "60", unit: min }
   culture_volume: { value: "5", unit: mL }
   elution_volume: { value: "50", unit: "uL" }
+actions: [add, incubate, add, manual, manual, manual, spin, add, add, manual, manual]
 ---
 
 # Transformation and plasmid miniprep

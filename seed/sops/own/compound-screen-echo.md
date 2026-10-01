@@ -24,6 +24,7 @@ status_of_values:
   assay_volume: lab_convention
   max_dmso: lab_convention
   positive_control_conc: lab_convention
+actions: [manual, transfer, manual, transfer, manual, manual, serial_dilute, transfer, manual]
 ---
 
 # Compound screen, single point and dose-response follow-up

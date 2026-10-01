@@ -14,6 +14,7 @@ variables:
   split_ratio: "1:5 to 1:10"
   confluence_at_split: "70-90%"
   trypsin_time: { value: "5", unit: min }
+actions: [manual, manual, wash, add, mix, transfer]
 ---
 
 # HEK293 routine passaging
