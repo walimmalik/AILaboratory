@@ -389,11 +389,24 @@ describe('transfers.options', () => {
 /** A person confirms every section of a draft, which activates it. */
 async function confirm(record: RecordEnvelope): Promise<RecordEnvelope> {
   let current = record;
+  let skipped = false;
   for (const section of kinds.get(record.kind).sections ?? []) {
+    // A section the person edited themselves is already theirs (ADR 0056).
+    if (await confirmedAlready(current, section.id)) {
+      skipped = true;
+      continue;
+    }
     current = await run(person, 'records.confirm_section', {
       id: current.id,
       expectedVersion: current.version,
       section: section.id,
+    });
+  }
+  // Editing never activates a draft; one Confirm does once every section is confirmed.
+  if (skipped && current.status === 'draft') {
+    current = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: current.id,
+      expectedVersion: current.version,
     });
   }
   return current;
@@ -1131,3 +1144,8 @@ describe('Echo reports', () => {
     ).toThrow('Row 1: Actual Volume is "lots", not a number');
   });
 });
+
+async function confirmedAlready(record: RecordEnvelope, section: string) {
+  const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+  return state.sections.find((s) => s.id === section)?.state === 'confirmed';
+}

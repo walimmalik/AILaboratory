@@ -63,11 +63,24 @@ async function refused(promise: Promise<unknown>) {
 
 async function confirmAll(record: RecordEnvelope, sections: string[]) {
   let current = record;
+  let skipped = false;
   for (const section of sections) {
+    // A section the person edited themselves is already theirs (ADR 0056).
+    if (await confirmedAlready(current, section)) {
+      skipped = true;
+      continue;
+    }
     current = await run<RecordEnvelope>(person, 'records.confirm_section', {
       id: current.id,
       expectedVersion: current.version,
       section,
+    });
+  }
+  // Editing never activates a draft; one Confirm does once every section is confirmed.
+  if (skipped && current.status === 'draft') {
+    current = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: current.id,
+      expectedVersion: current.version,
     });
   }
   return current;
@@ -356,3 +369,8 @@ describe('seed entity library', () => {
     }
   }, 300_000);
 });
+
+async function confirmedAlready(record: RecordEnvelope, section: string) {
+  const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+  return state.sections.find((s) => s.id === section)?.state === 'confirmed';
+}

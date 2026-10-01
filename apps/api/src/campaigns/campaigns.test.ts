@@ -61,11 +61,24 @@ async function run<T = RecordEnvelope>(ctx: RecordContext, id: string, input: un
 /** A person confirms every section of a draft, which activates it. */
 async function confirm(record: RecordEnvelope): Promise<RecordEnvelope> {
   let current = record;
+  let skipped = false;
   for (const section of kinds.get(record.kind).sections ?? []) {
+    // A section the person edited themselves is already theirs (ADR 0056).
+    if (await confirmedAlready(current, section.id)) {
+      skipped = true;
+      continue;
+    }
     current = await run(person, 'records.confirm_section', {
       id: current.id,
       expectedVersion: current.version,
       section: section.id,
+    });
+  }
+  // Editing never activates a draft; one Confirm does once every section is confirmed.
+  if (skipped && current.status === 'draft') {
+    current = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: current.id,
+      expectedVersion: current.version,
     });
   }
   return current;
@@ -609,14 +622,10 @@ describe('binding the protocol (013b)', () => {
       inputs: [{ name: 'wells', value: '96' }],
     });
     expect(bound.status).toBe('active');
-    const reconfirmed = await run(person, 'records.confirm_section', {
-      id: bound.id,
-      expectedVersion: bound.version,
-      section: 'protocol',
-    });
+    // The person bound it, so the protocol is theirs already (ADR 0056).
     const planned = await run(person, 'experiments.set_stage', {
       id: bound.id,
-      expectedVersion: reconfirmed.version,
+      expectedVersion: bound.version,
       stage: 'planned',
     });
     expect(planned.attributes).toMatchObject({ stage: 'planned' });
@@ -1046,3 +1055,8 @@ describe('conclusions and sets (013c)', () => {
     });
   });
 });
+
+async function confirmedAlready(record: RecordEnvelope, section: string) {
+  const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
+  return state.sections.find((s) => s.id === section)?.state === 'confirmed';
+}

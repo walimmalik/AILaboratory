@@ -14,6 +14,7 @@ import {
   type EvidenceInput,
   type FieldEvidence,
   type KindDefinition,
+  type KindSection,
   type Readiness,
   type RecordEnvelope,
   RecordLink,
@@ -223,19 +224,20 @@ export class RecordService {
             : parseAttributes(kind, input.attributes);
         if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
         await checkCalculatedEvidence(tx, ctx, attributes, input.evidence, kind.items);
+        const evidence = nextEvidence(
+          ctx.actor,
+          this.now(),
+          record.attributes,
+          attributes,
+          record.evidence,
+          input.evidence,
+          kind.items,
+        );
         return {
           label: input.label ?? record.label,
           attributes,
-          evidence: nextEvidence(
-            ctx.actor,
-            this.now(),
-            record.attributes,
-            attributes,
-            record.evidence,
-            input.evidence,
-            kind.items,
-          ),
-          reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
+          evidence,
+          reviews: approvalReviews(ctx, kind, record, attributes, evidence, this.now()),
         };
       },
     );
@@ -468,7 +470,7 @@ export class RecordService {
           label: earlier.snapshot.label,
           attributes,
           evidence,
-          reviews: approvalReviews(ctx, kind, record, attributes, this.now()),
+          reviews: approvalReviews(ctx, kind, record, attributes, evidence, this.now()),
         };
       },
     );
@@ -671,29 +673,65 @@ export class RecordService {
 /**
  * Section reviews after a change. When the change runs because a person approved an agent's
  * proposal, each section it changed counts as confirmed by that person, as they saw it in the
- * proposal. Otherwise reviews are unchanged, and changed sections read as needing review.
+ * proposal. When a person edits a record themselves, each section they changed counts as confirmed
+ * by them unless it still holds an agent's value they haven't confirmed (plan 004e R10, ADR 0056):
+ * there is nothing to review in what you typed yourself. Otherwise reviews are unchanged, and
+ * changed sections read as needing review.
  */
 function approvalReviews(
   ctx: RecordContext,
   kind: KindDefinition,
   record: RecordRow,
   attributes: Record<string, unknown>,
+  evidence: Record<string, FieldEvidence>,
   at: Date,
 ): Record<string, SectionReview> {
-  if (!ctx.approvedBy) return record.reviews;
+  const by = ctx.approvedBy ?? (ctx.actor.type === 'user' ? ctx.actor : undefined);
+  if (!by) return record.reviews;
   const reviews = { ...record.reviews };
   for (const section of kind.sections ?? []) {
     const before = sectionValues(section, record.attributes);
     const after = sectionValues(section, attributes);
     if (sameValue(before, after)) continue;
+    if (
+      !ctx.approvedBy &&
+      holdsAgentValues(section, after, evidence, record.reviews[section.id], kind.items)
+    ) {
+      continue;
+    }
     reviews[section.id] = {
-      confirmedBy: ctx.approvedBy,
+      confirmedBy: by,
       confirmedAt: at.toISOString(),
       version: record.version + 1,
       values: after,
     };
   }
   return reviews;
+}
+
+/**
+ * Whether a section holds an agent's value no person has confirmed: a field, or an item of a keyed
+ * list, whose evidence is an agent's and whose value isn't the one last confirmed for the section.
+ */
+function holdsAgentValues(
+  section: KindSection,
+  values: Record<string, unknown>,
+  evidence: Record<string, FieldEvidence>,
+  review: SectionReview | undefined,
+  items: Readonly<Record<string, string>> = {},
+): boolean {
+  const byAgent = (key: string) => evidence[key]?.by.type === 'agent';
+  return section.fields.some((field) => {
+    const confirmed = review?.values[field];
+    if (review && sameValue(confirmed, values[field])) return false;
+    const keyField = items[field];
+    if (!keyField) return byAgent(field);
+    const was = keyedItems(confirmed, keyField);
+    return [...keyedItems(values[field], keyField)].some(
+      ([key, item]) =>
+        byAgent(itemPath(field, key)) && !(was.has(key) && sameValue(was.get(key), item)),
+    );
+  });
 }
 
 /**
