@@ -60,6 +60,15 @@ Consumers:
 
 `seed/memory.yaml`: 25 fictional Demo Lab memories across every kind and strength, records named by kind and label (`{sop: …}`, `{instrument_kind: …}`, `{liquid_type: …}`); the loader (`memory/seed.ts`) drafts each once its records exist and the seed settles them. No derived memories and no personal ones (people are not records yet).
 
+## Screens (005d)
+
+- **The Lab memory tab** (Library, `/memory`, `apps/web/src/pages/Memory.tsx`). It shows memories grouped by what they are about, worked out from their links by `groupMemories` (`apps/web/src/lib/memory.ts`), never tagged by hand. The groups are Lab-wide, Assays and SOPs, Instruments, Labware, Reagents and liquids, Cells and samples, Places, People and Other records. Inside a group, memories sit under their record, rules first. A memory with several links shows once, under its most specific link (a physical thing before its kind), and the other links are tags.
+- **Each row** is the statement, then one grey line with the strength, kind, evidence line, "when" words and "due for a check".
+- **The filter row** has words, kind, strength and current, drafts or retired.
+- **Due memories** are folded at the top.
+- **"Add a lab note"** calls `memory.remember`. A note is the default, and "Rule: designs follow it" is a visible choice. An optional record it is about, a "when" line, and "only me" make it personal.
+- **`memory.search`** returns each memory's records as `aboutRecords` (named) and its evidence as `seen`. `due` now also counts evidence against and quiet runs, as `memory.for` does.
+
 ## Not yet
 
 Review's Lab memory screen (005d), with memories due for a check in "for your information"; suggesting promotion of a note or default that gains weight; flagging a memory when a linked SOP gets a new version or a linked instrument is serviced (M17 note); 020's control charts as a detector that reports quiet records. A run corrected after it finished is not observed again, so a corrected value keeps its old observation. The "for your information" notice on drafts that used a retired or replaced memory comes with the Review screen (005d). A readiness warning on designs that use what a rule avoids comes with the designers that apply rules (017, 018, 019); the transfer plan only shows it in `transfers.options` for now. A personal memory drafted by an agent can still be confirmed by anyone in the lab through `records.confirm`; ownership on confirm comes with the Review screen (005d). Seed handling rules marked `lab_convention` don't name a memory yet: they load before the memories that describe them.

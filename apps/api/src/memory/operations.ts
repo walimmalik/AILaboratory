@@ -17,7 +17,7 @@ import { OperationError } from '../operations/errors.ts';
 import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { activeMemories, bundle, lookup, nearby } from './match.ts';
+import { activeMemories, bundle, evidenceByMemory, lookup, nearby } from './match.ts';
 
 /** Lab memory operations (plans 005a and 005b). */
 
@@ -197,11 +197,30 @@ export const memoryOperations = [
             order[(y.attributes as MemoryAttributes).strength] ||
           y.updatedAt.localeCompare(x.updatedAt),
       );
+      const shown = found.slice(0, input.limit ?? 50);
+      const evidence = await evidenceByMemory(deps, ctx);
+      const named = new Map<string, { id: string; name: string; label: string; kind: string }>();
+      for (const id of new Set(
+        shown.flatMap((m) => (m.attributes as MemoryAttributes).about ?? []),
+      )) {
+        const record = await records.get(ctx, id).catch(() => undefined);
+        if (record)
+          named.set(id, { id, name: record.name, label: record.label, kind: record.kind });
+      }
       return {
-        memories: found.slice(0, input.limit ?? 50).map((m) => ({
-          ...m,
-          due: m.status === 'active' && isDue((m.attributes as MemoryAttributes).checkAgain, now),
-        })),
+        memories: shown.map((m) => {
+          const a = m.attributes as MemoryAttributes;
+          const seen = evidence.get(m.id);
+          return {
+            ...m,
+            due: m.status === 'active' && (isDue(a.checkAgain, now) || seen?.due !== undefined),
+            ...(seen ? { seen } : {}),
+            aboutRecords: (a.about ?? []).flatMap((id) => {
+              const r = named.get(id);
+              return r ? [r] : [];
+            }),
+          };
+        }),
         total: found.length,
       };
     },

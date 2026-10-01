@@ -372,6 +372,9 @@ describe('memory.search', () => {
       { about: kind.id },
     );
     expect(star_.memories.map((m) => attributes(m).strength)).toEqual(['rule', 'note']);
+    expect((star_.memories[0] as unknown as { aboutRecords: unknown[] }).aboutRecords).toEqual([
+      { id: kind.id, name: kind.name, label: kind.label, kind: kind.kind },
+    ]);
     const words = await run<{ memories: (RecordEnvelope & { due: boolean })[] }>(
       agent,
       'memory.search',
