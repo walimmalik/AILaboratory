@@ -20,7 +20,7 @@ Plan [016](../plans/016-transfer-designer.md): how the liquid gets there. Code w
 
 The solvent limit, the tolerance and the intermediate plate's volumes are hard limits. Within them it picks the fewest dilutions per compound that reach every point (so one intermediate serves as many points as it can), then the smallest total error. It fills each dilution's wells with the dispenses in order, opening another well when one would drop below its dead volume, and packs the wells onto the fewest plates in row order.
 
-It reports, per point, where it comes from (the source, or the intermediate wells `I1`, `I2`…), the droplets, the concentration the well gets, its error and its solvent. Per intermediate well it reports the concentration, what the preparation puts in (stock, then solvent up to the volume), what the dispenses draw and the dead volume. A point no route reaches is listed with why.
+It reports, per point, where it comes from (the source, or the intermediate wells `I1`, `I2`…), the droplets, the concentration the well gets, its error and its solvent. Per intermediate well it reports the concentration, what the preparation puts in (stock, then solvent up to the volume; the stock is whole steps of the dispensing device, rounded up, and the well grows to keep the factor exact, so each well keeps one factor × step of room for it), what the dispenses draw and the dead volume. A point no route reaches is listed with why.
 
 ## Calculator operations (016a-2)
 
