@@ -18,6 +18,7 @@ variables:
   standard_points: 7
   standard_dilution_factor: 2
   well_volume: { value: "100", unit: "uL" }
+  sample_dilution: 1
 status_of_values:
   capture_ab_working_conc: estimated
   detection_ab_working_conc: estimated
@@ -36,7 +37,7 @@ actions: [add, wash, add, serial_dilute, add, add, add, add, read]
 1. **Coat.** Dilute capture antibody to `capture_ab_working_conc` in PBS. Add `well_volume` per well to a MaxiSorp plate. Seal and incubate overnight at room temperature.
 2. **Wash.** Wash 3 times with 400 µL wash buffer per well (BlueWasher). Remove all liquid after the last wash.
 3. **Block.** Add 300 µL reagent diluent per well. Incubate at least 1 h at room temperature. Wash as in step 2.
-4. **Standards and samples.** Make a `standard_points`-point, `standard_dilution_factor`-fold series from `standard_top_conc` in reagent diluent, plus a blank. Add `well_volume` of standard or sample per well, in duplicate. Seal and incubate 2 h at room temperature. Wash.
+4. **Standards and samples.** Dilute samples `sample_dilution`-fold in reagent diluent. Make a `standard_points`-point, `standard_dilution_factor`-fold series from `standard_top_conc` in reagent diluent, plus a blank. Add `well_volume` of standard or sample per well, in duplicate. Seal and incubate 2 h at room temperature. Wash.
 5. **Detection antibody.** Dilute to `detection_ab_working_conc` in reagent diluent. Add `well_volume` per well. Seal and incubate 2 h at room temperature. Wash.
 6. **Streptavidin-HRP.** Dilute as stated on the vial (typically 1:40). Add `well_volume` per well. Incubate 20 min at room temperature, **away from light**. Wash.
 7. **Substrate.** Add `well_volume` TMB substrate per well. Incubate 20 min at room temperature, **away from light**.

@@ -147,6 +147,7 @@ describe('MCP', () => {
     });
     const listed = (await calculators.json()).result.structuredContent.operations;
     expect(listed.map((o: { id: string }) => o.id).sort()).toEqual([
+      'assays.design',
       'experiments.calculate',
       'inventory.calculate_transfer',
       'inventory.map_plates',

@@ -1,4 +1,5 @@
 import type { OperationContract } from '../operation.ts';
+import * as assays from './assays.ts';
 import * as assistant from './assistant.ts';
 import * as campaigns from './campaigns.ts';
 import * as contents from './contents.ts';
@@ -33,6 +34,7 @@ const isContract = (value: unknown): value is OperationContract =>
  */
 export const operationContracts: ReadonlyMap<string, OperationContract> = new Map(
   [
+    assays,
     assistant,
     campaigns,
     contents,

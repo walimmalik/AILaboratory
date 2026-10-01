@@ -1,4 +1,5 @@
 import { recordsOverview } from '@ailab/schema';
+import { assayOverviews } from '../assays/overview.ts';
 import { campaignOverviews } from '../campaigns/overview.ts';
 import { entityOverviews } from '../entities/overview.ts';
 import { instrumentOverviews } from '../instruments/overview.ts';
@@ -20,6 +21,7 @@ const NOUNS: Record<string, string> = { sop: 'SOP' };
 
 /** Each module says how its kinds read first; kinds without a builder get the fallback. */
 const builders: Record<string, OverviewBuilder> = {
+  ...assayOverviews,
   ...campaignOverviews,
   ...entityOverviews,
   ...instrumentOverviews,

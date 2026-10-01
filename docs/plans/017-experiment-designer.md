@@ -71,7 +71,7 @@ Recommended option in bold. Asked 2026-09-29.
 
 ## Proposed split
 
-- **017a:** assay template schema, `packages/domain/design`, operations, ELISA template from the seed.
-- **017b:** the designer (drafts experiment, plate maps and transfer plans together), feasibility, design page, skill.
+- **017a:** assay template schema, `packages/domain/design`, operations, ELISA template from the seed. Built (017a-1, ADR 0066): `AssayTemplateAttributes` and `packages/domain/src/design.ts` (series levels, full factorial and one-factor-at-a-time conditions, wells, plates and runs). Built (017a-2): the `assay_template` record kind, `assays.draft_template`, `assays.design` and `assays.search`, and the IL-6 ELISA template in `seed/assay-templates.yaml`.
+- **017b:** the designer (drafts experiment, plate maps and transfer plans together), feasibility, design page, skill. Built (017b-1, ADR 0067): `designer.start` drafts the experiment, pinned to the confirmed template, and its plate map in one write. Next (017b-2): feasibility, `assays.save_from_experiment` and the design page.
 - **017c:** compound screen and dose-response, Dual-Glo and pNPP templates.
 - **017d:** fractional factorial and response-surface designs through the science service.

@@ -1,5 +1,6 @@
 import type { Actor, Connection, RecordEnvelope, RecordOverview } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { assayKinds } from '../assays/kinds.ts';
 import { createTenant } from '../auth.ts';
 import { campaignKinds } from '../campaigns/kinds.ts';
 import type { Db } from '../db/client.ts';
@@ -218,6 +219,7 @@ describe('overview builders', () => {
       ...plateMapKinds,
       ...transferKinds,
       ...memoryKinds,
+      ...assayKinds,
     ].map((k) => k.kind);
     const built = new Set(overviewKinds());
     expect(all.filter((k) => !built.has(k) && !FALLBACK_KINDS.has(k))).toEqual([]);
