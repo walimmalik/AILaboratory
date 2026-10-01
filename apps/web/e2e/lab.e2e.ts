@@ -1033,3 +1033,60 @@ test('a layout previews its plate, and a plate map shows real samples well by we
     '39 samples per plate',
   );
 });
+
+test('a person restores a version, archives and unarchives a record, and discards a draft from its page', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const label = `Reservoir ${Date.now()}`;
+  const record = await asPerson(page, 'records.create', {
+    kind: 'widget',
+    label,
+    attributes,
+    status: 'active',
+  });
+  await asPerson(page, 'records.update', {
+    id: record.id,
+    expectedVersion: 1,
+    label: `Renamed ${label}`,
+  });
+  await page.goto(`/records/${record.id}`);
+  const heading = page.getByRole('heading', { level: 1 });
+  await expect(heading).toContainText(`Renamed ${label}`);
+
+  await page.getByRole('button', { name: 'Restore version 1' }).click();
+  await page.getByRole('button', { name: 'Restore v1' }).click();
+  await expect(heading).not.toContainText('Renamed');
+  await expect(heading).toContainText(label);
+
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await page.getByRole('button', { name: `Archive ${record.name}` }).click();
+  await expect(page.getByRole('button', { name: 'Unarchive', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Unarchive', exact: true }).click();
+  await page.getByRole('button', { name: `Unarchive ${record.name}` }).click();
+  await expect(page.getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
+
+  const drafted = await asAgent(request, 'records.create', {
+    kind: 'widget',
+    label: `Spare ${label}`,
+    attributes,
+  });
+  await page.goto(`/records/${drafted.output.id}`);
+  await page.getByRole('button', { name: 'Discard draft', exact: true }).click();
+  await page.getByRole('button', { name: `Discard draft ${drafted.output.name}` }).click();
+  await expect(page).toHaveURL(/\/review$/);
+});
+
+test('the calculators page lists every lab calculator with a form drawn from its inputs', async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: 'Calculators' })
+    .click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Calculators');
+  expect(await page.getByLabel('Calculator').locator('option').count()).toBeGreaterThan(5);
+  await expect(page.getByRole('button', { name: 'Calculate' })).toBeVisible();
+});

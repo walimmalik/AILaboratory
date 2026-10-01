@@ -162,6 +162,9 @@ function ShellLayout() {
         <section className="nav-foot">
           <ul>
             <li>
+              <Link to="/calculators">Calculators</Link>
+            </li>
+            <li>
               <Link to="/wiki">Wiki</Link>
             </li>
             <li>

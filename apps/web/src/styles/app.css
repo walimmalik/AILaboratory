@@ -2192,3 +2192,17 @@ table.dense td.row-actions > * + * {
 .actions.batch {
   margin-bottom: 8px;
 }
+
+/* Whole-record actions and restoring a version (plan 004e R11). */
+.actions.record-actions {
+  margin-top: 6px;
+}
+span.row-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  white-space: nowrap;
+}
+.calculator-result {
+  margin-top: 12px;
+}
