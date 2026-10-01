@@ -642,7 +642,9 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
     /3 wells · “Plated the reagent”/,
   );
   await page.getByRole('link', { name: /^Connections/ }).click();
-  await expect(page.getByRole('region', { name: 'Based on' })).toContainText('is a');
+  const basedOn = page.getByRole('region', { name: 'Based on' });
+  await expect(basedOn).toContainText('is a');
+  await expect(basedOn).not.toContainText('Invalid Date');
 
   await page
     .getByRole('navigation', { name: 'Modules' })

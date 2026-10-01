@@ -14,7 +14,7 @@ import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import {
   actorLabel,
   diffRecords,
-  formatDay,
+  formatShortDay,
   formatValue,
   formatWhen,
   isAgent,
@@ -368,12 +368,12 @@ function RecordMissing({ id, error }: { id: string; error: Error }) {
 /** Every version: who changed what, when and why, with Restore. */
 /** What a physical event did, as the History tab says it. */
 const EVENT_WORDS: Record<InventoryEvent['type'], string> = {
-  fill: 'Filled',
-  transfer: 'Transferred',
-  stamp: 'Stamped',
-  consume: 'Used',
-  correct: 'Corrected',
-  discard: 'Discarded',
+  fill: 'filled',
+  transfer: 'transferred',
+  stamp: 'stamped',
+  consume: 'used',
+  correct: 'corrected',
+  discard: 'discarded',
 };
 
 /**
@@ -581,7 +581,7 @@ function ConnectionGroup({ words, links }: { words: string; links: Connection[] 
             </Link>
             {other.status !== 'active' && <span className="muted"> · {other.status}</span>}
             <span className="when" title={`last changed ${formatWhen(other.updatedAt)}`}>
-              {formatDay(other.updatedAt)}
+              {formatShortDay(other.updatedAt)}
             </span>
           </li>
         ))}
