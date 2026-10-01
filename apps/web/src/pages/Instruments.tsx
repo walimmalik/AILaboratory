@@ -22,35 +22,10 @@ import {
   statusLamp,
   statusWords,
 } from '../lib/instruments.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
+import { Head, page } from './AreaHead.tsx';
 import { RecordList } from './Records.tsx';
 import { LinkedName } from './Value.tsx';
-
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
-
-export function Head({
-  page,
-  lede,
-  actions,
-}: {
-  page: KindPage;
-  lede: string;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className="page-head">
-      <div>
-        <div className="crumbs">
-          lab / library / <b>{page.title.toLowerCase()}</b>
-        </div>
-        <h1>{page.title}</h1>
-        <p className="lede">{lede}</p>
-      </div>
-      {actions}
-    </div>
-  );
-}
 
 const words = (id: string) => id.replaceAll('_', ' ');
 const capabilityList = (providers: CapabilityProvider[] | undefined) =>

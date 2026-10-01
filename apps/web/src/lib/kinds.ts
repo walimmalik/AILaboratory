@@ -1,10 +1,13 @@
 /**
- * The library pages in the menu (plan 007b): one per registry, in plain words. Kinds without a page
- * (test kinds, registries still to come) are reached through All records.
+ * The menu (plan 004f N1, ADR 0063): eight entries, four of them areas whose pages are tabs, one
+ * per kind of thing the area lists. Each tab keeps its own path, so old links open the tab. Kinds
+ * without a tab (test kinds, kinds still to come) are reached through All records.
  */
+export type Area = 'Experiments' | 'Inventory' | 'Instruments' | 'Library';
+
 export interface KindPage {
   kind: string;
-  /** Menu and page title, e.g. "Labware". */
+  /** Tab and page title, e.g. "Labware". */
   title: string;
   /** One record in words, e.g. "labware type". */
   noun: string;
@@ -32,115 +35,120 @@ export interface KindPage {
     | '/sets'
     | '/plate-maps'
     | '/layouts';
-  /** The menu group it sits in: one per registry. */
-  group: 'Experiments' | 'Library' | 'Instruments' | 'Reagents' | 'Inventory';
+  /** The menu entry whose tabs it sits in. */
+  area: Area;
+  /** A page without a tab of its own names the tab it belongs under (plate maps under layouts, N5). */
+  under?: string;
 }
 
+/** Every kind page, in tab order within each area. */
 export const libraryPages: KindPage[] = [
-  {
-    kind: 'campaign',
-    title: 'Campaigns',
-    noun: 'campaign',
-    path: '/campaigns',
-    group: 'Experiments',
-  },
   {
     kind: 'experiment',
     title: 'Experiments',
     noun: 'experiment',
     path: '/experiments',
-    group: 'Experiments',
+    area: 'Experiments',
   },
-  { kind: 'run', title: 'Runs', noun: 'run', path: '/runs', group: 'Experiments' },
-  { kind: 'set', title: 'Sets', noun: 'set', path: '/sets', group: 'Experiments' },
   {
-    kind: 'plate_map',
-    title: 'Plate maps',
-    noun: 'plate map',
-    path: '/plate-maps',
-    group: 'Experiments',
+    kind: 'campaign',
+    title: 'Campaigns',
+    noun: 'campaign',
+    path: '/campaigns',
+    area: 'Experiments',
   },
-  { kind: 'layout', title: 'Layouts', noun: 'layout', path: '/layouts', group: 'Experiments' },
+  { kind: 'run', title: 'Runs', noun: 'run', path: '/runs', area: 'Experiments' },
+  { kind: 'set', title: 'Sets', noun: 'set', path: '/sets', area: 'Experiments' },
+  { kind: 'product', title: 'Reagents', noun: 'product', path: '/reagents', area: 'Inventory' },
+  { kind: 'lot', title: 'Lots', noun: 'lot', path: '/lots', area: 'Inventory' },
+  { kind: 'entity', title: 'Materials', noun: 'material', path: '/entities', area: 'Inventory' },
+  { kind: 'sample', title: 'Samples', noun: 'sample', path: '/samples', area: 'Inventory' },
   {
-    kind: 'labware_type',
-    title: 'Labware',
-    noun: 'labware type',
-    path: '/labware',
-    group: 'Library',
+    kind: 'container',
+    title: 'Containers',
+    noun: 'container',
+    path: '/containers',
+    area: 'Inventory',
   },
-  { kind: 'vendor', title: 'Vendors', noun: 'vendor', path: '/vendors', group: 'Library' },
-  { kind: 'document', title: 'Documents', noun: 'document', path: '/documents', group: 'Library' },
-  { kind: 'sop', title: 'SOPs', noun: 'SOP', path: '/sops', group: 'Library' },
+  { kind: 'location', title: 'Places', noun: 'place', path: '/places', area: 'Inventory' },
   {
     kind: 'instrument',
     title: 'Instruments',
     noun: 'instrument',
     path: '/instruments',
-    group: 'Instruments',
+    area: 'Instruments',
   },
   {
     kind: 'instrument_kind',
     title: 'Instrument models',
     noun: 'instrument model',
     path: '/instrument-models',
-    group: 'Instruments',
+    area: 'Instruments',
   },
   {
     kind: 'workcell',
     title: 'Workcells',
     noun: 'workcell',
     path: '/workcells',
-    group: 'Instruments',
+    area: 'Instruments',
   },
   {
     kind: 'equipment_kind',
     title: 'Equipment',
     noun: 'equipment kind',
     path: '/equipment',
-    group: 'Instruments',
+    area: 'Instruments',
   },
-  { kind: 'product', title: 'Reagents', noun: 'product', path: '/reagents', group: 'Reagents' },
-  { kind: 'lot', title: 'Lots', noun: 'lot', path: '/lots', group: 'Reagents' },
+  { kind: 'sop', title: 'SOPs', noun: 'SOP', path: '/sops', area: 'Library' },
+  { kind: 'document', title: 'Documents', noun: 'document', path: '/documents', area: 'Library' },
+  {
+    kind: 'labware_type',
+    title: 'Labware',
+    noun: 'labware type',
+    path: '/labware',
+    area: 'Library',
+  },
+  { kind: 'layout', title: 'Plate layouts', noun: 'layout', path: '/layouts', area: 'Library' },
+  {
+    kind: 'plate_map',
+    title: 'Plate maps',
+    noun: 'plate map',
+    path: '/plate-maps',
+    area: 'Library',
+    under: 'layout',
+  },
   {
     kind: 'liquid_class',
     title: 'Liquid classes',
     noun: 'liquid class',
     path: '/liquid-classes',
-    group: 'Reagents',
+    area: 'Library',
   },
   {
     kind: 'liquid_type',
     title: 'Liquid types',
     noun: 'liquid type',
     path: '/liquid-types',
-    group: 'Reagents',
+    area: 'Library',
   },
-  {
-    kind: 'container',
-    title: 'Containers',
-    noun: 'container',
-    path: '/containers',
-    group: 'Inventory',
-  },
-  { kind: 'location', title: 'Places', noun: 'place', path: '/places', group: 'Inventory' },
-  { kind: 'sample', title: 'Samples', noun: 'sample', path: '/samples', group: 'Inventory' },
-  { kind: 'entity', title: 'Entities', noun: 'entity', path: '/entities', group: 'Inventory' },
   {
     kind: 'entity_kind',
-    title: 'Entity kinds',
-    noun: 'entity kind',
+    title: 'Material kinds',
+    noun: 'material kind',
     path: '/entity-kinds',
-    group: 'Inventory',
+    area: 'Library',
   },
+  { kind: 'vendor', title: 'Vendors', noun: 'vendor', path: '/vendors', area: 'Library' },
 ];
 
-/** The menu groups in order, each with its pages. */
-export const libraryGroups = (
-  ['Experiments', 'Library', 'Instruments', 'Reagents', 'Inventory'] as const
-).map((group) => ({
-  group,
-  pages: libraryPages.filter((p) => p.group === group),
-}));
+/** The four areas in menu order, each with its tabs (pages that sit under another tab left out). */
+export const areas = (['Experiments', 'Inventory', 'Instruments', 'Library'] as const).map(
+  (area) => ({
+    area,
+    tabs: libraryPages.filter((p) => p.area === area && !p.under),
+    kinds: libraryPages.filter((p) => p.area === area).map((p) => p.kind),
+  }),
+);
 
 export function kindPage(kind: string): KindPage | undefined {
   return libraryPages.find((p) => p.kind === kind);

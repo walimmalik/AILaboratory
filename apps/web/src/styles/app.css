@@ -183,7 +183,8 @@ a {
   background: var(--accent-soft);
   color: var(--ink);
 }
-.nav a[data-status="active"] {
+.nav a[data-status="active"],
+.nav a.on {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
@@ -2365,7 +2366,7 @@ span.row-actions {
   text-decoration: underline;
 }
 
-.record-page .tabs {
+.tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -2387,12 +2388,15 @@ span.row-actions {
   border-bottom-color: var(--accent);
   font-weight: 500;
 }
-.record-page .tabs .count {
+.tabs .count {
   font: 11px var(--font-mono);
   color: var(--ink-3);
   margin-left: 5px;
 }
-.record-page .tabs .count.warn-ink {
+.tabs .count.agent-ink {
+  color: var(--agent);
+}
+.tabs .count.warn-ink {
   color: var(--warn);
 }
 

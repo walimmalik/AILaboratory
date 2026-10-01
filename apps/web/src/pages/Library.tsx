@@ -1,30 +1,12 @@
 import type { LabwareFamily, LabwareTypeAttributes, RecordEnvelope } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { formatValue } from '../lib/format.ts';
-import type { KindPage } from '../lib/kinds.ts';
-import { libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
+import { Head, page } from './AreaHead.tsx';
 import { ImportOpentrons } from './ImportOpentrons.tsx';
 import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
-
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
-
-function Head({ page, lede, actions }: { page: KindPage; lede: string; actions?: ReactNode }) {
-  return (
-    <div className="page-head">
-      <div>
-        <div className="crumbs">
-          lab / library / <b>{page.title.toLowerCase()}</b>
-        </div>
-        <h1>{page.title}</h1>
-        <p className="lede">{lede}</p>
-      </div>
-      {actions}
-    </div>
-  );
-}
 
 const familyWords: Record<LabwareFamily, string> = {
   plate: 'plate',

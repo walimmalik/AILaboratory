@@ -18,9 +18,8 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery } from '../queries.ts';
-import { Head } from './Instruments.tsx';
+import { Head, page } from './AreaHead.tsx';
 import { DocumentMentions, mentionsQuery } from './Mentions.tsx';
 import { RecordList } from './Records.tsx';
 
@@ -69,7 +68,6 @@ export function Snippet({ text }: { text: string }) {
 }
 
 export function DocumentsPage() {
-  const page = libraryPages.find((p) => p.kind === 'document') as KindPage;
   const confirmed = useQuery({
     queryKey: ['library', 'mentions', { status: 'confirmed' }],
     queryFn: () => api.run(libraryMentions, { status: 'confirmed', limit: 500 }),
@@ -84,7 +82,7 @@ export function DocumentsPage() {
   return (
     <>
       <Head
-        page={page}
+        page={page('document')}
         lede="SOPs, vendor manuals, papers and protocol code as published, searchable by their text, with what each one mentions."
         actions={
           <button

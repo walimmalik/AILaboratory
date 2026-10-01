@@ -35,13 +35,12 @@ import {
   volumeText,
   wellRanges,
 } from '../lib/inventory.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
-import { Head, useLabels } from './Instruments.tsx';
+import { Head, page } from './AreaHead.tsx';
+import { useLabels } from './Instruments.tsx';
 import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
 
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 const words = (id: string) => id.replaceAll('_', ' ');
 
 /** Labels of containers and locations together, for "where is it". */
@@ -120,10 +119,10 @@ export function EntitiesPage() {
         lede="What the lab works with, whatever form it is in: plasmids, cell lines, compounds, antibodies, enzymes. Samples and lots are batches of them."
       />
       <RecordList
-        title="Entities"
+        title="Materials"
         kind="entity"
         placeholder="Find by name or synonym, e.g. HEK293 or PLS-0001"
-        empty="No entities yet. Ask the assistant to draft one, or load the seed lab."
+        empty="No materials yet. Ask the assistant to draft one, or load the seed lab."
         columns={[{ header: 'Kind', cell: (r) => kinds.get(of(r).entityKind ?? '') ?? '—' }]}
       />
     </>
@@ -139,10 +138,10 @@ export function EntityKindsPage() {
         lede="The kinds of things the lab keeps, each with its fields and the handling rules every one of them follows."
       />
       <RecordList
-        title="Entity kinds"
+        title="Material kinds"
         kind="entity_kind"
         placeholder="Find by name, e.g. Plasmid"
-        empty="No entity kinds yet. Load the seed lab, or ask the assistant to draft one."
+        empty="No material kinds yet. Load the seed lab, or ask the assistant to draft one."
         columns={[
           { header: 'Prefix', cell: (r) => of(r).prefix ?? '—', className: 'mono' },
           { header: 'Base', cell: (r) => (of(r).base ? words(of(r).base as string) : '—') },

@@ -13,7 +13,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import {
   cellWords,
   classMatrix,
@@ -24,11 +23,11 @@ import {
   volumeWords,
 } from '../lib/liquids.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
-import { Head, useLabels } from './Instruments.tsx';
+import { Head, page } from './AreaHead.tsx';
+import { useLabels } from './Instruments.tsx';
 import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
 
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 const words = (id: string) => id.replaceAll('_', ' ');
 const today = () => new Date().toISOString().slice(0, 10);
 

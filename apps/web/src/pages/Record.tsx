@@ -144,7 +144,7 @@ export function RecordPage() {
       <div className="page-head record-head">
         <div>
           <div className="crumbs">
-            lab /{' '}
+            lab / {kindPage(r.kind) && <>{kindPage(r.kind)?.area.toLowerCase()} / </>}
             {kindPage(r.kind) ? (
               <Link to={kindPage(r.kind)?.path ?? '/records'}>
                 {kindPage(r.kind)?.title.toLowerCase()}

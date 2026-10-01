@@ -71,7 +71,7 @@ export function NewRecordPage() {
     <div className="page-head">
       <div>
         <div className="crumbs">
-          lab /{' '}
+          lab / {page && <>{page.area.toLowerCase()} / </>}
           {page ? (
             <Link to={page.path}>{page.title.toLowerCase()}</Link>
           ) : (
