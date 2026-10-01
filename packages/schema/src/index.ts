@@ -13,6 +13,7 @@ export * from './kind.ts';
 export * from './labware.ts';
 export * from './library.ts';
 export * from './liquids.ts';
+export * from './memory.ts';
 export * from './operation.ts';
 export * from './operations/index.ts';
 export * from './platemaps.ts';

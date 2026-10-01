@@ -13,6 +13,7 @@ import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { converterFromEnv } from './library/convert.ts';
 import { libraryKinds } from './library/kinds.ts';
+import { memoryKinds } from './memory/kinds.ts';
 import { plateMapKinds } from './platemaps/kinds.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
@@ -45,6 +46,7 @@ for (const kind of [
   ...campaignKinds,
   ...plateMapKinds,
   ...transferKinds,
+  ...memoryKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);

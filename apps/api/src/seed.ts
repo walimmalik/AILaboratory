@@ -20,6 +20,7 @@ import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
+import { memoryKinds } from './memory/kinds.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { plateMapKinds } from './platemaps/kinds.ts';
 import { loadSeedLayouts, readSeedLayouts } from './platemaps/seed.ts';
@@ -104,6 +105,7 @@ for (const kind of [
   ...campaignKinds,
   ...plateMapKinds,
   ...transferKinds,
+  ...memoryKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {

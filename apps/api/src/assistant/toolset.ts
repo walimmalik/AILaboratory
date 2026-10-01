@@ -11,8 +11,9 @@ import type { ModelTool } from './model.ts';
  */
 
 /**
- * Always offered: reading records and what waits for people, discovery, drafting records, change sets
- * and the proposals the assistant left.
+ * Always offered: reading records and what waits for people, discovery, drafting records, change sets,
+ * the proposals the assistant left, and lab memory (searching it, and proposing what a person says
+ * generally, plan 005a).
  */
 const CORE = new Set([
   'records.get',
@@ -30,6 +31,8 @@ const CORE = new Set([
   'skills.list',
   'skills.get',
   'operations.describe',
+  'memory.search',
+  'memory.propose',
 ]);
 
 /** The modules each page of the app belongs to, by its path. */
@@ -76,6 +79,7 @@ const KIND_NAMESPACES: Record<string, string[]> = {
   sop: ['sops'],
   transfer_plan: ['transfers', 'worklists'],
   worklist_format: ['worklists', 'transfers', 'files'],
+  memory: ['memory'],
 };
 
 /** The namespaces of the page a message was sent from. */
