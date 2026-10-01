@@ -45,15 +45,14 @@ export function runChecks(
 ): CheckResult[] {
   return checks.flatMap((check) => {
     let outcome: true | string;
-    let quickFix: CheckResult['quickFix'];
+    let options: CheckResult['options'];
     try {
       const applies = (check as unknown as KindCheck).applies;
       if (applies && !applies(attributes)) return [];
       outcome = (check as unknown as KindCheck).test(attributes);
-      const offered = (check as unknown as KindCheck).quickFix;
-      if (outcome !== true && offered && (!offered.applies || offered.applies(attributes))) {
-        quickFix = { operation: offered.operation, label: offered.label };
-      }
+      const offer = (check as unknown as KindCheck).options;
+      const offered = outcome !== true && offer ? offer(attributes) : [];
+      if (offered.length) options = offered.map((o) => ({ ...o, input: o.input ?? {} }));
     } catch (error) {
       outcome = error instanceof Error ? error.message : String(error);
     }
@@ -67,7 +66,7 @@ export function runChecks(
         passed: outcome === true,
         ...(outcome === true ? {} : { message: outcome }),
         ...(check.fix ? { fix: check.fix } : {}),
-        ...(quickFix ? { quickFix } : {}),
+        ...(options ? { options } : {}),
       },
     ];
   });
@@ -176,7 +175,18 @@ export function readiness(
     };
   });
 
-  const results = [...runChecks(checks, attributes), ...related];
+  // Options act on this record as it stands, so each carries its id and version.
+  const results = [...runChecks(checks, attributes), ...related].map((c) =>
+    c.options && !c.passed
+      ? {
+          ...c,
+          options: c.options.map((o) => ({
+            ...o,
+            input: { id: record.id, expectedVersion: record.version, ...o.input },
+          })),
+        }
+      : (({ options: _, ...rest }) => rest)(c),
+  );
   const missing = [
     ...sectionStates
       .filter((s) => s.state === 'needs_review')

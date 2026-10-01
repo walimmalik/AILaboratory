@@ -154,25 +154,41 @@ describe('readiness', () => {
     expect(result.notApplicable).toEqual(['volume.unit']);
   });
 
-  it('offers a quick fix only while the check fails and the fix fits the values', () => {
-    const withFix = [
+  it('offers ranked options only while the check fails, acting on this record as it stands', () => {
+    const withOptions = [
       {
         ...checks[0],
-        quickFix: {
-          operation: 'widgets.fill_volume',
-          label: 'Use the standard volume',
-          applies: (a: { color: string }) => a.color === 'blue',
-        },
+        options: (a: { color: string }) =>
+          a.color === 'blue'
+            ? [
+                {
+                  label: 'Use the standard volume',
+                  consequence: 'Sets the volume to 50 mL',
+                  operation: 'widgets.fill_volume',
+                  input: { volume: '50' },
+                },
+                {
+                  label: 'Archive it',
+                  consequence: 'Stops using it',
+                  operation: 'records.archive',
+                },
+              ]
+            : [],
       },
     ] as unknown as KindCheck<never>[];
     const empty = widget({ attributes: { color: 'blue', volume: { value: '0', unit: 'mL' } } });
-    expect(readiness(empty, { sections, checks: withFix }).checks[0]?.quickFix).toEqual({
-      operation: 'widgets.fill_volume',
-      label: 'Use the standard volume',
+    const offered = readiness(empty, { sections, checks: withOptions }).checks[0]?.options;
+    expect(offered?.map((o) => o.label)).toEqual(['Use the standard volume', 'Archive it']);
+    expect(offered?.[0]?.input).toEqual({
+      id: empty.id,
+      expectedVersion: empty.version,
+      volume: '50',
     });
     empty.attributes = { color: 'red', volume: { value: '0', unit: 'mL' } };
-    expect(readiness(empty, { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
-    expect(readiness(widget(), { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
+    expect(readiness(empty, { sections, checks: withOptions }).checks[0]?.options).toBeUndefined();
+    expect(
+      readiness(widget(), { sections, checks: withOptions }).checks[0]?.options,
+    ).toBeUndefined();
   });
 
   it('counts the guesses of a draft whose kind has no sections, until it is active', () => {

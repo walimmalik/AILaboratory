@@ -13,7 +13,7 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
 import { actorLabel, formatWhen, operationIntent, operationVerb } from '../lib/format.ts';
-import { kindPage } from '../lib/kinds.ts';
+import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   decidedProposalsQuery,
   kindsQuery,
@@ -224,7 +224,10 @@ export function ReviewPage() {
                         {p.operationId === 'changes.apply' ? (
                           `(${stepsOf(p).length} changes)`
                         ) : (
-                          <TargetName step={stepsOf(p)[0] as Step} />
+                          <TargetName
+                            step={stepsOf(p)[0] as Step}
+                            created={createdIn(stepsOf(p))}
+                          />
                         )}
                       </td>
                       <td>
@@ -446,25 +449,51 @@ function asRecord(output: unknown): RecordEnvelope | undefined {
     : undefined;
 }
 
-function TargetName({ step }: { step: Step }) {
+/**
+ * The ids of the records a set's steps create. A preview's new records were rolled back, so their
+ * names and ids aren't the ones they will get: they are named by kind and label instead.
+ */
+function createdIn(steps: Step[]): Set<string> {
+  return new Set(
+    steps.flatMap((s) => {
+      const made = asRecord(s.output);
+      return made && !targetId(s.input) ? [made.id] : [];
+    }),
+  );
+}
+
+/** The record a step changes: a link when it exists now, "a new vendor “NEB”" when it will. */
+function TargetName({ step, created }: { step: Step; created: Set<string> }) {
+  const record = asRecord(step.output);
+  // A calculation or a read changes no record, so it names none.
+  if (!record) return null;
   const id = targetId(step.input);
-  const name = asRecord(step.output)?.name;
-  if (id) {
+  if (!id || created.has(id)) {
     return (
-      <Link to="/records/$id" params={{ id }} className="mono">
-        {name ?? 'record'}
-      </Link>
+      <span>
+        {id ? 'the new' : 'a new'} {kindNoun(record.kind)} “{record.label}”
+      </span>
     );
   }
-  return <span className="mono">{name ?? 'a new record'}</span>;
+  // Codes are tags after names.
+  return (
+    <>
+      <Link to="/records/$id" params={{ id }}>
+        {record.label}
+      </Link>{' '}
+      <span className="mono muted">{record.name}</span>
+    </>
+  );
 }
 
 /**
  * What one step would change, row by row against the record as it is now (UI rule: a diff is rows
  * of what changed), with the agent's guesses marked and counted, since confirming accepts them.
  */
-function StepChanges({ step }: { step: Step }) {
-  const id = targetId(step.input);
+function StepChanges({ step, created }: { step: Step; created: Set<string> }) {
+  const target = targetId(step.input);
+  // A record made earlier in the same set doesn't exist yet: its changes read as new values.
+  const id = target && !created.has(target) ? target : undefined;
   const current = useQuery({ ...recordQuery(id ?? ''), enabled: Boolean(id) });
   const kinds = useQuery(kindsQuery).data;
   const after = asRecord(step.output);
@@ -496,6 +525,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
   const me = useMe();
   const queryClient = useQueryClient();
   const steps = stepsOf(proposal);
+  const created = createdIn(steps);
   const isSet = proposal.operationId === 'changes.apply';
   const [note, setNote] = useState('');
 
@@ -521,7 +551,8 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
         ) : (
           steps[0] && (
             <span>
-              wants to {operationIntent(proposal.operationId)} <TargetName step={steps[0]} />
+              wants to {operationIntent(proposal.operationId)}{' '}
+              <TargetName step={steps[0]} created={created} />
             </span>
           )
         )}
@@ -534,13 +565,16 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
           {steps.map((step, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: steps are a fixed, ordered list
             <li key={i}>
-              {sentence(operationIntent(step.operation))} <TargetName step={step} />
-              <StepChanges step={step} />
+              <span>
+                {sentence(operationIntent(step.operation))}{' '}
+                <TargetName step={step} created={created} />
+              </span>
+              <StepChanges step={step} created={created} />
             </li>
           ))}
         </ol>
       ) : (
-        steps[0] && <StepChanges step={steps[0]} />
+        steps[0] && <StepChanges step={steps[0]} created={created} />
       )}
 
       <div className="decide">

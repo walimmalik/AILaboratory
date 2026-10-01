@@ -131,19 +131,19 @@ const checks: KindCheck<Attributes>[] = [
       const single = w.rows === 1 && w.columns === 1;
       return w.a1 && (w.pitch || single) ? true : 'Pitch or A1 offset is missing';
     },
-    quickFix: {
-      operation: 'labware.use_standard_positions',
-      label: 'Use the standard SBS positions',
-      // Offered when the standard places this grid and any pitch already given agrees with it.
-      applies: (a) => {
-        const w = a.wells;
-        const standard = w?.layout === 'grid' && sbsPositions(w.rows, w.columns);
-        return (
-          a.footprint?.sbs === true &&
-          !!standard &&
-          (!w.pitch || Number(w.pitch.value) === standard.pitch)
-        );
-      },
+    // Offered when the standard places this grid and any pitch already given agrees with it.
+    options: (a) => {
+      const w = a.wells;
+      const standard = w?.layout === 'grid' && sbsPositions(w.rows, w.columns);
+      if (!standard || a.footprint?.sbs !== true) return [];
+      if (w.pitch && Number(w.pitch.value) !== standard.pitch) return [];
+      return [
+        {
+          label: 'Use the standard SBS positions',
+          consequence: `Sets the pitch to ${standard.pitch} mm and well A1 to ${standard.a1.x} mm from the left edge and ${standard.a1.y} mm from the back edge (ANSI/SLAS 4-2004)`,
+          operation: 'labware.use_standard_positions',
+        },
+      ];
     },
   },
   {

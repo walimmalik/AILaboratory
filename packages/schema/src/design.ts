@@ -131,10 +131,10 @@ export interface KindCheck<A = Record<string, unknown>> {
   /** What to do when it fails. */
   fix?: string;
   /**
-   * An operation that fixes the failure in one step, when it can for these values. It takes
-   * `{id, expectedVersion}` of the record, like `labware.use_standard_positions`.
+   * Ways to fix the failure in one step for these values, best first (review 2026-10-01 item 19):
+   * each an operation on this record. Readiness adds `{id, expectedVersion}` to the input.
    */
-  quickFix?: { operation: string; label: string; applies?: (attributes: A) => boolean };
+  options?: (attributes: A) => CheckOptionInput[];
   /** Whether the check means anything for these values, e.g. well positions for a single tube. Default yes. */
   applies?: (attributes: A) => boolean;
   test: (attributes: A) => true | string;
@@ -188,6 +188,24 @@ export const ReadinessSection = z.object({
 });
 export type ReadinessSection = z.infer<typeof ReadinessSection>;
 
+/**
+ * One way to fix a failing check: an operation with its whole input, and what it changes, in lab
+ * words. A check's options are ranked, best first; a person picks one and an agent recommends one.
+ */
+export const CheckOption = z.object({
+  /** What the button says, e.g. "Use the standard SBS positions". */
+  label: z.string(),
+  /** What choosing it does, e.g. "Sets the pitch to 9 mm and A1 to the SBS offset". */
+  consequence: z.string(),
+  operation: z.string(),
+  /** The operation's complete input, the record and its version included. */
+  input: z.record(z.string(), z.unknown()),
+});
+export type CheckOption = z.infer<typeof CheckOption>;
+
+/** An option as a kind or a related check offers it: the input beyond the record and its version. */
+export type CheckOptionInput = Omit<CheckOption, 'input'> & { input?: Record<string, unknown> };
+
 export const CheckResult = z.object({
   id: z.string(),
   label: z.string(),
@@ -199,8 +217,8 @@ export const CheckResult = z.object({
   fix: z.string().optional(),
   /** Another record the check waits on (a draft entity kind); the fix is made there, not here. */
   record: z.string().optional(),
-  /** Offered only while the check fails: an operation taking `{id, expectedVersion}` that fixes it. */
-  quickFix: z.object({ operation: z.string(), label: z.string() }).optional(),
+  /** Offered only while the check fails: ways to fix it in one step, best first. */
+  options: z.array(CheckOption).optional(),
 });
 export type CheckResult = z.infer<typeof CheckResult>;
 

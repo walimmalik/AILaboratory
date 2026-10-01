@@ -1,9 +1,12 @@
 import {
   type Actor,
+  type CheckOption,
   type CheckResult,
+  experimentsAdoptVersions,
   type FieldEvidence,
   labwareUseStandardPositions,
   type Me,
+  type OperationContract,
   type Readiness,
   type ReadinessSection,
   type RecordEnvelope,
@@ -493,8 +496,11 @@ interface Target {
   version: number;
 }
 
-/** Operations a check may offer as a one-step fix; each takes the record and its version. */
-const quickFixes = { 'labware.use_standard_positions': labwareUseStandardPositions } as const;
+/** Operations checks offer as one-step fixes; an option naming another one isn't shown. */
+const fixContracts: Record<string, OperationContract> = {
+  'labware.use_standard_positions': labwareUseStandardPositions,
+  'experiments.adopt_versions': experimentsAdoptVersions,
+};
 
 function CheckRow({
   check,
@@ -538,7 +544,7 @@ function CheckRow({
             )}
           </div>
         )}
-        {!check.passed && check.quickFix && <QuickFix fix={check.quickFix} target={target} />}
+        {!check.passed && check.options && <FixOptions options={check.options} target={target} />}
       </td>
       {/* The source in lab words; plan and ADR numbers stay on hover. */}
       <td className="muted source" title={check.source}>
@@ -548,12 +554,15 @@ function CheckRow({
   );
 }
 
-/** A one-step fix the check offers, run as its operation; the record then reloads. */
-function QuickFix({ fix, target }: { fix: NonNullable<CheckResult['quickFix']>; target: Target }) {
+/**
+ * The ways a failing check can be fixed in one step, best first (review 2026-10-01 item 19): each
+ * a button saying what it does, run as its operation; the record then reloads.
+ */
+function FixOptions({ options, target }: { options: CheckOption[]; target: Target }) {
   const queryClient = useQueryClient();
-  const contract = quickFixes[fix.operation as keyof typeof quickFixes];
   const run = useMutation({
-    mutationFn: () => api.run(contract, { id: target.id, expectedVersion: target.version }),
+    mutationFn: (option: CheckOption) =>
+      api.run(fixContracts[option.operation] as OperationContract, option.input as never),
     onSuccess: () =>
       Promise.all(
         [['record', target.id], ['review'], ['records']].map((queryKey) =>
@@ -561,14 +570,28 @@ function QuickFix({ fix, target }: { fix: NonNullable<CheckResult['quickFix']>; 
         ),
       ),
   });
-  if (!contract) return null;
+  const offered = options.filter((o) => fixContracts[o.operation]);
+  if (offered.length === 0) return null;
   return (
-    <div className="quick-fix">
-      <button type="button" className="btn" disabled={run.isPending} onClick={() => run.mutate()}>
-        {fix.label}
-      </button>
-      {run.error && <span className="error-text"> {run.error.message}</span>}
-    </div>
+    <ul className="fix-options">
+      {offered.map((option, i) => (
+        <li key={option.label}>
+          <button
+            type="button"
+            className="btn"
+            disabled={run.isPending}
+            onClick={() => run.mutate(option)}
+          >
+            {option.label}
+          </button>
+          <span className="muted">
+            {offered.length > 1 && i === 0 && 'Recommended. '}
+            {option.consequence}
+          </span>
+        </li>
+      ))}
+      {run.error && <li className="error-text">{run.error.message}</li>}
+    </ul>
   );
 }
 
