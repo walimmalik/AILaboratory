@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CheckSeverity, EvidenceInput, KindSection, Readiness } from '../design.ts';
 import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
+import { RecordOverview } from '../overview.ts';
 import { RecordEnvelope, RecordLink, RecordStatus, RecordVersion } from '../record.ts';
 
 const Reason = z.string().min(1).optional().describe('Why the change was made; kept in history');
@@ -52,6 +53,16 @@ export const recordsGet = defineContract({
   output: RecordEnvelope.extend({
     reviews: RecordEnvelope.shape.reviews.optional().describe('Left out when brief'),
   }),
+});
+
+export const recordsOverview = defineContract({
+  id: 'records.overview',
+  verbs: { done: 'summarised', intent: 'summarise' },
+  summary:
+    "A record in a few lines, as its page shows it first: what it is and where, and the facts a person reads first (what a plate holds and where it is, when a lot expires, an experiment's question and protocol). Cheaper than records.get when you need the gist",
+  effect: 'read',
+  input: z.object({ id: RecordId }),
+  output: RecordOverview.extend({ id: RecordId }),
 });
 
 export const recordsList = defineContract({
