@@ -266,8 +266,8 @@ function SopEditor({
                           JSON.stringify(guesses.get(field)?.stored) ===
                             JSON.stringify(edits.values[field]) && (
                             <div className="agent-ink hint">
-                              agent's estimate
-                              {guesses.get(field)?.note ? `: ${guesses.get(field)?.note}` : ''}
+                              unverified · entered by an agent, no source
+                              {guesses.get(field)?.note ? ` (${guesses.get(field)?.note})` : ''}
                             </div>
                           )}
                       </FormRow>

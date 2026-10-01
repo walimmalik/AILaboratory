@@ -52,7 +52,7 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 16. **A diff is rows of what changed.** A proposal, a change set step and "changed since you last looked" render from item paths, one row per changed value or list item, never two copies of a list; unchanged items fold to a count.
 17. **Done means applied.** Today lists only what ran; what waits is under Waiting; no link points at a record that does not exist.
 18. **Looking includes acting.** Saving, confirming or approving marks the record seen for that person.
-19. **Guesses are marked where they are edited and read,** not only on the readiness line, and parts are named by their label ("step 2 Wash", "Wash volume").
+19. **Unverified values are marked where they are edited and read,** not only on the readiness line, and parts are named by their label ("step 2 Wash", "Wash volume").
 20. **One Confirm per record, for every kind.** Which parts are confirmed sits under technical details; a part can still be confirmed on its own from its block.
 21. **A batch action never errors on what it offered.** When some drafts in a list can't be confirmed together, the button confirms the ones that can and names how many are left; warnings are counted, not refused.
 22. **An agent never destroys a person's work directly.** Deleting a draft a person wrote or confirmed any of is a proposal.
@@ -63,7 +63,8 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 - Plain lab language on screen. Record IDs, operation IDs and JSON sit under "technical details".
 - One verb for agreeing to agent work: **Confirm** ("Confirm change" for a proposal; "Confirm LWT-0032" on a draft, which confirms every part nothing blocks).
 - Record status in words: "draft · needs your review", "active", "active · change waiting".
-- Where a value came from, in words: "assumed by deepseek-chat", "you told Claude", "from a datasheet", "entered by you".
+- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it.
+- An SOP value's type, in words: **protocol default** (fixed by the SOP, may be overridden for a run), **set per run**, **calculated** (from a formula), **from <material>** (read from the selected lot or record; a **nominal value** stands in until one is selected).
 
 ## Pages so far
 

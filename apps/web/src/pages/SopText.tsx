@@ -409,7 +409,7 @@ export function describeSop(
       }
       if (current)
         rows.push(['now', current.from ? `${current.value} · ${current.from}` : current.value]);
-      rows.push(['kind', kindWords(v, terms)]);
+      rows.push(['type', kindWords(v, terms)]);
       if (v.kind === 'input' && (v.min !== undefined || v.max !== undefined))
         rows.push([
           'allowed',
@@ -427,7 +427,7 @@ export function describeSop(
     if (m) {
       const rows: [string, ReactNode][] = m.type ? [['type', m.type]] : [];
       if (m.requirements) rows.push(['needs', m.requirements]);
-      if (m.default) rows.push(['usually', <RecordName key="usually" id={m.default} />]);
+      if (m.default) rows.push(['default', <RecordName key="default" id={m.default} />]);
       if (gives.length) rows.push(['gives', gives.join(', ')]);
       return { title: m.label ?? name, rows };
     }

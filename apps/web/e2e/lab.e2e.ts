@@ -253,11 +253,13 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   const volume = page.getByRole('region', { name: 'Volume' });
 
   // What the agent assumed is marked and named; what it took from a datasheet says so.
-  await expect(appearance.getByText('assumed by E2E agent')).toBeVisible();
+  await expect(appearance.getByText(/unverified · entered by E2E agent, no source/)).toBeVisible();
   await expect(
     volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
   ).toBeVisible();
-  await expect(readiness.getByText(/One value is an agent's estimate: color/)).toBeVisible();
+  await expect(
+    readiness.getByText(/One value was entered by an agent without a source: color/),
+  ).toBeVisible();
   await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
   // One part can still be confirmed on its own.
@@ -763,7 +765,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   // A number that comes from a value reads as that value: hover says which, and Names shows it.
   await procedure.getByRole('button', { name: '100 µL' }).first().hover();
   await expect(page.getByRole('tooltip')).toContainText('Well volume');
-  await expect(page.getByRole('tooltip')).toContainText('usual value');
+  await expect(page.getByRole('tooltip')).toContainText('protocol default');
   await procedure.getByRole('button', { name: 'Names' }).click();
   await expect(procedure).toContainText('volume Well volume');
   await procedure.getByRole('button', { name: 'Numbers' }).click();
@@ -780,7 +782,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await variables.getByRole('textbox', { name: 'Well volume: value or formula' }).fill('150 uL');
   const formula = variables.getByRole('textbox', { name: 'Coating solution: value or formula' });
   await expect(formula).toHaveValue('Wells × Well volume');
-  await expect(variables).toContainText('worked out');
+  await expect(variables).toContainText('calculated');
   // Names are recognized as they are typed, and picked from a list under the caret.
   await formula.fill('Wells × well vol');
   await variables
@@ -821,7 +823,9 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(variables.getByRole('textbox', { name: 'Plates: value or formula' })).toHaveValue(
     /ceil\(Wells ÷ 96\)/,
   );
-  await expect(variables).toContainText('assistant: One plate per 96 wells');
+  await expect(variables).toContainText(
+    'suggested by the assistant, unverified: One plate per 96 wells',
+  );
 
   // A step's words mark its values and materials; what it uses and its settings are read from them.
   const steps = page.getByRole('region', { name: 'Steps' });

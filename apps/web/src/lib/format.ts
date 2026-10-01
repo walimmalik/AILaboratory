@@ -356,3 +356,20 @@ export function proposalTouches(proposal: Pick<Proposal, 'operationId' | 'input'
   const steps = (proposal.input as { steps?: { input?: unknown }[] } | undefined)?.steps ?? [];
   return steps.some((step) => idOf(step.input) === id);
 }
+
+/**
+ * A failing check as one statement of what is wrong (review 2026-10-01): the check's label states
+ * the passing condition ("Outer size is known"), so a failing row names its subject and the problem
+ * ("Outer size: length, width or height is missing") instead of contradicting itself.
+ */
+export function problemWords(check: { label: string; message?: string | undefined }): string {
+  const subject = check.label.match(
+    /^(.+?)\s+(?:is|are)\s+(?:known|set|given|named|filled in|present|confirmed)$/i,
+  )?.[1];
+  if (!check.message) return subject ? `${subject}: missing` : check.label;
+  if (!subject) return check.message;
+  const message = /^[A-Z][a-z]/.test(check.message)
+    ? check.message[0]?.toLowerCase() + check.message.slice(1)
+    : check.message;
+  return `${subject}: ${message}`;
+}

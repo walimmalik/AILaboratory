@@ -44,10 +44,12 @@ function evidenceKey(path: string, items: Readonly<Record<string, string>>): str
 }
 
 /** Whether this value is an agent's guess, or something an agent says its person told it. */
-function agentSaid(evidence: FieldEvidence | undefined): 'estimate' | 'as told' | undefined {
+function agentSaid(
+  evidence: FieldEvidence | undefined,
+): 'unverified' | 'stated by you' | undefined {
   if (evidence?.by.type !== 'agent') return undefined;
-  if (evidence.source === 'assumed') return 'estimate';
-  if (evidence.source === 'stated') return 'as told';
+  if (evidence.source === 'assumed') return 'unverified';
+  if (evidence.source === 'stated') return 'stated by you';
   return undefined;
 }
 
@@ -63,7 +65,7 @@ export function estimatesIn(
   const keys = new Set(
     changes.flatMap((c) =>
       c.change !== 'removed' &&
-      agentSaid(after?.evidence?.[evidenceKey(c.path, items)]) === 'estimate'
+      agentSaid(after?.evidence?.[evidenceKey(c.path, items)]) === 'unverified'
         ? [evidenceKey(c.path, items)]
         : [],
     ),
@@ -178,7 +180,7 @@ const singular = (list: string) =>
 
 /**
  * A changed value in lab words: an SOP's step words with values by their names, an added item on
- * one line ("Wash volume = 300 µL, usual value"), anything else as the record page shows it.
+ * one line ("Wash volume = 300 µL, protocol default"), anything else as the record page shows it.
  */
 function itemWords(value: unknown, path: string, terms: Terms | undefined): ReactNode {
   const [list = '', key, ...inside] = path.split('/').slice(1);

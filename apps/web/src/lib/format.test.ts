@@ -8,6 +8,7 @@ import {
   foldRepeats,
   formatValue,
   partLabel,
+  problemWords,
   waitingForYou,
 } from './format.ts';
 
@@ -243,5 +244,19 @@ describe('partLabel', () => {
       partLabel('/steps/s3', attributes, items, { steps: [{ id: 's3', title: 'Block' }] }),
     ).toBe('step 1 Block');
     expect(partLabel('/steps/s9', attributes, items)).toBe('step s9');
+  });
+});
+
+describe('problemWords', () => {
+  it('names what is wrong without restating the passing condition', () => {
+    expect(
+      problemWords({ label: 'Outer size is known', message: 'Length, width or height is missing' }),
+    ).toBe('Outer size: length, width or height is missing');
+    expect(problemWords({ label: 'Tip length is known', message: 'Not given' })).toBe(
+      'Tip length: not given',
+    );
+    expect(problemWords({ label: 'Every volume fits its instrument', message: 'Too much' })).toBe(
+      'Too much',
+    );
   });
 });

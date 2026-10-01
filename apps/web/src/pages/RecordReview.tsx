@@ -15,7 +15,7 @@ import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
-import { fieldLabel, formatWhen, isAgent, partLabel } from '../lib/format.ts';
+import { fieldLabel, formatWhen, isAgent, partLabel, problemWords } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
 import { LinkedName } from './Value.tsx';
 
@@ -251,7 +251,8 @@ export function Estimates({
   const shown = all ? paths : paths.slice(0, SHOWN_ESTIMATES);
   return (
     <p className="agent-ink estimates">
-      {paths.length === 1 ? 'One value is' : `${paths.length} values are`} an agent's estimate:{' '}
+      {paths.length === 1 ? 'One value was' : `${paths.length} values were`} entered by an agent
+      without a source:{' '}
       {shown.map((path, i) => (
         <span key={path}>
           {i > 0 && ', '}
@@ -268,7 +269,7 @@ export function Estimates({
           </button>
         </>
       )}
-      . Check {paths.length === 1 ? 'it' : 'them'} before you confirm.
+      . Verify {paths.length === 1 ? 'it' : 'them'} before you confirm.
     </p>
   );
 }
@@ -440,9 +441,22 @@ export function Checks({
       </table>
     </div>
   );
+  const required = failing.filter((c) => c.severity === 'blocker');
+  const recommended = failing.filter((c) => c.severity !== 'blocker');
   return (
     <>
-      {failing.length > 0 && table(failing)}
+      {required.length > 0 && (
+        <>
+          <p className="check-group crit-ink">Required before confirming</p>
+          {table(required)}
+        </>
+      )}
+      {recommended.length > 0 && (
+        <>
+          <p className="check-group warn-ink">Recommended</p>
+          {table(recommended)}
+        </>
+      )}
       {passing.length > 0 && (
         <details className="passing">
           <summary className="ok-ink">
@@ -487,8 +501,7 @@ function CheckRow({
         {mark}
       </td>
       <td>
-        {check.label}
-        {!check.passed && check.message && <span className={tone}> · {check.message}</span>}
+        {check.passed ? check.label : problemWords(check)}
         {!check.passed && (check.fix || section || check.record) && (
           <div className="muted">
             {check.fix}
@@ -673,7 +686,9 @@ function SectionValues({
                 </td>
                 <td className="source">
                   {f.assumed ? (
-                    <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
+                    <span className="agent-ink">
+                      unverified · entered by {who(f.evidence?.by, me)}, no source
+                    </span>
                   ) : (
                     <Evidence evidence={f.evidence} me={me} />
                   )}
@@ -720,8 +735,8 @@ function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
 
 const sourceWords: Record<FieldEvidence['source'], string> = {
   // Only shown once a person has confirmed the value; before that it reads "assumed by …".
-  assumed: 'estimated',
-  stated: 'told',
+  assumed: 'entered without a source',
+  stated: 'stated',
   person: 'entered',
   datasheet: 'from a datasheet',
   imported: 'imported',
@@ -740,7 +755,7 @@ function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: M
     evidence.source === 'person'
       ? `entered by ${who(by, me)}`
       : evidence.source === 'stated' && by.type === 'agent'
-        ? `${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} told ${by.agentName}`
+        ? `stated by ${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} to ${by.agentName}`
         : evidence.from
           ? sourceWords[evidence.source]
           : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;

@@ -295,8 +295,8 @@ function BatchConfirm({ items }: { items: DraftItem[] }) {
       </button>
       <span className="muted">
         {left === 0
-          ? 'Nothing in these is a guess and nothing blocks them.'
-          : `They hold no guess and nothing blocks them; ${many(left, 'other opens', 'others open')} on its own.`}
+          ? 'None holds an unverified value and nothing blocks them.'
+          : `They hold no unverified value and nothing blocks them; ${many(left, 'other opens', 'others open')} on its own.`}
         {warned > 0 && (
           <span className="warn-ink">
             {' '}
@@ -363,12 +363,7 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
       </td>
       <td>
         {todo}
-        {item.assumed > 0 && (
-          <span className="agent-ink">
-            {' '}
-            · {item.assumed} {item.assumed === 1 ? 'estimate' : 'estimates'}
-          </span>
-        )}
+        {item.assumed > 0 && <span className="agent-ink"> · {item.assumed} unverified</span>}
       </td>
       <td className="when">
         {formatWhen(item.at)}
@@ -470,8 +465,8 @@ function StepChanges({ step }: { step: Step }) {
       <ItemDiff kind={after.kind} before={before} after={after} changes={changes} isNew={!id} />
       {estimates > 0 && (
         <p className="agent-ink">
-          Confirming accepts {estimates} {estimates === 1 ? 'estimate' : 'estimates'} of the
-          agent's.
+          Confirming verifies {estimates} {estimates === 1 ? 'value' : 'values'} the agent entered
+          without a source.
         </p>
       )}
       {id && current.data && current.data.version >= after.version && (

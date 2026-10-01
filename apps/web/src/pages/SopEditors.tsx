@@ -63,10 +63,14 @@ function useGuess(path: string | undefined, now: unknown): string | undefined {
   return guess.note ?? '';
 }
 
-/** "agent's estimate", with its note when the agent gave one. */
+/** "unverified: entered by an agent without a source", with the agent's note when it gave one. */
 function GuessNote({ note }: { note: string | undefined }) {
   if (note === undefined) return null;
-  return <span className="agent-ink">agent's estimate{note ? `: ${note}` : ''}</span>;
+  return (
+    <span className="agent-ink">
+      unverified · entered by an agent, no source{note ? ` (${note})` : ''}
+    </span>
+  );
 }
 
 /** The SOP as edited so far, and the names its text can use. */
@@ -381,7 +385,9 @@ function ValueRow({
               {v.max === undefined ? '…' : formatValue(v.max)}
             </span>
           )}
-          {suggested && <span className="agent-ink">assistant: {suggested}</span>}
+          {suggested && (
+            <span className="agent-ink">suggested by the assistant, unverified: {suggested}</span>
+          )}
           {!suggested && <GuessNote note={guess} />}
           {canFill && (!text.trim() || !read.ok) && fillButton('Fill in with the assistant')}
           <button
@@ -422,7 +428,7 @@ function ValueRow({
                     })
                   }
                 />{' '}
-                Ask each run
+                Set per run
               </label>
             )}
             {perRun && (
@@ -697,7 +703,11 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                 </button>
               )}
             </p>
-            {suggested && <p className="agent-ink step-note">assistant: {suggested}</p>}
+            {suggested && (
+              <p className="agent-ink step-note">
+                suggested by the assistant, unverified: {suggested}
+              </p>
+            )}
             {suggest.error && <p className="error-text">{suggest.error.message}</p>}
           </div>
         </FormRow>
@@ -911,7 +921,9 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
           What a step uses and its settings are read from its words: a material named, a value (Add
           Well volume) or an amount (2 h, 37 °C). Anything else goes under More.
         </p>
-        {drafted && <p className="agent-ink step-note">assistant: {drafted}</p>}
+        {drafted && (
+          <p className="agent-ink step-note">drafted by the assistant, unverified: {drafted}</p>
+        )}
         <div className="step-line">
           <button
             type="button"
@@ -1101,11 +1113,11 @@ function MaterialRow({
           value={m.requirements ?? ''}
           onChange={(e) => set({ requirements: e.target.value || undefined })}
         />
-        <span className="muted">usually</span>
+        <span className="muted">default</span>
         <MaterialPicker
           type={m.type ?? 'reagent'}
           value={m.default}
-          label={`${called}: usually`}
+          label={`${called}: default record`}
           onChange={(id) => set({ default: id })}
         />
       </div>
