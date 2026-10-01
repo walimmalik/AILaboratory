@@ -38,6 +38,17 @@ export const activityList = defineContract({
   input: z.object({
     limit: z.number().int().min(1).max(200).optional(),
     before: z.iso.datetime().optional(),
+    since: z.iso.datetime().optional().describe('Only entries after this time'),
+    record: z.string().optional().describe('Only entries that touched this record ID'),
+    conversation: z
+      .string()
+      .optional()
+      .describe('Only what an assistant conversation did, and the asks that started it'),
+    actor: z
+      .enum(['people', 'agents'])
+      .optional()
+      .describe('Only what people did, or only what agents did'),
+    mine: z.boolean().optional().describe('Only what you did, or agents did for you'),
   }),
   output: z.object({ entries: z.array(ActivityEntry) }),
 });

@@ -41,6 +41,8 @@ export interface RecordContext {
    * change, so the sections it touches count as confirmed by them (ADR 0021).
    */
   approvedBy?: Actor;
+  /** The operation making the change, kept on each version it writes (ADR 0053). */
+  via?: string;
 }
 
 type RecordRow = typeof records.$inferSelect;
@@ -162,7 +164,7 @@ export class RecordService {
         .returning();
       const record = await this.#stamp(tx, ctx, kind, required(row));
       await syncLinks(tx, record, kind, attributes);
-      return writeVersion(tx, record, 'create', ctx.actor, input.reason);
+      return writeVersion(tx, record, 'create', ctx, input.reason);
     });
   }
 
@@ -661,7 +663,7 @@ export class RecordService {
         .returning();
       const record = await this.#stamp(tx, ctx, kind, required(row));
       if (changes.attributes !== undefined) await syncLinks(tx, record, kind, record.attributes);
-      return writeVersion(tx, record, operation, ctx.actor, reason);
+      return writeVersion(tx, record, operation, ctx, reason);
     });
   }
 }
@@ -927,7 +929,7 @@ async function writeVersion(
   tx: Db,
   record: RecordRow,
   operation: RecordOperation,
-  actor: Actor,
+  ctx: RecordContext,
   reason: string | undefined,
 ): Promise<RecordEnvelope> {
   const snapshot = toEnvelope(record);
@@ -935,9 +937,10 @@ async function writeVersion(
     recordId: record.id,
     version: record.version,
     operation,
-    actor,
+    actor: ctx.actor,
     reason: reason ?? null,
     at: record.updatedAt,
+    via: ctx.via ?? null,
     snapshot,
   });
   return snapshot;
@@ -986,6 +989,7 @@ function toVersion(row: typeof recordVersions.$inferSelect): RecordVersion {
     actor: row.actor,
     ...(row.reason === null ? {} : { reason: row.reason }),
     at: row.at.toISOString(),
+    ...(row.via ? { via: row.via } : {}),
     snapshot: row.snapshot,
   };
 }

@@ -290,9 +290,14 @@ export function fieldLabel(field: string): string {
 /** A readiness path in words: "volume" → "volume", "/steps/wash" → "step wash" (ADR 0049). */
 export function pathLabel(path: string): string {
   if (!path.startsWith('/')) return fieldLabel(path);
-  const [, list = '', key = ''] = path.split('/');
+  const [list = '', ...rest] = path
+    .split('/')
+    .slice(1)
+    .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'));
+  if (rest.length === 0) return fieldLabel(list);
   const one = list.endsWith('ies') ? `${list.slice(0, -3)}y` : list.replace(/s$/, '');
-  return `${fieldLabel(one)} ${key}`;
+  const [key, ...inside] = rest;
+  return [fieldLabel(one), key, ...inside.map(fieldLabel)].join(' ');
 }
 
 /** Whether a proposed change would change this record, alone or as a step of a change set (ADR 0051). */

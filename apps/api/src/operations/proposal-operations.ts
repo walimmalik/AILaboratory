@@ -66,7 +66,7 @@ export const proposalOperations = [
   }),
   implement(activityList, {
     run: async (ctx, input, deps) => ({
-      entries: await listActivity(deps.db, ctx, { limit: input.limit, before: input.before }),
+      entries: await listActivity(deps.db, ctx, input),
     }),
   }),
 ];

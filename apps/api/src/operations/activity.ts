@@ -1,10 +1,21 @@
 import { EventEmitter } from 'node:events';
 import { newId } from '@ailab/domain';
 import type { ActivityEntry } from '@ailab/schema';
-import { and, desc, eq, inArray, lt } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { activity, records } from '../db/schema.ts';
 import type { RecordContext } from '../records/service.ts';
+
+/** What `activity.list` can narrow the ledger to (ADR 0053). */
+export interface ActivityFilter {
+  limit?: number | undefined;
+  before?: string | undefined;
+  since?: string | undefined;
+  record?: string | undefined;
+  conversation?: string | undefined;
+  actor?: 'people' | 'agents' | undefined;
+  mine?: boolean | undefined;
+}
 
 /** In-process fan-out of new ledger entries, for the live activity stream. */
 export class ActivityBus {
@@ -68,8 +79,9 @@ export async function recordActivity(
 export async function listActivity(
   db: Db,
   ctx: RecordContext,
-  options: { limit?: number | undefined; before?: string | undefined },
+  options: ActivityFilter,
 ): Promise<ActivityEntry[]> {
+  const me = ctx.actor.type === 'agent' ? ctx.actor.onBehalfOf : ctx.actor.userId;
   const rows = await db
     .select()
     .from(activity)
@@ -77,6 +89,25 @@ export async function listActivity(
       and(
         eq(activity.labId, ctx.labId),
         options.before ? lt(activity.at, new Date(options.before)) : undefined,
+        options.since ? gt(activity.at, new Date(options.since)) : undefined,
+        options.record
+          ? sql`${activity.recordIds} @> ${JSON.stringify([options.record])}::jsonb`
+          : undefined,
+        options.conversation
+          ? or(
+              sql`${activity.actor}->>'sessionRef' = ${options.conversation}`,
+              sql`${activity.input}->>'conversationId' = ${options.conversation}`,
+            )
+          : undefined,
+        options.actor
+          ? sql`${activity.actor}->>'type' = ${options.actor === 'agents' ? 'agent' : 'user'}`
+          : undefined,
+        options.mine
+          ? or(
+              sql`${activity.actor}->>'userId' = ${me}`,
+              sql`${activity.actor}->>'onBehalfOf' = ${me}`,
+            )
+          : undefined,
       ),
     )
     .orderBy(desc(activity.at), desc(activity.id))

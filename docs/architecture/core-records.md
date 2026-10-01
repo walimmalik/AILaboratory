@@ -34,7 +34,8 @@ ID and name prefixes are unique across kinds; a kind that names records with mor
 
 - **Tenancy.** Every call runs in a `RecordContext` (actor, org, lab). Records in another lab are "not found".
 - **Optimistic concurrency.** Every change passes the `expectedVersion` it last saw. A stale version is refused with `version_conflict` and the current version, so an agent and a person can't overwrite each other.
-- **History.** Every change increments `version` and appends the full record, actor, operation and reason to `record_versions`. `restore` writes a new version from an earlier one.
+- **History.** Every change increments `version` and appends the full record, actor, operation and reason to `record_versions`. `restore` writes a new version from an earlier one. Each version also stores `via`, the operation that wrote it (ADR 0053).
+- **What changed.** `records.diff {id, from?, to?}` compares two versions value by value (keyed list items by key); by default since the caller (or the person an agent works for) last looked, kept in `record_seen` by `records.mark_seen` (people only, not in the ledger), or since first drafted (ADR 0053).
 - **Lifecycle.** `draft → active → archived`. Archived records can't be edited, only unarchived (back to their earlier status). Only drafts with no inbound links can be deleted, and their history goes with them.
 - **Links.** New links must point to an existing, non-archived record in the same lab, and not to the record itself. Existing links survive their target being archived.
 - **Names.** `PREFIX-000123`, counted per lab and prefix, never reused.

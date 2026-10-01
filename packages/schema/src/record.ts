@@ -61,6 +61,8 @@ export const RecordVersion = z.object({
   actor: Actor,
   reason: z.string().optional(),
   at: z.iso.datetime(),
+  /** The operation that made this version, e.g. "sops.draft", so history can say what was done (ADR 0053). */
+  via: z.string().optional(),
   snapshot: RecordEnvelope,
 });
 export type RecordVersion = z.infer<typeof RecordVersion>;

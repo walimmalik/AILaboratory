@@ -32,6 +32,7 @@ import { ScanPage } from './pages/Scan.tsx';
 import { Shell } from './pages/Shell.tsx';
 import { SignInPage } from './pages/SignIn.tsx';
 import { SopsPage } from './pages/Sops.tsx';
+import { TodayPage } from './pages/Today.tsx';
 import { WikiPage } from './pages/Wiki.tsx';
 import { meQuery } from './session.ts';
 
@@ -57,9 +58,7 @@ const app = createRoute({
 const index = createRoute({
   getParentRoute: () => app,
   path: '/',
-  beforeLoad: () => {
-    throw redirect({ to: '/activity' });
-  },
+  component: TodayPage,
 });
 
 const activity = createRoute({

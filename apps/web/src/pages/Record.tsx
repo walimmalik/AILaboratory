@@ -2,7 +2,14 @@ import type { Configuration, RecordEnvelope, RecordLink } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
-import { actorLabel, diffRecords, formatWhen, isAgent, proposalTouches } from '../lib/format.ts';
+import {
+  actorLabel,
+  diffRecords,
+  formatWhen,
+  isAgent,
+  operationVerb,
+  proposalTouches,
+} from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -25,6 +32,7 @@ import { LayoutBlocks, PlateMapBlocks } from './PlateMaps.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
 import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
+import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
 import { LinkedName, renderValue } from './Value.tsx';
@@ -95,6 +103,8 @@ export function RecordPage() {
           to this record. <Link to="/review">Review it</Link>
         </p>
       )}
+
+      <SinceYouLooked key={r.id} record={r} />
 
       {(r.kind === 'lot' || r.kind === 'sample' || r.kind === 'product') && (
         <WhereIsBlock record={r} />
@@ -220,7 +230,9 @@ export function RecordPage() {
                         {actorLabel(v.actor, me)}
                       </td>
                       <td>
-                        {operationWords[v.operation] ?? v.operation}
+                        {v.via && !v.via.startsWith('records.')
+                          ? operationVerb(v.via)
+                          : (operationWords[v.operation] ?? v.operation)}
                         {v.operation === 'confirm_section' && (
                           <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
                         )}

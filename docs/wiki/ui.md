@@ -56,7 +56,7 @@ Added 2026-09-30 with [plan 004e](../plans/004e-review-v2-and-agent-context.md),
 
 ## Pages so far
 
-- **Nav:** Lab (Activity, Review) and Library (one page per registry, each with its draft count), with All records at the foot.
+- **Nav:** Lab (Today, Activity, Review) and Library (one page per registry, each with its draft count), with All records at the foot.
 - **Library pages:** Labware (family filter; type, manufacturer, catalog number, maximum volume), Vendors, Documents and SOPs. More registries get a page as they land. An SOP's page reads as a procedure at the bench first (steps with run values, questions to settle, checks against the source), with the editable sections below.
 - **Review:** "Needs you" (changes agents proposed) first, then drafts to confirm as dense rows with kind chips, Discard, and "Confirm all" when none holds a guess (ADR 0050). The nav counts only what needs you.
 - **Record review:** a readiness block with failing checks first, each with its source, its fix and a "Fix in …" link; passing checks fold under "N checks pass". Then one block per section with each value and where it came from, and Edit to change values in place.
