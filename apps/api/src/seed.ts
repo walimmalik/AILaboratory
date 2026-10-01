@@ -1,6 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { assayKinds } from './assays/kinds.ts';
+import { loadSeedAssayTemplates, readSeedAssayTemplates } from './assays/seed.ts';
 import { contextFor } from './auth.ts';
 import { campaignKinds } from './campaigns/kinds.ts';
 import { loadSeedCampaigns, readSeedCampaigns } from './campaigns/seed.ts';
@@ -107,6 +109,7 @@ for (const kind of [
   ...plateMapKinds,
   ...transferKinds,
   ...memoryKinds,
+  ...assayKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
@@ -374,6 +377,24 @@ async function loadOnce() {
   );
   for (const line of memories.created) console.log(`  + ${line}`);
   for (const line of memories.waiting) console.log(`  … ${line}`);
+  await settle();
+  // Templates pin the SOPs and layout at the versions the last pass confirmed.
+  const templates = await loadSeedAssayTemplates(
+    registry,
+    ctx,
+    readSeedAssayTemplates(await seedFile('assay-templates.yaml'), {
+      sops: new Map(seedSops.map((s) => [s.key, s.label])),
+      layouts: await seedFile('layouts.yaml'),
+      labware: await seedFile('labware.yaml'),
+      instrumentLibrary: await seedFile('instrument-library.yaml'),
+    }),
+    'Seed lab (plan 006), loaded by plan 017a',
+  );
+  console.log(
+    `Assay templates: ${templates.created.length} drafted, ${templates.existing.length} already there, ${templates.waiting.length} waiting for their records.`,
+  );
+  for (const line of templates.created) console.log(`  + ${line}`);
+  for (const line of templates.waiting) console.log(`  … ${line}`);
   await settle();
 }
 

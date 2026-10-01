@@ -9,6 +9,7 @@ Volumes, concentrations, dilutions and amounts come from a calculator, never fro
 
 | Calculator | Use it for | Input |
 | --- | --- | --- |
+| `assays.design` | What an assay template gives for a request: the inputs still missing, the conditions, and the wells, plates and runs | `{template or attributes, answers?, wellsPerPlate?}` |
 | `inventory.calculate_transfer` | What two wells hold after moving a volume: volumes left, every component's concentration after mixing, dry amounts dissolving | `{source: WellState, destination?: WellState, volume}` |
 | `inventory.map_plates` | Which source well lands on which destination well when stamping (one to one, quadrant, offset) | `{from, to, mapping, wells?}` |
 | `layouts.preview` | How many subjects fit on a plate with a layout, how many plates they need, and every planned well | `{layout or attributes, subjects, seed?}` |
