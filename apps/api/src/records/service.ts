@@ -31,6 +31,7 @@ import { nameCounters, recordLinks, records, recordVersions } from '../db/schema
 import { checkCalculated } from './calculations.ts';
 import { RecordError } from './errors.ts';
 import { type KindRegistry, namePrefixesOf } from './kinds.ts';
+import { markSeenBy, writtenBySeer } from './seen.ts';
 
 /** Who is acting, and in which lab. Every record operation runs in one. */
 export interface RecordContext {
@@ -112,6 +113,7 @@ export class RecordService {
       kind.items,
     );
     await checkCalculatedEvidence(this.db, ctx, attributes, input.evidence, kind.items);
+    await checkCopiedEvidence(this.db, ctx, this.kinds, attributes, input.evidence, kind.items);
     // A person who creates a record active confirms every section as they wrote it (ADR 0021).
     const reviews: Record<string, SectionReview> = {};
     if (input.status === 'active' && kind.sections?.length) {
@@ -224,6 +226,7 @@ export class RecordService {
             : parseAttributes(kind, input.attributes);
         if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
         await checkCalculatedEvidence(tx, ctx, attributes, input.evidence, kind.items);
+        await checkCopiedEvidence(tx, ctx, this.kinds, attributes, input.evidence, kind.items);
         const evidence = nextEvidence(
           ctx.actor,
           this.now(),
@@ -308,24 +311,35 @@ export class RecordService {
     id: string,
     input: TransitionInput,
   ): Promise<RecordEnvelope> {
+    // A kind without sections is confirmed whole, so its history reads as an activation.
+    const sectioned = !!this.kinds.get((await findRecord(this.db, ctx, id)).kind).sections?.length;
     return this.#change(
       ctx,
       id,
       input.expectedVersion,
-      'confirm_section',
+      sectioned ? 'confirm_section' : 'activate',
       input.reason,
       async (record, kind, tx) => {
         if (record.status === 'archived') {
           throw new RecordError('invalid_state', `${record.name} is archived`);
         }
-        if (!kind.sections?.length) {
-          throw new RecordError(
-            'invalid_input',
-            `A ${kind.kind} has no sections to confirm; confirm it with records.activate`,
-          );
-        }
         const related = await this.#related(tx, ctx, kind, record.attributes, record);
         const before = readiness(toEnvelope(record), kind, related.checks);
+        // A kind without sections has nothing to confirm piece by piece: confirming its draft is
+        // making it active, as long as nothing blocks it.
+        if (!kind.sections?.length) {
+          if (record.status !== 'draft') {
+            throw new RecordError('invalid_state', `${record.name} is already confirmed`);
+          }
+          if (!before.ready) {
+            throw new RecordError(
+              'not_ready',
+              `${record.name} can't be confirmed yet: ${before.missing.join('; ')}`,
+              { missing: before.missing },
+            );
+          }
+          return { status: 'active' as const };
+        }
         const blocked = new Set(
           before.checks.flatMap((c) =>
             !c.passed && c.severity === 'blocker' && c.section ? [c.section] : [],
@@ -531,6 +545,33 @@ export class RecordService {
       .orderBy(asc(recordLinks.relation), asc(recordLinks.toId));
   }
 
+  /**
+   * Records in the lab, at their current version, with a value copied from this record (`from` in
+   * their evidence), and the fields it filled: where a lab memory was used (plan 005b, M11).
+   */
+  async citing(
+    ctx: RecordContext,
+    id: string,
+  ): Promise<{ record: RecordEnvelope; fields: string[] }[]> {
+    const rows = await this.db
+      .select()
+      .from(records)
+      .where(
+        and(
+          eq(records.labId, ctx.labId),
+          sql`exists (select 1 from jsonb_each(${records.evidence}) e where e.value->'from'->>'id' = ${id})`,
+        ),
+      )
+      .orderBy(asc(records.name));
+    return rows.map((row) => ({
+      record: toEnvelope(row),
+      fields: Object.entries(row.evidence)
+        .filter(([, e]) => e.from?.id === id)
+        .map(([field]) => field)
+        .sort(),
+    }));
+  }
+
   /** Where this record is used. */
   async linksTo(ctx: RecordContext, id: string): Promise<RecordLink[]> {
     const record = await findRecord(this.db, ctx, id);
@@ -590,6 +631,7 @@ export class RecordService {
         return rows.map(toEnvelope);
       },
       current: current ? toEnvelope(current) : undefined,
+      actor: ctx.actor,
       reservedPrefixes: this.kinds.list().flatMap(namePrefixesOf),
     });
     if (refuse && result.invalid?.length) {
@@ -711,7 +753,8 @@ function approvalReviews(
 
 /**
  * Whether a section holds an agent's value no person has confirmed: a field, or an item of a keyed
- * list, whose evidence is an agent's and whose value isn't the one last confirmed for the section.
+ * list, whose evidence is an agent's, or is marked assumed by whoever saved it (an assistant's
+ * suggestion a person saved untouched), and whose value isn't the one last confirmed for the section.
  */
 function holdsAgentValues(
   section: KindSection,
@@ -720,7 +763,8 @@ function holdsAgentValues(
   review: SectionReview | undefined,
   items: Readonly<Record<string, string>> = {},
 ): boolean {
-  const byAgent = (key: string) => evidence[key]?.by.type === 'agent';
+  const byAgent = (key: string) =>
+    evidence[key]?.by.type === 'agent' || evidence[key]?.source === 'assumed';
   return section.fields.some((field) => {
     const confirmed = review?.values[field];
     if (review && sameValue(confirmed, values[field])) return false;
@@ -833,6 +877,103 @@ async function checkCalculatedEvidence(
       : attributes[key];
     await checkCalculated(db, ctx, key, value, given.calculation, given.output);
   }
+}
+
+/**
+ * Each value named as copied (`record`, `template`) must come from a record in this lab, at a
+ * version that exists and was active; with a `path`, the value there must be the value set (ADR
+ * 0049). Lab memory (`memory`) must cite a memory confirmed at that version (plan 005a).
+ */
+async function checkCopiedEvidence(
+  db: Db,
+  ctx: RecordContext,
+  kinds: KindRegistry,
+  attributes: Record<string, unknown>,
+  named: Record<string, EvidenceInput> | undefined,
+  items: Readonly<Record<string, string>> = {},
+): Promise<void> {
+  for (const [key, given] of Object.entries(named ?? {})) {
+    if (!['record', 'template', 'memory'].includes(given.source) || !given.from) continue;
+    const { from } = given;
+    const [source] = await db
+      .select({ id: records.id, name: records.name, kind: records.kind })
+      .from(records)
+      .where(and(eq(records.id, from.id), eq(records.labId, ctx.labId)));
+    if (!source) {
+      throw new RecordError(
+        'invalid_input',
+        `${key} is marked copied from ${from.id}, which is not a record in this lab`,
+      );
+    }
+    if ((given.source === 'memory') !== (source.kind === 'memory')) {
+      throw new RecordError(
+        'invalid_input',
+        given.source === 'memory'
+          ? `${key} cites ${source.name} as lab memory, but it is not a lab memory`
+          : `${key} is copied from the lab memory ${source.name}; mark it as memory evidence`,
+      );
+    }
+    const [version] = await db
+      .select({ snapshot: recordVersions.snapshot })
+      .from(recordVersions)
+      .where(and(eq(recordVersions.recordId, source.id), eq(recordVersions.version, from.version)));
+    if (!version) {
+      throw new RecordError(
+        'invalid_input',
+        `${key} is marked copied from ${source.name} version ${from.version}, which it doesn't have`,
+      );
+    }
+    if (version.snapshot.status !== 'active') {
+      throw new RecordError(
+        'invalid_input',
+        `${key} is marked copied from ${source.name} version ${from.version}, which was ${version.snapshot.status}, not confirmed; copy from a confirmed version`,
+      );
+    }
+    if (!from.path) continue;
+    const found = valueAt(version.snapshot.attributes, from.path, kinds.get(source.kind).items);
+    const [, list = '', item = ''] = key.split('/');
+    const keyField = key.startsWith('/') ? (items[list] ?? 'id') : undefined;
+    const value = keyField ? keyedItems(attributes[list], keyField).get(item) : attributes[key];
+    // A copied list item keeps its own key here, so the key itself isn't compared.
+    const withoutKey = (v: unknown) =>
+      keyField && v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== keyField))
+        : v;
+    if (found === undefined || !sameValue(withoutKey(value), withoutKey(found))) {
+      throw new RecordError(
+        'invalid_input',
+        `${key} is marked copied from ${source.name} version ${from.version} at ${from.path}, but the value there is different; mark it with where it really came from`,
+      );
+    }
+  }
+}
+
+/** The value at a JSON pointer, where a keyed list's items are found by their key (ADR 0049). */
+function valueAt(
+  attributes: Record<string, unknown>,
+  path: string,
+  items: Readonly<Record<string, string>> = {},
+): unknown {
+  const parts = path
+    .split('/')
+    .slice(1)
+    .map((p) => p.replaceAll('~1', '/').replaceAll('~0', '~'));
+  let at: unknown = attributes;
+  for (const [depth, part] of parts.entries()) {
+    if (Array.isArray(at)) {
+      const keyField = depth === 1 ? items[parts[0] ?? ''] : undefined;
+      at = keyField
+        ? keyedItems(at, keyField).get(part)
+        : /^\d+$/.test(part)
+          ? at[Number(part)]
+          : keyedItems(at, 'id').get(part);
+    } else if (at && typeof at === 'object') {
+      at = (at as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return at;
 }
 
 function parseAttributes(kind: KindDefinition, attributes: unknown): Record<string, unknown> {
@@ -971,6 +1112,8 @@ async function writeVersion(
   reason: string | undefined,
 ): Promise<RecordEnvelope> {
   const snapshot = toEnvelope(record);
+  const seer = writtenBySeer(ctx);
+  if (seer) await markSeenBy(tx, seer, record.labId, record.id, record.version);
   await tx.insert(recordVersions).values({
     recordId: record.id,
     version: record.version,

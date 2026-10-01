@@ -53,6 +53,8 @@ export async function settleSeed(
     else report.failed.push({ id: proposal.id, reason: decided.error?.message ?? decided.status });
   }
 
+  // The same loader that made the proposals: same agent name, same person it works for.
+  if (loader.actor.type !== 'agent') return report;
   const drafts = await db
     .select({ id: records.id })
     .from(records)
@@ -60,9 +62,9 @@ export async function settleSeed(
       and(
         eq(records.labId, person.labId),
         eq(records.status, 'draft'),
-        loader.actor.type === 'agent'
-          ? sql`${records.createdBy}->>'agentName' = ${loader.actor.agentName}`
-          : undefined,
+        sql`${records.createdBy}->>'type' = 'agent'`,
+        sql`${records.createdBy}->>'agentName' = ${loader.actor.agentName}`,
+        sql`${records.createdBy}->>'onBehalfOf' = ${loader.actor.onBehalfOf}`,
       ),
     )
     .orderBy(asc(records.createdAt), asc(records.id));

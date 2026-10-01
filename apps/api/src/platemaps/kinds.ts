@@ -8,11 +8,11 @@ import {
   type PlateMapAttributes,
   PlateMapAttributes as PlateMapSchema,
 } from '@ailab/schema';
-import { checkPin } from '../records/pins.ts';
+import { checkPin, type PinReport } from '../records/pins.ts';
 import { planPlateMap } from './generate.ts';
 import { layoutSpec, subjectOf } from './spec.ts';
 
-const PLAN = 'Plate maps (plan 014)';
+const PLAN = '(plan 014, plate maps)';
 
 const duplicates = (names: readonly string[]) => [
   ...new Set(names.filter((n, i) => names.indexOf(n) !== i)),
@@ -160,8 +160,9 @@ export const plateMap = defineKind({
     const invalid: string[] = [];
     if (a.experiment && (await context.get(a.experiment))?.kind !== 'experiment')
       invalid.push(`${a.experiment} is not an experiment in this lab`);
+    let plate: PinReport | undefined;
     if (a.labware) {
-      const plate = await checkPin(context, a.labware, 'labware_type', 'a labware type');
+      plate = await checkPin(context, a.labware, 'labware_type', 'a labware type');
       if (plate.invalid) invalid.push(plate.invalid);
       const wells = (plate.pinned?.attributes as LabwareTypeAttributes | undefined)?.wells;
       if (wells?.layout === 'grid' && wells.rows * wells.columns !== layout.wells)
@@ -228,6 +229,30 @@ export const plateMap = defineKind({
           'Look at what changed in the layout, then adopt the newer version or keep this one',
           'subjects',
         ),
+        ...(a.labware && plate
+          ? [
+              check(
+                'labware_confirmed',
+                'The plate type is confirmed',
+                'blocker',
+                plate.unconfirmed
+                  ? `${plate.unconfirmed}; confirm the plate type first`
+                  : undefined,
+                'Confirm the labware type, then pin the version a person confirmed',
+                'subjects',
+              ),
+              check(
+                'labware_current',
+                'It uses the latest confirmed plate type',
+                'warning',
+                plate.newer
+                  ? `${plate.record?.name} v${plate.newer} is newer than v${a.labware.version}`
+                  : undefined,
+                'Look at what changed in the plate type, then adopt the newer version or keep this one',
+                'subjects',
+              ),
+            ]
+          : []),
         check(
           'controls_named',
           'Controls and standards say what goes in',

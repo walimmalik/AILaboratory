@@ -4,6 +4,9 @@ import type {
   Component,
   FieldEvidence,
   InventoryEventType,
+  MemoryBar,
+  MemoryDraft,
+  MemoryObservationEntry,
   OperationErrorBody,
   Quantity,
   ReadinessSummary,
@@ -538,4 +541,34 @@ export const calculations = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('calculations_lab_idx').on(t.labId, t.createdAt)],
+);
+
+/**
+ * Memory candidates (plan 005c-1, M14), owned by the memory module: observations a detector
+ * collects under one key until they pass the bar, then the memory proposed from them. Not records:
+ * people see only the proposal.
+ */
+export const memoryCandidates = pgTable(
+  'memory_candidates',
+  {
+    id: text('id').primaryKey(),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    detector: text('detector').notNull(),
+    key: text('key').notNull(),
+    draft: jsonb('draft').$type<MemoryDraft>().notNull(),
+    source: text('source').$type<'experiment' | 'run' | 'analysis' | 'edits'>().notNull(),
+    bar: jsonb('bar').$type<MemoryBar>().notNull(),
+    observations: jsonb('observations').$type<MemoryObservationEntry[]>().notNull(),
+    status: text('status').$type<'collecting' | 'proposed' | 'confirmed' | 'rejected'>().notNull(),
+    memory: text('memory'),
+    proposedWith: integer('proposed_with'),
+    createdAt: createdAt(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [uniqueIndex('memory_candidates_key_idx').on(t.labId, t.detector, t.key)],
 );

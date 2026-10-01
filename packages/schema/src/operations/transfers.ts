@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EvidenceInput } from '../design.ts';
+import { EvidenceInput, pinOf } from '../design.ts';
 import { recordIdOf } from '../ids.ts';
 import { LocalId } from '../instruments.ts';
 import { ContainerId } from '../inventory.ts';
@@ -8,7 +8,8 @@ import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { LiquidTypeId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
-import { PlanPlate, TransferGroup, TransferPlanId } from '../transfers.ts';
+import { DeckSite, PlanPlate, ProtocolCheck, TransferGroup, TransferPlanId } from '../transfers.ts';
+import { WorklistFormatAttributes, WorklistFormatId } from '../worklists.ts';
 
 /**
  * The transfer calculators (plan 016, T2; ADR 0024): read operations over
@@ -68,7 +69,7 @@ const DeviceUsed = z.object({
 export const transfersDilutionOptions = defineContract({
   id: 'transfers.dilution_options',
   verbs: { done: 'worked out dilution options', intent: 'work out dilution options' },
-  calculator: true,
+  calculator: { title: 'Dilution options', group: 'dilutions' },
   summary:
     'Can each target concentration be reached from a stock with this device: straight from the stock (the volume, droplets, the concentration the well really gets and its error, the solvent it brings) or through an intermediate diluted 10, 100 or 1000 fold. Use it before planning any dilution',
   effect: 'read',
@@ -102,7 +103,7 @@ export const transfersOptimizeDilution = defineContract({
     done: 'planned an intermediate dilution plate',
     intent: 'plan an intermediate dilution plate',
   },
-  calculator: true,
+  calculator: { title: 'Intermediate dilution plate', group: 'dilutions' },
   summary:
     "The dilution optimizer: for every compound and curve point, dispense from the source plate when that is within tolerance, else from an intermediate well, using the fewest intermediate wells and plates within the solvent limit and the intermediate plate's dead and maximum volume. Returns per point the source or intermediate well, droplets, achieved concentration and error, and per intermediate well what to put in it. Choose between runs with different settings and explain; never work the volumes out yourself",
   effect: 'read',
@@ -175,7 +176,7 @@ export const transfersOptimizeDilution = defineContract({
 export const transfersSourceVolumes = defineContract({
   id: 'transfers.source_volumes',
   verbs: { done: 'worked out source volumes', intent: 'work out source volumes' },
-  calculator: true,
+  calculator: { title: 'Source volumes', group: 'dilutions' },
   summary:
     'What each source well must hold for a set of draws: what is drawn, plus the dead volume of its labware type, plus an overage, against what inventory says the well holds now less what confirmed transfer plans have reserved. Says which wells are short',
   effect: 'read',
@@ -212,9 +213,9 @@ export const transfersSourceVolumes = defineContract({
 export const transfersOptions = defineContract({
   id: 'transfers.options',
   verbs: { done: 'compared transfer instruments', intent: 'compare transfer instruments' },
-  calculator: true,
+  calculator: { title: 'Transfer instruments', group: 'dilutions' },
   summary:
-    'Every instrument in the lab that could move a volume, best first: whether its transfer or dispense limits allow it, the volume it really moves (droplets or steps) and its error, its liquid class for the liquid and whether that class is verified, and how it uses tips (estimated). Instruments without volume limits are listed apart. Pick from these and say why',
+    'Every instrument in the lab that could move a volume, best first: whether its transfer or dispense limits allow it, the volume it really moves (droplets or steps) and its error, its liquid class for the liquid and whether that class is verified, and how it uses tips (estimated). Instruments without volume limits are listed apart. Lab memory that prefers an instrument puts it first among those that fit, and one that avoids it puts it last; each option names the memories. Pick from these and say why',
   effect: 'read',
   input: z.strictObject({
     volume: LiquidVolume,
@@ -225,6 +226,12 @@ export const transfersOptions = defineContract({
       .positive()
       .optional()
       .describe('The plate format moved into, to leave out devices that do not handle it'),
+    samples: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('How many samples the work has, for lab memories that depend on it'),
   }),
   output: z.object({
     options: z.array(
@@ -239,6 +246,17 @@ export const transfersOptions = defineContract({
         liquidClass: z
           .object({ label: z.string().optional(), verified: z.boolean(), why: z.string() })
           .optional(),
+        memory: z
+          .array(
+            z.object({
+              name: z.string(),
+              statement: z.string(),
+              effect: z.enum(['prefer', 'avoid']),
+              strength: z.enum(['rule', 'default']),
+            }),
+          )
+          .optional()
+          .describe('Lab memories that moved this option up or down (plan 005b)'),
       }),
     ),
     unknown: z.array(
@@ -290,6 +308,11 @@ export const transfersSetInstrument = defineContract({
     why: z.string().min(1).describe('Why this instrument'),
     liquidClass: recordIdOf('lqc').optional(),
     tips: z.enum(['none', 'new_each', 'per_source', 'lab_default']).optional(),
+    worklist: pinOf(WorklistFormatId)
+      .optional()
+      .describe(
+        "The confirmed worklist format the instrument's method reads (Hamilton, Mantis, PreciseDrop); find it with records.list kind worklist_format",
+      ),
   }),
   output: RecordEnvelope,
 });
@@ -320,7 +343,7 @@ const Check = z.object({
 export const transfersCheck = defineContract({
   id: 'transfers.check',
   verbs: { done: 'checked', intent: 'check' },
-  calculator: true,
+  calculator: { title: 'Transfer plan check', group: 'dilutions' },
   summary:
     "Every rule on a transfer plan, with what is live on the day: each volume against its instrument's limits now, whether each instrument is ready and still has the limits the plan used, what each source well must hold (drawn, dead volume) against what it holds less other plans' reservations, destination wells against their capacity, and whether pinned plate maps and labware are current",
   effect: 'read',
@@ -333,6 +356,50 @@ export const transfersCheck = defineContract({
       tips: z.number().int().describe("Estimated from each group's tip rule"),
       sources: z.number().int(),
     }),
+  }),
+});
+
+export const transfersSetDeck = defineContract({
+  id: 'transfers.set_deck',
+  verbs: { done: 'set the deck layout of', intent: 'set the deck layout of' },
+  summary:
+    "Set where each plate and tip rack goes on the Opentrons Flex for a group of a transfer plan, with why. Left out, code lays it out: the plates the group uses in plan order, then enough full tip racks of the lab's Flex tip rack for the pipette, on the slots the instrument's configuration leaves free, front row first. Given, each site is checked against the free slots, the plates the group uses and the tips it takes. The layout is its own section of the plan, confirmed by a person; exports and the loading list use the confirmed layout. Direct on drafts; proposed on a confirmed plan",
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    expectedVersion: z.number().int().positive(),
+    group: LocalId,
+    sites: z
+      .array(DeckSite)
+      .min(1)
+      .optional()
+      .describe('What goes on each slot; left out, code lays it out'),
+    why: z.string().min(1).describe('Why this layout'),
+  }),
+  output: RecordEnvelope,
+});
+
+export const transfersLoadingList = defineContract({
+  id: 'transfers.loading_list',
+  verbs: { done: 'read the loading list of', intent: 'read the loading list of' },
+  summary:
+    "What a person does at the instrument before a group runs, as numbered steps in plain words: check the pipette and empty the trash, then put each plate and tip rack on its slot, with how much each source well must hold for this group (what it draws plus the plate type's dead volume). From the plan's deck layouts. Give `group` for one group; groups without a layout are listed as skipped with why",
+  effect: 'read',
+  input: z.strictObject({
+    id: TransferPlanId,
+    group: LocalId.optional(),
+  }),
+  output: z.object({
+    plan: z.object({ id: z.string(), name: z.string(), version: z.number().int() }),
+    groups: z.array(
+      z.object({
+        group: z.string(),
+        label: z.string(),
+        instrument: z.string(),
+        steps: z.array(z.string()),
+      }),
+    ),
+    skipped: z.array(z.object({ group: z.string(), why: z.string() })),
   }),
 });
 
@@ -409,7 +476,7 @@ export const transfersExport = defineContract({
   id: 'transfers.export',
   verbs: { done: 'exported a worklist from', intent: 'export a worklist from' },
   summary:
-    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo. Each file is stored in the file store with the plan version it came from. Groups done by hand, or on instruments without a writer yet, are listed as skipped with why. Give `group` to write one group's file only",
+    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo, and an Opentrons protocol (Python) for each group on an Opentrons Flex, checked in Opentrons' simulator first, placed as the plan's confirmed deck layout says; and the lab's CSV for each group with a worklist format pinned (Hamilton, Mantis, PreciseDrop). Each file is stored in the file store with the plan version it came from. Groups done by hand, on instruments with no worklist format pinned, or stopped by the simulator are listed as skipped with why. Give `group` to write one group's file only",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -421,10 +488,17 @@ export const transfersExport = defineContract({
     files: z.array(
       z.object({
         group: z.string(),
-        format: z.enum(['echo_pick_list']),
+        format: z.enum(['echo_pick_list', 'opentrons_protocol', 'worklist']),
         file: RecordEnvelope,
         filename: z.string(),
         rows: z.number().int(),
+        check: ProtocolCheck.optional().describe(
+          'Opentrons protocols: what the simulator made of it',
+        ),
+        deck: z
+          .array(z.object({ slot: z.string(), holds: z.string() }))
+          .optional()
+          .describe('Opentrons protocols: what goes on each deck slot'),
       }),
     ),
     skipped: z.array(z.object({ group: z.string(), why: z.string() })),
@@ -437,7 +511,7 @@ export const transfersImportReport = defineContract({
   id: 'transfers.import_report',
   verbs: { done: 'read an instrument report for', intent: 'read an instrument report for' },
   summary:
-    'Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report says which planned transfers were done, short, failed or not run, and records what really moved in the inventory ledger as from a run log (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export',
+    "Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report records the execution (a TRN record: which planned transfers were done, short, failed or not run), records what really moved in the inventory ledger as from a run log, ends the plan's reservations, and drafts a rerun plan for the short, failed and missing transfers for a person to confirm (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -477,6 +551,29 @@ export const transfersImportReport = defineContract({
     ),
     recorded: z.number().int().describe('Transfers written to the inventory ledger'),
     event: z.string().optional().describe('The inventory event they were written in'),
+    execution: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The execution recorded from a transfer report'),
+    rerun: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The draft plan that redoes the exceptions, waiting for a person to confirm'),
     notes: z.array(z.string()),
   }),
+});
+
+export const worklistsDraftFormat = defineContract({
+  id: 'worklists.draft_format',
+  verbs: { done: 'drafted a worklist format', intent: 'draft a worklist format' },
+  summary:
+    "Draft a worklist format (016c, T1): the CSV the lab's own method on an instrument reads (a Hamilton Venus method, the Mantis or PreciseDrop software), column by column, from an example file the lab exported (upload it with files.upload, read it with files.read). Each column says what fills it: the plate's name, barcode or labware, the well (as A1 or a position number), the volume in the format's unit, the liquid class, a new tip flag, or fixed text. With `example`, code checks the headers against the file's first line (rows) or the grid's labels (grid). A person confirms it with records.confirm; then pin it on a group with transfers.set_instrument and transfers.export writes the file",
+  effect: 'write',
+  input: z.strictObject({
+    label: z.string().min(1).describe('e.g. "STAR ELISA sample transfer"'),
+    ...WorklistFormatAttributes.shape,
+    evidence: z.record(z.string(), EvidenceInput).optional(),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
 });

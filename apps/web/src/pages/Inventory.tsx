@@ -41,6 +41,7 @@ import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { Head, useLabels } from './Instruments.tsx';
+import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
@@ -186,6 +187,7 @@ export function PlacesPage() {
       <Head
         page={page('location')}
         lede="Rooms, fridges, freezers, incubators and shelves, and what is in each."
+        actions={<NewRecordButton kind="location" />}
       />
       <div className="places">
         <section className="block">

@@ -40,6 +40,12 @@ export const operationsDescribe = defineContract({
       .describe('Only operations whose ID starts with this, e.g. "sops"'),
     ids: z.array(z.string()).optional().describe('Only these operation IDs'),
     calculators: z.boolean().optional().describe('Only the lab calculators'),
+    schema: z
+      .boolean()
+      .optional()
+      .describe(
+        'false lists IDs and summaries only, without the JSON Schemas; ask for the ones you will call by ids',
+      ),
   }),
   output: z.object({
     operations: z.array(
@@ -47,9 +53,12 @@ export const operationsDescribe = defineContract({
         id: z.string(),
         summary: z.string(),
         effect: z.enum(['read', 'write']),
-        calculator: z.literal(true).optional(),
-        input: z.record(z.string(), z.unknown()),
-        output: z.record(z.string(), z.unknown()),
+        calculator: z
+          .object({ title: z.string(), group: z.string() })
+          .optional()
+          .describe('A lab calculator: its name and group on the Calculators page'),
+        input: z.record(z.string(), z.unknown()).optional(),
+        output: z.record(z.string(), z.unknown()).optional(),
       }),
     ),
   }),

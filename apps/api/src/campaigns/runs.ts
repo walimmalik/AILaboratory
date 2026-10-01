@@ -19,6 +19,7 @@ import { OperationError } from '../operations/errors.ts';
 import { type AgentPolicy, implement, type OperationDeps } from '../operations/registry.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { observeDeviations } from './detectors.ts';
 import { calculateExperiment, recordOf } from './operations.ts';
 
 /**
@@ -80,6 +81,12 @@ export const runOperations = [
     run: async (ctx, input, deps) => {
       const records = service(deps);
       const experiment = await recordOf(records, ctx, input.experiment, 'experiment', 'experiment');
+      // A proposal replays this later: start the version that was reviewed, or nothing.
+      if (experiment.version !== input.expectedVersion)
+        throw new OperationError(
+          'version_conflict',
+          `${experiment.name} is at version ${experiment.version}, not ${input.expectedVersion}; look at what changed, then start it again`,
+        );
       const e = experiment.attributes as ExperimentAttributes;
       if (
         experiment.status !== 'active' ||
@@ -263,7 +270,7 @@ export const runOperations = [
             .join(', ')}); tick or skip them, or finish the run as failed or aborted`,
         );
       }
-      return service(deps).update(ctx, run.id, {
+      const finished = await service(deps).update(ctx, run.id, {
         expectedVersion: input.expectedVersion,
         attributes: {
           ...a,
@@ -273,6 +280,8 @@ export const runOperations = [
         },
         reason: input.reason ?? `Finished ${run.name}: ${input.status}`,
       });
+      await observeDeviations(deps, ctx, finished);
+      return finished;
     },
   }),
   implement(runsCorrect, {

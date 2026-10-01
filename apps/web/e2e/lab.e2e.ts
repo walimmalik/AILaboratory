@@ -228,7 +228,7 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await expect(panel.getByText('You said: thanks')).toBeVisible();
 });
 
-test('an agent drafts a record, a person reviews it section by section, and the last confirm activates it', async ({
+test('an agent drafts a record, a person reviews it, and one Confirm activates it', async ({
   page,
   request,
 }) => {
@@ -244,7 +244,9 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   // The draft waits on the Review page, which opens it.
   await page.getByRole('link', { name: /^Review/ }).click();
   const waiting = page.getByRole('row', { name: `Draft ${record.name}` });
-  await expect(waiting).toContainText('Confirm appearance and volume');
+  // What blocks it leads; the parts left are a count, named on hover.
+  await expect(waiting).toContainText('2 parts to confirm');
+  await expect(waiting.getByTitle('Appearance, Volume')).toBeVisible();
   await waiting.getByRole('link', { name: `Review ${record.name}` }).click();
   await expect(page.getByText('needs your review').first()).toBeVisible();
 
@@ -252,16 +254,18 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   const appearance = page.getByRole('region', { name: 'Appearance' });
   const volume = page.getByRole('region', { name: 'Volume' });
 
-  // What the agent assumed is marked; what it took from a datasheet says so.
-  await expect(appearance.getByText('assumed by E2E agent')).toBeVisible();
+  // What the agent assumed is marked and named; what it took from a datasheet says so.
+  await expect(appearance.getByText(/unverified · entered by E2E agent, no source/)).toBeVisible();
   await expect(
     volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
   ).toBeVisible();
-  await expect(readiness.getByText('Appearance is not confirmed')).toBeVisible();
-  // Kinds with sections have no separate final Confirm: the last section's confirm activates.
-  await expect(readiness.getByRole('button', { name: `Confirm ${record.name}` })).toHaveCount(0);
+  await expect(
+    readiness.getByText(/One value was entered by an agent without a source: color/),
+  ).toBeVisible();
+  await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
-  await volume.getByRole('button', { name: 'Confirm volume' }).click();
+  // One part can still be confirmed on its own.
+  await volume.getByRole('button', { name: 'confirm only volume' }).click();
   await expect(volume.getByText(/confirmed by you/)).toBeVisible();
 
   // The agent changes a confirmed value: the section goes back to review, showing the change.
@@ -273,20 +277,15 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   await expect(volume.getByText('changed, needs review')).toBeVisible();
   await expect(volume.locator('.was')).toHaveText('200 µL');
   await expect(volume.locator('.now')).toHaveText('250 µL');
-  await expect(readiness.getByText('Volume changed since it was confirmed')).toBeVisible();
 
-  await volume.getByRole('button', { name: 'Confirm volume' }).click();
-  await expect(volume.getByText(/confirmed by you/)).toBeVisible();
-  // The last section's button says it activates the record, and it does.
-  await appearance.getByRole('button', { name: 'Confirm appearance and activate' }).click();
+  // One Confirm takes everything that is left, and the draft becomes active.
+  await readiness.getByRole('button', { name: `Confirm ${record.name}` }).click();
   await expect(page.locator('.chip.active')).toBeVisible();
   // Once active and confirmed, the sections fold into one Details block.
   await expect(
     page.getByRole('region', { name: 'Details' }).getByText('✓ confirmed'),
   ).toBeVisible();
-  await expect(page.getByRole('row', { name: /v5/ })).toContainText(
-    'confirmed appearance and activated',
-  );
+  await expect(page.getByRole('row', { name: /v4/ })).toContainText(/confirmed .+ and activated/);
 });
 
 test('labware has its own page in the library, and the Review page groups drafts by kind', async ({
@@ -694,6 +693,7 @@ test('a file added on the documents page becomes a draft document with its file'
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: 'Documents' })
     .click();
+  await page.getByRole('button', { name: 'Add documents' }).click();
   const add = page.getByRole('region', { name: 'Add documents' });
   await add.getByLabel('Files').setInputFiles({
     name: `Coating ${stamp}.md`,
@@ -768,7 +768,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   // A number that comes from a value reads as that value: hover says which, and Names shows it.
   await procedure.getByRole('button', { name: '100 µL' }).first().hover();
   await expect(page.getByRole('tooltip')).toContainText('Well volume');
-  await expect(page.getByRole('tooltip')).toContainText('usual value');
+  await expect(page.getByRole('tooltip')).toContainText('protocol default');
   await procedure.getByRole('button', { name: 'Names' }).click();
   await expect(procedure).toContainText('volume Well volume');
   await procedure.getByRole('button', { name: 'Numbers' }).click();
@@ -785,7 +785,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await variables.getByRole('textbox', { name: 'Well volume: value or formula' }).fill('150 uL');
   const formula = variables.getByRole('textbox', { name: 'Coating solution: value or formula' });
   await expect(formula).toHaveValue('Wells × Well volume');
-  await expect(variables).toContainText('worked out');
+  await expect(variables).toContainText('calculated');
   // Names are recognized as they are typed, and picked from a list under the caret.
   await formula.fill('Wells × well vol');
   await variables
@@ -826,7 +826,9 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   await expect(variables.getByRole('textbox', { name: 'Plates: value or formula' })).toHaveValue(
     /ceil\(Wells ÷ 96\)/,
   );
-  await expect(variables).toContainText('assistant: One plate per 96 wells');
+  await expect(variables).toContainText(
+    'suggested by the assistant, unverified: One plate per 96 wells',
+  );
 
   // A step's words mark its values and materials; what it uses and its settings are read from them.
   const steps = page.getByRole('region', { name: 'Steps' });

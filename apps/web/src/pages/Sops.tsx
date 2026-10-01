@@ -51,11 +51,11 @@ export const actionWords: Record<SopStep['action'], string> = {
 };
 
 const fromWords = {
-  input: 'chosen for this run',
+  input: 'set for this run',
   record: 'from the record',
-  default: 'usual value',
-  typical: 'typical value, until a lot is picked',
-  computed: 'worked out',
+  default: 'protocol default',
+  typical: 'nominal value, until a lot is selected',
+  computed: 'calculated',
   missing: 'missing',
 } as const;
 

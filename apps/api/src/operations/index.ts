@@ -28,13 +28,19 @@ export { ActivityBus } from './activity.ts';
 import { conclusionOperations } from '../campaigns/conclusions.ts';
 import { campaignOperations } from '../campaigns/operations.ts';
 import { runOperations } from '../campaigns/runs.ts';
+import { candidateOperations } from '../memory/candidates.ts';
+import { memoryOperations } from '../memory/operations.ts';
+import { observeOverrides } from '../memory/overrides.ts';
 import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { transferCalculators } from '../transfers/calculators.ts';
+import { deckOperations } from '../transfers/deck-operations.ts';
 import { exportOperations } from '../transfers/export.ts';
 import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
 import { reportOperations } from '../transfers/reports.ts';
+import { noProtocolWriter, type ProtocolWriter } from '../transfers/simulator.ts';
+import { worklistOperations } from '../transfers/worklist-operations.ts';
 import { OperationError } from './errors.ts';
 
 export { OperationError } from './errors.ts';
@@ -56,35 +62,42 @@ export function createRegistry(
   {
     files = new MemoryFileStore(),
     converter = noConverter,
-  }: { files?: FileStore; converter?: Converter } = {},
+    protocols = noProtocolWriter,
+  }: { files?: FileStore; converter?: Converter; protocols?: ProtocolWriter } = {},
 ) {
-  return new OperationRegistry({ db, kinds, bus, assistant, files, converter }).register(
-    ...recordOperations,
-    ...proposalOperations,
-    ...changeSetOperations,
-    ...reviewOperations,
-    ...skillOperations,
-    ...labwareOperations,
-    ...instrumentOperations,
-    ...workcellOperations,
-    ...reagentOperations,
-    ...liquidOperations,
-    ...entityOperations,
-    ...inventoryOperations,
-    ...contentsOperations,
-    ...fileOperations,
-    ...libraryOperations,
-    ...mentionOperations,
-    ...sopOperations,
-    ...campaignOperations,
-    ...runOperations,
-    ...conclusionOperations,
-    ...plateMapOperations,
-    ...transferCalculators,
-    ...transferPlanOperations,
-    draftFromPlateMap,
-    ...exportOperations,
-    ...reportOperations,
-    ...assistantOperations,
-  );
+  return new OperationRegistry({ db, kinds, bus, assistant, files, converter, protocols })
+    .register(
+      ...recordOperations,
+      ...proposalOperations,
+      ...changeSetOperations,
+      ...reviewOperations,
+      ...skillOperations,
+      ...labwareOperations,
+      ...instrumentOperations,
+      ...workcellOperations,
+      ...reagentOperations,
+      ...liquidOperations,
+      ...entityOperations,
+      ...inventoryOperations,
+      ...contentsOperations,
+      ...fileOperations,
+      ...libraryOperations,
+      ...mentionOperations,
+      ...sopOperations,
+      ...campaignOperations,
+      ...runOperations,
+      ...conclusionOperations,
+      ...plateMapOperations,
+      ...memoryOperations,
+      ...candidateOperations,
+      ...transferCalculators,
+      ...transferPlanOperations,
+      draftFromPlateMap,
+      ...deckOperations,
+      ...exportOperations,
+      ...worklistOperations,
+      ...reportOperations,
+      ...assistantOperations,
+    )
+    .onWrite(observeOverrides);
 }

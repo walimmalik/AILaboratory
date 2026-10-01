@@ -27,7 +27,8 @@ Every capability is an **operation**. People (through the web app) and agents (t
    - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
 5. Output is checked against the contract before it leaves the server.
 6. An implementation may declare `after`, which runs once a write is committed and logged (never on previews or proposals). `assistant.ask` uses it to start the assistant in the background.
-7. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
+7. Write listeners (`registry.onWrite`) run after each committed write a person makes at the top level, with the records it touched (a change set counts once, with every record). Lab memory's repeated-override detector is one (plan 005c-1b). A listener's failure is logged and never fails the write.
+8. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
 
 ## Agent policies
 
@@ -38,7 +39,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `records.create` | direct for drafts, proposed when `status: "active"` |
 | `records.update`, `records.restore` | direct on drafts, proposed on active records |
 | `records.activate`, `records.archive`, `records.unarchive` | proposed |
-| `records.delete_draft` | direct |
+| `records.delete_draft` | direct for the agent's own draft (it alone wrote every version, for the same person, and nothing is confirmed); proposed otherwise (C5) |
 | `labware.import_opentrons` | direct (creates a draft) |
 | `labware.use_standard_positions` | direct on drafts, proposed on active records |
 | `instruments.register` | direct (creates a draft) |
@@ -69,7 +70,7 @@ Approving (`proposals.approve`, people only) runs the stored input as the propos
 | Errors | HTTP 400/401/403/404/409/500 with `{code, message, details?}` |
 | Live conversation | `GET /v1/assistant/conversations/{id}/stream`: `ready` and `status` (the conversation's state), `message` (each new message), `ping`. Only the conversation's owner. See [assistant.md](assistant.md). |
 | Live ledger | `GET /v1/activity/stream`: server-sent events `ready`, `activity` (one ledger entry) and `ping` every 25 s, for the caller's lab. Each entry carries `recordNames` (readable names at the time of the change) so a ledger line can say "archived WDG-0001" even after a draft is deleted. |
-| MCP | `POST /mcp` (Streamable HTTP, stateless, JSON responses). Two tools: `describe_operations` (optionally by namespace or IDs) and `run_operation` (`operation`, `input`, `preview`). Refusals come back as tool errors with `{code, message}`. |
+| MCP | `POST /mcp` (Streamable HTTP, stateless, JSON responses). Two tools: `describe_operations` (optionally by namespace or IDs; `schema: false` lists IDs and summaries only, for scanning a large namespace) and `run_operation` (`operation`, `input`, `preview`). Refusals come back as tool errors with `{code, message}`. |
 | Web app | `@ailab/client`: `call(contract, input, {preview})` returns the typed result; `run` returns the output or throws. `apps/web/src` may not use `fetch` (lint rule). |
 
 All doors need `Authorization: Bearer <token>`, or the web app's session cookie (ADR 0019; cookie-authenticated writes must be JSON). Agent tokens act on behalf of a person: `pnpm --filter @ailab/api token --agent "Claude Code"`.

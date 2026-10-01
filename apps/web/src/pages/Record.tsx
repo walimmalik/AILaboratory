@@ -5,6 +5,7 @@ import { type ReactNode, useState } from 'react';
 import {
   actorLabel,
   diffRecords,
+  formatValue,
   formatWhen,
   isAgent,
   operationVerb,
@@ -154,8 +155,9 @@ export function RecordPage() {
             <ReadinessBlock
               record={r}
               readiness={readiness}
-              titles={{}}
+              titles={{ fields: 'the fields' }}
               onFix={() => setEditing(true)}
+              editing={editing ? 'fields' : undefined}
             />
           )}
           <section className="block">
@@ -176,9 +178,13 @@ export function RecordPage() {
                 <p className="empty">No fields.</p>
               ) : (
                 <dl className="kv">
-                  {Object.entries(r.attributes).map(([key, value]) => (
-                    <Field key={key} name={key} value={value} />
-                  ))}
+                  {Object.entries(r.attributes).map(([key, value]) =>
+                    r.kind === 'lot' && key === 'values' ? (
+                      <LotValues key={key} record={r} />
+                    ) : (
+                      <Field key={key} name={key} value={value} />
+                    ),
+                  )}
                 </dl>
               )}
               {!editing && r.status !== 'archived' && (
@@ -295,6 +301,29 @@ function Field({ name, value }: { name: string; value: unknown }) {
         {typeof value === 'string' && /^[a-z]+(_[a-z]+)+$/.test(value) && name !== 'name'
           ? value.replaceAll('_', ' ')
           : renderValue(value)}
+      </dd>
+    </>
+  );
+}
+
+/**
+ * A lot's certificate values by the names its product gives them ("Working concentration 0.5 mg/mL"),
+ * not by their keys (QA 2026-10-01 Q6).
+ */
+function LotValues({ record }: { record: RecordEnvelope }) {
+  const a = record.attributes as { product?: string; values?: { field: string; value: unknown }[] };
+  const product = useQuery({ ...recordQuery(a.product ?? ''), enabled: !!a.product }).data;
+  const fields = (product?.attributes.lotFields ?? []) as { key: string; label: string }[];
+  return (
+    <>
+      <dt>certificate values</dt>
+      <dd>
+        {(a.values ?? []).map((v) => (
+          <div key={v.field}>
+            {fields.find((f) => f.key === v.field)?.label ?? fieldLabel(v.field)}{' '}
+            <span className="num">{formatValue(v.value)}</span>
+          </div>
+        ))}
       </dd>
     </>
   );

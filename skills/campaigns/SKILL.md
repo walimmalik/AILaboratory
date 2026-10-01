@@ -26,10 +26,10 @@ A **campaign** is a lab project with a goal and aims. An **experiment** is one q
 
 ## Recording a run
 
-- `runs.start` `{experiment, label?, date?, operator?}` starts a run of a planned experiment. The run lists every step with its planned values. From an agent it is a proposal.
+- `runs.start` `{experiment, expectedVersion, label?, date?, operator?}` starts a run of a planned experiment at the version you looked at; if the experiment changed since, the start (or its approval) is refused with `version_conflict`. The run lists every step with its planned values. From an agent it is a proposal.
 - `runs.record_step` `{id, expectedVersion, part, step}` ticks a step as done as planned. Only when something differed, add `changed: [{name, value}]` and `why` (and `impact` if known); `skipped: true` with `why` records a step not done. `runs.done_as_planned` ticks every remaining step.
 - `runs.record_deviation` `{what, why, impact?}` records anything else that went differently. `runs.attach_data` `{file, part?, step?, container?, note?}` links an uploaded file (`files.upload`) to the run.
-- `runs.finish` `{status: done | failed | aborted, note?}`. Done needs every step ticked or skipped.
+- `runs.finish` `{status: done | failed | aborted, note?}`. Done needs every step ticked or skipped. Finishing a run that was not aborted reports each value recorded differently from the plan to lab memory (`memory.observe`, detector `runs.recurring_deviation`); the same change in 3 runs on 2 days becomes a proposed lesson a person confirms.
 - `runs.correct` records what someone says afterwards about a finished run ("incubated 45 min, not 30" in a notebook entry that evening). For a step's value give `{part, step, changed, why, source?}`, the same shape as `runs.record_step`, so lab memory can group the deviation; for anything else give `{what, why, impact?, source?}`. Put where it was said in `source`. Yours are proposals a person confirms; the run keeps its finish time and the history shows the correction.
 - In a run a person started, your records go in directly; otherwise they are proposals. Filling a run from notes or a photo: tick only what the notes say, and put anything unclear in a deviation rather than guessing.
 

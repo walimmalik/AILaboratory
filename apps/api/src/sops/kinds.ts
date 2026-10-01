@@ -1,9 +1,10 @@
 import { evaluateVariables, getUnit, isUnit, type VariableDefinition } from '@ailab/domain';
 import { type CheckResult, defineKind, type Quantity, SopAttributes } from '@ailab/schema';
+import { memoryLinks } from '../memory/links.ts';
 import { citationsOf } from './citations.ts';
 import { bindRoles, readField } from './resolve.ts';
 
-const PLAN = 'Digital SOPs (plan 012)';
+const PLAN = '(plan 012, digital SOPs)';
 
 const check = (
   id: string,
@@ -68,6 +69,7 @@ export const sop = defineKind({
   nameWidth: 4,
   attributes: SopAttributes,
   links: (a) => [
+    ...memoryLinks(a.timing),
     ...(a.source ? [{ toId: a.source.document, relation: 'digitized_from' }] : []),
     ...(a.derivedFrom ? [{ toId: a.derivedFrom, relation: 'derived_from' }] : []),
     ...[...new Set(a.materials.flatMap((m) => (m.default ? [m.default] : [])))].map((toId) => ({
@@ -115,7 +117,7 @@ export const sop = defineKind({
     { id: 'timing', title: 'Timing', fields: ['timing'] },
     { id: 'questions', title: 'Open questions', fields: ['questions'] },
   ],
-  related: async (a, { get }) => {
+  related: async (a, { get, actor, current }) => {
     const invalid: string[] = [];
     const roles = [...a.materials.map((m) => m.role), ...(a.solutions ?? []).map((s) => s.role)];
     const produced = a.steps.flatMap((s) => (s.produces ?? []).map((p) => p.role));
@@ -167,6 +169,20 @@ export const sop = defineKind({
         invalid.push(`Question ${q.id} is about ${q.about.variable}, which is not a variable`);
       if (q.status === 'answered' && !q.answer)
         invalid.push(`Question ${q.id} is answered but has no answer`);
+    }
+    // A person settles a question (sops.answer_question, G6); an agent's write, approved or not,
+    // keeps each question's status and answer as they were, and asks new ones open.
+    if (actor?.type === 'agent') {
+      const before = new Map(
+        ((current?.attributes as SopAttributes | undefined)?.questions ?? []).map((q) => [q.id, q]),
+      );
+      for (const q of a.questions ?? []) {
+        const was = before.get(q.id);
+        if (q.status !== (was?.status ?? 'open') || q.answer !== was?.answer)
+          invalid.push(
+            `Question ${q.id} is for a person to answer (sops.answer_question); leave its status and answer as they are`,
+          );
+      }
     }
     for (const { where, unit } of unitsOf(a)) {
       if (!isUnit(unit)) invalid.push(`${where}: unknown unit "${unit}"`);

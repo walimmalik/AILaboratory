@@ -8,12 +8,13 @@ import type {
   OperationErrorBody,
   PageContext,
 } from '@ailab/schema';
-import { eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { labs, users } from '../db/schema.ts';
+import { activity, labs, proposals, users } from '../db/schema.ts';
+import { activeMemories, bundle, lookup, nearby } from '../memory/match.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
-import type { RecordContext } from '../records/service.ts';
+import { type RecordContext, RecordService } from '../records/service.ts';
 import { findSkill } from '../skills/skills.ts';
 import type { ModelSetup } from './config.ts';
 import { type ChatModel, ModelError, type ModelMessage } from './model.ts';
@@ -31,6 +32,8 @@ import { callable, pageNamespaces, RUN_OPERATION, toolName, toolsFor } from './t
 export const MAX_STEPS = 16;
 /** Longest tool result sent back to the model, in characters. */
 const MAX_RESULT_CHARS = 30_000;
+/** Lab memory lines the assistant gets for a page (M7). */
+const MEMORY_LINES = 15;
 const MODEL_TIMEOUT_MS = 180_000;
 
 export type AssistantEvent =
@@ -117,7 +120,15 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const system = await systemPrompt(db, ctx);
+    const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(
+      deps,
+      ctx,
+      conversationId,
+    )}${await memoryNote(
+      deps,
+      ctx,
+      (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
+    )}`;
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
       this.publish(conversationId, { type: 'status', conversation: toSummary(row) });
@@ -389,7 +400,104 @@ function withPage(text: string, page: PageContext | undefined): string {
   return `${text}\n\n[Sent from the page: ${where}${record}]`;
 }
 
-async function systemPrompt(db: Db, ctx: RecordContext): Promise<string> {
+/**
+ * What people decided about the changes this conversation proposed, so the assistant knows which
+ * were rejected and why before it answers again (review 2026-10-01 I13).
+ */
+async function decidedProposals(
+  db: Db,
+  ctx: RecordContext,
+  conversationId: string,
+): Promise<string> {
+  const rows = await db
+    .select()
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.labId, ctx.labId),
+        sql`${proposals.proposedBy}->>'sessionRef' = ${conversationId}`,
+        ne(proposals.status, 'pending'),
+      ),
+    )
+    .orderBy(asc(proposals.proposedAt));
+  if (rows.length === 0) return '';
+  const lines = rows.map((row) => {
+    const why = row.decisionReason ? `: "${row.decisionReason}"` : '';
+    const what = row.reason ? ` (${row.reason})` : '';
+    const outcome =
+      row.status === 'approved'
+        ? 'confirmed and applied'
+        : row.status === 'rejected'
+          ? `rejected${why}`
+          : `confirmed, but it failed when applied${row.error ? `: ${row.error.message}` : ''}`;
+    return `- ${row.id}, ${row.operationId}${what}: ${outcome}`;
+  });
+  return `\n\nWhat people decided about the changes you proposed in this conversation. Don't propose a rejected change again unless the person asks; if the reason says what to change, do that. A reason that says how the lab always does something is a possible lab memory: ask once whether to remember it for the lab, then memory.propose.\n${lines.join('\n')}`;
+}
+
+/**
+ * Values this conversation filled that a person has since changed (plan 005c-1b, M15): each one
+ * may be how the lab does things, so the agent is told and asks once whether to remember it.
+ */
+async function personEdits(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  conversationId: string,
+): Promise<string> {
+  const rows = await deps.db
+    .select({ recordIds: activity.recordIds })
+    .from(activity)
+    .where(
+      and(
+        eq(activity.labId, ctx.labId),
+        eq(activity.outcome, 'succeeded'),
+        sql`${activity.actor}->>'sessionRef' = ${conversationId}`,
+      ),
+    )
+    .orderBy(desc(activity.at))
+    .limit(50);
+  const ids = [...new Set(rows.flatMap((r) => r.recordIds))].slice(0, 20);
+  const records = new RecordService(deps.db, deps.kinds);
+  const lines: string[] = [];
+  for (const id of ids) {
+    const record = await records.get(ctx, id).catch(() => undefined);
+    if (!record) continue;
+    const history = await records.history(ctx, id);
+    for (const [field, now] of Object.entries(record.evidence ?? {})) {
+      if (now.source !== 'person' || field.startsWith('/')) continue;
+      const mine = history.find((v) => {
+        const by = v.snapshot.evidence?.[field]?.by;
+        return by?.type === 'agent' && by.sessionRef === conversationId;
+      });
+      if (!mine) continue;
+      const was = JSON.stringify((mine.snapshot.attributes as Record<string, unknown>)[field]);
+      const is = JSON.stringify((record.attributes as Record<string, unknown>)[field]);
+      if (was === is) continue;
+      lines.push(`- ${record.name} ${field}: you filled ${was}; a person changed it to ${is}`);
+    }
+  }
+  if (lines.length === 0) return '';
+  return `\n\nValues you filled in this conversation that a person has since changed. When a change looks like how the lab always does it (not a one-off), it is a possible lab memory: ask once whether to remember it for the lab, then memory.propose.\n${lines.slice(0, 10).join('\n')}`;
+}
+
+/**
+ * The lab memory the assistant gets without asking (plan 005b, M7): memories about the record on
+ * the page and the records it links to, plus the lab-wide rules, one line each, capped.
+ */
+async function memoryNote(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  ask: MessageRow['body'] | undefined,
+): Promise<string> {
+  const page = ask?.role === 'user' ? ask.page?.record?.id : undefined;
+  const records = page ? [page, ...(await nearby(deps, ctx, [page]))] : [];
+  const { matches } = lookup(await activeMemories(deps, ctx), ctx, { records });
+  const { lines } = bundle(matches, MEMORY_LINES);
+  if (lines.length === 0) return '';
+  return `\n\nLab memory${page ? ' for this page' : ''}, confirmed by people. Follow a rule, or say why you didn't; use a default unless the person or a confirmed record says otherwise; a note only informs. Name the memory (e.g. MEM-0004) when it shaped what you did. memory.for gives the memories for a particular piece of work.\n${lines.map((l) => `- ${l}`).join('\n')}`;
+}
+
+async function systemPrompt(db: Db, ctx: RecordContext, conversationId: string): Promise<string> {
   const [user] = await db
     .select({ name: users.displayName })
     .from(users)
@@ -403,9 +511,11 @@ You act only through the lab's operations, which are your tools. Everything you 
 - Your named tools cover records, review, skills, the calculators and the module of the page you are on. For anything else, find the operation with operations_describe (by namespace, e.g. "sops") and call it with run_operation.
 - Some changes are proposed rather than made: the result then has status "proposed" and waits for a person to confirm it on the Review page. Say that plainly; never say a proposed change is done.
 - You draft; people confirm. Create records as drafts. Values you set are marked "assumed" until a person confirms them. Say where each value came from in "evidence": "stated" for values the person told you (e.g. {"color": {"source": "stated"}}), "datasheet", "imported" or "measured" with a reference when you used one; "calculated" with the "calculation" handle a calculator returned (and "output", a pointer into its output, when the value is one part of it); "record" or "template" with "from": {id, version} when you copied the value from a confirmed record. For a list the kind keys by item (an SOP's steps by id, variables by name), evidence can name one item as "/steps/<id>". Values you estimated get no evidence and show as assumed. Never name a source you did not use.
-- A person confirms each section of a draft on its page; confirming the last one makes it active. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
+- A person confirms a draft with one Confirm on its page or on Review, which makes it active; you can't confirm. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
+- Changes that belong together (a record and the records it links to, several edits for one ask) go in one changes_apply call with a reason: they run in order, all or nothing, and when any step needs a person the whole set is one proposal they confirm or reject at once. Don't propose them one by one.
 - The app adds a linked "Waiting for you" line under your reply listing the drafts and proposed changes you left, so don't write one yourself; just say briefly what you did and anything you assumed.
-- To edit a record, read it first (records_get) for its current version and attributes, then send records_update the complete attributes with your change, and that version as expectedVersion.
+- To edit a record, read it first (records_get with brief: true, which leaves out the confirmations) for its current version and attributes, then send records_update the complete attributes with your change, and that version as expectedVersion.
+- Long results are cut at ${MAX_RESULT_CHARS / 1000}k characters. Ask for less: review_list puts its counts first and takes a limit; operations_describe with schema: false lists a namespace's operations without their schemas, then ask for the ones you need by ids.
 - The person may attach files; each shows as [Attached file file_…] with the start of its text. To give a whole file to a tool, put {"$file": "file_…"} where the value goes (e.g. labware_import_opentrons with {"definition": {"$file": "file_…"}}); never retype a file's contents.
 - Some tools return a file (an Opentrons definition, a worklist; their description says so). The app shows it under your reply with Download and Copy buttons, so don't copy its contents into your reply: say what it is and answer questions about it briefly.
 - Every quantity has a unit, e.g. {"value": "50", "unit": "uL"}.
@@ -417,7 +527,7 @@ You act only through the lab's operations, which are your tools. Everything you 
 
 The calculators skill, which you always follow:
 
-${findSkill('calculators')?.text ?? ''}`;
+${findSkill('calculators')?.text ?? ''}${await decidedProposals(db, ctx, conversationId)}`;
 }
 
 export { toolName, toolsFor } from './toolset.ts';

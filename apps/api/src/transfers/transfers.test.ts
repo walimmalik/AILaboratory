@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Actor, Readiness, RecordEnvelope, WellState } from '@ailab/schema';
+import type { Actor, Quantity, Readiness, RecordEnvelope, WellState } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -10,6 +10,7 @@ import { fileKinds } from '../files/kinds.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { inventoryKinds } from '../inventory/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -53,6 +54,7 @@ beforeEach(async () => {
     ...transferKinds,
     ...plateMapKinds,
     ...fileKinds,
+    ...memoryKinds,
   ]) {
     kinds.register(kind);
   }
@@ -211,6 +213,15 @@ describe('transfers.dilution_options', () => {
       }),
     );
     expect(units).toMatchObject({ code: 'invalid_input' });
+    const unknown = await refused(
+      run(agent, 'transfers.dilution_options', {
+        ...input,
+        device: { limits: { min: nL('2.5'), max: nL('500'), step: nL('2.5') } },
+        stock: { value: '10', unit: 'undefined' },
+      }),
+    );
+    expect(unknown).toMatchObject({ code: 'invalid_input' });
+    expect(unknown.message).toContain('Unknown unit "undefined"');
   });
 
   it("does not read another lab's instruments", async () => {
@@ -371,6 +382,34 @@ describe('transfers.options', () => {
       { volume: uL('50') },
     );
     expect(large.options[0]).toMatchObject({ device: 'Flex 1 (left)', fit: { fits: true } });
+  });
+
+  it('ranks an instrument lab memory avoids for the work last, and leaves other work alone', async () => {
+    const { echo } = await lab();
+    const echoKind = (echo.attributes as { kind: string }).kind;
+    type Options = {
+      options: { device: string; memory?: { name: string; effect: string }[] }[];
+    };
+    const order = async (volume: unknown) =>
+      (await run<Options>(agent, 'transfers.options', { volume })).options;
+    expect((await order(uL('5'))).map((o) => o.device)).toEqual(['Echo 1', 'Flex 1 (left)']);
+    await run(person, 'memory.remember', {
+      statement: 'The Echo misfires above 4 uL from this plate; move larger volumes on the Flex',
+      kind: 'quirk',
+      strength: 'default',
+      about: [echoKind],
+      conditions: { instrumentKind: echoKind, capability: 'transfer', volume: { min: uL('4') } },
+      effect: { effect: 'avoid', record: echoKind },
+      source: { from: 'stated' },
+    });
+    const avoided = await order(uL('5'));
+    expect(avoided.map((o) => o.device)).toEqual(['Flex 1 (left)', 'Echo 1']);
+    expect(avoided[1]?.memory).toEqual([
+      expect.objectContaining({ name: 'MEM-0001', effect: 'avoid' }),
+    ]);
+    const small = await order(uL('2'));
+    expect(small.map((o) => o.device)).toEqual(['Echo 1', 'Flex 1 (left)']);
+    expect(small[0]?.memory).toBeUndefined();
   });
 
   it('refuses a volume without a volume unit, and sees nothing of other labs', async () => {
@@ -598,6 +637,11 @@ describe('transfer plans', () => {
             },
             {
               from: { plate: 'src', well: 'A1' },
+              to: { plate: 'assay', well: 'A3' },
+              volume: nL('3'),
+            },
+            {
+              from: { plate: 'src', well: 'A1' },
               to: { plate: 'assay', well: 'A2' },
               volume: uL('60'),
             },
@@ -608,6 +652,10 @@ describe('transfer plans', () => {
     const ready = await run<Readiness>(person, 'records.readiness', { id: plan.id });
     const byId = new Map(ready.checks.map((c) => [c.id, c]));
     expect(byId.get('volumes_fit')?.message).toContain('1 nL is less than one step of 2.5 nL');
+    expect(byId.get('volumes_fit')?.message).toContain(
+      '3 nL is not a whole number of 2.5 nL steps (it would move 2.5 nL)',
+    );
+    expect(byId.get('volumes_fit')?.message).not.toContain('2.5 nL is not');
     expect(byId.get('wells_hold')?.message).toBe('assay A2 gets 60 µL; it holds 50 µL');
     expect(byId.get('intermediates_first')?.message).toContain('draws from mid A1 before anything');
 
@@ -680,7 +728,7 @@ describe('transfer plans', () => {
   });
 
   it('writes an Echo pick list from a confirmed plan and stores it with the plan version', async () => {
-    const { flex, pp, assay, src, draft } = await setup();
+    const { pp, assay, src, draft } = await setup();
     const ppOk = await confirm(pp);
     const assayOk = await confirm(assay);
     const plan = await run<RecordEnvelope>(agent, 'transfers.draft', {
@@ -702,21 +750,6 @@ describe('transfer plans', () => {
       ],
       groups: [
         { ...draft.groups[0], transfers: draft.groups[0]?.transfers.slice(0, 2) },
-        {
-          id: 'buffer',
-          label: 'Flex: buffer into the assay plate',
-          method: 'reagent_addition',
-          instrument: { instrument: flex.id },
-          reason: 'Microlitre volumes',
-          tips: 'new_each',
-          transfers: [
-            {
-              from: { plate: 'src', well: 'B1' },
-              to: { plate: 'assay', well: 'A1' },
-              volume: uL('10'),
-            },
-          ],
-        },
         {
           id: 'mix',
           label: 'By hand: top up',
@@ -742,10 +775,7 @@ describe('transfer plans', () => {
       files: { group: string; file: RecordEnvelope; filename: string; rows: number }[];
       skipped: { group: string; why: string }[];
     }>(agent, 'transfers.export', { id: active.id });
-    expect(out.skipped).toEqual([
-      { group: 'buffer', why: 'No file writer for Flex 1 yet' },
-      { group: 'mix', why: 'Done by hand; no instrument file' },
-    ]);
+    expect(out.skipped).toEqual([{ group: 'mix', why: 'Done by hand; no instrument file' }]);
     expect(out.files).toMatchObject([
       {
         group: 'compounds',
@@ -768,10 +798,6 @@ describe('transfer plans', () => {
       ].join('\n'),
     );
 
-    const onlyFlex = await refused(
-      run(agent, 'transfers.export', { id: active.id, group: 'buffer' }),
-    );
-    expect(onlyFlex.message).toBe('No file writer for Flex 1 yet');
     const noGroup = await refused(run(agent, 'transfers.export', { id: active.id, group: 'x' }));
     expect(noGroup.message).toBe('TFP-0001 has no group x');
     const hidden = await refused(run(otherLab, 'transfers.export', { id: active.id }));
@@ -888,6 +914,76 @@ describe('transfer plans', () => {
       container: dest.id,
     });
     expect(history.events[0]?.runLog).toBe(report.id);
+
+    // The execution is on record with what didn't go as planned, and a rerun plan redoes it.
+    const reserved = await run<{ wells: unknown[] }>(person, 'transfers.reserved', {
+      container: src.id,
+    });
+    expect(reserved.wells).toEqual([]);
+    const { execution, rerun } = read as Imported & {
+      execution: { id: string; name: string };
+      rerun: { id: string; name: string };
+    };
+    expect(execution.name).toBe('TRN-0001');
+    const trn = await run<RecordEnvelope>(person, 'records.get', { id: execution.id });
+    expect(trn.status).toBe('active');
+    expect(trn.attributes).toMatchObject({
+      plan: { id: plan.id, version: plan.version },
+      report: report.id,
+      status: 'with_exceptions',
+      counts: { planned: 3, done: 1, short: 1, failed: 0, notRun: 1, unplanned: 1 },
+      containers: [
+        { plate: 'src', container: src.id },
+        { plate: 'assay', container: dest.id },
+      ],
+      exceptions: [
+        {
+          index: 1,
+          to: { plate: 'assay', well: 'A2' },
+          outcome: 'short',
+          actual: nL('1000'),
+          rerun: nL('1500'),
+          note: 'Insufficient volume',
+        },
+        { index: 2, to: { plate: 'assay', well: 'A3' }, outcome: 'not_run', rerun: nL('2500') },
+      ],
+      unplanned: [{ to: { plate: 'assay', well: 'B9' }, actual: nL('0') }],
+      rerun: rerun.id,
+    });
+    const redo = await run<RecordEnvelope>(person, 'records.get', { id: rerun.id });
+    expect(redo).toMatchObject({ kind: 'transfer_plan', status: 'draft' });
+    expect(redo.attributes).toMatchObject({
+      rerunOf: { plan: { id: plan.id, version: plan.version }, run: execution.id },
+      plates: [
+        { id: 'src', role: 'source', container: src.id },
+        { id: 'assay', role: 'destination', container: dest.id },
+      ],
+      groups: [
+        {
+          id: (plan.attributes as { groups: { id: string }[] }).groups[0]?.id,
+          transfers: [
+            { to: { plate: 'assay', well: 'A2' }, volume: nL('1500') },
+            { to: { plate: 'assay', well: 'A3' }, volume: nL('2500') },
+          ],
+        },
+      ],
+    });
+    // Confirmed, the rerun reserves just what it redoes.
+    await confirm(redo);
+    const again = await run<{ wells: { well: string; reserved: Quantity }[] }>(
+      person,
+      'transfers.reserved',
+      { container: src.id },
+    );
+    expect(again.wells).toEqual([expect.objectContaining({ well: 'A1', reserved: uL('4') })]);
+    await expect(
+      registry.execute(person, 'records.update', {
+        id: trn.id,
+        expectedVersion: trn.version,
+        attributes: { ...trn.attributes, status: 'complete' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+
     const twice = await refused(
       run(agent, 'transfers.import_report', {
         id: plan.id,
@@ -895,7 +991,9 @@ describe('transfer plans', () => {
         containers: [{ plate: 'assay', container: dest.id }],
       }),
     );
-    expect(twice.message).toContain('is already recorded in the inventory');
+    expect(twice.message).toBe(
+      `${report.name} was already read as TRN-0001; a report is read once`,
+    );
 
     // 30 µL less 3.5 µL moved: 26.5 µL. The survey says 20 µL.
     const survey = await upload(
@@ -1059,7 +1157,8 @@ describe('transfers.draft_from_plate_map', () => {
     const h1 = groups[3]?.transfers.find((t) => t.to.well === 'H1');
     expect(h1?.volume).toEqual(nL('25'));
     const ready = await run<Readiness>(person, 'records.readiness', { id: out.plan.id });
-    // Echo volumes fit; the intermediate diluent is too much for it, which readiness says.
+    // Echo volumes fit, the intermediates' stock in whole droplets too; the intermediate diluent is
+    // too much for it, which readiness says.
     expect(ready.checks.find((c) => c.id === 'volumes_fit')?.message).toMatch(
       /^Solvent into the intermediate wells: 2 transfers: .* is above the maximum of 10 µL$/,
     );

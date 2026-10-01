@@ -40,7 +40,7 @@ const EvaluatedVariable = z.object({
 export const sopsEvaluate = defineContract({
   id: 'sops.evaluate',
   verbs: { done: "worked out the SOP's formulas", intent: "work out the SOP's formulas" },
-  calculator: true,
+  calculator: { title: 'SOP formulas', group: 'protocols' },
   summary:
     'Work out formulas over named values with units and exact decimals, as digital SOP variables do: "n_samples * replicates * well_volume + dead_volume", "roundup(total * 1.1, 0.5 mL)", "final_conc * final_volume / stock_conc". Give each variable a value (a number, a quantity or a list) or a formula; formulas may use each other in any order. Functions: ceil, floor, round, roundup(x, step), rounddown(x, step), min, max, sum, count',
   effect: 'read',
@@ -98,7 +98,7 @@ export const sopsDraft = defineContract({
 export const sopsCalculate = defineContract({
   id: 'sops.calculate',
   verbs: { done: 'calculated the values of', intent: 'calculate the values of' },
-  calculator: true,
+  calculator: { title: 'SOP values', group: 'protocols' },
   summary:
     "Work out an SOP's variables for a run: bind its material roles to records (each role's default unless one is given here), read record variables from them (a lot's certificate value, a plate type's dead volume), take the run's inputs (number of samples, replicates), and compute the formulas. Says where every value came from and what is still missing",
   effect: 'read',
@@ -285,7 +285,7 @@ export const sopsReviews = defineContract({
 export const sopsScore = defineContract({
   id: 'sops.score',
   verbs: { done: 'scored the SOP', intent: 'score the SOP' },
-  calculator: true,
+  calculator: { title: 'SOP score', group: 'protocols' },
   summary:
     'Score a digitized SOP against what its source must contain (the digitizing benchmark): the share of expected materials, steps (by action and stated values), values and unclear spots raised as questions the draft has, what is missing, and whether the steps keep their order',
   effect: 'read',

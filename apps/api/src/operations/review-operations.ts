@@ -1,5 +1,11 @@
 import { readiness, summarizeReadiness } from '@ailab/domain';
-import { type Actor, type ReviewItem, reviewList } from '@ailab/schema';
+import {
+  type Actor,
+  type MemoryAttributes,
+  type RecordEnvelope,
+  type ReviewItem,
+  reviewList,
+} from '@ailab/schema';
 import { and, count, eq } from 'drizzle-orm';
 import { records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
@@ -40,13 +46,29 @@ export const reviewOperations = [
       const draftTotal = Object.values(draftCounts).reduce((sum, n) => sum + n, 0);
       const me = addressee(ctx.actor);
       const items: ReviewItem[] = [
-        ...drafts.flatMap((record): ReviewItem[] => {
-          const kind = kinds.get(record.kind);
-          if (!kind) return [];
-          const state = readiness(record, kind);
-          // The stored summary includes checks that read other records (ADR 0050); older rows
-          // written before it existed fall back to the kind's own checks.
+        ...(
+          await Promise.all(
+            drafts.map(async (record) => {
+              const kind = kinds.get(record.kind);
+              if (!kind) return undefined;
+              const own = readiness(record, kind);
+              // The stored summary includes checks that read other records (ADR 0050); only a
+              // draft where one of those fails is read again, to name what fails.
+              const failing = (s: typeof own) =>
+                s.checks.filter((c) => c.severity === 'blocker' && !c.passed).length;
+              const state =
+                record.readiness && record.readiness.blockers > failing(own)
+                  ? await service.readiness(ctx, record.id)
+                  : own;
+              return { record, state };
+            }),
+          )
+        ).flatMap((found): ReviewItem[] => {
+          if (!found) return [];
+          const { record, state } = found;
+          // Older rows written before the stored summary existed fall back to the kind's checks.
           const summary = record.readiness ?? summarizeReadiness(state);
+          const memory = record.kind === 'memory' ? memoryOf(record) : undefined;
           const item: ReviewItem = {
             type: 'draft',
             tier: 'to_confirm',
@@ -64,14 +86,21 @@ export const reviewOperations = [
             },
             byAgent: record.createdBy.type === 'agent',
             batchable:
+              memory?.strength !== 'rule' &&
               summary.assumed === 0 &&
+              state.unchecked.length === 0 &&
               summary.blockers === 0 &&
-              summary.warnings === 0 &&
               summary.changed.length === 0,
+            warnings: summary.warnings,
             sectionsToConfirm: summary.sectionsLeft,
             missing: state.missing,
+            blockers: state.checks
+              .filter((c) => c.severity === 'blocker' && !c.passed)
+              .map((c) => c.message ?? c.label),
             ready: summary.ready,
             assumed: summary.assumed,
+            unchecked: state.unchecked.length,
+            ...(memory ? { memory } : {}),
           };
           return [item];
         }),
@@ -96,8 +125,9 @@ export const reviewOperations = [
           }),
         ),
       ].filter((item) => !input.mine || item.for === me);
+      items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+      // Counts come first, so an agent whose view of a long result is cut still has the totals.
       return {
-        items: items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)),
         counts: {
           total: draftTotal + changes.length + mentions.length,
           changes: changes.length,
@@ -105,7 +135,31 @@ export const reviewOperations = [
           needsYou: changes.filter((p) => addressee(p.proposedBy) === me).length,
           drafts: draftCounts,
         },
+        items: input.limit ? items.slice(0, input.limit) : items,
       };
     },
   }),
 ];
+
+const FROM: Record<MemoryAttributes['source']['from'], string> = {
+  stated: 'Stated by a person',
+  conversation: 'From a conversation',
+  experiment: 'From an experiment',
+  run: 'From runs',
+  analysis: 'From an analysis',
+  edits: 'From repeated edits',
+};
+
+/** A proposed memory's group in Review (M16): the detector that proposed it, or its source. */
+function memoryOf(record: RecordEnvelope) {
+  const a = record.attributes as MemoryAttributes;
+  const by = record.createdBy;
+  return {
+    group:
+      by.type === 'agent' && by.agentName.startsWith('Lab memory detector')
+        ? by.agentName
+        : FROM[a.source.from],
+    strength: a.strength,
+    ...(a.source.note ? { evidence: a.source.note } : {}),
+  };
+}

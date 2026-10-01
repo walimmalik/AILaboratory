@@ -38,17 +38,37 @@ export const ReviewDraft = z.object({
   /** Made by an agent, so a person may discard it from Review. */
   byAgent: z.boolean(),
   /**
-   * Nothing in it is a guess, no check fails and no confirmed value changed, so it may be confirmed
-   * with others in one step (R3, `records.confirm_many`).
+   * Nothing in it is a guess or an unchecked source, no blocker fails and no
+   * confirmed value changed, so it may be confirmed with others in one step (R3,
+   * `records.confirm_many`); warnings are counted, not refused.
    */
   batchable: z.boolean(),
+  /** How many warning checks fail: shown with a batch confirm, which lets them pass. */
+  warnings: z.number().int().nonnegative(),
   /** Titles of the sections still to confirm. */
   sectionsToConfirm: z.array(z.string()),
-  /** What stands in the way, in plain words. */
+  /** What stands in the way, in plain words: the sections left, then the failing blockers. */
   missing: z.array(z.string()),
+  /** The failing blocker checks alone, in plain words, including checks that read other records. */
+  blockers: z.array(z.string()),
   ready: z.boolean(),
   /** How many values are an agent's unconfirmed estimate. */
   assumed: z.number().int().nonnegative(),
+  /** How many values an agent sourced to a datasheet, measurement or import that nothing checked. */
+  unchecked: z.number().int().nonnegative(),
+  /**
+   * For a proposed lab memory (plan 005c-1b, M16): where it came from, to group proposals by
+   * source, and its evidence line. A rule is never confirmed in a batch.
+   */
+  memory: z
+    .object({
+      group: z
+        .string()
+        .describe('e.g. "Lab memory detector (runs.recurring_deviation)" or "From a conversation"'),
+      strength: z.enum(['rule', 'default', 'note']),
+      evidence: z.string().optional().describe('e.g. "seen in 3 runs on 2 days since 2026-10-01"'),
+    })
+    .optional(),
 });
 
 /** A proposed change to an active record, waiting for a person to confirm or reject it. */
@@ -86,13 +106,15 @@ export const reviewList = defineContract({
       .optional()
       .describe('Only drafts of this kind; proposed changes and mentions are left out'),
     mine: z.boolean().optional().describe('Only items addressed to you'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('List at most this many items; counts still cover everything'),
   }),
   output: z.object({
-    items: z
-      .array(ReviewItem)
-      .describe(
-        'Newest first; at most 200 drafts, so compare with counts to see what was left out',
-      ),
     counts: z
       .object({
         total: z
@@ -116,5 +138,10 @@ export const reviewList = defineContract({
           .describe('Drafts waiting per kind, all of them, not only those listed'),
       })
       .describe('Counts over everything waiting, whatever the filter and limit'),
+    items: z
+      .array(ReviewItem)
+      .describe(
+        'Newest first; at most 200 drafts and at most limit items, so compare with counts to see what was left out',
+      ),
   }),
 });

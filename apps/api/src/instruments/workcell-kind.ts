@@ -13,7 +13,7 @@ import {
  * confirmed workcell (I9), and is standalone otherwise.
  */
 
-const SOURCE = 'Workcells (plan 008d)';
+const SOURCE = '(plan 008d, workcells)';
 
 const check = (
   id: string,
@@ -69,6 +69,9 @@ async function workcellRules(
       if (instruments.has(m.instrument))
         elsewhere.push(`${named(m.instrument)} is in ${w.label} (${w.name})`);
   }
+  // A draft may overlap while it is designed; a confirmed workcell is never edited into overlap.
+  if (current?.status === 'active' && elsewhere.length)
+    return { invalid: elsewhere.map((e) => `${e}; take it out of there first`) };
   const unmapped = [
     ...(a.twin ? [] : ['No twin workcell is named']),
     ...a.members

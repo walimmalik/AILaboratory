@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6, 0058 for 016b-3, 0059 for 016b-4, 0060 for 016b-2b, 0061 for 016c-1, 0062 for 005a). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -62,6 +62,11 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0055](../decisions/0055-assistant-core-toolset-and-page-context.md) | The assistant names a core toolset, the calculators and the page's modules, and runs the rest with `run_operation` after `operations.describe`; `records.kinds` has summary and filter modes; page context names the record and version |
 | [0056](../decisions/0056-a-persons-own-edits-are-confirmed.md) | A person's own edit confirms the sections it changes unless an agent's unconfirmed value is left in them; editing never activates a draft |
 | [0057](../decisions/0057-people-parity.md) | Archive, Unarchive, Discard draft and Restore on the record page, a generic Calculators page, and a test that every agent write has a web caller or a stated reason |
+| [0058](../decisions/0058-opentrons-protocols-from-data.md) | Opentrons Flex protocols: the API sends the plan's data, the science service writes it into one fixed program and runs it in Opentrons' simulator before export |
+| [0059](../decisions/0059-deck-layouts-confirmed.md) | Deck layouts for Opentrons Flex groups are the transfer plan's own section, drafted by code from the configuration and confirmed by a person per group; exports and the loading list read only that |
+| [0060](../decisions/0060-transfer-executions-and-reruns.md) | Reading an Echo transfer report records the execution (`TRN`) with each exception, ends the plan's reservations, and drafts a rerun plan of the same design for the failed, short and missing transfers |
+| [0061](../decisions/0061-worklist-format-records.md) | The lab's CSV worklists (Hamilton, Mantis, PreciseDrop) are worklist format records of typed columns or a volume grid, drafted from an example file, confirmed by a person, pinned on a group and filled by one generic writer |
+| [0062](../decisions/0062-lab-memory-records.md) | Lab memories are records with typed conditions and effects; agents propose drafts, people remember directly; retire and replace keep history; rules, timing windows and evidence cite a memory by id |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

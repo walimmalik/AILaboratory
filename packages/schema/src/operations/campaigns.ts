@@ -117,7 +117,7 @@ export const experimentsBindProtocol = defineContract({
 export const experimentsCalculate = defineContract({
   id: 'experiments.calculate',
   verbs: { done: 'calculated the amounts for', intent: 'calculate the amounts for' },
-  calculator: true,
+  calculator: { title: 'Experiment amounts', group: 'protocols' },
   summary:
     "Work out every protocol part of an experiment as it is pinned: each SOP at its pinned version, with the experiment's bindings (read at their pinned versions) and inputs. Says where every value came from and what is still missing or does not fit, which planning needs cleared",
   effect: 'read',
@@ -196,6 +196,13 @@ export const runsStart = defineContract({
   effect: 'write',
   input: z.strictObject({
     experiment: ExperimentId,
+    expectedVersion: z
+      .number()
+      .int()
+      .positive()
+      .describe(
+        'The experiment version you looked at; the run follows exactly that version, and the start is refused if the experiment changed since',
+      ),
     label: z.string().min(1).optional().describe('e.g. "Day 1"; defaults to the date'),
     date: z.iso.date().optional().describe('Defaults to today'),
     operator: UserId.optional(),

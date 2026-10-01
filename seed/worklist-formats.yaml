@@ -1,0 +1,77 @@
+# Worklist formats for the demo lab (plan 016c, T1): the CSV each lab method reads, drafted from the
+# mock examples in worklists/. Every one is a mock made up on 2026-09-29 (see worklists/README.md),
+# marked assumed until the lab's real method file replaces it. The loader checks each against its
+# example file's headers.
+
+formats:
+  - key: star-elisa-samples
+    label: STAR ELISA samples
+    instrument: hamilton-star
+    method: Venus ELISA sample transfer (generic lab method, mock)
+    example: hamilton-star-worklist.csv
+    volumeUnit: uL
+    tips: column
+    layout:
+      layout: rows
+      columns:
+        - { header: Step, value: row_number }
+        - { header: SourceLabware, value: source_labware }
+        - { header: SourceBarcode, value: source_barcode }
+        - { header: SourcePosition, value: source_well, wells: index_by_column }
+        - { header: TargetLabware, value: destination_labware }
+        - { header: TargetBarcode, value: destination_barcode }
+        - { header: TargetPosition, value: destination_well }
+        - { header: Volume, value: volume }
+        - { header: LiquidClass, value: liquid_class }
+        - { header: TipType, value: constant, text: 1000uL_Filter }
+        - { header: NewTip, value: new_tip }
+
+  - key: vantage-medium-addition
+    label: Vantage medium addition
+    instrument: hamilton-vantage
+    method: Venus medium addition (generic lab method, mock)
+    example: hamilton-vantage-worklist.csv
+    volumeUnit: uL
+    tips: new_each
+    layout:
+      layout: rows
+      columns:
+        - { header: SourceRack, value: source_labware }
+        - { header: SourceBarcode, value: source_barcode }
+        - { header: SourceWell, value: source_well, wells: index_by_row }
+        - { header: DestRack, value: destination_labware }
+        - { header: DestBarcode, value: destination_barcode }
+        - { header: DestWell, value: destination_well }
+        - { header: Volume_uL, value: volume }
+        - { header: LiquidClass, value: liquid_class }
+
+  - key: mantis-dispense-grid
+    label: Mantis dispense grid
+    instrument: formulatrix-mantis
+    method: Mantis software grid import (mock)
+    example: mantis-dispense-grid.csv
+    volumeUnit: uL
+    tips: none
+    layout:
+      layout: grid
+      preamble:
+        - { header: Reagent, value: liquid }
+        - { header: Plate type, value: destination_type }
+        - { header: Chip, value: constant, text: HV }
+        - { header: Units, value: volume_unit }
+      empty: "0"
+
+  - key: precisedrop-dispense-list
+    label: PreciseDrop dispense list
+    instrument: precisedrop-ii
+    method: PreciseDrop software well list import (mock)
+    example: precisedrop-dispense-list.csv
+    volumeUnit: uL
+    tips: none
+    layout:
+      layout: rows
+      columns:
+        - { header: Plate, value: destination_barcode }
+        - { header: Well, value: destination_well }
+        - { header: Reagent, value: liquid }
+        - { header: Volume (uL), value: volume }

@@ -203,12 +203,19 @@ export const TimingRule = z
     target: Quantity.optional(),
     tolerance: Quantity.optional().describe('Either side of the target'),
     source: TimingSource,
+    memory: recordIdOf('mem')
+      .optional()
+      .describe('The lab memory it comes from (005a); required for lab_memory'),
     enforce: z.boolean().describe('Whether the scheduler must keep it or only warns'),
     note: z.string().min(1).optional(),
     cite,
   })
   .refine((t) => t.min || t.max || t.target, {
     message: 'A timing rule has a min, a max or a target',
+  })
+  .refine((t) => t.source !== 'lab_memory' || t.memory, {
+    message: 'A timing rule from lab memory names the memory (mem_…)',
+    path: ['memory'],
   });
 export type TimingRule = z.infer<typeof TimingRule>;
 

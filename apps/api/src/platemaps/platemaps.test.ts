@@ -4,6 +4,7 @@ import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
+import { labwareKinds } from '../labware/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -30,7 +31,7 @@ beforeEach(async () => {
     labId: other.labId,
   };
   kinds = new KindRegistry();
-  for (const kind of [...entityKinds, ...plateMapKinds]) kinds.register(kind);
+  for (const kind of [...entityKinds, ...labwareKinds, ...plateMapKinds]) kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus());
 });
 afterEach(() => close());
@@ -345,6 +346,65 @@ describe('plate maps', () => {
     expect(readiness.checks.find((x) => x.id === 'controls_named')).toMatchObject({
       passed: false,
       message: expect.stringContaining('DMSO'),
+    });
+  });
+
+  it('says when the plate type is not confirmed, and when a newer one is', async () => {
+    const layout = await confirm(await run(agent, 'layouts.draft', elisa));
+    const [a] = await samples(1);
+    const plate = await run(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'Assay 96',
+      attributes: {
+        family: 'plate',
+        footprint: {
+          length: { value: '127.76', unit: 'mm' },
+          width: { value: '85.48', unit: 'mm' },
+          height: { value: '14.4', unit: 'mm' },
+          sbs: true,
+        },
+        wells: { layout: 'grid', rows: 8, columns: 12 },
+        maxVolume: { value: '300', unit: 'uL' },
+      },
+    });
+    const draft = await run(agent, 'platemaps.draft', {
+      label: 'On a draft plate',
+      layout: layout.id,
+      subjects: [{ record: a?.id }],
+    });
+    const pinTo = (version: number) =>
+      run(person, 'records.update', {
+        id: draft.id,
+        expectedVersion: draft.version,
+        attributes: { ...draft.attributes, labware: { id: plate.id, version } },
+      });
+    let map = await pinTo(plate.version);
+    let checks = (await run<Readiness>(person, 'records.readiness', { id: map.id })).checks;
+    expect(checks.find((x) => x.id === 'labware_confirmed')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+      message: expect.stringContaining('was not confirmed'),
+    });
+
+    const confirmed = await confirm(plate);
+    map = await run(person, 'records.update', {
+      id: map.id,
+      expectedVersion: map.version,
+      attributes: { ...map.attributes, labware: { id: plate.id, version: confirmed.version } },
+    });
+    checks = (await run<Readiness>(person, 'records.readiness', { id: map.id })).checks;
+    expect(checks.find((x) => x.id === 'labware_confirmed')?.passed).toBe(true);
+    expect(checks.find((x) => x.id === 'labware_current')?.passed).toBe(true);
+
+    await run(person, 'records.update', {
+      id: plate.id,
+      expectedVersion: confirmed.version,
+      attributes: { ...confirmed.attributes, maxVolume: { value: '350', unit: 'uL' } },
+    });
+    checks = (await run<Readiness>(person, 'records.readiness', { id: map.id })).checks;
+    expect(checks.find((x) => x.id === 'labware_current')).toMatchObject({
+      passed: false,
+      severity: 'warning',
     });
   });
 

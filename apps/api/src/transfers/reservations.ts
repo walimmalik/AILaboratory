@@ -1,5 +1,7 @@
 import { add, convert } from '@ailab/domain';
 import type { Quantity, RecordEnvelope, TransferPlanAttributes } from '@ailab/schema';
+import { and, eq, sql } from 'drizzle-orm';
+import { records } from '../db/schema.ts';
 import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 
@@ -24,7 +26,8 @@ export function drawsOf(a: TransferPlanAttributes): Map<string, Quantity> {
 
 /**
  * Soft reservations (010 V8): what confirmed transfer plans draw from each container well. Plans
- * reserve while confirmed; archiving one ends its reservations.
+ * reserve while confirmed and not yet executed. Recording an execution ends them (ADR 0060: what
+ * moved is in the ledger, what didn't is its rerun plan's to reserve), and so does archiving.
  */
 export async function reservations(
   deps: OperationDeps,
@@ -36,9 +39,17 @@ export async function reservations(
     status: 'active',
     limit: 500,
   });
+  const executed = new Set(
+    (
+      await deps.db
+        .select({ plan: sql<string>`${records.attributes}->'plan'->>'id'` })
+        .from(records)
+        .where(and(eq(records.labId, ctx.labId), eq(records.kind, 'transfer_run')))
+    ).map((r) => r.plan),
+  );
   const out = new Map<string, { plan: RecordEnvelope; volume: Quantity }[]>();
   for (const plan of plans) {
-    if (plan.id === except) continue;
+    if (plan.id === except || executed.has(plan.id)) continue;
     for (const [key, volume] of drawsOf(plan.attributes as TransferPlanAttributes))
       out.set(key, [...(out.get(key) ?? []), { plan, volume }]);
   }

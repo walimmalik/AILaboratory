@@ -47,24 +47,37 @@ Added 2026-09-30 with [plan 004e](../plans/004e-review-v2-and-agent-context.md),
 14. **Laptop width is the normal case:** tables scroll rather than clip, with the assistant open.
 15. **Agents discover, then load:** a small core toolset plus calculators, with skills and module tools served on demand.
 
+Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-01 in the project files):
+
+16. **A diff is rows of what changed.** A proposal, a change set step and "changed since you last looked" render from item paths, one row per changed value or list item, never two copies of a list; unchanged items fold to a count.
+17. **Done means applied.** Today lists only what ran; what waits is under Waiting; no link points at a record that does not exist.
+18. **Looking includes acting.** Saving, confirming or approving marks the record seen for that person.
+19. **Unverified values are marked where they are edited and read,** not only on the readiness line, and parts are named by their label ("step 2 Wash", "Wash volume").
+20. **One Confirm per record, for every kind.** Which parts are confirmed sits under technical details; a part can still be confirmed on its own from its block.
+21. **A batch action never errors on what it offered.** When some drafts in a list can't be confirmed together, the button confirms the ones that can and names how many are left; warnings are counted, not refused.
+22. **An agent never destroys a person's work directly.** Deleting a draft a person wrote or confirmed any of is a proposal.
+23. **Evidence that names a source is checked against it.**
+24. **A person starts a common record from its registry page.** Products, lots, places, labware types and vendors have a "New …" form drawn from the kind's schema (required fields first, the rest folded); it saves a draft through the same `records.create` an agent calls. Other kinds are drafted by asking the assistant.
+
 ## Language
 
 - Plain lab language on screen. Record IDs, operation IDs and JSON sit under "technical details".
-- One verb for agreeing to agent work: **Confirm** ("Confirm change" for a proposal; "Confirm volume and activate" on the last section).
+- One verb for agreeing to agent work: **Confirm** ("Confirm change" for a proposal; "Confirm LWT-0032" on a draft, which confirms every part nothing blocks).
 - Record status in words: "draft · needs your review", "active", "active · change waiting".
-- Where a value came from, in words: "assumed by deepseek-chat", "you told Claude", "from a datasheet", "entered by you".
+- Where a value came from, in words: "unverified · entered by deepseek-chat, no source", "stated by you to Claude", "from a datasheet", "entered by you". An agent's value without a source is **unverified**, never an "estimate" or a "guess", and confirming it is verifying it.
+- An SOP value's type, in words: **protocol default** (fixed by the SOP, may be overridden for a run), **set per run**, **calculated** (from a formula), **from <material>** (read from the selected lot or record; a **nominal value** stands in until one is selected).
 
 ## Pages so far
 
 - **Nav:** Lab (Today, Activity, Review) and Library (one page per registry, each with its draft count), with All records at the foot.
 - **Library pages:** Labware (family filter; type, manufacturer, catalog number, maximum volume), Vendors, Documents and SOPs. More registries get a page as they land. An SOP's page reads as a procedure at the bench first (steps with run values, questions to settle, checks against the source), with the editable sections below.
-- **Review:** "Needs you" (changes agents proposed) first, then drafts to confirm as dense rows with kind chips, Discard, and "Confirm all" when none holds a guess (ADR 0050). The nav counts only what needs you.
-- **Record review:** a readiness block with failing checks first, each with its source, its fix and a "Fix in …" link; passing checks fold under "N checks pass". Then one block per section with each value and where it came from, and Edit to change values in place.
+- **Review:** "Needs you" (changes agents proposed) first, each as rows of what would change with the agent's estimates marked and counted ("Confirming accepts 2 estimates of the agent's"), then drafts to confirm as dense rows with kind chips, Discard, and "Confirm all" or "Confirm the N ready ones" for the drafts that hold no guess and nothing blocks (ADR 0050). The nav counts only what needs you.
+- **Record review:** a readiness block with the agent's estimates by name (each opening where it is edited), failing checks with their source, fix and a "Fix in …" link, passing checks folded under "N checks pass", and one Confirm. Then one block per section with each value and where it came from, Edit, and "confirm only this part" for the rare partial confirm.
 - **Labware drawings:** a labware type drawn to scale from above with named wells, and one well cut through its centre filled to the maximum volume. Values the record doesn't give are drawn dashed and listed, so a draft has a picture without the picture claiming values nobody entered.
 
 ## Interaction
 
 - No 100-option forms or wizards. The agent fills the options; the page shows the result; a person adjusts. Small fixes by hand (select wells and pick a role), bigger ones by asking.
 - Agent changes are highlighted like track changes against the last confirmed values, with the confirmed value struck through, plus a list of what changed.
-- Confirm section by section; the last section activates.
+- One Confirm confirms every part nothing blocks; a draft left with nothing to do becomes active. The SOP editor marks each box still holding an agent's estimate in agent ink.
 - The run view is a checklist with "all done as planned".

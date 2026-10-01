@@ -5,14 +5,17 @@ import type {
   RecordId as RecordIdType,
 } from '@ailab/schema';
 import { RecordId } from '@ailab/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
+import { records } from '../db/schema.ts';
 import type { FileStore } from '../files/store.ts';
 import type { Converter } from '../library/convert.ts';
 import { saveCalculation } from '../records/calculations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import type { ProtocolWriter } from '../transfers/simulator.ts';
 import { type ActivityBus, recordActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
 import { createProposal } from './proposal-store.ts';
@@ -27,6 +30,8 @@ export interface OperationDeps {
   files: FileStore;
   /** Turns library files into text (plan 011b): the science service. */
   converter: Converter;
+  /** Writes and simulates Opentrons protocols (plan 016b-3): the science service. */
+  protocols: ProtocolWriter;
 }
 
 type Policy = 'direct' | 'propose';
@@ -66,6 +71,13 @@ export function implement<I extends z.ZodType, O extends z.ZodType>(
   return { contract, ...implementation };
 }
 
+/** Called after a person's write is committed, with the records it touched. */
+export type WriteListener = (
+  ctx: RecordContext,
+  recordIds: string[],
+  deps: OperationDeps,
+) => Promise<void>;
+
 export interface ExecuteOptions {
   preview?: boolean;
   /** Set when a person approved a proposal: run the change as the proposing agent without re-proposing. */
@@ -84,6 +96,7 @@ class PreviewRollback extends Error {
  */
 export class OperationRegistry {
   readonly #operations = new Map<string, OperationImplementation>();
+  readonly #listeners: WriteListener[] = [];
   readonly deps: OperationDeps;
 
   constructor(deps: Omit<OperationDeps, 'registry'>) {
@@ -99,6 +112,15 @@ export class OperationRegistry {
       }
       this.#operations.set(id, operation);
     }
+    return this;
+  }
+
+  /**
+   * Listens to every write a person makes, after it is committed: the records it touched. Lab
+   * memory detectors use it (plan 005c-1b). A listener's failure never fails the write.
+   */
+  onWrite(listener: WriteListener): this {
+    this.#listeners.push(listener);
     return this;
   }
 
@@ -155,11 +177,11 @@ export class OperationRegistry {
         const preview = await this.#dryRun(operation, ctx, input, deps);
         const reason = (input as { reason?: string }).reason;
         const proposal = await createProposal(db, ctx, { operationId: id, input, preview, reason });
+        // A preview's new records were rolled back, so a proposal names only records that exist.
         await recordActivity(db, this.deps.bus, ctx, {
           operationId: id,
           outcome: 'proposed',
-          recordIds: touched(operation, input, preview, this),
-          nameHints: nameHints(preview),
+          recordIds: await existing(db, ctx, touched(operation, input, preview, this)),
           proposalId: proposal.id,
           input,
           durationMs: Date.now() - started,
@@ -174,16 +196,23 @@ export class OperationRegistry {
         this.#run(operation, ctx, input, { ...deps, db: tx }),
       );
       if (operation.ledger === false) return { status: 'done', output };
+      const recordIds = touched(operation, input, output, this);
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: operation.outcome?.(output) ?? 'succeeded',
-        recordIds: touched(operation, input, output, this),
+        recordIds,
         nameHints: nameHints(output),
         ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
         input,
         durationMs: Date.now() - started,
       });
       operation.after?.(ctx, input, output, deps);
+      // Only a person's own top-level write; steps inside a change set arrive with the set.
+      if (ctx.actor.type === 'user' && db === this.deps.db)
+        for (const listener of this.#listeners)
+          await listener(ctx, recordIds, deps).catch((error: unknown) =>
+            console.error(`A write listener failed after ${id}:`, error),
+          );
       return { status: 'done', output };
     } catch (error) {
       if (operation.ledger === false) throw error;
@@ -302,6 +331,17 @@ function touched(
     ? operation.touches(input, output, registry)
     : [(input as { id?: unknown })?.id, (output as { id?: unknown } | undefined)?.id];
   return [...new Set(ids.filter((id): id is string => RecordId.safeParse(id).success))];
+}
+
+/** The ones of these records that exist in the lab. */
+async function existing(db: Db, ctx: RecordContext, ids: RecordIdType[]): Promise<RecordIdType[]> {
+  if (!ids.length) return [];
+  const found = await db
+    .select({ id: records.id })
+    .from(records)
+    .where(and(inArray(records.id, ids), eq(records.labId, ctx.labId)));
+  const there = new Set(found.map((r) => r.id));
+  return ids.filter((id) => there.has(id));
 }
 
 /** A record envelope's readable name, so the ledger can name records that no longer (or don't yet) exist. */

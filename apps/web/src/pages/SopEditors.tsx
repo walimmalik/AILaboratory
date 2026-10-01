@@ -8,7 +8,15 @@ import {
   sopsSuggest,
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { type NamedValue, nameFor, readSetting } from '../lib/formulas.ts';
@@ -33,6 +41,7 @@ import {
   useEditorScope,
   ValueEditor,
 } from './FieldEditor.tsx';
+import { RecordSearch } from './RecordSearch.tsx';
 import { actionWords } from './Sops.tsx';
 import { describeSop, TermAnchor, TermBox, TermCards } from './SopText.tsx';
 
@@ -45,6 +54,33 @@ import { describeSop, TermAnchor, TermBox, TermCards } from './SopText.tsx';
  */
 
 type Item = Record<string, unknown>;
+
+/**
+ * The agent's estimates in the SOP being edited (rule 6, review 2026-10-01): by readiness path, the
+ * value as stored and the agent's note. A box still holding that value is marked in agent ink;
+ * once a person types over it, it is theirs.
+ */
+export interface Guesses {
+  get(path: string): { stored: unknown; note?: string | undefined } | undefined;
+}
+export const GuessContext = createContext<Guesses>({ get: () => undefined });
+
+/** The agent's note when this item still holds the agent's estimate, '' without one. */
+function useGuess(path: string | undefined, now: unknown): string | undefined {
+  const guess = useContext(GuessContext).get(path ?? '');
+  if (!path || !guess || JSON.stringify(guess.stored) !== JSON.stringify(now)) return undefined;
+  return guess.note ?? '';
+}
+
+/** "unverified: entered by an agent without a source", with the agent's note when it gave one. */
+function GuessNote({ note }: { note: string | undefined }) {
+  if (note === undefined) return null;
+  return (
+    <span className="agent-ink">
+      unverified · entered by an agent, no source{note ? ` (${note})` : ''}
+    </span>
+  );
+}
 
 /** The SOP as edited so far, and the names its text can use. */
 function useSop() {
@@ -67,12 +103,67 @@ type Target = { value: string } | { step: string } | { newStep: string } | { ste
  * the editor shows what comes back in agent ink until a person changes or saves it.
  */
 function useSuggest() {
-  const { document = {}, recordId } = useEditorScope();
+  const { document = {}, recordId, onSuggested } = useEditorScope();
+  const controller = useRef<AbortController>(undefined);
   const ask = useMutation({
-    mutationFn: (target: Target) =>
-      api.run(sopsSuggest, { sop: recordId ?? '', attributes: document, ...target }),
+    mutationFn: (target: Target) => {
+      controller.current = new AbortController();
+      return api.run(
+        sopsSuggest,
+        { sop: recordId ?? '', attributes: document, ...target },
+        { signal: controller.current.signal },
+      );
+    },
   });
-  return { ...ask, available: !!recordId };
+  /** Stops waiting: the editor is free again and nothing the answer holds is taken. */
+  const cancel = () => {
+    controller.current?.abort();
+    ask.reset();
+  };
+  /** Notes items as the assistant filled them, so saving them untouched keeps them assumed. */
+  const taken = (
+    list: 'steps' | 'variables',
+    items: Item[],
+    out: { model: string; reason: string },
+  ) => {
+    for (const item of items) {
+      const key = list === 'steps' ? item.id : item.name;
+      if (typeof key === 'string')
+        onSuggested?.(
+          `/${list}/${key}`,
+          item,
+          `suggested by the assistant (${out.model}): ${out.reason}`,
+        );
+    }
+  };
+  return { ...ask, available: !!recordId, taken, cancel };
+}
+
+/** How long a fill-in may take before the server gives up (sops.suggest's limits). */
+const SUGGEST_LIMIT_S = 45;
+const DRAFT_LIMIT_S = 90;
+
+/** While the assistant is asked: how long it has taken, its limit, and a Cancel. */
+function SuggestWait({ suggest }: { suggest: ReturnType<typeof useSuggest> }) {
+  const [seconds, setSeconds] = useState(0);
+  const limit = suggest.variables && 'steps' in suggest.variables ? DRAFT_LIMIT_S : SUGGEST_LIMIT_S;
+  const pending = suggest.isPending;
+  useEffect(() => {
+    if (!pending) return;
+    setSeconds(0);
+    const started = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [pending]);
+  if (!pending) return null;
+  return (
+    <span className="muted" role="status">
+      Asking the assistant, {seconds} s (it stops at {limit} s){' '}
+      <button type="button" className="link-btn" onClick={suggest.cancel}>
+        Cancel
+      </button>
+    </span>
+  );
 }
 
 const without = (item: Item) => {
@@ -265,6 +356,7 @@ function ValueRow({
   const suggest = useSuggest();
   // The assistant's reason while its suggestion stands; typing over it makes it the person's.
   const [suggested, setSuggested] = useState<string>();
+  const guess = useGuess(v.name && `/variables/${v.name}`, v);
   const fillIn = () =>
     v.name &&
     suggest.mutate(
@@ -274,7 +366,9 @@ function ValueRow({
           if (!out.variable) return;
           setDraft(undefined);
           // The whole value as suggested: its kind decides which fields it has.
-          onChange({ ...out.variable });
+          const item = { ...out.variable };
+          onChange(item);
+          suggest.taken('variables', [item], out);
           setSuggested(out.reason);
         },
       },
@@ -287,7 +381,7 @@ function ValueRow({
       disabled={suggest.isPending}
       onClick={fillIn}
     >
-      {suggest.isPending ? 'Asking the assistant…' : words}
+      {words}
     </button>
   );
   return (
@@ -320,7 +414,7 @@ function ValueRow({
           mode="formula"
           label={`${called}: value or formula`}
           placeholder="100 µL, a formula, or Material.field"
-          assumed={!!suggested}
+          assumed={!!suggested || guess !== undefined}
           check={(t) => {
             const r = readValue(t, terms, perRun);
             return r.ok ? {} : { problem: r.problem, fix: r.fix };
@@ -357,7 +451,10 @@ function ValueRow({
               {v.max === undefined ? '…' : formatValue(v.max)}
             </span>
           )}
-          {suggested && <span className="agent-ink">assistant: {suggested}</span>}
+          {suggested && (
+            <span className="agent-ink">suggested by the assistant, unverified: {suggested}</span>
+          )}
+          {!suggested && <GuessNote note={guess} />}
           {canFill && (!text.trim() || !read.ok) && fillButton('Fill in with the assistant')}
           <button
             type="button"
@@ -369,6 +466,7 @@ function ValueRow({
             More
           </button>
         </div>
+        <SuggestWait suggest={suggest} />
         {suggest.error && <p className="error-text">{suggest.error.message}</p>}
         {open && (
           <div className="value-more">
@@ -397,7 +495,7 @@ function ValueRow({
                     })
                   }
                 />{' '}
-                Ask each run
+                Set per run
               </label>
             )}
             {perRun && (
@@ -521,6 +619,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
   const set = (patch: Item) => onChange(without({ ...value, ...patch }));
   const suggest = useSuggest();
   const [suggested, setSuggested] = useState<string>();
+  const guess = useGuess(step.id && `/steps/${step.id}`, value);
   // Counts suggestions taken, so the setting rows start again from what came back.
   const [round, setRound] = useState(0);
   const parameters = step.parameters ?? [];
@@ -591,7 +690,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
               label={`Step ${index + 1}: what to do`}
               placeholder="In lab words, close to the source: Add Well volume of Wash buffer…"
               check={(t) => (t.trim() ? {} : { problem: 'Say what to do' })}
-              assumed={!!suggested}
+              assumed={!!suggested || guess !== undefined}
               onChange={(t) => {
                 setDraft(t);
                 setSuggested(undefined);
@@ -599,6 +698,11 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
               }}
               onBlur={() => setDraft(undefined)}
             />
+            {!suggested && guess !== undefined && (
+              <p className="step-read">
+                <GuessNote note={guess} />
+              </p>
+            )}
             <p className="step-read">
               {(step.uses?.length ?? 0) > 0 && (
                 <span>
@@ -655,18 +759,25 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                           if (!next) return;
                           setDraft(undefined);
                           setRound(round + 1);
-                          onChange(without({ ...value, ...next }));
+                          const item = without({ ...value, ...next });
+                          onChange(item);
+                          suggest.taken('steps', [item], out);
                           setSuggested(out.reason);
                         },
                       },
                     )
                   }
                 >
-                  {suggest.isPending ? 'Asking the assistant…' : 'Fill in with the assistant'}
+                  Fill in with the assistant
                 </button>
               )}
             </p>
-            {suggested && <p className="agent-ink step-note">assistant: {suggested}</p>}
+            {suggested && (
+              <p className="agent-ink step-note">
+                suggested by the assistant, unverified: {suggested}
+              </p>
+            )}
+            <SuggestWait suggest={suggest} />
             {suggest.error && <p className="error-text">{suggest.error.message}</p>}
           </div>
         </FormRow>
@@ -805,7 +916,9 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
   const [sentence, setSentence] = useState('');
   // Steps the assistant wrote, by id, with its reason, until a person saves.
   const [drafted, setDrafted] = useState<string>();
-  const take = (steps: Item[], reason: string, replace: boolean) => {
+  const take = (steps: Item[], out: { model: string; reason: string }, replace: boolean) => {
+    const reason = out.reason;
+    suggest.taken('steps', steps, out);
     const base = replace ? [] : items;
     const fresh = steps.map((_, i) => next + i);
     setNext(next + steps.length);
@@ -880,7 +993,9 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
           What a step uses and its settings are read from its words: a material named, a value (Add
           Well volume) or an amount (2 h, 37 °C). Anything else goes under More.
         </p>
-        {drafted && <p className="agent-ink step-note">assistant: {drafted}</p>}
+        {drafted && (
+          <p className="agent-ink step-note">drafted by the assistant, unverified: {drafted}</p>
+        )}
         <div className="step-line">
           <button
             type="button"
@@ -915,14 +1030,14 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
                     { newStep: sentence.trim() },
                     {
                       onSuccess: (out) => {
-                        take((out.steps ?? []) as Item[], out.reason, false);
+                        take((out.steps ?? []) as Item[], out, false);
                         setSentence('');
                       },
                     },
                   )
                 }
               >
-                {suggest.isPending ? 'Asking the assistant…' : 'Write it with the assistant'}
+                Write it with the assistant
               </button>
               {items.length === 0 && !!document.source && (
                 <button
@@ -932,7 +1047,7 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
                   onClick={() =>
                     suggest.mutate(
                       { steps: true },
-                      { onSuccess: (out) => take((out.steps ?? []) as Item[], out.reason, true) },
+                      { onSuccess: (out) => take((out.steps ?? []) as Item[], out, true) },
                     )
                   }
                 >
@@ -942,6 +1057,12 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
             </>
           )}
         </div>
+        {suggest.available && items.length === 0 && !document.source && (
+          <p className="muted hint">
+            The assistant drafts every step only from a source document, and this SOP has none.
+          </p>
+        )}
+        <SuggestWait suggest={suggest} />
         {suggest.error && <p className="error-text">{suggest.error.message}</p>}
       </li>
     </ol>
@@ -1028,8 +1149,10 @@ function MaterialRow({
   const [open, setOpen] = useState(false);
   const set = (patch: Item) => onChange(without({ ...m, ...patch }) as Partial<SopMaterial>);
   const called = m.label || 'This material';
+  const guess = useGuess(m.role && `/materials/${m.role}`, m);
   return (
-    <div className="material-row">
+    <div className={`material-row${guess === undefined ? '' : ' assumed'}`}>
+      <GuessNote note={guess} />
       <div className="material-line">
         <input
           className="field material-name"
@@ -1068,11 +1191,11 @@ function MaterialRow({
           value={m.requirements ?? ''}
           onChange={(e) => set({ requirements: e.target.value || undefined })}
         />
-        <span className="muted">usually</span>
+        <span className="muted">default</span>
         <MaterialPicker
           type={m.type ?? 'reagent'}
           value={m.default}
-          label={`${called}: usually`}
+          label={`${called}: default record`}
           onChange={(id) => set({ default: id })}
         />
       </div>
@@ -1145,20 +1268,13 @@ function MaterialPicker({
     .flatMap((q) => q.data ?? [])
     .filter((r) => r.status !== 'archived' || r.id === value);
   return (
-    <select
-      className="field"
-      aria-label={label}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value || undefined)}
-    >
-      <option value="">any that fits</option>
-      {value && !records.some((r) => r.id === value) && <option value={value}>{value}</option>}
-      {records.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.label} ({r.name})
-        </option>
-      ))}
-    </select>
+    <RecordSearch
+      records={records}
+      value={value}
+      onChange={onChange}
+      label={label}
+      empty="any that fits"
+    />
   );
 }
 

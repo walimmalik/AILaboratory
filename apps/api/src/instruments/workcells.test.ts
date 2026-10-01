@@ -240,6 +240,74 @@ describe('workcells', () => {
     );
     expect(foreign.message).toContain('is not an instrument in this lab');
   });
+
+  it("never edits a confirmed workcell into another one's instrument", async () => {
+    const { echo, sealer, reader } = await instruments();
+    const cell = (label: string, instrument: RecordEnvelope, twinDevice: string) =>
+      run<RecordEnvelope>(agent, 'workcells.draft', {
+        label,
+        twin: label,
+        members: [{ instrument: instrument.id, twinDevice, byHand: false }],
+      });
+    const firstDraft = await cell('First', echo, 'echo');
+    const second = await confirm(await cell('Second', reader, 'spark'));
+
+    // An agent proposes adding the Echo while the first workcell is still a draft...
+    const echoToo = [{ instrument: echo.id, twinDevice: 'echo', byHand: false }];
+    const proposed = await registry.execute(agent, 'workcells.change_members', {
+      id: second.id,
+      expectedVersion: second.version,
+      set: echoToo,
+    });
+    expect(proposed.status).toBe('proposed');
+    // ...then the first is confirmed, so the proposal no longer applies.
+    const first = await confirm(firstDraft);
+    expect([first.status, second.status]).toEqual(['active', 'active']);
+    const decided = await run<{ status: string }>(person, 'proposals.approve', {
+      id: (proposed as { proposal: { id: string } }).proposal.id,
+    });
+    expect(decided.status).toBe('failed');
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: second.id })).version).toBe(
+      second.version,
+    );
+
+    const direct = await refused(
+      run(person, 'workcells.change_members', {
+        id: second.id,
+        expectedVersion: second.version,
+        set: echoToo,
+      }),
+    );
+    expect(direct).toMatchObject({ code: 'invalid_attributes' });
+    expect(direct.message).toContain('Echo 1 (INS-0001) is in First (WCL-0001)');
+    const generic = await refused(
+      run(person, 'records.update', {
+        id: second.id,
+        expectedVersion: second.version,
+        attributes: {
+          ...second.attributes,
+          members: [...(second.attributes as { members: object[] }).members, ...echoToo],
+        },
+      }),
+    );
+    expect(generic).toMatchObject({ code: 'invalid_attributes' });
+    // An agent's proposal to do the same now is refused when it is made.
+    await expect(
+      registry.execute(agent, 'workcells.change_members', {
+        id: second.id,
+        expectedVersion: second.version,
+        set: echoToo,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+
+    // Other edits to a confirmed workcell still go through.
+    const sealed = await run<RecordEnvelope>(person, 'workcells.change_members', {
+      id: second.id,
+      expectedVersion: second.version,
+      set: [{ instrument: sealer.id, twinDevice: 'a4s', byHand: true }],
+    });
+    expect(sealed.status).toBe('active');
+  });
 });
 
 describe('seed workcells', () => {

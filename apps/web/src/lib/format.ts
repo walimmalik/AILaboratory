@@ -189,6 +189,30 @@ function recordsIn(value: unknown): { record: { id: string; name: string }; enve
   );
 }
 
+/**
+ * A refusal in plain words: input the operation doesn't take names the fields, without the
+ * validator's glyphs and the operation ID; the full message stays under technical details.
+ */
+export function plainError(message: string): string {
+  const [first = '', ...rest] = message.split('\n');
+  const problems: { what: string; field?: string }[] = [];
+  for (const line of rest) {
+    const at = line.match(/^\s*→ at (.+)$/);
+    const last = problems.at(-1);
+    if (at && last) last.field = fieldLabel(at[1]?.split('.').at(-1) ?? '');
+    else if (line.startsWith('✖ ')) problems.push({ what: line.slice(2) });
+  }
+  const said = problems.map(({ what, field }) =>
+    !field ? what : /^invalid input$/i.test(what) ? field : `${field}: ${what.toLowerCase()}`,
+  );
+  if (/^Invalid input for /.test(first)) {
+    return said.length
+      ? `the request did not fit what it takes (${said.join('; ')})`
+      : 'the request did not fit what it takes';
+  }
+  return said.length ? `${first.replace(/:$/, '')}: ${said.join('; ')}` : first;
+}
+
 /** One step the assistant took (an operation it ran), as a line for people. */
 export function describeToolStep(step: {
   operationId: string;
@@ -199,7 +223,7 @@ export function describeToolStep(step: {
   const result = (step.result ?? {}) as { output?: unknown; proposal?: { preview?: unknown } };
   if (step.outcome === 'failed') {
     return {
-      text: `could not ${operationIntent(step.operationId)}: ${step.error?.message ?? 'refused'}`,
+      text: `could not ${operationIntent(step.operationId)}: ${plainError(step.error?.message ?? 'refused')}`,
       tone: 'crit-ink',
     };
   }
@@ -300,10 +324,76 @@ export function pathLabel(path: string): string {
   return [fieldLabel(one), key, ...inside.map(fieldLabel)].join(' ');
 }
 
+/** The item of a keyed list with this key, and where it sits (ADR 0049). */
+function findItem(
+  list: unknown,
+  key: string,
+  keyField: string | undefined,
+): { item: Record<string, unknown>; position: number } | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const fields = keyField ? [keyField] : ['id', 'name', 'role', 'key'];
+  const position = list.findIndex(
+    (i) =>
+      i && typeof i === 'object' && fields.some((f) => (i as Record<string, unknown>)[f] === key),
+  );
+  return position < 0 ? undefined : { item: list[position], position };
+}
+
+/** What an item is called in the lab: its label, title or name, before its technical key. */
+export function itemName(item: Record<string, unknown>): string | undefined {
+  for (const field of ['label', 'title', 'name', 'role', 'id']) {
+    const v = item[field];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return undefined;
+}
+
+/**
+ * A readiness or diff path named the way the record names it (UI rule 9): "/steps/s2" → "step 2
+ * Wash", "/variables/wash_volume" → "Wash volume", "/steps/s2/text" → "step 2 Wash · text". Without
+ * the item in hand it falls back to the technical key.
+ */
+export function partLabel(
+  path: string,
+  attributes: Record<string, unknown> | undefined,
+  items: Readonly<Record<string, string>> = {},
+  fallback?: Record<string, unknown>,
+): string {
+  if (!path.startsWith('/')) return fieldLabel(path);
+  const [list = '', key, ...inside] = path
+    .split('/')
+    .slice(1)
+    .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'));
+  if (key === undefined) return fieldLabel(list);
+  const found =
+    findItem(attributes?.[list], key, items[list]) ?? findItem(fallback?.[list], key, items[list]);
+  if (!found) return pathLabel(path);
+  const name = itemName(found.item) ?? key;
+  const head = list === 'steps' ? `step ${found.position + 1} ${name}` : name;
+  return [head, ...inside.map(fieldLabel)].join(' · ');
+}
+
 /** Whether a proposed change would change this record, alone or as a step of a change set (ADR 0051). */
 export function proposalTouches(proposal: Pick<Proposal, 'operationId' | 'input'>, id: string) {
   const idOf = (input: unknown) => (input as { id?: unknown } | undefined)?.id;
   if (proposal.operationId !== 'changes.apply') return idOf(proposal.input) === id;
   const steps = (proposal.input as { steps?: { input?: unknown }[] } | undefined)?.steps ?? [];
   return steps.some((step) => idOf(step.input) === id);
+}
+
+/**
+ * A failing check as one statement of what is wrong (review 2026-10-01): the check's label states
+ * the passing condition ("Outer size is known"), so a failing row names its subject and the problem
+ * ("Outer size: length, width or height is missing") instead of contradicting itself.
+ */
+export function problemWords(check: { label: string; message?: string | undefined }): string {
+  const subject = check.label.match(
+    /^(.+?)\s+(?:is|are)\s+(?:known|set|given|named|filled in|present|confirmed)$/i,
+  )?.[1];
+  if (!check.message) return subject ? `${subject}: missing` : check.label;
+  if (!subject) return check.message;
+  const message = /^[A-Z][a-z]/.test(check.message)
+    ? check.message[0]?.toLowerCase() + check.message.slice(1)
+    : check.message;
+  return `${subject}: ${message}`;
 }

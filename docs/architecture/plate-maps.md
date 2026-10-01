@@ -48,7 +48,7 @@ A `plate_map` record (`pmp_`, `PMP-0001`) applies a layout to real subjects (P1,
 
 The wells are never stored. `apps/api/src/platemaps/generate.ts` works them out from the pinned layout version, the subjects, the seed and the overrides every time, so they always match the record and a map rebuilds exactly (M1). Every write does the same, so a map the layout can't place is refused. `platemaps.draft` pins the layout's current version unless given one, and sets a seed for randomized or balanced placement.
 
-Readiness: it places something and its layout version is confirmed (blockers); a newer confirmed layout version, control regions that name nothing, and hand edits that no longer land on a plate (warnings).
+Readiness: it places something, and its layout version and any pinned plate type version are confirmed (blockers); a newer confirmed layout or plate type version, control regions that name nothing, and hand edits that no longer land on a plate (warnings).
 
 | Operation | What it does | Agents |
 | --- | --- | --- |

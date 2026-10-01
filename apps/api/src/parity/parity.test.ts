@@ -12,14 +12,17 @@ import { KindRegistry } from '../records/kinds.ts';
  */
 const draftedByAsking =
   'Not yet a form of its own: a person asks the assistant to draft it, then edits and confirms the draft on its page';
-const transferScreens = 'Transfer plan screens come with 016c and 016d, after the morning review';
+const transferScreens =
+  'Transfer plan and worklist format screens come after the UI fixes land (016 screens)';
 const notYet = (where: string) => `No screen yet; ${where}`;
 
 const noScreen: Record<string, string> = {
   'assistant.send': 'The assistant panel itself; agents do not call it',
-  'changes.apply': 'Runs other operations together; each step has its own screen',
-  'library.propose_mentions': 'Agents propose mentions; people review them in Review',
-  'records.create': draftedByAsking,
+  'changes.apply':
+    'Bundles other operations so an agent asks once; a person makes the same changes one by one, on the screens of the steps that have one',
+  'library.propose_mentions': notYet(
+    'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
+  ),
   'campaigns.draft': draftedByAsking,
   'experiments.draft': draftedByAsking,
   'sops.draft': draftedByAsking,
@@ -36,8 +39,18 @@ const noScreen: Record<string, string> = {
   'transfers.import_report': transferScreens,
   'transfers.pick_sources': transferScreens,
   'transfers.set_instrument': transferScreens,
+  'transfers.set_deck': transferScreens,
+  'worklists.draft_format': transferScreens,
+  'memory.propose': notYet('the Lab memory page and Remember card come with 005d'),
+  'memory.update': notYet('the Lab memory page comes with 005d'),
+  'memory.retire': notYet('the Lab memory page comes with 005d'),
+  'memory.replace': notYet('the Lab memory page comes with 005d'),
+  'memory.observe':
+    'Detectors and agents reading results report observations; a person states a memory with memory.remember instead',
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
-  'experiments.adopt_versions': notYet('the experiment page shows newer versions only'),
+  'experiments.adopt_versions': notYet(
+    'the experiment page shows the SOP versions it follows, not newer ones',
+  ),
   'experiments.bind_protocol': notYet('the experiment page shows the protocol only'),
   'instruments.change_configuration': notYet('the instrument page shows it read-only'),
   'instruments.log_service': notYet('the instrument page lists service read-only'),
@@ -59,19 +72,60 @@ const noScreen: Record<string, string> = {
   'runs.correct': notYet('the run page shows the log read-only'),
 };
 
-const webSource = (() => {
+const IMPORT = /import\s+(type\s+)?\{([^}]*)\}\s+from\s+'@ailab\/schema';?/g;
+
+/**
+ * The contracts a source file calls: the names it imports from `@ailab/schema` as values (not
+ * `type` imports) and then uses in its code, outside comments and the import itself. A name in a
+ * comment, a string or an unused import doesn't count.
+ */
+function contractsCalled(source: string): Set<string> {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const imported: [exported: string, local: string][] = [];
+  for (const [, typeOnly, specifiers = ''] of code.matchAll(IMPORT)) {
+    if (typeOnly) continue;
+    for (const spec of specifiers.split(',')) {
+      const words = spec.trim().split(/\s+/);
+      if (!words[0] || words[0] === 'type') continue;
+      imported.push([words[0], words.at(-1) as string]);
+    }
+  }
+  const body = code.replace(IMPORT, '').replace(/'[^'\n]*'|"[^"\n]*"/g, "''");
+  return new Set(
+    imported.filter(([, local]) => new RegExp(`\\b${local}\\b`).test(body)).map(([name]) => name),
+  );
+}
+
+const webCalls = (() => {
   const root = join(import.meta.dirname, '../../../web/src');
-  const files: string[] = [];
+  const called = new Set<string>();
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) walk(path);
-      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(path);
+      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))
+        for (const c of contractsCalled(readFileSync(path, 'utf8'))) called.add(c);
     }
   };
   walk(root);
-  return files.map((f) => readFileSync(f, 'utf8')).join('\n');
+  return called;
 })();
+
+describe('what counts as a web caller', () => {
+  it('is a contract imported and used, not a comment, a string or an unused import', () => {
+    const source = [
+      "import { recordsUpdate, type RecordEnvelope, recordsArchive as archive } from '@ailab/schema';",
+      "import type { recordsDelete } from '@ailab/schema';",
+      "import { recordsCreate, recordsRestore } from '@ailab/schema';",
+      'api.run(recordsUpdate, input);',
+      'const go = () => api.run(archive, input);',
+      '// recordsCreate, someday',
+      "const label = 'recordsRestore';",
+      'let x: RecordEnvelope;',
+    ].join('\n');
+    expect([...contractsCalled(source)]).toEqual(['recordsUpdate', 'recordsArchive']);
+  });
+});
 
 describe('people parity (ADR 0057)', () => {
   it('every write an agent can make has a web caller or a stated reason', async () => {
@@ -92,7 +146,7 @@ describe('people parity (ADR 0057)', () => {
         .filter((c) => !(c.id in noScreen))
         .filter((c) => {
           const name = names.get(c.id);
-          return !name || !new RegExp(`\\b${name}\\b`).test(webSource);
+          return !name || !webCalls.has(name);
         })
         .map((c) => c.id);
       expect(
@@ -100,7 +154,7 @@ describe('people parity (ADR 0057)', () => {
         'agent writes with no web caller; add a screen or a reason to noScreen',
       ).toEqual([]);
       const stale = Object.keys(noScreen).filter(
-        (id) => names.get(id) && new RegExp(`\\b${names.get(id)}\\b`).test(webSource),
+        (id) => names.get(id) && webCalls.has(names.get(id) as string),
       );
       expect(stale, 'these have a web caller now; take them out of noScreen').toEqual([]);
     } finally {

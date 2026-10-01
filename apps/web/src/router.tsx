@@ -24,6 +24,7 @@ import {
   SamplesPage,
 } from './pages/Inventory.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
+import { NewRecordPage } from './pages/NewRecord.tsx';
 import { LayoutsPage, PlateMapsPage } from './pages/PlateMaps.tsx';
 import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pages/Reagents.tsx';
 import { RecordPage } from './pages/Record.tsx';
@@ -202,6 +203,11 @@ const record = createRoute({
   path: '/records/$id',
   component: RecordPage,
 });
+const newRecord = createRoute({
+  getParentRoute: () => app,
+  path: '/new/$kind',
+  component: NewRecordPage,
+});
 
 const calculators = createRoute({
   getParentRoute: () => app,
@@ -252,6 +258,7 @@ const routeTree = root.addChildren([
     layouts,
     records,
     record,
+    newRecord,
     calculators,
     wiki,
     wikiPage,

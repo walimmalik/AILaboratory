@@ -13,12 +13,14 @@ import { inventoryKinds } from './inventory/kinds.ts';
 import { labwareKinds } from './labware/kinds.ts';
 import { converterFromEnv } from './library/convert.ts';
 import { libraryKinds } from './library/kinds.ts';
+import { memoryKinds } from './memory/kinds.ts';
 import { plateMapKinds } from './platemaps/kinds.ts';
 import { reagentKinds } from './reagents/kinds.ts';
 import { KindRegistry } from './records/kinds.ts';
 import { widget } from './records/test-kinds.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { transferKinds } from './transfers/kinds.ts';
+import { protocolWriterFromEnv } from './transfers/simulator.ts';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -44,6 +46,7 @@ for (const kind of [
   ...campaignKinds,
   ...plateMapKinds,
   ...transferKinds,
+  ...memoryKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);
@@ -67,6 +70,7 @@ serve(
       assistant,
       files: fileStoreFromEnv(process.env),
       converter: converterFromEnv(process.env),
+      protocols: protocolWriterFromEnv(process.env),
     }).fetch,
     port,
     hostname: '0.0.0.0',

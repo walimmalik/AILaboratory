@@ -16,8 +16,11 @@ import { sopVariableDefinitions } from './kinds.ts';
  * the editor shows the suggestion as assumed until a person keeps or changes it.
  */
 
-const MAX_TURNS = 4;
-const MODEL_TIMEOUT_MS = 120_000;
+/** One answer and one retry with the reason it was refused: a person waits on this in the editor. */
+const MAX_TURNS = 2;
+/** How long one answer may take; drafting every step from a document gets longer. */
+export const SUGGEST_TIMEOUT_MS = 45_000;
+export const DRAFT_TIMEOUT_MS = 90_000;
 const MAX_SOURCE_CHARS = 40_000;
 
 export type SuggestInput = {
@@ -241,17 +244,21 @@ export async function suggestSop(
     return { steps, reason: parsed.data.reason, model: name };
   };
 
+  const limit = input.steps ? DRAFT_TIMEOUT_MS : SUGGEST_TIMEOUT_MS;
   let problem = 'The assistant gave no answer';
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     let answer: Awaited<ReturnType<ChatModel['complete']>>;
+    // Adapters wrap an aborted request in their own error, so the signal says whether time ran out.
+    const signal = AbortSignal.timeout(limit);
     try {
-      answer = await model.complete({
-        system: SYSTEM,
-        messages,
-        tools: [tool],
-        signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
-      });
+      answer = await model.complete({ system: SYSTEM, messages, tools: [tool], signal });
     } catch (error) {
+      if (signal.aborted) {
+        throw new OperationError(
+          'invalid_state',
+          `The assistant did not answer within ${limit / 1000} seconds; try again, or fill it in yourself`,
+        );
+      }
       throw new OperationError(
         'invalid_state',
         `The assistant's model failed: ${error instanceof Error ? error.message : String(error)}`,

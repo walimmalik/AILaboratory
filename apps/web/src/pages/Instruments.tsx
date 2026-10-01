@@ -29,7 +29,15 @@ import { LinkedName } from './Value.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 
-export function Head({ page, lede }: { page: KindPage; lede: string }) {
+export function Head({
+  page,
+  lede,
+  actions,
+}: {
+  page: KindPage;
+  lede: string;
+  actions?: ReactNode;
+}) {
   return (
     <div className="page-head">
       <div>
@@ -39,6 +47,7 @@ export function Head({ page, lede }: { page: KindPage; lede: string }) {
         <h1>{page.title}</h1>
         <p className="lede">{lede}</p>
       </div>
+      {actions}
     </div>
   );
 }
