@@ -54,6 +54,19 @@ export interface KindDefinition<A extends z.ZodType = z.ZodType> {
    * Runs inside every write and readiness read, with the attributes as they will be and as they were.
    */
   related?: (attributes: z.infer<A>, context: RelatedContext) => Promise<RelatedResult>;
+  /**
+   * What Review says about records of this kind (review 2026-10-01 item 16). `due` is the date a
+   * draft has to be confirmed by (a campaign's start). `notice` is something a person should know
+   * about a confirmed record, listed under "For your information" (a memory past its check-again
+   * date); `today` is YYYY-MM-DD.
+   */
+  review?: {
+    due?: (attributes: z.infer<A>) => string | undefined;
+    notice?: (
+      attributes: z.infer<A>,
+      today: string,
+    ) => { message: string; due?: string } | undefined;
+  };
 }
 
 /** What `related` can read: records in the same lab, and the name prefixes code kinds hold. */

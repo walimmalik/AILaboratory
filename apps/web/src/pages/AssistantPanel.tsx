@@ -176,7 +176,9 @@ function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
         ? item.record.id
         : item.type === 'change'
           ? item.proposal.id
-          : item.document.id,
+          : item.type === 'mentions'
+            ? item.document.id
+            : item.about.id,
     ),
   );
   const drafts = turn.drafts.filter((d) => waitingIds.has(d.id));
