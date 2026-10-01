@@ -104,6 +104,21 @@ describe('dilution options', () => {
     });
     expect(points[2]?.reachable).toBe(false);
   });
+
+  it('gives the same answer whatever order the factors come in', () => {
+    const input = {
+      stock: q('10', 'mM'),
+      finalVolume: q('10', 'uL'),
+      device: { min: q('2', 'uL'), max: q('100', 'uL'), step: q('0.1', 'uL') },
+      maxSolventPercent: '100',
+      tolerance: '0.05',
+      targets: [q('1', 'mM')],
+    };
+    const sorted = dilutionOptions({ ...input, factors: ['10', '1000'] });
+    const unsorted = dilutionOptions({ ...input, factors: ['1000', '10'] });
+    expect(sorted[0]).toMatchObject({ reachable: true, intermediate: { factor: '10' } });
+    expect(unsorted).toEqual(sorted);
+  });
 });
 
 describe('source volumes', () => {

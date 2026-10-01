@@ -197,10 +197,12 @@ export function dilutionOptions(input: DilutionInput): DilutionPoint[] {
   const factors = input.factors ?? ['10', '100', '1000'];
   for (const f of factors)
     if (new LabDecimal(f).lte(1)) throw new TransferError('A dilution factor is more than 1');
+  // Mildest first, so the search can stop at the first intermediate already below the target.
+  const ascending = [...factors].sort((a, b) => new LabDecimal(a).comparedTo(b));
   return input.targets.map((target) => {
     const direct = directDispense({ ...input, target });
     if (direct.ok) return { target, direct, reachable: true };
-    for (const factor of factors) {
+    for (const factor of ascending) {
       const concentration: Quantity = {
         value: round(dec(input.stock).dividedBy(factor)),
         unit: input.stock.unit,
