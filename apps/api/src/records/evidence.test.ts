@@ -134,6 +134,81 @@ describe('evidence by item (ADR 0049)', () => {
   });
 });
 
+describe("a person's own edits (ADR 0056)", () => {
+  const section = (record: Parameters<typeof readiness>[0]) =>
+    readiness(record, protocol).sections[0];
+
+  it('confirms the section a person changed when no guess is left in it', async () => {
+    const draft = await service.create(agent, {
+      kind: 'widget',
+      label: 'Blue',
+      attributes: { color: 'blue', volume: { value: '50', unit: 'uL' } },
+    });
+    const edited = await service.update(person, draft.id, {
+      expectedVersion: 1,
+      attributes: { color: 'red', volume: { value: '50', unit: 'uL' } },
+    });
+    expect(edited.reviews.appearance).toMatchObject({
+      confirmedBy: person.actor,
+      version: 2,
+      values: { color: 'red' },
+    });
+    // The volume is still the agent's guess, so it still waits for the person.
+    expect(edited.reviews.volume).toBeUndefined();
+  });
+
+  it("leaves a section to review while it holds an agent's unconfirmed step", async () => {
+    const draft = await service.create(agent, {
+      kind: 'protocol',
+      label: 'ELISA',
+      attributes: { steps },
+    });
+    const one = await service.update(person, draft.id, {
+      expectedVersion: 1,
+      attributes: { steps: [{ id: 'coat', text: 'Coat overnight' }, steps[1], steps[2]] },
+    });
+    expect(one.reviews.steps).toBeUndefined();
+    expect(section(one)?.state).toBe('needs_review');
+    const all = await service.update(person, draft.id, {
+      expectedVersion: 2,
+      attributes: { steps: [{ id: 'coat', text: 'Coat overnight' }] },
+    });
+    expect(section(all)?.state).toBe('confirmed');
+  });
+
+  it('keeps steps a person already confirmed as confirmed when they edit another', async () => {
+    const draft = await service.create(agent, {
+      kind: 'protocol',
+      label: 'ELISA',
+      attributes: { steps },
+    });
+    await service.confirmSection(person, draft.id, { expectedVersion: 1, section: 'steps' });
+    const edited = await service.update(person, draft.id, {
+      expectedVersion: 2,
+      attributes: { steps: [steps[0], { id: 'wash', text: 'Wash five times' }, steps[2]] },
+    });
+    expect(section(edited)?.state).toBe('confirmed');
+    expect(edited.reviews.steps?.version).toBe(3);
+  });
+
+  it("still sends an agent's edit back to review", async () => {
+    const draft = await service.create(person, {
+      kind: 'protocol',
+      label: 'ELISA',
+      attributes: { steps },
+    });
+    const confirmed = await service.confirmSection(person, draft.id, {
+      expectedVersion: 1,
+      section: 'steps',
+    });
+    const edited = await service.update(agent, draft.id, {
+      expectedVersion: confirmed.version,
+      attributes: { steps: [steps[0]] },
+    });
+    expect(section(edited)?.state).toBe('needs_review');
+  });
+});
+
 describe('checked calculations (ADR 0049)', () => {
   it('accepts a calculated value the calculation gave, at its place in the output', async () => {
     const calculation = await saveCalculation(
