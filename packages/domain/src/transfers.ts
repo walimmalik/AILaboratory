@@ -565,3 +565,88 @@ function subsets<T>(items: readonly T[]): T[][] {
   for (const item of items) for (const s of [...out]) out.push([...s, item]);
   return out.sort((a, b) => a.length - b.length);
 }
+
+// Deck layouts (016b-4, T6): where a group's plates and tip racks go on an instrument.
+
+/** Opentrons Flex working slots in the order plates and tip racks are placed: front row first. */
+export const FLEX_SLOTS = [
+  'D1',
+  'D2',
+  'D3',
+  'C1',
+  'C2',
+  'C3',
+  'B1',
+  'B2',
+  'B3',
+  'A1',
+  'A2',
+  'A3',
+] as const;
+
+/** Tips in one Flex rack. */
+export const TIPS_PER_RACK = 96;
+
+export const racksFor = (tips: number) => Math.ceil(tips / TIPS_PER_RACK);
+
+export interface DeckPlacement {
+  slot: string;
+  plate?: string;
+  tipRack?: unknown;
+}
+
+/**
+ * A layout: the plates in the order given, then the tip racks, on the free slots in placement
+ * order. Refused when there are too few slots.
+ */
+export function draftDeck(
+  free: readonly string[],
+  plates: readonly string[],
+  racks: number,
+  order: readonly string[] = FLEX_SLOTS,
+): { slot: string; plate?: string; rack?: true }[] {
+  const slots = order.filter((s) => free.includes(s));
+  if (plates.length + racks > slots.length)
+    throw new TransferError(
+      `It needs ${plates.length} plates and ${racks} tip racks on the deck, but only ${slots.length} slots are free (${slots.join(', ') || 'none'}); split the group`,
+    );
+  return [
+    ...plates.map((plate, i) => ({ slot: slots[i] as string, plate })),
+    ...Array.from({ length: racks }, (_, i) => ({
+      slot: slots[plates.length + i] as string,
+      rack: true as const,
+    })),
+  ];
+}
+
+/**
+ * What is wrong with a layout for a group: a slot that isn't free or holds two things, a plate
+ * the group uses that isn't on the deck or one it doesn't use, a plate placed twice, too few
+ * tip racks for the tips the group takes.
+ */
+export function deckProblems(
+  sites: readonly DeckPlacement[],
+  free: readonly string[],
+  used: readonly string[],
+  tips: number,
+): string[] {
+  const problems: string[] = [];
+  const slots = sites.map((s) => s.slot);
+  for (const slot of new Set(slots.filter((s, i) => slots.indexOf(s) !== i)))
+    problems.push(`${slot} holds more than one thing`);
+  for (const slot of new Set(slots.filter((s) => !free.includes(s))))
+    problems.push(`${slot} is not a free slot on the instrument`);
+  const placed = sites.flatMap((s) => (s.plate ? [s.plate] : []));
+  for (const plate of new Set(placed.filter((p, i) => placed.indexOf(p) !== i)))
+    problems.push(`${plate} is placed twice`);
+  for (const plate of used.filter((p) => !placed.includes(p)))
+    problems.push(`${plate} is used but not on the deck`);
+  for (const plate of new Set(placed.filter((p) => !used.includes(p))))
+    problems.push(`${plate} is on the deck but the group doesn't use it`);
+  const racks = sites.filter((s) => s.tipRack !== undefined).length;
+  if (racks < racksFor(tips))
+    problems.push(
+      `It takes ${tips} tips, ${racksFor(tips)} racks, but the deck has ${racks} tip rack${racks === 1 ? '' : 's'}`,
+    );
+  return problems;
+}

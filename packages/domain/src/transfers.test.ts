@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   backfill,
   countTips,
+  deckProblems,
   dilutionOptions,
   directDispense,
+  draftDeck,
   fitVolume,
   optimizeDilution,
+  racksFor,
   rankDevices,
   sourceVolumes,
   TransferError,
@@ -276,5 +279,56 @@ describe('the dilution optimizer', () => {
       'No intermediate of 10, 100, 1000 fold reaches it within the limits',
       'No intermediate of 10, 100, 1000 fold reaches it within the limits',
     ]);
+  });
+});
+
+describe('deck layouts', () => {
+  it('places plates, then tip racks, on free slots front row first', () => {
+    expect(draftDeck(['A1', 'C1', 'D2', 'D3', 'C2'], ['src', 'assay'], 2)).toEqual([
+      { slot: 'D2', plate: 'src' },
+      { slot: 'D3', plate: 'assay' },
+      { slot: 'C1', rack: true },
+      { slot: 'C2', rack: true },
+    ]);
+    expect(() => draftDeck(['D1'], ['src', 'assay'], 1)).toThrow(
+      'It needs 2 plates and 1 tip racks on the deck, but only 1 slots are free (D1); split the group',
+    );
+    expect(racksFor(96)).toBe(1);
+    expect(racksFor(97)).toBe(2);
+  });
+
+  it('says what is wrong with a layout', () => {
+    const rack = { id: 'lwt_1', version: 1 };
+    expect(
+      deckProblems(
+        [
+          { slot: 'D1', plate: 'src' },
+          { slot: 'D1', plate: 'extra' },
+          { slot: 'A1', plate: 'src' },
+          { slot: 'C1', tipRack: rack },
+        ],
+        ['D1', 'D2', 'C1'],
+        ['src', 'assay'],
+        100,
+      ),
+    ).toEqual([
+      'D1 holds more than one thing',
+      'A1 is not a free slot on the instrument',
+      'src is placed twice',
+      'assay is used but not on the deck',
+      "extra is on the deck but the group doesn't use it",
+      'It takes 100 tips, 2 racks, but the deck has 1 tip rack',
+    ]);
+    expect(
+      deckProblems(
+        [
+          { slot: 'D1', plate: 'src' },
+          { slot: 'C1', tipRack: rack },
+        ],
+        ['D1', 'C1'],
+        ['src'],
+        96,
+      ),
+    ).toEqual([]);
   });
 });

@@ -698,7 +698,7 @@ describe('transfer plans', () => {
   });
 
   it('writes an Echo pick list from a confirmed plan and stores it with the plan version', async () => {
-    const { flex, pp, assay, src, draft } = await setup();
+    const { pp, assay, src, draft } = await setup();
     const ppOk = await confirm(pp);
     const assayOk = await confirm(assay);
     const plan = await run<RecordEnvelope>(agent, 'transfers.draft', {
@@ -720,21 +720,6 @@ describe('transfer plans', () => {
       ],
       groups: [
         { ...draft.groups[0], transfers: draft.groups[0]?.transfers.slice(0, 2) },
-        {
-          id: 'buffer',
-          label: 'Flex: buffer into the assay plate',
-          method: 'reagent_addition',
-          instrument: { instrument: flex.id },
-          reason: 'Microlitre volumes',
-          tips: 'new_each',
-          transfers: [
-            {
-              from: { plate: 'src', well: 'B1' },
-              to: { plate: 'assay', well: 'A1' },
-              volume: uL('10'),
-            },
-          ],
-        },
         {
           id: 'mix',
           label: 'By hand: top up',
@@ -760,13 +745,7 @@ describe('transfer plans', () => {
       files: { group: string; file: RecordEnvelope; filename: string; rows: number }[];
       skipped: { group: string; why: string }[];
     }>(agent, 'transfers.export', { id: active.id });
-    expect(out.skipped).toEqual([
-      {
-        group: 'buffer',
-        why: 'Flex 1 has no trash bin or waste chute installed; add one with instruments.change_configuration',
-      },
-      { group: 'mix', why: 'Done by hand; no instrument file' },
-    ]);
+    expect(out.skipped).toEqual([{ group: 'mix', why: 'Done by hand; no instrument file' }]);
     expect(out.files).toMatchObject([
       {
         group: 'compounds',
@@ -789,12 +768,6 @@ describe('transfer plans', () => {
       ].join('\n'),
     );
 
-    const onlyFlex = await refused(
-      run(agent, 'transfers.export', { id: active.id, group: 'buffer' }),
-    );
-    expect(onlyFlex.message).toBe(
-      'Flex: buffer into the assay plate: Flex 1 has no trash bin or waste chute installed; add one with instruments.change_configuration',
-    );
     const noGroup = await refused(run(agent, 'transfers.export', { id: active.id, group: 'x' }));
     expect(noGroup.message).toBe('TFP-0001 has no group x');
     const hidden = await refused(run(otherLab, 'transfers.export', { id: active.id }));

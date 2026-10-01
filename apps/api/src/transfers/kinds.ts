@@ -36,7 +36,10 @@ export const transferPlan = defineKind({
   sections: [
     { id: 'plates', title: 'Plates and sources', fields: ['experiment', 'purpose', 'plates'] },
     { id: 'transfers', title: 'Transfers', fields: ['groups', 'notes'] },
+    { id: 'decks', title: 'Deck layouts', fields: ['decks'] },
   ],
+  // Each group's layout is reviewed on its own: changing one sends only it back to review.
+  items: { decks: 'group' },
   related: async (a, context) => {
     const { invalid, rules } = await planRules(a, context);
     if (invalid.length) return { invalid: [...new Set(invalid)] };

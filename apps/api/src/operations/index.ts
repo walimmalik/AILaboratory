@@ -31,6 +31,7 @@ import { runOperations } from '../campaigns/runs.ts';
 import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { transferCalculators } from '../transfers/calculators.ts';
+import { deckOperations } from '../transfers/deck-operations.ts';
 import { exportOperations } from '../transfers/export.ts';
 import { draftFromPlateMap } from '../transfers/from-plate-map.ts';
 import { transferPlanOperations } from '../transfers/plans.ts';
@@ -85,6 +86,7 @@ export function createRegistry(
     ...transferCalculators,
     ...transferPlanOperations,
     draftFromPlateMap,
+    ...deckOperations,
     ...exportOperations,
     ...reportOperations,
     ...assistantOperations,

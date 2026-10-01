@@ -15,8 +15,9 @@ import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { run } from './calculators.ts';
+import { isFlex } from './decks.ts';
 import { type EchoPlate, echoPickList } from './echo.ts';
-import { flexRequest, isFlex } from './opentrons.ts';
+import { flexRequest } from './opentrons.ts';
 
 /**
  * Instrument files from confirmed transfer plans (plan 016b): Echo pick lists, and Opentrons Flex
@@ -145,7 +146,7 @@ export const exportOperations = [
           };
           let flex: Awaited<ReturnType<typeof flexRequest>>;
           try {
-            flex = await flexRequest(deps, ctx, plan, group, instrument);
+            flex = await flexRequest(deps, ctx, plan, group);
           } catch (e) {
             if (!(e instanceof OperationError) || e.code !== 'invalid_state') throw e;
             cannot(e.message);

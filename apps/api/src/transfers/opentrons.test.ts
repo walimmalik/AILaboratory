@@ -153,7 +153,8 @@ async function lab() {
     fits: ['flex_module'],
     serialized: true,
   });
-  const flex = await run<RecordEnvelope>(person, 'instruments.register', {
+  for (const kind of [flexKind, single, small, bin, shaker]) await confirm(kind);
+  const registered = await run<RecordEnvelope>(person, 'instruments.register', {
     label: 'Flex 1',
     kind: flexKind.id,
     configuration: {
@@ -164,6 +165,8 @@ async function lab() {
       ],
     },
   });
+  const flex = await confirm(registered);
+  expect(flex.status).toBe('active');
   const tips = async (volume: string) =>
     confirm(
       await create(`Flex filter tips ${volume} uL`, 'labware_type', {
@@ -401,37 +404,156 @@ describe('Opentrons protocols', () => {
     });
   });
 
-  it("refuses a group that says no tips, and reads nothing of another lab's plans", async () => {
-    const { plan } = await confirmedPlan((flex) => [
+  it('drafts each Flex group a deck layout that a person confirms as its own section', async () => {
+    const { plan, flex } = await confirmedPlan();
+    const decks = (plan.attributes as { decks: unknown[] }).decks;
+    expect(decks).toEqual([
       {
-        id: 'buffer',
-        label: 'Flex: buffer',
-        method: 'reagent_addition',
-        instrument: { instrument: flex.id },
-        reason: 'Microlitre volumes',
-        tips: 'none',
-        transfers: [
-          {
-            from: { plate: 'reservoir', well: 'A1' },
-            to: { plate: 'elisa', well: 'A1' },
-            volume: uL('20'),
-          },
+        group: 'buffer',
+        sites: [
+          { slot: 'D2', plate: 'reservoir' },
+          { slot: 'D3', plate: 'elisa' },
+          { slot: 'C1', tipRack: expect.objectContaining({ version: expect.any(Number) }) },
+        ],
+        free: ['D2', 'D3', 'C1', 'C2', 'C3', 'B1', 'B2', 'B3', 'A1', 'A2'],
+        trash: { kind: 'trash_bin', slot: 'A3' },
+      },
+    ]);
+    const state = await run<{ sections: { id: string; title: string; state: string }[] }>(
+      person,
+      'records.readiness',
+      { id: plan.id },
+    );
+    expect(state.sections.map((s) => [s.id, s.state])).toContainEqual(['decks', 'confirmed']);
+
+    // An agent's change to a confirmed plan's deck is a proposal a person approves.
+    const tipRack = (decks[0] as { sites: { tipRack?: unknown }[] }).sites[2]?.tipRack;
+    const moved = await registry.execute(agent, 'transfers.set_deck', {
+      id: plan.id,
+      expectedVersion: plan.version,
+      group: 'buffer',
+      sites: [
+        { slot: 'B1', plate: 'reservoir' },
+        { slot: 'B2', plate: 'elisa' },
+        { slot: 'B3', tipRack },
+      ],
+      why: 'Keep the front row for the next run',
+    });
+    expect(moved.status).toBe('proposed');
+
+    const bad = await refused(
+      run(person, 'transfers.set_deck', {
+        id: plan.id,
+        expectedVersion: plan.version,
+        group: 'buffer',
+        sites: [
+          { slot: 'D1', plate: 'reservoir' },
+          { slot: 'A3', tipRack },
+        ],
+        why: 'Try',
+      }),
+    );
+    expect(bad.message).toBe(
+      "That layout doesn't fit Flex 1: D1 is not a free slot on the instrument; A3 is not a free slot on the instrument; elisa is used but not on the deck",
+    );
+
+    // The Flex changes after the layout was confirmed: export and check say so.
+    const now = await run<RecordEnvelope>(person, 'records.get', { id: flex.id });
+    await run(person, 'instruments.change_configuration', {
+      id: flex.id,
+      expectedVersion: now.version,
+      changes: [
+        { change: 'move', id: 'shaker', mount: 'deck', placement: { on: 'slot', slot: 'D2' } },
+      ],
+    });
+    const out = await run<{ skipped: { why: string }[] }>(agent, 'transfers.export', {
+      id: plan.id,
+    });
+    expect(out.skipped[0]?.why).toBe(
+      'The Flex changed since the deck layout was confirmed: D2 is not free on Flex 1 now; lay it out again with transfers.set_deck',
+    );
+    const check = await run<{ checks: { id: string; problems: string[] }[] }>(
+      agent,
+      'transfers.check',
+      { id: plan.id },
+    );
+    expect(check.checks.find((c) => c.id === 'decks_now')?.problems).toEqual([
+      'Flex: buffer and standards into the ELISA plate: D2 is not free on Flex 1 now',
+    ]);
+  });
+
+  it('says what to put where at the instrument', async () => {
+    const { plan, container } = await confirmedPlan();
+    const list = await run<{ groups: { group: string; steps: string[] }[]; skipped: unknown[] }>(
+      agent,
+      'transfers.loading_list',
+      { id: plan.id },
+    );
+    expect(list.skipped).toEqual([]);
+    expect(list.groups).toEqual([
+      {
+        group: 'buffer',
+        label: 'Flex: buffer and standards into the ELISA plate',
+        instrument: 'Flex 1',
+        steps: [
+          'On Flex 1, check the Flex 1-Channel 1000 uL pipette is on the left mount.',
+          'Empty the trash bin in A3.',
+          `Put Reagent diluent (${container.name}, NEST 12-channel reservoir) in D2. It must hold at least 200 µL in A1, 300 µL in A2.`,
+          'Put ELISA plate (an empty Corning 96 flat) in D3.',
+          'Put a full rack of Flex filter tips 1000 uL in C1.',
         ],
       },
     ]);
-    const all = await run<{ skipped: unknown[] }>(agent, 'transfers.export', { id: plan.id });
-    expect(all.skipped).toEqual([
-      {
-        group: 'buffer',
-        why: 'A Flex pipette uses tips, but the group says none; set its tip rule',
-      },
-    ]);
-    const none = await refused(run(agent, 'transfers.export', { id: plan.id, group: 'buffer' }));
-    expect(none.message).toBe(
-      'Flex: buffer: A Flex pipette uses tips, but the group says none; set its tip rule',
+  });
+
+  it('lays out no deck for a group that says no tips, and reads nothing of another lab', async () => {
+    const { flex, reservoir, plate, container } = await lab();
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', {
+      label: 'No tips',
+      plates: [
+        { id: 'reservoir', role: 'source', labwareType: pin(reservoir), container: container.id },
+        { id: 'elisa', role: 'destination', labwareType: pin(plate) },
+      ],
+      groups: [
+        {
+          id: 'buffer',
+          label: 'Flex: buffer',
+          method: 'reagent_addition',
+          instrument: { instrument: flex.id },
+          reason: 'Microlitre volumes',
+          tips: 'none',
+          transfers: [
+            {
+              from: { plate: 'reservoir', well: 'A1' },
+              to: { plate: 'elisa', well: 'A1' },
+              volume: uL('20'),
+            },
+          ],
+        },
+      ],
+    });
+    expect((plan.attributes as { decks?: unknown }).decks).toBeUndefined();
+    const state = await run<{ checks: { id: string; passed: boolean; message?: string }[] }>(
+      person,
+      'records.readiness',
+      { id: plan.id },
     );
-    const hidden = await refused(run(otherLab, 'transfers.export', { id: plan.id }));
+    expect(state.checks.find((c) => c.id === 'decks_fit')).toMatchObject({
+      passed: false,
+      message: 'Flex: buffer: no deck layout yet',
+    });
+    const none = await refused(
+      run(agent, 'transfers.set_deck', {
+        id: plan.id,
+        expectedVersion: plan.version,
+        group: 'buffer',
+        why: 'Lay it out',
+      }),
+    );
+    expect(none.message).toBe(
+      'A Flex pipette uses tips, but the group says none; set its tip rule',
+    );
+    const hidden = await refused(run(otherLab, 'transfers.loading_list', { id: plan.id }));
     expect(hidden).toMatchObject({ code: 'not_found' });
-    expect(sent).toHaveLength(0);
   });
 });

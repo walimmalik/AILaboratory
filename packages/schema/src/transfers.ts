@@ -67,6 +67,36 @@ export const DeviceSnapshot = z.strictObject({
 });
 export type DeviceSnapshot = z.infer<typeof DeviceSnapshot>;
 
+/** What one deck site holds: a plate of the plan, or a full tip rack of a labware type. */
+export const DeckSite = z.union([
+  z.strictObject({ slot: LocalId, plate: LocalId.describe("The plan's name for the plate") }),
+  z.strictObject({
+    slot: LocalId,
+    tipRack: pinOf(recordIdOf('lwt')).describe('A full rack of this tip rack type'),
+  }),
+]);
+export type DeckSite = z.infer<typeof DeckSite>;
+
+/**
+ * Where everything goes on the instrument for one group (T6): drafted by code, changed with
+ * transfers.set_deck, and confirmed by a person as its own section of the plan. Exports and the
+ * loading list read it.
+ */
+export const DeckLayout = z.strictObject({
+  group: LocalId.describe('The group it is for'),
+  sites: z.array(DeckSite).min(1).max(48),
+  free: z
+    .array(LocalId)
+    .describe('The slots the instrument had free when the layout was set, copied by code'),
+  trash: z
+    .discriminatedUnion('kind', [
+      z.strictObject({ kind: z.literal('trash_bin'), slot: LocalId }),
+      z.strictObject({ kind: z.literal('waste_chute'), slot: LocalId }),
+    ])
+    .describe("Where used tips go, from the instrument's configuration"),
+});
+export type DeckLayout = z.infer<typeof DeckLayout>;
+
 /** One group of transfers: one method on one instrument (or by hand), in the order they run. */
 export const TransferGroup = z.strictObject({
   id: LocalId,
@@ -95,6 +125,11 @@ export const TransferPlanAttributes = z.strictObject({
   plates: z.array(PlanPlate).min(1).max(200),
   groups: z.array(TransferGroup).max(100).describe('Run in this order'),
   notes: z.string().min(1).optional(),
+  decks: z
+    .array(DeckLayout)
+    .max(100)
+    .optional()
+    .describe('Opentrons Flex groups: where each plate and tip rack goes, one layout per group'),
 });
 export type TransferPlanAttributes = z.infer<typeof TransferPlanAttributes>;
 
