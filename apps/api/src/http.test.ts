@@ -189,6 +189,15 @@ describe('MCP', () => {
     expect((await archive.json()).result.structuredContent.status).toBe('proposed');
   });
 
+  it('serves each module skill as a resource', async () => {
+    const listed = (await (await rpc('resources/list', {})).json()).result.resources;
+    expect(listed.map((r: { uri: string }) => r.uri)).toContain('skill://records');
+    const read = (await (await rpc('resources/read', { uri: 'skill://calculators' })).json())
+      .result;
+    expect(read.contents[0]).toMatchObject({ mimeType: 'text/markdown' });
+    expect(read.contents[0].text).toMatch(/^# Lab calculators/);
+  });
+
   it('returns refusals as tool errors the agent can act on', async () => {
     const response = await rpc('tools/call', {
       name: 'run_operation',

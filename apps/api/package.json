@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
+    "skills:generate": "tsx scripts/generate-skills.ts",
     "db:migrate": "tsx --env-file-if-exists=../../.env --conditions=source src/db/migrate.ts",
     "bootstrap": "tsx --env-file-if-exists=../../.env --conditions=source src/bootstrap.ts",
     "token": "tsx --env-file-if-exists=../../.env --conditions=source src/token.ts",

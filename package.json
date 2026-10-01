@@ -14,7 +14,7 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
-    "generate": "pnpm --filter @ailab/schema generate && pnpm --filter @ailab/api db:generate"
+    "generate": "pnpm --filter @ailab/schema generate && pnpm --filter @ailab/api db:generate && pnpm --filter @ailab/api skills:generate"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

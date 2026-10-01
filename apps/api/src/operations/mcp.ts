@@ -2,12 +2,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
 import type { RecordContext } from '../records/service.ts';
+import { skills } from '../skills/skills.ts';
 import { describeOperation } from './describe.ts';
 import { toErrorBody } from './errors.ts';
 import type { OperationRegistry } from './registry.ts';
 
 const instructions = `AILaboratory: every capability is an operation.
 Call describe_operations to see what exists (optionally filtered by namespace, e.g. "records"), then run_operation with its ID and input.
+Each module has a skill that explains its operations: the resources skill://<module> (e.g. skill://sops), or run_operation with skills.get. Read a module's skill before you first work in it.
 Volumes, concentrations and amounts come from the lab calculators (describe_operations with calculators: true), never from your own arithmetic.
 Use preview: true to see what a change would do without making it.
 Some changes by agents are proposed rather than applied: the result then has status "proposed" and a person approves or rejects it.
@@ -16,6 +18,18 @@ Errors come back as { code, message } with a message that says what to fix.`;
 /** A stateless MCP server over the operation registry: two tools, the same path as REST. */
 export function createMcpServer(registry: OperationRegistry, ctx: RecordContext): McpServer {
   const server = new McpServer({ name: 'ailaboratory', version: '0.1.0' }, { instructions });
+
+  // One resource per module skill (ADR 0054), the same text skills.get returns.
+  for (const skill of skills) {
+    server.registerResource(
+      skill.name,
+      `skill://${skill.module}`,
+      { title: skill.name, description: skill.description, mimeType: 'text/markdown' },
+      async (uri) => ({
+        contents: [{ uri: uri.href, mimeType: 'text/markdown', text: skill.text }],
+      }),
+    );
+  }
 
   server.registerTool(
     'describe_operations',

@@ -24,7 +24,7 @@ jobs:
         run: |
           pnpm generate
           git add --intent-to-add --all
-          git diff --exit-code -- packages/schema/generated apps/api/drizzle
+          git diff --exit-code -- packages/schema/generated apps/api/drizzle apps/api/src/skills/skills.generated.json
 
   postgres:
     runs-on: ubuntu-latest

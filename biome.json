@@ -13,6 +13,7 @@
       "!apps/science",
       "!packages/schema/generated",
       "!apps/api/drizzle",
+      "!apps/api/src/skills/skills.generated.json",
       "!docs/sop-library/sops",
       "!docs/sop-library/literature",
       "!seed/opentrons",
