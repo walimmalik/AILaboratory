@@ -5,6 +5,7 @@ description = "AILaboratory science service: statistics, curve fitting, cheminfo
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.141.1",
+    "opentrons==10.0.0",
     "uvicorn==0.54.0",
 ]
 
@@ -25,6 +26,7 @@ packages = ["src/science"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["tests/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

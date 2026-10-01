@@ -8,7 +8,7 @@ import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { LiquidTypeId } from '../reagents.ts';
 import { RecordEnvelope } from '../record.ts';
-import { PlanPlate, TransferGroup, TransferPlanId } from '../transfers.ts';
+import { DeckSite, PlanPlate, ProtocolCheck, TransferGroup, TransferPlanId } from '../transfers.ts';
 
 /**
  * The transfer calculators (plan 016, T2; ADR 0024): read operations over
@@ -336,6 +336,50 @@ export const transfersCheck = defineContract({
   }),
 });
 
+export const transfersSetDeck = defineContract({
+  id: 'transfers.set_deck',
+  verbs: { done: 'set the deck layout of', intent: 'set the deck layout of' },
+  summary:
+    "Set where each plate and tip rack goes on the Opentrons Flex for a group of a transfer plan, with why. Left out, code lays it out: the plates the group uses in plan order, then enough full tip racks of the lab's Flex tip rack for the pipette, on the slots the instrument's configuration leaves free, front row first. Given, each site is checked against the free slots, the plates the group uses and the tips it takes. The layout is its own section of the plan, confirmed by a person; exports and the loading list use the confirmed layout. Direct on drafts; proposed on a confirmed plan",
+  effect: 'write',
+  input: z.strictObject({
+    id: TransferPlanId,
+    expectedVersion: z.number().int().positive(),
+    group: LocalId,
+    sites: z
+      .array(DeckSite)
+      .min(1)
+      .optional()
+      .describe('What goes on each slot; left out, code lays it out'),
+    why: z.string().min(1).describe('Why this layout'),
+  }),
+  output: RecordEnvelope,
+});
+
+export const transfersLoadingList = defineContract({
+  id: 'transfers.loading_list',
+  verbs: { done: 'read the loading list of', intent: 'read the loading list of' },
+  summary:
+    "What a person does at the instrument before a group runs, as numbered steps in plain words: check the pipette and empty the trash, then put each plate and tip rack on its slot, with how much each source well must hold for this group (what it draws plus the plate type's dead volume). From the plan's deck layouts. Give `group` for one group; groups without a layout are listed as skipped with why",
+  effect: 'read',
+  input: z.strictObject({
+    id: TransferPlanId,
+    group: LocalId.optional(),
+  }),
+  output: z.object({
+    plan: z.object({ id: z.string(), name: z.string(), version: z.number().int() }),
+    groups: z.array(
+      z.object({
+        group: z.string(),
+        label: z.string(),
+        instrument: z.string(),
+        steps: z.array(z.string()),
+      }),
+    ),
+    skipped: z.array(z.object({ group: z.string(), why: z.string() })),
+  }),
+});
+
 export const transfersReserved = defineContract({
   id: 'transfers.reserved',
   verbs: { done: 'looked at what is reserved', intent: 'look at what is reserved' },
@@ -409,7 +453,7 @@ export const transfersExport = defineContract({
   id: 'transfers.export',
   verbs: { done: 'exported a worklist from', intent: 'export a worklist from' },
   summary:
-    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo. Each file is stored in the file store with the plan version it came from. Groups done by hand, or on instruments without a writer yet, are listed as skipped with why. Give `group` to write one group's file only",
+    "Write the instrument files for a confirmed transfer plan: an Echo pick list (CSV) for each group on an Echo, and an Opentrons protocol (Python) for each group on an Opentrons Flex, checked in Opentrons' simulator first, placed as the plan's confirmed deck layout says. Each file is stored in the file store with the plan version it came from. Groups done by hand, on instruments without a writer yet, or stopped by the simulator are listed as skipped with why. Give `group` to write one group's file only",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -421,10 +465,17 @@ export const transfersExport = defineContract({
     files: z.array(
       z.object({
         group: z.string(),
-        format: z.enum(['echo_pick_list']),
+        format: z.enum(['echo_pick_list', 'opentrons_protocol']),
         file: RecordEnvelope,
         filename: z.string(),
         rows: z.number().int(),
+        check: ProtocolCheck.optional().describe(
+          'Opentrons protocols: what the simulator made of it',
+        ),
+        deck: z
+          .array(z.object({ slot: z.string(), holds: z.string() }))
+          .optional()
+          .describe('Opentrons protocols: what goes on each deck slot'),
       }),
     ),
     skipped: z.array(z.object({ group: z.string(), why: z.string() })),
@@ -437,7 +488,7 @@ export const transfersImportReport = defineContract({
   id: 'transfers.import_report',
   verbs: { done: 'read an instrument report for', intent: 'read an instrument report for' },
   summary:
-    'Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report says which planned transfers were done, short, failed or not run, and records what really moved in the inventory ledger as from a run log (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export',
+    "Read an Echo transfer report or survey (uploaded first with files.upload) against a confirmed transfer plan. A transfer report records the execution (a TRN record: which planned transfers were done, short, failed or not run), records what really moved in the inventory ledger as from a run log, ends the plan's reservations, and drafts a rerun plan for the short, failed and missing transfers for a person to confirm (each report once). A survey compares the measured source volumes with the inventory. Plates are matched by the names and barcodes in the export",
   effect: 'write',
   input: z.strictObject({
     id: TransferPlanId,
@@ -477,6 +528,14 @@ export const transfersImportReport = defineContract({
     ),
     recorded: z.number().int().describe('Transfers written to the inventory ledger'),
     event: z.string().optional().describe('The inventory event they were written in'),
+    execution: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The execution recorded from a transfer report'),
+    rerun: z
+      .object({ id: z.string(), name: z.string() })
+      .optional()
+      .describe('The draft plan that redoes the exceptions, waiting for a person to confirm'),
     notes: z.array(z.string()),
   }),
 });

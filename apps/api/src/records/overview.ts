@@ -13,7 +13,7 @@ import { RecordError } from './errors.ts';
 import { type RecordContext, RecordService } from './service.ts';
 
 /**
- * A record as a person reads it first (plan 004f N4, ADR 0058): an identity line and a few facts,
+ * A record as a person reads it first (plan 004f N4, ADR 0061): an identity line and a few facts,
  * chosen per kind by the module that owns the kind. Worked out on read; nothing is stored.
  */
 export type OverviewBuilder = (

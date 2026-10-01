@@ -22,7 +22,6 @@ const noScreen: Record<string, string> = {
   'library.propose_mentions': notYet(
     'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
   ),
-  'records.create': draftedByAsking,
   'campaigns.draft': draftedByAsking,
   'experiments.draft': draftedByAsking,
   'sops.draft': draftedByAsking,
@@ -39,6 +38,7 @@ const noScreen: Record<string, string> = {
   'transfers.import_report': transferScreens,
   'transfers.pick_sources': transferScreens,
   'transfers.set_instrument': transferScreens,
+  'transfers.set_deck': transferScreens,
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
   'experiments.adopt_versions': notYet(
     'the experiment page shows the SOP versions it follows, not newer ones',

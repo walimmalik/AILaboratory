@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { RecordId } from './ids.ts';
 
 /**
- * A record as a person reads it first (plan 004f N4, ADR 0058): what it is and where in one line, then
+ * A record as a person reads it first (plan 004f N4, ADR 0061): what it is and where in one line, then
  * the handful of facts chosen for its kind. Worked out on read, so agents and the record page say the
  * same thing.
  */

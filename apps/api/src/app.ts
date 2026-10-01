@@ -18,6 +18,7 @@ import { ActivityBus, createRegistry } from './operations/index.ts';
 import { handleMcpRequest } from './operations/mcp.ts';
 import { KindRegistry } from './records/kinds.ts';
 import type { RecordContext } from './records/service.ts';
+import type { ProtocolWriter } from './transfers/simulator.ts';
 
 export interface AppDependencies {
   db: Db;
@@ -29,6 +30,8 @@ export interface AppDependencies {
   files?: FileStore;
   /** Turns library files into text; none unless given (tests). */
   converter?: Converter;
+  /** Writes and simulates Opentrons protocols; none unless given (tests). */
+  protocols?: ProtocolWriter;
 }
 
 type Env = { Variables: { ctx: RecordContext } };
@@ -48,10 +51,12 @@ export function createApp({
   assistant = new Assistant({ reason: 'No model is set up' }),
   files = new MemoryFileStore(),
   converter,
+  protocols,
 }: AppDependencies) {
   const registry = createRegistry(db, kinds, bus, assistant, {
     files,
     ...(converter ? { converter } : {}),
+    ...(protocols ? { protocols } : {}),
   });
   const app = new Hono<Env>();
 

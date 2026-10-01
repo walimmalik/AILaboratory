@@ -354,6 +354,11 @@ a {
   padding: 5px 12px;
   white-space: nowrap;
 }
+a.btn {
+  display: inline-block;
+  color: var(--ink);
+  text-decoration: none;
+}
 .btn:hover:not(:disabled) {
   border-color: var(--ink-3);
 }
@@ -415,6 +420,11 @@ a {
 }
 .import label.btn {
   cursor: pointer;
+}
+.head-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .field {

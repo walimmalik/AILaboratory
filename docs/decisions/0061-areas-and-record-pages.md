@@ -1,4 +1,4 @@
-# 0058: Areas with tabs, one inventory view, and record pages that lead with facts
+# 0061: Areas with tabs, one inventory view, and record pages that lead with facts
 
 - Status: accepted
 - Date: 2026-10-01

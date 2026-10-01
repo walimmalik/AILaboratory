@@ -47,6 +47,7 @@ export const FALLBACK_KINDS = new Set([
   'set',
   'sop',
   'transfer_plan',
+  'transfer_run',
   'workcell',
 ]);
 
