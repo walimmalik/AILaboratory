@@ -59,7 +59,7 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 23. **Evidence that names a source is checked against it.**
 24. **A person starts a common record from its registry page.** Products, lots, places, labware types and vendors have a "New …" form drawn from the kind's schema (required fields first, the rest folded); it saves a draft through the same `records.create` an agent calls. Other kinds are drafted by asking the assistant.
 
-Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md), after Wali asked for fewer, linked views (ADR 0061):
+Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md), after Wali asked for fewer, linked views (ADR 0063):
 
 25. **An area per kind of work, a tab per kind of thing.** Eight menu entries; a kind and its items are one view. A new capability's plan says whether it is a menu entry, a tab in an area, a tab on a record page, or a fact on the Overview.
 26. **Every record leads with what it is and where.** An identity line and a few key facts chosen per kind, then its picture, then the tabs Overview · the kind's tabs · History · Connections · All fields.
