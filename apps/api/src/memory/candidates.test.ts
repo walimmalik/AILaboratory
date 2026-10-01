@@ -152,6 +152,117 @@ describe('memory.observe', () => {
   });
 });
 
+type For = {
+  memories: { name: string; due: boolean; evidence?: Record<string, unknown> }[];
+  lines: string[];
+};
+
+describe('evidence on memories (005c-2)', () => {
+  it('counts quiet opportunities after a confirmed memory was last seen and makes it due for a check', async () => {
+    const instrument = await star();
+    const ids = (await Promise.all(Array.from({ length: 13 }, () => star()))).map((p) => p.id);
+    const draft = {
+      statement: 'Edge wells read low after 48 h',
+      kind: 'lesson',
+      about: [instrument.id],
+    };
+    for (const [i, id] of ids.slice(0, 3).entries())
+      await observe(agent, id, `2026-10-0${i + 1}`, { draft, quietLimit: 10 });
+    const { candidates } = await run<{ candidates: { memory: string }[] }>(
+      person,
+      'memory.candidates',
+      {},
+    );
+    const draftMemory = await run<RecordEnvelope>(person, 'records.get', {
+      id: candidates[0]?.memory,
+    });
+    await run(person, 'records.confirm', {
+      id: draftMemory.id,
+      expectedVersion: draftMemory.version,
+    });
+    const quiet = async (n: number) => {
+      for (const id of ids.slice(3, 3 + n))
+        await observe(agent, id, '2026-10-20', { draft, finding: 'quiet' });
+    };
+    await quiet(9);
+    let found = await run<For>(agent, 'memory.for', { records: [instrument.id] });
+    expect(found.memories[0]).toMatchObject({
+      due: false,
+      evidence: { for: 3, against: 0, quiet: 9, weight: 3, lastSeen: '2026-10-03' },
+    });
+    await quiet(10);
+    found = await run<For>(agent, 'memory.for', { records: [instrument.id] });
+    expect(found.memories[0]).toMatchObject({ due: true, evidence: { quiet: 10, due: 'quiet' } });
+    expect(found.lines[0]).toContain(
+      'seen in 3 analyses, last 2026-10-03; not seen in the last 10 matching analyses since 2026-10-03; due for a check',
+    );
+    // Quiet records never count towards the bar.
+    const listed = await run<{ candidates: { evidence: { for: number } }[] }>(
+      person,
+      'memory.candidates',
+      {},
+    );
+    expect(listed.candidates[0]?.evidence.for).toBe(3);
+  });
+
+  it('reports evidence against a memory a person stated, and refuses a report with nothing to report on', async () => {
+    const instrument = await star();
+    const memory = await run<RecordEnvelope>(person, 'memory.remember', {
+      statement: 'The STAR drips below 5 uL',
+      kind: 'quirk',
+      about: [instrument.id],
+      source: stated,
+    });
+    const runs = (await Promise.all([1, 2].map(() => star()))).map((p) => p.id);
+    const report = (evidence: string, finding: string) =>
+      run<{ candidate: { status: string; key: string; evidence: { against: number } } }>(
+        agent,
+        'memory.observe',
+        {
+          detector: 'agent',
+          memory: memory.id,
+          finding,
+          source: 'analysis',
+          evidence,
+          note: 'no drips seen at 2 uL',
+        },
+      );
+    const first = await report(runs[0] as string, 'against');
+    expect(first.candidate).toMatchObject({
+      status: 'confirmed',
+      key: `memory:${memory.id}`,
+      evidence: { against: 1 },
+    });
+    await report(runs[1] as string, 'against');
+    const found = await run<For>(agent, 'memory.for', { records: [instrument.id] });
+    expect(found.memories[0]).toMatchObject({
+      due: true,
+      evidence: { for: 0, against: 2, weight: -2, due: 'against' },
+    });
+    expect(found.lines[0]).toContain('not seen yet, 2 against');
+
+    expect(
+      await refused(
+        run(agent, 'memory.observe', {
+          detector: 'agent',
+          source: 'analysis',
+          evidence: instrument.id,
+        }),
+      ),
+    ).toMatchObject({ code: 'invalid_input' });
+    expect(
+      await refused(
+        run(agent, 'memory.observe', {
+          detector: 'agent',
+          memory: memory.id.replace('mem_', 'ink_'),
+          source: 'analysis',
+          evidence: instrument.id,
+        }),
+      ),
+    ).toMatchObject({ code: 'invalid_input' });
+  });
+});
+
 describe('the repeated-override detector (005c-1b)', () => {
   it('proposes a convention once people change the same filled-in value the same way in 3 records', async () => {
     const drafted = await Promise.all(

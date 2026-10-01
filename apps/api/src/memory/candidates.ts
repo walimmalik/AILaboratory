@@ -1,17 +1,28 @@
-import { checkAgainFor, DEFAULT_BAR, evidenceLine, newId, passesBar } from '@ailab/domain';
+import {
+  checkAgainFor,
+  DEFAULT_BAR,
+  evidenceLine,
+  memoryEvidence,
+  newId,
+  passesBar,
+  showing,
+} from '@ailab/domain';
 import {
   type Actor,
   type MemoryAttributes,
   type MemoryCandidate,
+  type MemoryDraft,
+  type MemoryObservationEntry,
   memoryCandidates as memoryCandidatesContract,
   memoryObserve,
   type RecordEnvelope,
 } from '@ailab/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import { memoryCandidates } from '../db/schema.ts';
+import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { personOf } from './match.ts';
+import { NOUN, personOf } from './match.ts';
 import { labelOf } from './operations.ts';
 
 /**
@@ -33,7 +44,33 @@ const toCandidate = (row: Row): MemoryCandidate => ({
   status: row.status,
   ...(row.memory ? { memory: row.memory } : {}),
   ...(row.proposedWith !== null ? { proposedWith: row.proposedWith } : {}),
+  ...(row.quietLimit !== null ? { quietLimit: row.quietLimit } : {}),
+  evidence: memoryEvidence(row.observations, NOUN[row.source], row.quietLimit ?? undefined),
 });
+
+/** Kept per candidate: every record for or against, and the latest quiet ones. */
+const KEEP_QUIET = 200;
+
+function trim(observations: MemoryObservationEntry[]): MemoryObservationEntry[] {
+  const quiet = observations.filter((o) => o.finding === 'quiet');
+  if (quiet.length <= KEEP_QUIET) return observations;
+  const drop = new Set(
+    [...quiet].sort((a, b) => a.day.localeCompare(b.day)).slice(0, quiet.length - KEEP_QUIET),
+  );
+  return observations.filter((o) => !drop.has(o));
+}
+
+/** A memory's fields as a draft, for a candidate that reports on an existing memory. */
+function draftOf(a: MemoryAttributes): MemoryDraft {
+  return {
+    statement: a.statement,
+    kind: a.kind,
+    ...(a.about ? { about: a.about } : {}),
+    ...(a.when ? { when: a.when } : {}),
+    ...(a.conditions ? { conditions: a.conditions } : {}),
+    ...(a.strength === 'rule' ? {} : { strength: a.strength }),
+  };
+}
 
 /** What a proposed candidate's memory became: still waiting, confirmed, or discarded. */
 async function outcome(
@@ -50,27 +87,29 @@ async function outcome(
   return history.some((v) => v.snapshot.status === 'active') ? 'confirmed' : 'rejected';
 }
 
-const NOUN: Record<MemoryCandidate['source'], { one: string; many: string }> = {
-  experiment: { one: 'experiment', many: 'experiments' },
-  run: { one: 'run', many: 'runs' },
-  analysis: { one: 'analysis', many: 'analyses' },
-  edits: { one: 'record', many: 'records' },
-};
-
 export const candidateOperations = [
   implement(memoryObserve, {
     agentPolicy: 'direct',
     run: async (ctx, input, deps) => {
       const records = new RecordService(deps.db, deps.kinds);
       const now = new Date();
-      const entry = {
+      const finding = input.finding ?? 'for';
+      const entry: MemoryObservationEntry = {
         evidence: input.evidence,
         day: input.day ?? now.toISOString().slice(0, 10),
         at: now.toISOString(),
+        ...(finding === 'for' ? {} : { finding }),
         ...(input.note ? { note: input.note } : {}),
       };
       // The evidence must be a record in this lab.
       await records.get(ctx, input.evidence);
+      let reported: RecordEnvelope | undefined;
+      if (input.memory) {
+        reported = await records.get(ctx, input.memory);
+        if (reported.kind !== 'memory')
+          throw new OperationError('invalid_input', `${reported.name} is not a lab memory`);
+      }
+      const key = input.key ?? `memory:${input.memory}`;
       const [found] = await deps.db
         .select()
         .from(memoryCandidates)
@@ -78,32 +117,40 @@ export const candidateOperations = [
           and(
             eq(memoryCandidates.labId, ctx.labId),
             eq(memoryCandidates.detector, input.detector),
-            eq(memoryCandidates.key, input.key),
+            eq(memoryCandidates.key, key),
           ),
         );
-      const observations = [
+      if (found && input.memory && found.memory !== input.memory)
+        throw new OperationError(
+          'invalid_input',
+          `The key ${key} already collects for another pattern; leave the key out to report on the memory`,
+        );
+      const observations = trim([
         ...(found?.observations ?? []).filter((o) => o.evidence !== input.evidence),
         entry,
-      ];
+      ]);
       let status = found?.status ?? 'collecting';
-      if (found?.memory && status === 'proposed')
-        status = await outcome(records, ctx, found.memory);
+      let memory = found?.memory ?? input.memory ?? null;
+      if (memory && (status === 'proposed' || !found)) status = await outcome(records, ctx, memory);
       const bar = input.bar ?? found?.bar ?? DEFAULT_BAR;
-      const draft = input.draft;
+      const draft =
+        input.draft ?? found?.draft ?? draftOf(reported?.attributes as MemoryAttributes);
+      const quietLimit = input.quietLimit ?? found?.quietLimit ?? null;
       let proposed: RecordEnvelope | undefined;
-      let memory = found?.memory ?? null;
       let proposedWith = found?.proposedWith ?? null;
+      const shown = showing(observations);
       if (
+        !input.memory &&
         (status === 'collecting' || status === 'rejected') &&
-        passesBar(observations, bar, status === 'rejected' ? (proposedWith ?? 0) : undefined)
+        passesBar(shown, bar, status === 'rejected' ? (proposedWith ?? 0) : undefined)
       ) {
         const detector: Actor = {
           type: 'agent',
           agentName: `Lab memory detector (${input.detector})`,
           onBehalfOf: personOf(ctx),
         };
-        const evidence = [...new Set(observations.map((o) => o.evidence))];
-        const line = evidenceLine(observations, NOUN[input.source]);
+        const evidence = [...new Set(shown.map((o) => o.evidence))];
+        const line = evidenceLine(shown, NOUN[input.source]);
         const today = now.toISOString().slice(0, 10);
         const checkAgain = checkAgainFor(draft.kind, today);
         const attributes: MemoryAttributes = {
@@ -134,6 +181,7 @@ export const candidateOperations = [
         status,
         memory,
         proposedWith,
+        quietLimit,
         updatedAt: now,
       };
       const [row] = found
@@ -149,7 +197,7 @@ export const candidateOperations = [
               orgId: ctx.orgId,
               labId: ctx.labId,
               detector: input.detector,
-              key: input.key,
+              key,
               ...values,
             })
             .returning();

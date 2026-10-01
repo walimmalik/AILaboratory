@@ -2,7 +2,9 @@ import type {
   MemoryAttributes,
   MemoryConditions,
   MemoryEffect,
+  MemoryEvidence,
   MemoryFacts,
+  MemoryFinding,
   Quantity,
 } from '@ailab/schema';
 import { compare } from './units.ts';
@@ -52,6 +54,8 @@ export interface ActiveMemory {
   attributes: MemoryAttributes;
   /** When it last changed (ISO), for the last tie-break: newer first. */
   updatedAt: string;
+  /** What detectors and agents reported about it (005c-2); its weight orders equal matches. */
+  evidence?: MemoryEvidence | undefined;
 }
 
 export interface MemoryRequest {
@@ -147,7 +151,8 @@ export function matchMemory(memory: ActiveMemory, request: MemoryRequest): Memor
 
 /**
  * The total specificity order (change 2): strength (rule, default, note), then a personal memory
- * of the person, then more conditions that held, then more matching links, then newer.
+ * of the person, then more conditions that held, then more matching links, then weight (M9), then
+ * newer. Weight only orders: clashes are judged without it.
  */
 export function compareMatches(a: MemoryMatch, b: MemoryMatch): number {
   return (
@@ -155,6 +160,7 @@ export function compareMatches(a: MemoryMatch, b: MemoryMatch): number {
     Number(b.personal) - Number(a.personal) ||
     b.conditions - a.conditions ||
     b.links - a.links ||
+    (b.memory.evidence?.weight ?? 0) - (a.memory.evidence?.weight ?? 0) ||
     b.memory.updatedAt.localeCompare(a.memory.updatedAt) ||
     a.memory.name.localeCompare(b.memory.name)
   );
@@ -308,6 +314,62 @@ export function appliedEffects(matches: readonly MemoryMatch[]): AppliedEffects 
 
 /** The default bar: seen in at least 3 records on at least 2 different days. */
 export const DEFAULT_BAR = { records: 3, days: 2 } as const;
+
+type Observation = { evidence: string; day: string; finding?: MemoryFinding | undefined };
+
+/** The observations that show the pattern (finding for, the default). */
+export const showing = <T extends Observation>(observations: readonly T[]) =>
+  observations.filter((o) => (o.finding ?? 'for') === 'for');
+
+/** Quiet opportunities in a row before a memory is due for a check, unless its detector says (M17). */
+export const DEFAULT_QUIET_LIMIT = 10;
+
+/**
+ * The evidence behind a memory (M9, M17): different records for and against, quiet opportunities
+ * since it was last seen (each record once), and the weight, records for minus records against.
+ * Due for a check when more records are against than for, or after `quietLimit` quiet ones.
+ */
+export function memoryEvidence(
+  observations: readonly Observation[],
+  noun: { one: string; many: string },
+  quietLimit: number = DEFAULT_QUIET_LIMIT,
+): MemoryEvidence {
+  const records = (finding: MemoryFinding) =>
+    new Set(observations.filter((o) => (o.finding ?? 'for') === finding).map((o) => o.evidence));
+  const seen = showing(observations);
+  const lastSeen = seen
+    .map((o) => o.day)
+    .sort()
+    .at(-1);
+  const forCount = records('for').size;
+  const against = records('against').size;
+  const quietSince = observations.filter(
+    (o) => o.finding === 'quiet' && (lastSeen === undefined || o.day > lastSeen),
+  );
+  const quiet = new Set(quietSince.map((o) => o.evidence)).size;
+  const due = against > forCount ? 'against' : quiet >= quietLimit ? 'quiet' : undefined;
+  const parts = [
+    forCount > 0
+      ? `seen in ${forCount} ${forCount === 1 ? noun.one : noun.many}, last ${lastSeen}`
+      : 'not seen yet',
+    ...(against > 0 ? [`${against} against`] : []),
+  ];
+  const since = quietSince.map((o) => o.day).sort()[0];
+  const line =
+    parts.join(', ') +
+    (quiet > 0
+      ? `; not seen in the last ${quiet} matching ${quiet === 1 ? noun.one : noun.many}${lastSeen ? ` since ${lastSeen}` : ` since ${since}`}`
+      : '');
+  return {
+    for: forCount,
+    against,
+    quiet,
+    ...(lastSeen ? { lastSeen } : {}),
+    weight: forCount - against,
+    ...(due ? { due } : {}),
+    line,
+  };
+}
 
 /** How many different records and days the observations cover. */
 export function coverage(observations: readonly { evidence: string; day: string }[]) {

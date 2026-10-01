@@ -218,14 +218,47 @@ export const MemoryBar = z
   .describe('Left out: 3 records on 2 days');
 export type MemoryBar = z.infer<typeof MemoryBar>;
 
-/** One observation a detector or agent reports (M13): one record that shows the pattern. */
+/**
+ * What one record showed (005c-2, M9, M17): the pattern (for), the opposite (against), or nothing
+ * where it could have shown (quiet: the same instrument, conditions and action, and no sign of it).
+ * Only detectors that can see absence report quiet records.
+ */
+export const MemoryFinding = z
+  .enum(['for', 'against', 'quiet'])
+  .describe(
+    'for: the record shows the pattern; against: it shows the opposite; quiet: it could have shown the pattern and did not (only from detectors that can see absence)',
+  );
+export type MemoryFinding = z.infer<typeof MemoryFinding>;
+
+/** One observation a detector or agent reports (M13): one record and what it showed. */
 export const MemoryObservationEntry = z.object({
   evidence: RecordId,
   day: z.iso.date(),
   at: z.iso.datetime(),
+  finding: MemoryFinding.optional().describe('Left out: for'),
   note: z.string().optional(),
 });
 export type MemoryObservationEntry = z.infer<typeof MemoryObservationEntry>;
+
+/**
+ * The evidence behind a memory, counted by code (005c-2, M9, M17): different records for and
+ * against, quiet opportunities since it was last seen, and the weight that orders memories of equal
+ * specificity (records for minus records against). Due for a check when the evidence against
+ * outweighs the evidence for, or after its detector's limit of quiet opportunities in a row.
+ */
+export const MemoryEvidence = z.object({
+  for: z.number().int().describe('Different records that showed it'),
+  against: z.number().int().describe('Different records that showed the opposite'),
+  quiet: z.number().int().describe('Opportunities since it was last seen where it did not show'),
+  lastSeen: z.iso.date().optional(),
+  weight: z.number().int().describe('Records for minus records against'),
+  due: z
+    .enum(['against', 'quiet'])
+    .optional()
+    .describe('Why it is due for a check: more evidence against than for, or too many quiet runs'),
+  line: z.string().describe('e.g. "seen in 7 runs, last 2026-10-12, 1 against"'),
+});
+export type MemoryEvidence = z.infer<typeof MemoryEvidence>;
 
 /**
  * A memory candidate (plan 005c-1, M14): observations a detector collects under one key until they
@@ -247,5 +280,11 @@ export const MemoryCandidate = z.object({
     ),
   memory: MemoryId.optional().describe('The memory it proposed'),
   proposedWith: z.number().int().optional().describe('How many records it was proposed with'),
+  quietLimit: z
+    .number()
+    .int()
+    .optional()
+    .describe('Quiet opportunities in a row before its memory is due for a check'),
+  evidence: MemoryEvidence,
 });
 export type MemoryCandidate = z.infer<typeof MemoryCandidate>;
