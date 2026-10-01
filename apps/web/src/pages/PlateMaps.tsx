@@ -45,10 +45,10 @@ export function LayoutsPage() {
     <>
       <Head
         page={page('layout')}
-        lede="The lab's plate patterns: where samples, controls and standards go, replicates and placement. A plate map applies one to real samples."
+        lede="The lab's plate patterns: where samples, controls and standards go, replicates and placement. A plate map applies one to real samples; it shows in its experiment and on its layout."
         actions={
           <Link to="/plate-maps" className="btn">
-            Plate maps made from them
+            Plate maps outside experiments
           </Link>
         }
       />
@@ -73,7 +73,7 @@ export function PlateMapsPage() {
     <>
       <Head
         page={page('plate_map')}
-        lede="Real samples and compounds placed on plates by a layout, ready for the transfer plan. Each also shows in its experiment and on its layout."
+        lede="Plate maps that belong to no experiment, such as a stock plate. A plate map made for an experiment shows on the experiment's Plates tab and on its layout."
         actions={
           <Link to="/layouts" className="btn">
             Back to plate layouts
@@ -81,10 +81,12 @@ export function PlateMapsPage() {
         }
       />
       <RecordList
-        title="Plate maps"
+        title="Plate maps outside experiments"
         kind="plate_map"
+        narrow={(r) => !mapOf(r).experiment}
         placeholder="Find by title or name, e.g. IL-6 or PMP-0001"
         empty="No plate maps yet. Ask the assistant to place an experiment's samples with one of the lab's layouts."
+        noMatch="No plate maps outside experiments. One made for an experiment shows on the experiment's Plates tab."
         columns={[
           {
             header: 'Layout',

@@ -4,6 +4,7 @@ import type {
   InventoryEvent,
   OverviewFact,
   OverviewPart,
+  PlateMapAttributes,
   Readiness,
   RecordEnvelope,
   RecordVersion,
@@ -37,6 +38,7 @@ import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
+import { kindTabs } from './KindTabs.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
@@ -62,7 +64,7 @@ const operationWords: Record<string, string> = {
 /**
  * One record (plan 004f N4): its name with the code as a tag, an identity line and its key facts,
  * then tabs in a fixed order: Overview (what needs doing, the record's own picture and blocks),
- * History, Connections and All fields.
+ * the kind's own tabs (`KindTabs.tsx`), History, Connections and All fields.
  */
 export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
@@ -121,8 +123,13 @@ export function RecordPage() {
     const view = field ? fieldViews[`${r.kind}/${field}`] : undefined;
     return view ? view(value, r) : renderValue(value, field);
   };
+  const ownTabs = kindTabs[r.kind] ?? [];
   const tabs: { id: string; label: string; count?: string; warn?: boolean }[] = [
     { id: 'overview', label: 'Overview' },
+    ...ownTabs.map((t) => {
+      const n = t.count?.(r, to);
+      return { id: t.id, label: t.label, ...(n === undefined ? {} : { count: String(n) }) };
+    }),
     { id: 'history', label: 'History', count: String(versions.length + ledger.length) },
     { id: 'connections', label: 'Connections', count: String(from.length + to.length) },
     {
@@ -143,17 +150,21 @@ export function RecordPage() {
     <div className="record-page">
       <div className="page-head record-head">
         <div>
-          <div className="crumbs">
-            lab / {kindPage(r.kind) && <>{kindPage(r.kind)?.area.toLowerCase()} / </>}
-            {kindPage(r.kind) ? (
-              <Link to={kindPage(r.kind)?.path ?? '/records'}>
-                {kindPage(r.kind)?.title.toLowerCase()}
-              </Link>
-            ) : (
-              <Link to="/records">records</Link>
-            )}{' '}
-            / <b>{r.name}</b>
-          </div>
+          {r.kind === 'plate_map' ? (
+            <PlateMapCrumbs record={r} />
+          ) : (
+            <div className="crumbs">
+              lab / {kindPage(r.kind) && <>{kindPage(r.kind)?.area.toLowerCase()} / </>}
+              {kindPage(r.kind) ? (
+                <Link to={kindPage(r.kind)?.path ?? '/records'}>
+                  {kindPage(r.kind)?.title.toLowerCase()}
+                </Link>
+              ) : (
+                <Link to="/records">records</Link>
+              )}{' '}
+              / <b>{r.name}</b>
+            </div>
+          )}
           <h1>
             {r.label} <span className="code">{r.name}</span>
           </h1>
@@ -218,6 +229,8 @@ export function RecordPage() {
         </>
       )}
 
+      {ownTabs.map((t) => t.id === current && <Fragment key={t.id}>{t.render(r)}</Fragment>)}
+
       {current === 'history' && <History record={r} versions={versions} ledger={ledger} />}
 
       {current === 'connections' && <Connections from={from} to={to} />}
@@ -236,6 +249,37 @@ export function RecordPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * A plate map is its layout filled in (N5), so its crumb goes through the layout:
+ * "lab / library / plate layouts / IL-6 ELISA, 96 wells → for EXP-0004".
+ */
+function PlateMapCrumbs({ record }: { record: RecordEnvelope }) {
+  const a = record.attributes as PlateMapAttributes;
+  const layout = useQuery(recordQuery(a.layout.id)).data;
+  const experiment = useQuery({ ...recordQuery(a.experiment ?? ''), enabled: !!a.experiment }).data;
+  return (
+    <div className="crumbs">
+      lab / library / <Link to="/layouts">plate layouts</Link> /{' '}
+      <Link to="/records/$id" params={{ id: a.layout.id }}>
+        {layout?.label ?? 'layout'}
+      </Link>{' '}
+      →{' '}
+      <b>
+        {a.experiment ? (
+          <>
+            for{' '}
+            <Link to="/records/$id" params={{ id: a.experiment }}>
+              {experiment?.name ?? 'its experiment'}
+            </Link>
+          </>
+        ) : (
+          (a.purpose ?? record.name)
+        )}
+      </b>
     </div>
   );
 }

@@ -1048,6 +1048,16 @@ test('a layout previews its plate, and a plate map shows real samples well by we
   ).toBeVisible();
   await expect(plates.getByText(`${map.name}.csv`)).toBeVisible();
 
+  // A plate map reads as its layout filled in, and the layout lists the maps made from it (N5).
+  const crumbs = page.locator('.crumbs');
+  await expect(crumbs).toContainText(`plate layouts / ELISA 96 ${stamp} → ${map.name}`);
+  await crumbs.getByRole('link', { name: `ELISA 96 ${stamp}` }).click();
+  await page.getByRole('link', { name: /^Plates made from it/ }).click();
+  const made = page.getByRole('region', { name: 'Plates made from it' });
+  await expect(made.getByRole('row', { name: new RegExp(map.name) })).toContainText('3');
+  await made.getByRole('link', { name: `IL-6, three donors ${stamp}` }).click();
+  await expect(plates).toContainText('3 placed on 1 plate');
+
   // Two spare blanks by hand, then the pattern saved as a layout of its own.
   await plates.getByRole('button', { name: 'Change wells' }).click();
   await plates.getByRole('button', { name: /^H11: / }).click();
