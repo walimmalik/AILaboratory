@@ -6,9 +6,12 @@ import {
   type MemoryMatch,
   matchConflicts,
   memoriesFor,
+  memoryEvidence,
   memoryLine,
 } from '@ailab/domain';
-import type { MemoryAttributes, MemoryFacts } from '@ailab/schema';
+import type { MemoryAttributes, MemoryEvidence, MemoryFacts } from '@ailab/schema';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import { memoryCandidates } from '../db/schema.ts';
 import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 
@@ -32,12 +35,54 @@ export async function activeMemories(
     status: 'active',
     limit: 5000,
   });
+  const evidence = await evidenceByMemory(deps, ctx);
   return list.map((r) => ({
     id: r.id,
     name: r.name,
     attributes: r.attributes as MemoryAttributes,
     updatedAt: r.updatedAt,
+    evidence: evidence.get(r.id),
   }));
+}
+
+/** What a source's evidence records are called in evidence lines. */
+export const NOUN = {
+  experiment: { one: 'experiment', many: 'experiments' },
+  run: { one: 'run', many: 'runs' },
+  analysis: { one: 'analysis', many: 'analyses' },
+  edits: { one: 'record', many: 'records' },
+} as const;
+
+/**
+ * The evidence detectors and agents reported on each memory (005c-2): every candidate that names
+ * it, together. A memory reported on by several detectors uses the lowest quiet limit among them.
+ */
+export async function evidenceByMemory(
+  deps: Pick<OperationDeps, 'db'>,
+  ctx: RecordContext,
+): Promise<Map<string, MemoryEvidence>> {
+  const rows = await deps.db
+    .select()
+    .from(memoryCandidates)
+    .where(and(eq(memoryCandidates.labId, ctx.labId), isNotNull(memoryCandidates.memory)));
+  const grouped = new Map<string, (typeof rows)[number][]>();
+  for (const row of rows) {
+    const id = row.memory as string;
+    grouped.set(id, [...(grouped.get(id) ?? []), row]);
+  }
+  const out = new Map<string, MemoryEvidence>();
+  for (const [id, group] of grouped) {
+    const limits = group.flatMap((g) => (g.quietLimit === null ? [] : [g.quietLimit]));
+    out.set(
+      id,
+      memoryEvidence(
+        group.flatMap((g) => g.observations),
+        NOUN[(group[0] as (typeof rows)[number]).source],
+        limits.length ? Math.min(...limits) : undefined,
+      ),
+    );
+  }
+  return out;
 }
 
 export interface MemoryLookup {
@@ -89,9 +134,11 @@ export function bundle(matches: readonly MemoryMatch[], limit: number) {
   const more = matches.length - shown.length;
   const lines = [
     ...shown.map((m) => {
+      const evidence = m.memory.evidence;
       const extra = [
         m.applies ? '' : `may apply; not known: ${m.unknown.join(', ')}`,
-        isDue(m.memory.attributes.checkAgain, now) ? 'due for a check' : '',
+        evidence?.line ?? '',
+        dueFor(m, now) ? 'due for a check' : '',
       ].filter(Boolean);
       return `${memoryLine(m.memory)}${extra.length ? ` [${extra.join('; ')}]` : ''}`;
     }),
@@ -110,7 +157,8 @@ export function bundle(matches: readonly MemoryMatch[], limit: number) {
         ...(a.effect ? { effect: a.effect } : {}),
         applies: m.applies,
         unknown: m.unknown,
-        due: isDue(a.checkAgain, now),
+        due: dueFor(m, now),
+        ...(m.memory.evidence ? { evidence: m.memory.evidence } : {}),
       };
     }),
     more,
@@ -118,3 +166,7 @@ export function bundle(matches: readonly MemoryMatch[], limit: number) {
     lines,
   };
 }
+
+/** Due for a check (M6, M17): past its check-again date, or its evidence says so. */
+const dueFor = (m: MemoryMatch, today: string) =>
+  isDue(m.memory.attributes.checkAgain, today) || m.memory.evidence?.due !== undefined;

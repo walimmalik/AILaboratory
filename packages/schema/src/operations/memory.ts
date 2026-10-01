@@ -9,8 +9,10 @@ import {
   MemoryConditions,
   MemoryDraft,
   MemoryEffect,
+  MemoryEvidence,
   MemoryFacts,
   MemoryFields,
+  MemoryFinding,
   MemoryId,
   MemoryKind,
   MemorySource,
@@ -137,14 +139,21 @@ const Applied = z.object({
   unknown: z
     .array(MemoryConditions.keyof())
     .describe('Conditions the facts left out; give them to know whether it applies'),
-  due: z.boolean().describe('Past its check-again date: still used, due for a check'),
+  due: z
+    .boolean()
+    .describe(
+      'Due for a check: past its check-again date, more evidence against than for, or quiet for too many matching runs; still used',
+    ),
+  evidence: MemoryEvidence.optional().describe(
+    'What detectors and agents reported about it; left out when nothing was reported',
+  ),
 });
 
 export const memoryFor = defineContract({
   id: 'memory.for',
   verbs: { done: 'looked up the lab memory for', intent: 'look up the lab memory for' },
   summary:
-    "The lab memories that apply to a piece of work, most specific first: rules, then defaults, then notes; a person's own before the lab's; more matching conditions and records first. Give the records the work is about or uses and what you know about it (instrument, volume, liquid type, sample count…). A memory whose conditions you didn't give is listed but not applied. Conflicts list memories whose effects clash; code applies neither. `lines` is the same list as one line each, capped, as the in-app assistant gets it for a page",
+    "The lab memories that apply to a piece of work, most specific first: rules, then defaults, then notes; a person's own before the lab's; more matching conditions and records first, then more evidence for than against. Give the records the work is about or uses and what you know about it (instrument, volume, liquid type, sample count…). A memory whose conditions you didn't give is listed but not applied. Conflicts list memories whose effects clash; code applies neither. `lines` is the same list as one line each, capped, as the in-app assistant gets it for a page",
   effect: 'read',
   input: z.strictObject({
     records: z
@@ -202,27 +211,43 @@ export const memoryObserve = defineContract({
     intent: 'report an observation for lab memory',
   },
   summary:
-    "Report one record that shows a pattern worth remembering (a run, an analysis, a plate): a detector's or an agent's observation under a key that names the pattern. Observations collect on a hidden candidate until they pass its bar (default: 3 different records on 2 different days); then code proposes one draft memory with the evidence for a person to confirm. A rejected candidate comes back only when the records seen since its proposal are twice those it was proposed with. Reporting the same record again replaces its observation",
+    "Report one record and what it showed about a pattern worth remembering (a run, an analysis, a plate): a detector's or an agent's observation under a key that names the pattern. Records that show it (finding for) collect on a hidden candidate until they pass its bar (default: 3 different records on 2 different days); then code proposes one draft memory with the evidence for a person to confirm. A rejected candidate comes back only when the records seen since its proposal are twice those it was proposed with. Records that show the opposite (against) and records where it could have shown and didn't (quiet) count as evidence on the memory: a memory with more against than for, or quiet for its limit of matching runs in a row (default 10), is due for a check. Give `memory` to report on a memory that already exists, such as one a person stated. Reporting the same record again replaces its observation",
   effect: 'write',
-  input: z.strictObject({
-    detector: z
-      .string()
-      .regex(/^[a-z][a-z0-9_.]*$/, 'a detector name like runs.recurring_deviation')
-      .describe('Who noticed it: a detector, or "agent" for an agent reading results'),
-    key: z
-      .string()
-      .min(1)
-      .max(500)
-      .describe(
-        'What the pattern is, the same for every observation of it, e.g. sop|step|field|higher',
+  input: z
+    .strictObject({
+      detector: z
+        .string()
+        .regex(/^[a-z][a-z0-9_.]*$/, 'a detector name like runs.recurring_deviation')
+        .describe('Who noticed it: a detector, or "agent" for an agent reading results'),
+      key: z
+        .string()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe(
+          'What the pattern is, the same for every observation of it, e.g. sop|step|field|higher; left out with `memory`, the memory itself',
+        ),
+      draft: MemoryDraft.optional().describe(
+        'The memory to propose once the bar is passed; not needed with `memory`',
       ),
-    draft: MemoryDraft.describe('The memory to propose once the bar is passed'),
-    source: MemorySource.shape.from.exclude(['stated', 'conversation']),
-    evidence: RecordId.describe('The record that shows it'),
-    day: z.iso.date().optional().describe('When it happened; left out, today'),
-    note: z.string().min(1).max(300).optional().describe('What this record showed'),
-    bar: MemoryBar.optional(),
-  }),
+      memory: MemoryId.optional().describe('An existing memory this record is evidence about'),
+      finding: MemoryFinding.optional().describe('Left out: for'),
+      source: MemorySource.shape.from.exclude(['stated', 'conversation']),
+      evidence: RecordId.describe('The record that shows it'),
+      day: z.iso.date().optional().describe('When it happened; left out, today'),
+      note: z.string().min(1).max(300).optional().describe('What this record showed'),
+      bar: MemoryBar.optional(),
+      quietLimit: z
+        .number()
+        .int()
+        .min(1)
+        .max(1000)
+        .optional()
+        .describe('Quiet opportunities in a row before the memory is due for a check; default 10'),
+    })
+    .refine((i) => i.memory !== undefined || (i.key !== undefined && i.draft !== undefined), {
+      message: 'give a key and a draft for a new pattern, or the memory it is about',
+    }),
   output: z.object({
     candidate: MemoryCandidate,
     proposed: RecordEnvelope.optional().describe(

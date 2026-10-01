@@ -567,8 +567,12 @@ export const memoryCandidates = pgTable(
     status: text('status').$type<'collecting' | 'proposed' | 'confirmed' | 'rejected'>().notNull(),
     memory: text('memory'),
     proposedWith: integer('proposed_with'),
+    quietLimit: integer('quiet_limit'),
     createdAt: createdAt(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
-  (t) => [uniqueIndex('memory_candidates_key_idx').on(t.labId, t.detector, t.key)],
+  (t) => [
+    uniqueIndex('memory_candidates_key_idx').on(t.labId, t.detector, t.key),
+    index('memory_candidates_memory_idx').on(t.labId, t.memory),
+  ],
 );

@@ -12,6 +12,7 @@ import {
   matchConflicts,
   memoriesFor,
   memoryConflicts,
+  memoryEvidence,
   passesBar,
 } from './memory.ts';
 
@@ -200,5 +201,41 @@ describe('memory candidates', () => {
     expect(evidenceLine(runs(0, 4, twoDays), { one: 'run', many: 'runs' })).toBe(
       'seen in 4 runs on 2 days since 2026-10-01',
     );
+  });
+
+  it('counts evidence for and against, quiet opportunities since last seen, and when it is due', () => {
+    const noun = { one: 'run', many: 'runs' };
+    const seen = runs(0, 3, twoDays);
+    const quiet = (from: number, to: number, day: string) =>
+      runs(from, to, () => day).map((o) => ({ ...o, finding: 'quiet' as const }));
+    // A quiet run before the last sighting doesn't count.
+    const early = { evidence: 'run_x', day: '2026-10-01', finding: 'quiet' as const };
+    expect(memoryEvidence([...seen, early, ...quiet(10, 19, '2026-10-05')], noun)).toEqual({
+      for: 3,
+      against: 0,
+      quiet: 9,
+      lastSeen: '2026-10-02',
+      weight: 3,
+      line: 'seen in 3 runs, last 2026-10-02; not seen in the last 9 matching runs since 2026-10-02',
+    });
+    expect(memoryEvidence([...seen, ...quiet(10, 20, '2026-10-05')], noun).due).toBe('quiet');
+    expect(memoryEvidence([...seen, ...quiet(10, 13, '2026-10-05')], noun, 3).due).toBe('quiet');
+    const against = runs(20, 24, twoDays).map((o) => ({ ...o, finding: 'against' as const }));
+    expect(memoryEvidence([...seen, ...against], noun)).toMatchObject({
+      against: 4,
+      weight: -1,
+      due: 'against',
+      line: 'seen in 3 runs, last 2026-10-02, 4 against',
+    });
+  });
+
+  it('orders memories of equal specificity by weight, without making them clash', () => {
+    const weak = mem({ about: [star], strength: 'note' }, '2026-10-05T00:00:00Z');
+    const strong = {
+      ...mem({ about: [star], strength: 'note' }),
+      evidence: memoryEvidence(runs(0, 5, twoDays), { one: 'run', many: 'runs' }),
+    };
+    const got = memoriesFor([weak, strong], { records: [star], facts: {} });
+    expect(got.map((m) => m.memory.id)).toEqual([strong.id, weak.id]);
   });
 });
