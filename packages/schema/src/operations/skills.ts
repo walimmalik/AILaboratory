@@ -26,3 +26,31 @@ export const skillsGet = defineContract({
   input: z.strictObject({ name: z.string().min(1) }),
   output: SkillSummary.extend({ text: z.string().describe('The skill, in Markdown') }),
 });
+
+export const operationsDescribe = defineContract({
+  id: 'operations.describe',
+  verbs: { done: 'looked up operations', intent: 'look up operations' },
+  summary:
+    'Describe the operations you can run, with their input and output JSON Schemas: by namespace (e.g. "sops"), by IDs, or only the lab calculators. Then call one with run_operation',
+  effect: 'read',
+  input: z.strictObject({
+    namespace: z
+      .string()
+      .optional()
+      .describe('Only operations whose ID starts with this, e.g. "sops"'),
+    ids: z.array(z.string()).optional().describe('Only these operation IDs'),
+    calculators: z.boolean().optional().describe('Only the lab calculators'),
+  }),
+  output: z.object({
+    operations: z.array(
+      z.object({
+        id: z.string(),
+        summary: z.string(),
+        effect: z.enum(['read', 'write']),
+        calculator: z.literal(true).optional(),
+        input: z.record(z.string(), z.unknown()),
+        output: z.record(z.string(), z.unknown()),
+      }),
+    ),
+  }),
+});

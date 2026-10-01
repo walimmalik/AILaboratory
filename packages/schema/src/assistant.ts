@@ -8,6 +8,14 @@ export const PageContext = z.object({
   /** The app path, e.g. "/records/wdg_…". */
   path: z.string().max(500),
   title: z.string().max(200).optional(),
+  /** The record the page shows, at the version the person is looking at (ADR 0055). */
+  record: z
+    .object({
+      id: z.string().max(40),
+      name: z.string().max(40),
+      version: z.number().int().positive(),
+    })
+    .optional(),
 });
 export type PageContext = z.infer<typeof PageContext>;
 

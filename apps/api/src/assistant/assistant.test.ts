@@ -374,14 +374,57 @@ describe('assistant.ask', () => {
 });
 
 describe('tools and history', () => {
-  it('offers every operation an agent may call, and nothing else', () => {
+  it('names a small core, the calculators and the page module, and runs the rest by ID', () => {
     const { registry } = setup();
     const names = toolsFor(registry).list.map((t) => t.name);
     expect(names).toContain('records_create');
     expect(names).toContain('records_kinds');
-    expect(names).toContain('proposals_list');
+    expect(names).toContain('skills_get');
+    expect(names).toContain('operations_describe');
+    expect(names).toContain('sops_evaluate');
+    expect(names).toContain('run_operation');
+    expect(names).not.toContain('proposals_list');
+    expect(names).not.toContain('sops_draft');
     expect(names).not.toContain('proposals_approve');
     expect(names.some((n) => n.startsWith('assistant_'))).toBe(false);
+    const onSops = toolsFor(registry, ['sops']).list.map((t) => t.name);
+    expect(onSops).toContain('sops_draft');
+    expect(names.length).toBeLessThan(onSops.length);
+  });
+
+  it('runs other operations through run_operation, recorded under their own ID', async () => {
+    const model = new FakeModel([
+      {
+        text: '',
+        toolCalls: [
+          {
+            id: 't1',
+            name: 'run_operation',
+            input: { operation: 'proposals.list', input: { status: 'pending' } },
+          },
+          {
+            id: 't2',
+            name: 'run_operation',
+            input: { operation: 'proposals.approve', input: { id: 'prp_x' } },
+          },
+        ],
+        stop: 'tool_use',
+      },
+      { text: 'Nothing pending.', toolCalls: [], stop: 'end' },
+    ]);
+    const { assistant, registry } = setup(model);
+    const conversation = await ask(registry, assistant, 'Anything proposed?', {
+      page: { path: '/sops' },
+    });
+    const steps = conversation.messages.filter((m) => m.role === 'tool');
+    expect(steps.map((m) => [m.operationId, m.outcome])).toEqual([
+      ['proposals.list', 'done'],
+      ['proposals.approve', 'failed'],
+    ]);
+    // The page's module is named; the calls replay as run_operation, since proposals isn't.
+    const second = model.requests[1];
+    expect(second?.tools.map((t) => t.name)).toContain('sops_draft');
+    expect(second?.tools.map((t) => t.name)).toContain('proposals_list');
   });
 
   it('replays a reply in its original form only to the same model, and answers cut-off calls', async () => {

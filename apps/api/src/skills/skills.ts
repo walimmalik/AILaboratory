@@ -1,4 +1,5 @@
-import { skillsGet, skillsList } from '@ailab/schema';
+import { operationsDescribe, skillsGet, skillsList } from '@ailab/schema';
+import { describeOperation } from '../operations/describe.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import bundled from './skills.generated.json' with { type: 'json' };
@@ -35,5 +36,15 @@ export const skillOperations = [
       }
       return skill;
     },
+  }),
+  implement(operationsDescribe, {
+    run: async (_ctx, input, deps) => ({
+      operations: deps.registry
+        .list()
+        .filter((c) => !input.namespace || c.id.startsWith(`${input.namespace}.`))
+        .filter((c) => !input.ids || input.ids.includes(c.id))
+        .filter((c) => !input.calculators || c.calculator)
+        .map(describeOperation),
+    }),
   }),
 ];

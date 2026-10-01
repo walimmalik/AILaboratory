@@ -211,26 +211,39 @@ export const recordsKinds = defineContract({
   id: 'records.kinds',
   verbs: { done: 'checked which record kinds exist', intent: 'check which record kinds exist' },
   summary:
-    "List the record kinds this lab can hold, with the JSON Schema of each kind's attributes (read this before records.create)",
+    "List the record kinds this lab can hold, with the JSON Schema of each kind's attributes (read this before records.create). Pass summary: true for names and sections only, then kinds: [...] for the schemas you need",
   effect: 'read',
-  input: z.object({}),
+  input: z.strictObject({
+    kinds: z
+      .array(z.string())
+      .optional()
+      .describe('Only these kinds, e.g. ["sop"]; unknown names are refused'),
+    summary: z
+      .boolean()
+      .optional()
+      .describe('Leave out attribute schemas and checks: kind names, prefixes and sections only'),
+  }),
   output: z.object({
     kinds: z.array(
       z.object({
         kind: z.string(),
         idPrefix: z.string(),
         namePrefix: z.string(),
-        attributes: z.record(z.string(), z.unknown()),
+        attributes: z.record(z.string(), z.unknown()).optional(),
         sections: z.array(KindSection),
-        checks: z.array(
-          z.object({
-            id: z.string(),
-            label: z.string(),
-            severity: CheckSeverity,
-            source: z.string(),
-            section: z.string().optional(),
-          }),
-        ),
+        /** Lists whose items are keyed (ADR 0049), by the field that keys them. */
+        items: z.record(z.string(), z.string()).optional(),
+        checks: z
+          .array(
+            z.object({
+              id: z.string(),
+              label: z.string(),
+              severity: CheckSeverity,
+              source: z.string(),
+              section: z.string().optional(),
+            }),
+          )
+          .optional(),
       }),
     ),
   }),

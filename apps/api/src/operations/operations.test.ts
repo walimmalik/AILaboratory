@@ -877,3 +877,21 @@ describe('what changed (ADR 0053)', () => {
     expect((await list({ since: before })).map((e) => e.recordIds)).toEqual([[b.id]]);
   });
 });
+
+describe('records.kinds (ADR 0055)', () => {
+  type Kinds = { kinds: { kind: string; attributes?: unknown; checks?: unknown }[] };
+  it('lists every kind in full, a summary without schemas, or only the kinds asked for', async () => {
+    const full = await run<Kinds>(agent, 'records.kinds', {});
+    expect(full.kinds.map((k) => k.kind).sort()).toEqual(['gadget', 'widget']);
+    expect(full.kinds[0]?.attributes).toBeDefined();
+    const summary = await run<Kinds>(agent, 'records.kinds', { summary: true });
+    expect(summary.kinds.every((k) => k.attributes === undefined && k.checks === undefined)).toBe(
+      true,
+    );
+    const one = await run<Kinds>(agent, 'records.kinds', { kinds: ['widget'] });
+    expect(one.kinds.map((k) => k.kind)).toEqual(['widget']);
+    expect(
+      (await refused(registry.execute(agent, 'records.kinds', { kinds: ['nope'] }))).code,
+    ).toBe('unknown_kind');
+  });
+});

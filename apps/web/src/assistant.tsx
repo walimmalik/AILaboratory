@@ -18,7 +18,7 @@ import {
   useState,
 } from 'react';
 import { api } from './api.ts';
-import { conversationQuery, conversationsQuery } from './queries.ts';
+import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts';
 
 interface AssistantUi {
   open: boolean;
@@ -113,6 +113,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     async (message: string, options: { fresh?: boolean; attachments?: AttachmentInput[] } = {}) => {
       const target = options.fresh ? undefined : conversationId;
       const heading = document.querySelector('.page h1')?.textContent?.trim();
+      // On a record's page, say which record and version the person is looking at.
+      const recordId = /^\/records\/([a-z]+_[0-9A-Z]+)/.exec(path)?.[1];
+      const shown = recordId ? queryClient.getQueryData(recordQuery(recordId).queryKey) : undefined;
       setOpen(true);
       setSending(true);
       setSendError(undefined);
@@ -121,7 +124,13 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           message,
           ...(target ? { conversationId: target } : {}),
           ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-          page: { path, ...(heading ? { title: heading.slice(0, 200) } : {}) },
+          page: {
+            path,
+            ...(heading ? { title: heading.slice(0, 200) } : {}),
+            ...(shown
+              ? { record: { id: shown.id, name: shown.name, version: shown.version } }
+              : {}),
+          },
         });
         setRunning(true);
         setConversationId(summary.id);
