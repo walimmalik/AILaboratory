@@ -16,10 +16,9 @@ import { Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { fieldWords, sopTerms } from '../lib/sop-text.ts';
 import { recordQuery } from '../queries.ts';
-import { Head } from './Instruments.tsx';
+import { Head, page as kindPage } from './AreaHead.tsx';
 import { RecordList } from './Records.tsx';
 import { describeSop, TermAnchor, TermCards } from './SopText.tsx';
 
@@ -60,11 +59,10 @@ const fromWords = {
 } as const;
 
 export function SopsPage() {
-  const page = libraryPages.find((p) => p.kind === 'sop') as KindPage;
   return (
     <>
       <Head
-        page={page}
+        page={kindPage('sop')}
         lede="The lab's procedures as structured SOPs: steps, materials, values and formulas, each traced to its source, confirmed by a person before experiments use them."
       />
       <RecordList

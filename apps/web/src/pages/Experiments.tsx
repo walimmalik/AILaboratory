@@ -27,9 +27,9 @@ import {
   stageWords,
 } from '../lib/experiments.ts';
 import { formatValue, formatWhen } from '../lib/format.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
-import { Head, useLabels } from './Instruments.tsx';
+import { Head, page } from './AreaHead.tsx';
+import { useLabels } from './Instruments.tsx';
 import { RecordList } from './Records.tsx';
 
 /**
@@ -37,7 +37,6 @@ import { RecordList } from './Records.tsx';
  * where each thing stands; the full design stays in the section blocks below.
  */
 
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 const campaignOf = (r: RecordEnvelope) => r.attributes as CampaignAttributes;
 const experimentOf = (r: RecordEnvelope) => r.attributes as ExperimentAttributes;
 const runOf = (r: RecordEnvelope) => r.attributes as RunAttributes;

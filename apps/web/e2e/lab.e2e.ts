@@ -5,6 +5,18 @@ const api = 'http://localhost:3001';
 const agentHeaders = () => ({ authorization: `Bearer ${process.env.E2E_AGENT_TOKEN}` });
 const attributes = { color: 'clear', volume: { value: '200', unit: 'uL' } };
 
+/** Opens a tab in one of the menu's areas (plan 004f N1). */
+async function openTab(page: Page, area: string, tab: string | RegExp) {
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: new RegExp(`^${area}`) })
+    .click();
+  await page
+    .getByRole('navigation', { name: `${area} tabs` })
+    .getByRole('link', { name: tab })
+    .click();
+}
+
 async function signIn(page: Page) {
   await page.goto('/');
   await expect(page).toHaveURL(/\/sign-in$/);
@@ -313,10 +325,7 @@ test('labware has its own page in the library, and the Review page groups drafts
   });
   const name = drafted.output.name;
 
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: /^Labware/ })
-    .click();
+  await openTab(page, 'Library', /^Labware/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Labware');
   await page.getByRole('button', { name: 'Tip racks' }).click();
   await expect(page.getByRole('row', { name: new RegExp(name) })).toHaveCount(0);
@@ -325,7 +334,7 @@ test('labware has its own page in the library, and the Review page groups drafts
   await expect(row).toContainText('plate · 96 wells');
   await expect(row).toContainText('2 mL');
   await row.click();
-  await expect(page.locator('.crumbs')).toContainText(`lab / labware / ${name}`);
+  await expect(page.locator('.crumbs')).toContainText(`lab / library / labware / ${name}`);
 
   await page
     .getByRole('link', { name: /^Review/ })
@@ -539,10 +548,7 @@ test('the reagent library shows lots in date and the next expiry, and a product 
     expiry: '2099-01-31',
   });
 
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: /^Reagents/ })
-    .click();
+  await openTab(page, 'Inventory', /^Reagents/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reagents');
   await page.getByRole('button', { name: 'Fridge' }).click();
   const row = page.getByRole('row', { name: new RegExp(product.name) });
@@ -557,10 +563,7 @@ test('the reagent library shows lots in date and the next expiry, and a product 
   await expect(lots).toContainText('T-001');
   await expect(lots).toContainText('unopened');
 
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: /^Liquid classes/ })
-    .click();
+  await openTab(page, 'Library', /^Liquid classes/);
   await expect(
     page.getByRole('region', { name: 'Classes by device and liquid type' }),
   ).toBeVisible();
@@ -619,10 +622,7 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
     reason: 'Plated the reagent',
   });
 
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: /^Containers/ })
-    .click();
+  await openTab(page, 'Inventory', /^Containers/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Containers');
   await page.getByRole('row', { name: new RegExp(plate.name) }).click();
   const wells = page.getByRole('region', { name: 'Wells' });
@@ -646,10 +646,7 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await expect(basedOn).toContainText('is a');
   await expect(basedOn).not.toContainText('Invalid Date');
 
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: /^Places/ })
-    .click();
+  await openTab(page, 'Inventory', /^Places/);
   await page.getByRole('button', { name: `Freezer ${stamp}` }).click();
   await expect(page.getByRole('row', { name: new RegExp(plate.name) })).toBeVisible();
 });
@@ -708,10 +705,7 @@ test('a file added on the documents page becomes a draft document with its file'
 }) => {
   await signIn(page);
   const stamp = Date.now();
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: 'Documents' })
-    .click();
+  await openTab(page, 'Library', 'Documents');
   await page.getByRole('button', { name: 'Add documents' }).click();
   const add = page.getByRole('region', { name: 'Add documents' });
   await add.getByLabel('Files').setInputFiles({
@@ -775,10 +769,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
     ],
   });
   await signIn(page);
-  await page
-    .getByRole('navigation', { name: 'Modules' })
-    .getByRole('link', { name: 'SOPs' })
-    .click();
+  await openTab(page, 'Library', 'SOPs');
   await page.getByRole('row', { name: new RegExp(`Plate coating ${stamp}`) }).click();
   await expect(page).toHaveURL(new RegExp(`/records/${drafted.output.id}`));
   const procedure = page.getByRole('region', { name: 'At the bench' });

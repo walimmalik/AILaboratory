@@ -3,9 +3,9 @@ import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-route
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
-import { libraryGroups } from '../lib/kinds.ts';
+import { areas, kindPage, libraryPages } from '../lib/kinds.ts';
 import { LiveProvider, useLive } from '../live.tsx';
-import { reviewQuery } from '../queries.ts';
+import { recordQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { type ThemeChoice, useTheme } from '../theme.ts';
 import { AssistantPanel } from './AssistantPanel.tsx';
@@ -45,6 +45,12 @@ function ShellLayout() {
   const compact = !phone && (!roomy || (assistant.open && !wide));
   const [menu, setMenu] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  // The area the page belongs to: a tab's own path, or a record's (or new record's) kind.
+  const recordId = path.match(/^\/records\/([^/]+)$/)?.[1];
+  const recordKind = useQuery({ ...recordQuery(recordId ?? ''), enabled: !!recordId }).data?.kind;
+  const newKind = path.match(/^\/new\/([^/]+)$/)?.[1];
+  const areaHere =
+    libraryPages.find((p) => p.path === path)?.area ?? kindPage(recordKind ?? newKind ?? '')?.area;
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the menu whenever the page changes
   useEffect(() => setMenu(false), [path]);
   useEffect(() => {
@@ -108,18 +114,12 @@ function ShellLayout() {
       </header>
 
       <nav className="nav" id="modules" aria-label="Modules">
+        {/* Eight entries (plan 004f N1): the lab's day, then four areas, each one page with tabs. */}
         <section>
-          <h2>Lab</h2>
           <ul>
             <li>
               <Link to="/" activeOptions={{ exact: true }}>
                 Today
-              </Link>
-            </li>
-            <li>
-              <Link to="/activity">
-                <span className={`lamp ${live.connected ? 'on' : 'off'}`} aria-hidden="true" />
-                Activity
               </Link>
             </li>
             <li>
@@ -133,32 +133,42 @@ function ShellLayout() {
               </Link>
             </li>
             <li>
+              <Link to="/activity">
+                <span className={`lamp ${live.connected ? 'on' : 'off'}`} aria-hidden="true" />
+                Activity
+              </Link>
+            </li>
+            <li>
               <Link to="/scan">Scan</Link>
             </li>
           </ul>
         </section>
-        {libraryGroups.map(({ group, pages }) => (
-          <section key={group}>
-            <h2>{group}</h2>
-            <ul>
-              {pages.map((p) => {
-                const drafts = draftsOf(p.kind);
-                return (
-                  <li key={p.kind}>
-                    <Link to={p.path}>
-                      {p.title}
-                      {drafts > 0 && (
-                        <span className="count num pending" title={`${drafts} drafts to review`}>
-                          {drafts}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
+        <section>
+          <ul>
+            {areas.map(({ area, tabs, kinds }) => {
+              const drafts = kinds.reduce((n, kind) => n + draftsOf(kind), 0);
+              const here = area === areaHere;
+              const first = tabs[0];
+              if (!first) return null;
+              return (
+                <li key={area}>
+                  <Link
+                    to={first.path}
+                    className={here ? 'on' : undefined}
+                    aria-current={here ? 'page' : undefined}
+                  >
+                    {area}
+                    {drafts > 0 && (
+                      <span className="count num pending" title={`${drafts} drafts to review`}>
+                        {drafts}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
         <section className="nav-foot">
           <ul>
             <li>
@@ -168,7 +178,9 @@ function ShellLayout() {
               <Link to="/wiki">Wiki</Link>
             </li>
             <li>
-              <Link to="/records">All records</Link>
+              <Link to="/records" activeOptions={{ exact: true }}>
+                All records
+              </Link>
             </li>
           </ul>
         </section>

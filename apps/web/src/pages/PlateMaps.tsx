@@ -16,7 +16,6 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { type CSSProperties, type FormEvent, Fragment, useState } from 'react';
 import { api } from '../api.ts';
 import { fileOf } from '../lib/files.ts';
-import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import {
   describeWell,
   plateGrid,
@@ -28,8 +27,9 @@ import {
   subjectCount,
 } from '../lib/platemaps.ts';
 import { recordQuery } from '../queries.ts';
+import { Head, page } from './AreaHead.tsx';
 import { FileCard } from './FileCard.tsx';
-import { Head, useLabels } from './Instruments.tsx';
+import { useLabels } from './Instruments.tsx';
 import { RecordList } from './Records.tsx';
 
 /**
@@ -37,7 +37,6 @@ import { RecordList } from './Records.tsx';
  * gradient, one plate at a time with a strip of all of them, and a well's details on demand.
  */
 
-const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
 const layoutOf = (r: RecordEnvelope) => r.attributes as LayoutAttributes;
 const mapOf = (r: RecordEnvelope) => r.attributes as PlateMapAttributes;
 
@@ -47,9 +46,14 @@ export function LayoutsPage() {
       <Head
         page={page('layout')}
         lede="The lab's plate patterns: where samples, controls and standards go, replicates and placement. A plate map applies one to real samples."
+        actions={
+          <Link to="/plate-maps" className="btn">
+            Plate maps made from them
+          </Link>
+        }
       />
       <RecordList
-        title="Layouts"
+        title="Plate layouts"
         kind="layout"
         placeholder="Find by title or name, e.g. ELISA or LYT-0001"
         empty="No layouts yet. Ask the assistant to draft one, e.g. “our ELISA 96: standards in columns 1 and 2, blanks H1:H2, samples in duplicate”."
@@ -69,7 +73,12 @@ export function PlateMapsPage() {
     <>
       <Head
         page={page('plate_map')}
-        lede="Real samples and compounds placed on plates by a layout, ready for the transfer plan."
+        lede="Real samples and compounds placed on plates by a layout, ready for the transfer plan. Each also shows in its experiment and on its layout."
+        actions={
+          <Link to="/layouts" className="btn">
+            Back to plate layouts
+          </Link>
+        }
       />
       <RecordList
         title="Plate maps"
