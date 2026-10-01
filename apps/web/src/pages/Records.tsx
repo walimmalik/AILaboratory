@@ -58,6 +58,9 @@ export function RecordList({
   toolbar,
   placeholder = 'Find by name or label, e.g. LWT-0001',
   empty = 'Nothing here yet.',
+  onSearch,
+  searchAction,
+  noMatch = 'Nothing matches.',
 }: {
   title: string;
   kind?: string;
@@ -66,6 +69,12 @@ export function RecordList({
   toolbar?: ReactNode;
   placeholder?: string;
   empty?: string;
+  /** Hears what is typed in the find box, for a page that searches more with the same words. */
+  onSearch?: (text: string) => void;
+  /** A button beside the find box that acts on the same words (search the documents' text). */
+  searchAction?: ReactNode;
+  /** What the list says when the find box matches nothing. */
+  noMatch?: string;
 }) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('current');
@@ -99,9 +108,13 @@ export function RecordList({
             type="search"
             placeholder={placeholder}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              onSearch?.(e.target.value);
+            }}
             aria-label={`Find ${title.toLowerCase()}`}
           />
+          {searchAction}
           <fieldset className="segmented">
             <legend className="sr-only">Status</legend>
             {filters.map(([value, label]) => (
@@ -121,7 +134,7 @@ export function RecordList({
         {isPending ? (
           <p className="empty">Loading…</p>
         ) : records.length === 0 ? (
-          <p className="empty">{deferred || narrow ? 'Nothing matches.' : empty}</p>
+          <p className="empty">{deferred || narrow ? noMatch : empty}</p>
         ) : (
           <div className="table-wrap">
             <table>

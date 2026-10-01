@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isQuantity, type JsonSchema, parseTyped, typedByText, valueText } from './json-schema.ts';
+import {
+  isQuantity,
+  type JsonSchema,
+  parseTyped,
+  shapeKeys,
+  typedByText,
+  valueText,
+} from './json-schema.ts';
 
 const decimal: JsonSchema = { type: 'string', pattern: '^-?\\d+(\\.\\d+)?$' };
 const quantity: JsonSchema = {
@@ -46,5 +53,22 @@ describe('values as one line of text', () => {
     expect(
       typedByText({ anyOf: [decimal, { type: 'object', properties: { a: decimal } }] }, {}),
     ).toBe(false);
+  });
+});
+
+describe('variants told apart by what they hold', () => {
+  it('names each by a required property no other variant has', () => {
+    const instrument: JsonSchema = {
+      type: 'object',
+      properties: { instrument: { type: 'string' }, node: { type: 'string' } },
+      required: ['instrument'],
+    };
+    const limits: JsonSchema = {
+      type: 'object',
+      properties: { limits: { type: 'object' } },
+      required: ['limits'],
+    };
+    expect(shapeKeys([instrument, limits])).toEqual(['instrument', 'limits']);
+    expect(shapeKeys([instrument, { ...instrument }])).toBeUndefined();
   });
 });

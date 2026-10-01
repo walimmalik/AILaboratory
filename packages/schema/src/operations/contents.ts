@@ -201,7 +201,7 @@ const Grid = z.strictObject({
 export const inventoryMapPlates = defineContract({
   id: 'inventory.map_plates',
   verbs: { done: 'mapped plates', intent: 'map plates' },
-  calculator: true,
+  calculator: { title: 'Plate mapping', group: 'plates' },
   summary:
     'Work out which source well lands on which destination well when a plate is stamped onto another: one to one, by quadrant (96 into 384) or by an offset. Give containers or grids. Changes nothing',
   effect: 'read',

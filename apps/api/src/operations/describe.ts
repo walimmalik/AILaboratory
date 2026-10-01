@@ -5,7 +5,7 @@ export interface OperationDescription {
   id: string;
   summary: string;
   effect: OperationContract['effect'];
-  calculator?: true;
+  calculator?: OperationContract['calculator'];
   input?: Record<string, unknown>;
   output?: Record<string, unknown>;
 }
@@ -28,7 +28,7 @@ export function describeOperation(
     id: contract.id,
     summary: contract.summary,
     effect: contract.effect,
-    ...(contract.calculator ? { calculator: true as const } : {}),
+    ...(contract.calculator ? { calculator: contract.calculator } : {}),
     ...(schema
       ? {
           input: jsonSchema(contract.input, 'input'),

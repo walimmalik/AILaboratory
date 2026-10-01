@@ -189,6 +189,30 @@ function recordsIn(value: unknown): { record: { id: string; name: string }; enve
   );
 }
 
+/**
+ * A refusal in plain words: input the operation doesn't take names the fields, without the
+ * validator's glyphs and the operation ID; the full message stays under technical details.
+ */
+export function plainError(message: string): string {
+  const [first = '', ...rest] = message.split('\n');
+  const problems: { what: string; field?: string }[] = [];
+  for (const line of rest) {
+    const at = line.match(/^\s*→ at (.+)$/);
+    const last = problems.at(-1);
+    if (at && last) last.field = fieldLabel(at[1]?.split('.').at(-1) ?? '');
+    else if (line.startsWith('✖ ')) problems.push({ what: line.slice(2) });
+  }
+  const said = problems.map(({ what, field }) =>
+    !field ? what : /^invalid input$/i.test(what) ? field : `${field}: ${what.toLowerCase()}`,
+  );
+  if (/^Invalid input for /.test(first)) {
+    return said.length
+      ? `the request did not fit what it takes (${said.join('; ')})`
+      : 'the request did not fit what it takes';
+  }
+  return said.length ? `${first.replace(/:$/, '')}: ${said.join('; ')}` : first;
+}
+
 /** One step the assistant took (an operation it ran), as a line for people. */
 export function describeToolStep(step: {
   operationId: string;
@@ -199,7 +223,7 @@ export function describeToolStep(step: {
   const result = (step.result ?? {}) as { output?: unknown; proposal?: { preview?: unknown } };
   if (step.outcome === 'failed') {
     return {
-      text: `could not ${operationIntent(step.operationId)}: ${step.error?.message ?? 'refused'}`,
+      text: `could not ${operationIntent(step.operationId)}: ${plainError(step.error?.message ?? 'refused')}`,
       tone: 'crit-ink',
     };
   }

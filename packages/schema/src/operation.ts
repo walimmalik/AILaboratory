@@ -11,6 +11,14 @@ export type OperationEffect = z.infer<typeof OperationEffect>;
  * The public half of an operation, shared by the server (which implements it) and clients (which call it).
  * The same contract produces the REST route, the MCP tool description and the typed client call.
  */
+/** How the Calculators page groups calculators, in this order. */
+export const CALCULATOR_GROUPS = {
+  dilutions: 'Dilutions and transfers',
+  plates: 'Plates',
+  protocols: 'SOPs, recipes and experiments',
+} as const;
+export type CalculatorGroup = keyof typeof CALCULATOR_GROUPS;
+
 export interface OperationContract<
   I extends z.ZodType = z.ZodType,
   O extends z.ZodType = z.ZodType,
@@ -27,9 +35,10 @@ export interface OperationContract<
   effect: OperationEffect;
   /**
    * A lab calculator (ADR 0024): a read that computes numbers agents rely on (volumes,
-   * concentrations, amounts) from `@ailab/domain`, listed in the calculators skill.
+   * concentrations, amounts) from `@ailab/domain`, listed in the calculators skill. `title` names it
+   * on the Calculators page ("Dilution options"), which groups calculators by `group`.
    */
-  calculator?: true;
+  calculator?: { title: string; group: CalculatorGroup };
   input: I;
   output: O;
   /**

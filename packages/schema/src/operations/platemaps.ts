@@ -37,7 +37,7 @@ export const layoutsPreview = defineContract({
   summary:
     'Work out what a layout gives for a number of subjects: how many fit on a plate, how many plates, and every planned well. Give a saved layout (and optionally its version) or layout attributes to try. Use it instead of counting wells yourself',
   effect: 'read',
-  calculator: true,
+  calculator: { title: 'Plate layout preview', group: 'plates' },
   input: z.strictObject({
     layout: LayoutId.optional(),
     version: z.number().int().positive().optional(),

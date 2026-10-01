@@ -4,7 +4,7 @@ import { memoryLinks } from '../memory/links.ts';
 import { citationsOf } from './citations.ts';
 import { bindRoles, readField } from './resolve.ts';
 
-const PLAN = 'Digital SOPs (plan 012)';
+const PLAN = '(plan 012, digital SOPs)';
 
 const check = (
   id: string,
