@@ -81,8 +81,8 @@ Values copied from the template carry `template` evidence from the confirmed ver
 
 ## Seed
 
-`seed/assay-templates.yaml` holds the IL-6 ELISA template. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
+`seed/assay-templates.yaml` holds the IL-6 ELISA, compound single-point and dose-response, pNPP kinetic and Dual-Glo templates. A test checks that every role is a material of its part's SOP and every variable asked for is one of the SOP's inputs or defaults. The follow-up link (`next`) is not seeded, since it names a template the seed has not drafted yet. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
 
 ## Not yet
 
-`assays.save_from_experiment`, stock in feasibility and the design page (017b-3); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+`assays.save_from_experiment`, stock in feasibility and the design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.
