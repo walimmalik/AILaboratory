@@ -1,10 +1,11 @@
 import type {
   Configuration,
+  Connection,
+  InventoryEvent,
   OverviewFact,
   OverviewPart,
   Readiness,
   RecordEnvelope,
-  RecordLink,
   RecordVersion,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +14,7 @@ import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import {
   actorLabel,
   diffRecords,
+  formatShortDay,
   formatValue,
   formatWhen,
   isAgent,
@@ -22,6 +24,7 @@ import {
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
+  ledgerQuery,
   linksQuery,
   overviewQuery,
   pendingProposalsQuery,
@@ -44,7 +47,7 @@ import { fieldLabel, ReadinessBlock } from './RecordReview.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
-import { LinkedName, renderValue } from './Value.tsx';
+import { renderValue } from './Value.tsx';
 
 const operationWords: Record<string, string> = {
   create: 'created',
@@ -69,6 +72,11 @@ export function RecordPage() {
   const overview = useQuery(overviewQuery(id)).data;
   const history = useQuery(historyQuery(id));
   const readiness = useQuery(readinessQuery(id)).data;
+  const ledger =
+    useQuery({
+      ...ledgerQuery(id, record.data?.version ?? 0),
+      enabled: record.data?.kind === 'container',
+    }).data ?? [];
   const from = useQuery(linksQuery(id, 'from')).data ?? [];
   const to = useQuery(linksQuery(id, 'to')).data ?? [];
   const pending = (useQuery(pendingProposalsQuery).data ?? []).filter((p) =>
@@ -115,7 +123,7 @@ export function RecordPage() {
   };
   const tabs: { id: string; label: string; count?: string; warn?: boolean }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'history', label: 'History', count: String(versions.length) },
+    { id: 'history', label: 'History', count: String(versions.length + ledger.length) },
     { id: 'connections', label: 'Connections', count: String(from.length + to.length) },
     {
       id: 'fields',
@@ -210,7 +218,7 @@ export function RecordPage() {
         </>
       )}
 
-      {current === 'history' && <History record={r} versions={versions} />}
+      {current === 'history' && <History record={r} versions={versions} ledger={ledger} />}
 
       {current === 'connections' && <Connections from={from} to={to} />}
 
@@ -358,8 +366,34 @@ function RecordMissing({ id, error }: { id: string; error: Error }) {
 }
 
 /** Every version: who changed what, when and why, with Restore. */
-function History({ record: r, versions }: { record: RecordEnvelope; versions: RecordVersion[] }) {
+/** What a physical event did, as the History tab says it. */
+const EVENT_WORDS: Record<InventoryEvent['type'], string> = {
+  fill: 'filled',
+  transfer: 'transferred',
+  stamp: 'stamped',
+  consume: 'used',
+  correct: 'corrected',
+  discard: 'discarded',
+};
+
+/**
+ * One timeline (plan 004f-2): every version of the record and, for a container, every physical
+ * event in its ledger (fills, transfers, use, corrections), newest first.
+ */
+function History({
+  record: r,
+  versions,
+  ledger,
+}: {
+  record: RecordEnvelope;
+  versions: RecordVersion[];
+  ledger: InventoryEvent[];
+}) {
   const me = useMe();
+  const rows: { at: string; key: string; version?: RecordVersion; event?: InventoryEvent }[] = [
+    ...versions.map((v) => ({ at: v.at, key: `v${v.version}`, version: v })),
+    ...ledger.map((e) => ({ at: e.at, key: e.id, event: e })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return (
     <section className="block" aria-label="History">
       <div className="body">
@@ -367,43 +401,34 @@ function History({ record: r, versions }: { record: RecordEnvelope; versions: Re
           <table>
             <thead>
               <tr>
-                <th>Version</th>
                 <th>When</th>
+                <th>What</th>
                 <th>Who</th>
-                <th>What changed</th>
+                <th>Version</th>
                 <th>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {versions.map((v) => {
-                const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
-                const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
+              {rows.map((row) => {
+                const actor = row.version?.actor ?? row.event?.actor;
                 return (
-                  <tr key={v.version}>
-                    <td className="q">v{v.version}</td>
-                    <td className="when">{formatWhen(v.at)}</td>
-                    <td className={isAgent(v.actor) ? 'agent-ink' : undefined}>
-                      {actorLabel(v.actor, me)}
-                    </td>
+                  <tr key={row.key}>
+                    <td className="when">{formatWhen(row.at)}</td>
                     <td>
-                      {v.via && !v.via.startsWith('records.')
-                        ? operationVerb(v.via)
-                        : (operationWords[v.operation] ?? v.operation)}
-                      {v.operation === 'confirm_section' && (
-                        <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
-                      )}
-                      {v.operation === 'confirm_section' &&
-                        previous?.status === 'draft' &&
-                        v.snapshot.status === 'active' && <span> and activated</span>}
-                      {v.operation !== 'create' && changed.length > 0 && (
-                        <span className="muted"> ({changed.join(', ')})</span>
-                      )}
-                      {v.reason && <span className="muted"> · “{v.reason}”</span>}
+                      {row.version ? (
+                        <VersionWords versions={versions} v={row.version} />
+                      ) : row.event ? (
+                        <EventWords event={row.event} container={r.id} />
+                      ) : null}
                     </td>
+                    <td className={actor && isAgent(actor) ? 'agent-ink' : undefined}>
+                      {actor ? actorLabel(actor, me) : ''}
+                    </td>
+                    <td className="q">{row.version ? `v${row.version.version}` : ''}</td>
                     <td>
-                      <RestoreVersion record={r} version={v.version} />
+                      {row.version && <RestoreVersion record={r} version={row.version.version} />}
                     </td>
                   </tr>
                 );
@@ -413,6 +438,40 @@ function History({ record: r, versions }: { record: RecordEnvelope; versions: Re
         </div>
       </div>
     </section>
+  );
+}
+
+/** A version's change in words: the operation, the sections confirmed, the fields changed, why. */
+function VersionWords({ versions, v }: { versions: RecordVersion[]; v: RecordVersion }) {
+  const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
+  const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
+  return (
+    <>
+      {v.via && !v.via.startsWith('records.')
+        ? operationVerb(v.via)
+        : (operationWords[v.operation] ?? v.operation)}
+      {v.operation === 'confirm_section' && (
+        <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
+      )}
+      {v.operation === 'confirm_section' &&
+        previous?.status === 'draft' &&
+        v.snapshot.status === 'active' && <span> and activated</span>}
+      {v.operation !== 'create' && changed.length > 0 && (
+        <span className="muted"> ({changed.join(', ')})</span>
+      )}
+      {v.reason && <span className="muted"> · “{v.reason}”</span>}
+    </>
+  );
+}
+
+/** A physical event in words: what happened to how many of this container's wells, and why. */
+function EventWords({ event, container }: { event: InventoryEvent; container: string }) {
+  const wells = new Set(event.lines.filter((l) => l.container === container).map((l) => l.well));
+  return (
+    <>
+      {EVENT_WORDS[event.type]} {wells.size} {wells.size === 1 ? 'well' : 'wells'}
+      {event.reason && <span className="muted"> · “{event.reason}”</span>}
+    </>
   );
 }
 
@@ -461,30 +520,77 @@ function LotValues({ record }: { record: RecordEnvelope }) {
  * What the record is based on and what uses it, in two columns (N6). Relation words and dates come
  * in 004f-2; until then each link names its relation.
  */
-function Connections({ from, to }: { from: RecordLink[]; to: RecordLink[] }) {
-  const column = (title: string, links: RecordLink[], other: (l: RecordLink) => string) => (
-    <div>
-      <h3 className="column-title">{title}</h3>
-      {links.length === 0 ? (
-        <p className="empty">Nothing.</p>
-      ) : (
-        <ul className="plain connections">
-          {links.map((l) => (
-            <li key={`${l.fromId}-${l.toId}-${l.relation}`}>
-              <span className="muted">{l.relation.replaceAll('_', ' ')}</span>{' '}
-              <LinkedName id={other(l)} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+/**
+ * Connections (plan 004f N6): what the record is based on and where it is used, grouped by the
+ * relation in words, each record by name with its code as a tag and when it last changed.
+ */
+function Connections({ from, to }: { from: Connection[]; to: Connection[] }) {
   return (
     <section className="block" aria-label="Connections">
       <div className="body connection-columns">
-        {column('Based on', from, (l) => l.toId)}
-        {column('Used in', to, (l) => l.fromId)}
+        <ConnectionColumn title="Based on" links={from} empty="Not based on another record." />
+        <ConnectionColumn title="Used in" links={to} empty="Not used in another record yet." />
       </div>
     </section>
+  );
+}
+
+/** Links shown per relation before the rest fold under "N more". */
+const SHOWN_PER_RELATION = 6;
+
+function ConnectionColumn({
+  title,
+  links,
+  empty,
+}: {
+  title: string;
+  links: Connection[];
+  empty: string;
+}) {
+  const groups = new Map<string, Connection[]>();
+  for (const link of links) groups.set(link.words, [...(groups.get(link.words) ?? []), link]);
+  return (
+    <section aria-label={title}>
+      <h3 className="column-title">{title}</h3>
+      {links.length === 0 ? (
+        <p className="empty">{empty}</p>
+      ) : (
+        [...groups].map(([words, group]) => (
+          <ConnectionGroup key={words} words={words} links={group} />
+        ))
+      )}
+    </section>
+  );
+}
+
+function ConnectionGroup({ words, links }: { words: string; links: Connection[] }) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...links].sort((a, b) => b.other.updatedAt.localeCompare(a.other.updatedAt));
+  const shown = open ? sorted : sorted.slice(0, SHOWN_PER_RELATION);
+  return (
+    <div className="connection-group">
+      <h4 className="relation-words">
+        {words}
+        {links.length > 1 && <span className="relation-count"> {links.length}</span>}
+      </h4>
+      <ul className="plain connections">
+        {shown.map(({ other }) => (
+          <li key={other.id}>
+            <Link to="/records/$id" params={{ id: other.id }} className="linked-name">
+              {other.label} <span className="code">{other.name}</span>
+            </Link>
+            {other.status !== 'active' && <span className="muted"> · {other.status}</span>}
+            <span className="when" title={`last changed ${formatWhen(other.updatedAt)}`}>
+              {formatShortDay(other.updatedAt)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {sorted.length > shown.length && (
+        <button type="button" className="link-btn" onClick={() => setOpen(true)}>
+          {sorted.length - shown.length} more
+        </button>
+      )}
+    </div>
   );
 }

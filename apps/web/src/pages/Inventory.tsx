@@ -4,7 +4,6 @@ import {
   type EntityAttributes,
   type EntityKindAttributes,
   inventoryEffectiveRules,
-  inventoryHistory,
   inventoryListPlace,
   inventoryWells,
   inventoryWhereIs,
@@ -19,7 +18,6 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type CSSProperties, Fragment, type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
-import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
   atWords,
   type ContentGroup,
@@ -39,7 +37,6 @@ import {
 } from '../lib/inventory.ts';
 import { type KindPage, libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
-import { useMe } from '../session.ts';
 import { Head, useLabels } from './Instruments.tsx';
 import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
@@ -302,7 +299,6 @@ export function ContainerBlocks({ record }: { record: RecordEnvelope }) {
     <>
       <WellsBlock positions={wells.data.positions} wells={wells.data.wells} name={record.name} />
       <RulesBlock record={record} filled={wells.data.wells.length} />
-      <LedgerBlock record={record} />
     </>
   );
 }
@@ -676,65 +672,6 @@ function RulesBlock({ record, filled }: { record: RecordEnvelope; filled: number
             );
           })}
         </ul>
-      </div>
-    </section>
-  );
-}
-
-const eventWords: Record<string, string> = {
-  fill: 'Filled',
-  transfer: 'Transfer',
-  stamp: 'Stamped',
-  consume: 'Used',
-  correct: 'Corrected',
-  discard: 'Discarded',
-};
-
-function LedgerBlock({ record }: { record: RecordEnvelope }) {
-  const me = useMe();
-  const events =
-    useQuery({
-      queryKey: ['inventory', 'history', record.id, record.version],
-      queryFn: async () =>
-        (await api.run(inventoryHistory, { container: record.id, limit: 20 })).events,
-    }).data ?? [];
-  if (events.length === 0) return null;
-  return (
-    <section className="block" aria-label="Ledger">
-      <header>
-        <h2>Ledger</h2>
-        <span className="state muted">latest {events.length}</span>
-      </header>
-      <div className="body">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>What</th>
-                <th>Wells</th>
-                <th>By</th>
-                <th>Why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((e) => {
-                const mine = e.lines.filter((l) => l.container === record.id);
-                return (
-                  <tr key={e.id}>
-                    <td className="when">{formatWhen(e.at)}</td>
-                    <td>{eventWords[e.type] ?? e.type}</td>
-                    <td className="num">{mine.length}</td>
-                    <td className={isAgent(e.actor) ? 'agent-ink' : undefined}>
-                      {actorLabel(e.actor, me)}
-                    </td>
-                    <td className="muted">{e.reason ?? ''}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </div>
     </section>
   );

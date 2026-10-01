@@ -4,6 +4,7 @@ import {
   assistantGetConversation,
   assistantListConversations,
   assistantStatus,
+  inventoryHistory,
   proposalsList,
   recordsGet,
   recordsHistory,
@@ -110,6 +111,13 @@ export const linksQuery = (id: string, direction: 'from' | 'to') =>
   queryOptions({
     queryKey: ['record', id, 'links', direction],
     queryFn: async () => (await api.run(recordsLinks, { id, direction })).links,
+  });
+
+/** A container's physical ledger, newest first (inventory.history), for its History tab. */
+export const ledgerQuery = (id: string, version: number) =>
+  queryOptions({
+    queryKey: ['inventory', 'history', id, version],
+    queryFn: async () => (await api.run(inventoryHistory, { container: id, limit: 500 })).events,
   });
 
 export const assistantSetupQuery = queryOptions({

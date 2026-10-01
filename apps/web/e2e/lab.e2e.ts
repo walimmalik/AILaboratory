@@ -636,7 +636,15 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await expect(handling).toContainText(/Store at .30 °C to .10 °C/);
   await expect(handling).toContainText('Protect from light');
   await expect(handling).toContainText('scheduler keeps to it');
-  await expect(page.getByRole('region', { name: 'Ledger' })).toContainText('Plated the reagent');
+  // The physical ledger is part of the record's one History timeline (plan 004f-2).
+  await page.getByRole('link', { name: /^History/ }).click();
+  await expect(page.getByRole('region', { name: 'History' })).toContainText(
+    /3 wells · “Plated the reagent”/,
+  );
+  await page.getByRole('link', { name: /^Connections/ }).click();
+  const basedOn = page.getByRole('region', { name: 'Based on' });
+  await expect(basedOn).toContainText('is a');
+  await expect(basedOn).not.toContainText('Invalid Date');
 
   await page
     .getByRole('navigation', { name: 'Modules' })
