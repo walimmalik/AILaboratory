@@ -129,9 +129,9 @@ export type MemoryAppliesTo = z.infer<typeof MemoryAppliesTo>;
 export const MemorySource = z
   .strictObject({
     from: z
-      .enum(['stated', 'conversation', 'experiment', 'run', 'analysis'])
+      .enum(['stated', 'conversation', 'experiment', 'run', 'analysis', 'edits'])
       .describe(
-        'stated: a person said it; conversation: from a chat with the assistant; experiment, run, analysis: learned from results',
+        'stated: a person said it; conversation: from a chat with the assistant; experiment, run, analysis: learned from results; edits: people changing the same filled-in value the same way',
       ),
     evidence: z
       .array(RecordId)

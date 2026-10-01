@@ -1,5 +1,11 @@
 import { readiness, summarizeReadiness } from '@ailab/domain';
-import { type Actor, type ReviewItem, reviewList } from '@ailab/schema';
+import {
+  type Actor,
+  type MemoryAttributes,
+  type RecordEnvelope,
+  type ReviewItem,
+  reviewList,
+} from '@ailab/schema';
 import { and, count, eq } from 'drizzle-orm';
 import { records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
@@ -62,6 +68,7 @@ export const reviewOperations = [
           const { record, state } = found;
           // Older rows written before the stored summary existed fall back to the kind's checks.
           const summary = record.readiness ?? summarizeReadiness(state);
+          const memory = record.kind === 'memory' ? memoryOf(record) : undefined;
           const item: ReviewItem = {
             type: 'draft',
             tier: 'to_confirm',
@@ -79,6 +86,7 @@ export const reviewOperations = [
             },
             byAgent: record.createdBy.type === 'agent',
             batchable:
+              memory?.strength !== 'rule' &&
               summary.assumed === 0 &&
               state.unchecked.length === 0 &&
               summary.blockers === 0 &&
@@ -92,6 +100,7 @@ export const reviewOperations = [
             ready: summary.ready,
             assumed: summary.assumed,
             unchecked: state.unchecked.length,
+            ...(memory ? { memory } : {}),
           };
           return [item];
         }),
@@ -131,3 +140,26 @@ export const reviewOperations = [
     },
   }),
 ];
+
+const FROM: Record<MemoryAttributes['source']['from'], string> = {
+  stated: 'Stated by a person',
+  conversation: 'From a conversation',
+  experiment: 'From an experiment',
+  run: 'From runs',
+  analysis: 'From an analysis',
+  edits: 'From repeated edits',
+};
+
+/** A proposed memory's group in Review (M16): the detector that proposed it, or its source. */
+function memoryOf(record: RecordEnvelope) {
+  const a = record.attributes as MemoryAttributes;
+  const by = record.createdBy;
+  return {
+    group:
+      by.type === 'agent' && by.agentName.startsWith('Lab memory detector')
+        ? by.agentName
+        : FROM[a.source.from],
+    strength: a.strength,
+    ...(a.source.note ? { evidence: a.source.note } : {}),
+  };
+}

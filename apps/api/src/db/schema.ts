@@ -561,7 +561,7 @@ export const memoryCandidates = pgTable(
     detector: text('detector').notNull(),
     key: text('key').notNull(),
     draft: jsonb('draft').$type<MemoryDraft>().notNull(),
-    source: text('source').$type<'experiment' | 'run' | 'analysis'>().notNull(),
+    source: text('source').$type<'experiment' | 'run' | 'analysis' | 'edits'>().notNull(),
     bar: jsonb('bar').$type<MemoryBar>().notNull(),
     observations: jsonb('observations').$type<MemoryObservationEntry[]>().notNull(),
     status: text('status').$type<'collecting' | 'proposed' | 'confirmed' | 'rejected'>().notNull(),

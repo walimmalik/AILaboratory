@@ -27,7 +27,8 @@ Every capability is an **operation**. People (through the web app) and agents (t
    - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
 5. Output is checked against the contract before it leaves the server.
 6. An implementation may declare `after`, which runs once a write is committed and logged (never on previews or proposals). `assistant.ask` uses it to start the assistant in the background.
-7. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
+7. Write listeners (`registry.onWrite`) run after each committed write a person makes at the top level, with the records it touched (a change set counts once, with every record). Lab memory's repeated-override detector is one (plan 005c-1b). A listener's failure is logged and never fails the write.
+8. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
 
 ## Agent policies
 
