@@ -54,6 +54,7 @@ const NOUN: Record<MemoryCandidate['source'], { one: string; many: string }> = {
   experiment: { one: 'experiment', many: 'experiments' },
   run: { one: 'run', many: 'runs' },
   analysis: { one: 'analysis', many: 'analyses' },
+  edits: { one: 'record', many: 'records' },
 };
 
 export const candidateOperations = [

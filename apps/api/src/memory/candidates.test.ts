@@ -113,6 +113,17 @@ describe('memory.observe', () => {
         note: 'seen in 3 analyses on 2 days since 2026-10-01',
       },
     });
+    // Review groups it by the detector that proposed it, with its evidence line (M16).
+    const review = await run<{ items: { type: string; memory?: unknown }[] }>(
+      person,
+      'review.list',
+      { kind: 'memory' },
+    );
+    expect(review.items[0]?.memory).toEqual({
+      group: 'Lab memory detector (analysis.edge_effect)',
+      strength: 'note',
+      evidence: 'seen in 3 analyses on 2 days since 2026-10-01',
+    });
     // Once proposed, more observations add evidence without another proposal.
     expect((await observe(agent, (await star()).id, '2026-10-03')).proposed).toBeUndefined();
     const listed = await run<{ candidates: { status: string }[] }>(person, 'memory.candidates', {
@@ -138,5 +149,56 @@ describe('memory.observe', () => {
     });
     const { candidates } = await run<{ candidates: unknown[] }>(otherLab, 'memory.candidates', {});
     expect(candidates).toEqual([]);
+  });
+});
+
+describe('the repeated-override detector (005c-1b)', () => {
+  it('proposes a convention once people change the same filled-in value the same way in 3 records', async () => {
+    const drafted = await Promise.all(
+      ['Tween wash', 'Plate wash', 'Strip wash', 'Bead wash'].map((label) =>
+        run<RecordEnvelope>(agent, 'records.create', {
+          kind: 'liquid_type',
+          label,
+          attributes: { base: 'aqueous' },
+        }),
+      ),
+    );
+    const change = (r: RecordEnvelope, base: string, ctx = person) =>
+      run<RecordEnvelope>(ctx, 'records.update', {
+        id: r.id,
+        expectedVersion: r.version,
+        attributes: { base },
+      });
+    const [a, b, c, d] = drafted as [
+      RecordEnvelope,
+      RecordEnvelope,
+      RecordEnvelope,
+      RecordEnvelope,
+    ];
+    await change(a, 'detergent');
+    await change(b, 'detergent');
+    // An agent's own change and a different value are not the same override.
+    await change(c, 'detergent', agent);
+    await change(d, 'protein_rich');
+    const waiting = async () =>
+      (await run<{ memories: RecordEnvelope[] }>(person, 'memory.search', { status: 'draft' }))
+        .memories;
+    expect(await waiting()).toEqual([]);
+    const fresh = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'liquid_type',
+      label: 'Final wash',
+      attributes: { base: 'aqueous' },
+    });
+    await change(fresh, 'detergent');
+    const [proposal] = await waiting();
+    expect(proposal?.attributes).toMatchObject({
+      statement: 'People set base to "detergent" on a liquid type when another value was filled in',
+      kind: 'convention',
+      strength: 'note',
+      source: {
+        from: 'edits',
+        note: 'seen in 3 records on 1 day since ' + new Date().toISOString().slice(0, 10),
+      },
+    });
   });
 });
