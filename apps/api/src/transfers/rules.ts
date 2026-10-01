@@ -78,6 +78,19 @@ export const limitsOf = (g: TransferGroup): DeviceLimits | undefined =>
       }
     : undefined;
 
+/**
+ * Why the device can't move this volume as written, if it can't: out of its range, or not a whole
+ * number of its steps. A plan's volume is what moves, so the totals, reservations and pick list
+ * stay honest only when the device moves exactly that.
+ */
+export function moveProblem(volume: Quantity, limits: DeviceLimits): string | undefined {
+  const fit = fitVolume(volume, limits);
+  if (!fit.fits) return fit.problem;
+  if (limits.step && compare(fit.achieved, volume) !== 0)
+    return `${formatQuantity(volume)} is not a whole number of ${formatQuantity(limits.step)} steps (it would move ${formatQuantity(fit.achieved)})`;
+  return undefined;
+}
+
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
 export interface PlanRules {
@@ -165,9 +178,8 @@ export async function planRules(
     const problems = new Map<string, number>();
     for (const t of g.transfers) {
       try {
-        const fit = fitVolume(t.volume, limits);
-        if (!fit.fits && fit.problem)
-          problems.set(fit.problem, (problems.get(fit.problem) ?? 0) + 1);
+        const problem = moveProblem(t.volume, limits);
+        if (problem) problems.set(problem, (problems.get(problem) ?? 0) + 1);
       } catch (error) {
         if (!(error instanceof TransferError)) throw error;
         problems.set(error.message, (problems.get(error.message) ?? 0) + 1);

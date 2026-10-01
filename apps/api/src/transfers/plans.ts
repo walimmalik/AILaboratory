@@ -1,12 +1,4 @@
-import {
-  add,
-  compare,
-  convert,
-  fitVolume,
-  formatQuantity,
-  subtract,
-  TransferError,
-} from '@ailab/domain';
+import { add, compare, convert, formatQuantity, subtract, TransferError } from '@ailab/domain';
 import {
   type InstrumentAttributes,
   type LabwareTypeAttributes,
@@ -26,7 +18,7 @@ import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { deviceOf, deviceOut, run } from './calculators.ts';
 import { drawsOf, reservations, totalOf } from './reservations.ts';
-import { limitsOf, planRules, type Rule, tipsOf } from './rules.ts';
+import { limitsOf, moveProblem, planRules, type Rule, tipsOf } from './rules.ts';
 
 const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
   new RecordService(deps.db, deps.kinds);
@@ -177,7 +169,7 @@ export const transferPlanOperations = [
           const misfit = limits
             ? g.transfers.filter((t) => {
                 try {
-                  return !fitVolume(t.volume, limits).fits;
+                  return moveProblem(t.volume, limits) !== undefined;
                 } catch (error) {
                   if (error instanceof TransferError) return true;
                   throw error;
