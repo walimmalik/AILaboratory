@@ -7,6 +7,7 @@ import {
   diffRecords,
   foldRepeats,
   formatDay,
+  formatShortDay,
   formatValue,
   partLabel,
   plainError,
@@ -19,8 +20,8 @@ const me = { user: { id: 'usr_A' } } as unknown as Me;
 describe('plain language', () => {
   it('says a day without the year in the current year', () => {
     const now = new Date('2026-10-01T12:00:00Z');
-    expect(formatDay('2026-10-01T09:00:00Z', now)).toBe('1 Oct');
-    expect(formatDay('2025-03-31T09:00:00Z', now)).toBe('31 Mar 2025');
+    expect(formatShortDay('2026-10-01T09:00:00Z', now)).toBe('1 Oct');
+    expect(formatShortDay('2025-03-31T09:00:00Z', now)).toBe('31 Mar 2025');
   });
 
   it('names people and agents from the reader’s point of view', () => {
@@ -278,5 +279,11 @@ describe('plainError', () => {
       plainError('Invalid widget attributes:\n✖ Expected string, received number\n  → at color'),
     ).toBe('Invalid widget attributes: color: expected string, received number');
     expect(plainError('PLT-0001 is archived')).toBe('PLT-0001 is archived');
+  });
+});
+
+describe('formatDay', () => {
+  it('writes a calendar date the same in every time zone', () => {
+    expect(formatDay('2030-01-05')).toBe('5 Jan 2030');
   });
 });

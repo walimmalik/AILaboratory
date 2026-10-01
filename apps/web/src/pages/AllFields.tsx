@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, type ReactNode } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
-import { fieldLabel, formatDay } from '../lib/format.ts';
+import { fieldLabel, formatShortDay } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
@@ -278,7 +278,7 @@ function Sources({
   }
   const confirmedLine =
     sectioned && section.state === 'confirmed' && section.review
-      ? `Confirmed by ${who(section.review.confirmedBy, me)} on ${formatDay(section.review.confirmedAt)}.`
+      ? `Confirmed by ${who(section.review.confirmedBy, me)} on ${formatShortDay(section.review.confirmedAt)}.`
       : undefined;
   const pieces = [...groups.values()]
     .filter((g) => g.evidence || g.fields.some(unsourced))

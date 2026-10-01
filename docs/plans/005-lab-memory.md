@@ -7,7 +7,8 @@
 - Built (005a, ADR 0062): the memory record, `memory.propose/remember/update/retire/replace/search`, `memory` evidence, rules and timing windows naming their memory, `seed/memory.yaml`, the memory skill. See [memory.md](../architecture/memory.md).
 - Built (005b): `memory.for` with the total order and effect conflicts, the clash blocker on confirm, the assistant's page bundle, `memory.used_in`, and lab memory applied in `liquids.resolve_class` and `transfers.options`.
 - Built (005c-1a): `memory.observe` and `memory.candidates` with the bar and rejections (the `memory_candidates` table), and the recurring run deviation detector.
-- Built (005c-1b): the repeated-override detector (registry write listeners), the "possible lab memory" hint in the assistant, and proposed memories grouped in `review.list` (rules never batch-confirmed). Next: 005c-2 once a detector reports negatives; 005d screens.
+- Built (005c-1b): the repeated-override detector (registry write listeners), the "possible lab memory" hint in the assistant, and proposed memories grouped in `review.list` (rules never batch-confirmed).
+- Built (005c-2): observations carry a finding (for, against, quiet); evidence counts, weight ordering and "due for a check" from evidence against or quiet runs (M9, M17); `memory.observe {memory}` reports on existing memories. Next: the 016 detector that reports quiet records (transfer and survey reports); 005d screens.
 
 ## What this plan delivers
 

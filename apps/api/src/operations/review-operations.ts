@@ -6,10 +6,12 @@ import {
   type ReviewItem,
   reviewList,
 } from '@ailab/schema';
-import { and, count, eq } from 'drizzle-orm';
-import { records } from '../db/schema.ts';
+import { and, count, eq, inArray, ne } from 'drizzle-orm';
+import { conversationTitles } from '../assistant/store.ts';
+import type { Db } from '../db/client.ts';
+import { recordLinks, records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
-import { RecordService } from '../records/service.ts';
+import { type RecordContext, RecordService } from '../records/service.ts';
 import { listProposals } from './proposal-store.ts';
 import { implement } from './registry.ts';
 
@@ -21,6 +23,50 @@ const DRAFT_LIMIT = 200;
 
 /** Who an item is for: the person an agent worked for, or the person who acted. */
 const addressee = (actor: Actor) => (actor.type === 'agent' ? actor.onBehalfOf : actor.userId);
+
+/** The agent conversation an item came from, when an agent made it in one. */
+const sessionOf = (actor: Actor) => (actor.type === 'agent' ? actor.sessionRef : undefined);
+
+const TIERS = ['needs_you', 'to_confirm', 'fyi'] as const;
+
+/**
+ * Most urgent first (review 2026-10-01 item 16): by tier, then the earliest due date, then items
+ * other records wait on, then the newest.
+ */
+function byUrgency(a: ReviewItem, b: ReviewItem): number {
+  const tier = TIERS.indexOf(a.tier) - TIERS.indexOf(b.tier);
+  if (tier !== 0) return tier;
+  if (a.due !== b.due) return !a.due ? 1 : !b.due ? -1 : a.due < b.due ? -1 : 1;
+  const blocks = Number(Boolean(b.blocking?.length)) - Number(Boolean(a.blocking?.length));
+  if (blocks !== 0) return blocks;
+  return a.at < b.at ? 1 : a.at > b.at ? -1 : 0;
+}
+
+/** Records, not archived, that point to each of these drafts: what waits on them. */
+async function waitingOn(db: Db, labId: string, ids: string[]) {
+  const found = new Map<string, { id: string; kind: string; name: string; label: string }[]>();
+  if (ids.length === 0) return found;
+  const rows = await db
+    .selectDistinct({
+      toId: recordLinks.toId,
+      id: records.id,
+      kind: records.kind,
+      name: records.name,
+      label: records.label,
+    })
+    .from(recordLinks)
+    .innerJoin(records, eq(records.id, recordLinks.fromId))
+    .where(
+      and(
+        eq(recordLinks.labId, labId),
+        inArray(recordLinks.toId, ids),
+        ne(records.status, 'archived'),
+      ),
+    )
+    .orderBy(records.name);
+  for (const { toId, ...record } of rows) found.set(toId, [...(found.get(toId) ?? []), record]);
+  return found;
+}
 
 export const reviewOperations = [
   implement(reviewList, {
@@ -45,7 +91,46 @@ export const reviewOperations = [
       );
       const draftTotal = Object.values(draftCounts).reduce((sum, n) => sum + n, 0);
       const me = addressee(ctx.actor);
-      const items: ReviewItem[] = [
+      const waiting = await waitingOn(
+        deps.db,
+        ctx.labId,
+        drafts.map((d) => d.id),
+      );
+      // Confirmed records of kinds that raise notices, such as a memory past its check-again date.
+      const today = new Date().toISOString().slice(0, 10);
+      const notices = input.kind
+        ? []
+        : (
+            await Promise.all(
+              deps.kinds
+                .list()
+                .filter((k) => k.review?.notice)
+                .map((k) =>
+                  service.list(ctx, { kind: k.kind, status: 'active', limit: DRAFT_LIMIT }),
+                ),
+            )
+          )
+            .flat()
+            .flatMap((record): ReviewItem[] => {
+              const notice = kinds.get(record.kind)?.review?.notice?.(record.attributes, today);
+              if (!notice) return [];
+              return [
+                {
+                  type: 'notice',
+                  tier: 'fyi',
+                  at: record.updatedAt,
+                  ...(notice.due ? { due: notice.due } : {}),
+                  about: {
+                    id: record.id,
+                    kind: record.kind,
+                    name: record.name,
+                    label: record.label,
+                  },
+                  message: notice.message,
+                },
+              ];
+            });
+      const listed: ReviewItem[] = [
         ...(
           await Promise.all(
             drafts.map(async (record) => {
@@ -68,11 +153,15 @@ export const reviewOperations = [
           const { record, state } = found;
           // Older rows written before the stored summary existed fall back to the kind's checks.
           const summary = record.readiness ?? summarizeReadiness(state);
+          const due = kinds.get(record.kind)?.review?.due?.(record.attributes as never);
+          const blocking = waiting.get(record.id);
           const memory = record.kind === 'memory' ? memoryOf(record) : undefined;
           const item: ReviewItem = {
             type: 'draft',
             tier: 'to_confirm',
             for: addressee(record.createdBy),
+            ...(due ? { due } : {}),
+            ...(blocking ? { blocking } : {}),
             at: record.updatedAt,
             record: {
               id: record.id,
@@ -124,14 +213,24 @@ export const reviewOperations = [
             proposed: m.proposed,
           }),
         ),
-      ].filter((item) => !input.mine || item.for === me);
-      items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+        ...notices,
+      ].filter((item) => !input.mine || item.for === undefined || item.for === me);
+      const makers = new Map(drafts.map((d) => [d.id, d.createdBy]));
+      const items = await grouped(deps.db, ctx, listed, (item) =>
+        item.type === 'draft'
+          ? makers.get(item.record.id)
+          : item.type === 'change'
+            ? item.proposal.proposedBy
+            : undefined,
+      );
+      items.sort(byUrgency);
       // Counts come first, so an agent whose view of a long result is cut still has the totals.
       return {
         counts: {
           total: draftTotal + changes.length + mentions.length,
           changes: changes.length,
           mentions: mentions.reduce((sum, m) => sum + m.proposed, 0),
+          notices: notices.length,
           needsYou: changes.filter((p) => addressee(p.proposedBy) === me).length,
           drafts: draftCounts,
         },
@@ -140,6 +239,36 @@ export const reviewOperations = [
     },
   }),
 ];
+
+/**
+ * Puts items one agent made in one conversation in a group named after it (review 2026-10-01
+ * item 16), when there are two or more: an ask that drafted five documents is read as one.
+ */
+async function grouped(
+  db: Db,
+  ctx: RecordContext,
+  items: ReviewItem[],
+  maker: (item: ReviewItem) => Actor | undefined,
+): Promise<ReviewItem[]> {
+  const session = (item: ReviewItem) => {
+    const actor = maker(item);
+    return actor && sessionOf(actor);
+  };
+  const sizes = new Map<string, number>();
+  for (const item of items) {
+    const id = session(item);
+    if (id) sizes.set(id, (sizes.get(id) ?? 0) + 1);
+  }
+  const shared = [...sizes].filter(([, n]) => n > 1).map(([id]) => id);
+  const titles = await conversationTitles(db, ctx, shared);
+  return items.map((item) => {
+    const id = session(item);
+    if (!id || !shared.includes(id)) return item;
+    const agent = maker(item);
+    const name = agent?.type === 'agent' ? agent.agentName : 'an agent';
+    return { ...item, group: { id, title: titles.get(id) ?? `Work by ${name} in one session` } };
+  });
+}
 
 const FROM: Record<MemoryAttributes['source']['from'], string> = {
   stated: 'Stated by a person',

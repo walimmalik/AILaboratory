@@ -66,6 +66,8 @@ export const campaign = defineKind({
     ...[...new Set(a.about ?? [])].map((toId) => ({ toId, relation: 'about' })),
     ...[...new Set(a.references ?? [])].map((toId) => ({ toId, relation: 'references' })),
   ],
+  // A draft campaign is confirmed before it starts.
+  review: { due: (a: CampaignAttributes) => a.starts },
   sections: [
     {
       id: 'overview',

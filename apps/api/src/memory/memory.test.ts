@@ -1,5 +1,5 @@
 import { checkAgainFor } from '@ailab/domain';
-import type { Actor, MemoryAttributes, RecordEnvelope } from '@ailab/schema';
+import type { Actor, MemoryAttributes, RecordEnvelope, ReviewItem } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { createTestDb } from '../db/testing.ts';
@@ -141,6 +141,25 @@ describe('memory.propose and memory.remember', () => {
     });
     expect(preference.status).toBe('active');
     expect(attributes(preference).checkAgain).toBeUndefined();
+  });
+
+  it("lists a memory past its check-again date in Review's notices (M6)", async () => {
+    const due = await run<RecordEnvelope>(person, 'memory.remember', {
+      statement: 'The Spark reads 5% high on the left edge',
+      kind: 'quirk',
+      checkAgain: '2020-01-01',
+      source: stated,
+    });
+    await run(person, 'memory.remember', { statement: 'Not due', kind: 'quirk', source: stated });
+    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(items.filter((i) => i.type === 'notice')).toEqual([
+      expect.objectContaining({
+        tier: 'fyi',
+        due: '2020-01-01',
+        about: expect.objectContaining({ id: due.id }),
+        message: 'Check it is still true: its check-again date has passed',
+      }),
+    ]);
   });
 
   it('refuses a memory that contradicts itself or names records the lab does not have', async () => {
