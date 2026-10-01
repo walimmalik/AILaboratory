@@ -12,7 +12,7 @@ import { checkPin, type PinReport } from '../records/pins.ts';
 import { planPlateMap } from './generate.ts';
 import { layoutSpec, subjectOf } from './spec.ts';
 
-const PLAN = 'Plate maps (plan 014)';
+const PLAN = '(plan 014, plate maps)';
 
 const duplicates = (names: readonly string[]) => [
   ...new Set(names.filter((n, i) => names.indexOf(n) !== i)),

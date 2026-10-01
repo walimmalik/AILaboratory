@@ -18,9 +18,23 @@ import { OperationError } from './errors.ts';
 import { implement } from './registry.ts';
 
 /** First line of the first message, shortened: the conversation's title until people can rename it. */
-function titleFrom(message: string): string {
+/**
+ * A conversation's name from its first ask: the first sentence without the polite lead-in ("can
+ * you", "please"), capitalized and cut at a word to about 60 characters.
+ */
+export function titleFrom(message: string): string {
   const line = message.trim().split('\n')[0] ?? '';
-  return line.length > 80 ? `${line.slice(0, 79)}…` : line;
+  const sentence = line.match(/^.+?[.?!](?=\s|$)/)?.[0] ?? line;
+  const ask = sentence
+    .replace(/^(hi|hey|hello)[,!.]?\s+/i, '')
+    .replace(/^(can|could|would|will) you( please)?\s+/i, '')
+    .replace(/^please\s+/i, '')
+    .replace(/[.?!]+$/, '')
+    .trim();
+  const named = ask.charAt(0).toUpperCase() + ask.slice(1);
+  if (named.length <= 60) return named;
+  const cut = named.slice(0, 60);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60)}…`;
 }
 
 export const assistantOperations = [

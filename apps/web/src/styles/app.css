@@ -1048,6 +1048,55 @@ table.checks td.mark {
 .json-field:invalid {
   border-color: var(--crit);
 }
+.record-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 18rem;
+  max-width: 100%;
+}
+.record-search-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 20;
+  width: min(32rem, 90vw);
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--field);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.record-search-list > * {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.record-search-list [aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.record-search-list .mono {
+  flex-shrink: 0;
+}
+.record-search-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quantity-list {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.quantity-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .variant {
   display: grid;
   gap: 8px;

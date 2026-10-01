@@ -5,14 +5,14 @@ import {
   VerificationAttributes,
 } from '@ailab/schema';
 
-const PLAN = 'Reagents and liquids (plan 009)';
+const PLAN = '(plan 009, reagents and liquids)';
 
 const classChecks: KindCheck<LiquidClassAttributes>[] = [
   {
     id: 'platform_fits',
     label: 'The platform settings fit what the class is for',
     severity: 'blocker',
-    source: `${PLAN}, R5 and R7: one class is for one device, tip or source plate`,
+    source: `One class is for one device, tip or source plate (plan 009 R5 and R7, reagents and liquids)`,
     section: 'use',
     fix: 'Name the source plate type for an Echo class, and the tips for an Opentrons or Hamilton class',
     test: (a) => {
@@ -29,7 +29,7 @@ const classChecks: KindCheck<LiquidClassAttributes>[] = [
     id: 'venus_matches',
     label: 'The copy matches what Venus runs',
     severity: 'warning',
-    source: `${PLAN}, R5: Venus classes edited here must be applied in Venus`,
+    source: `Venus classes edited here must be applied in Venus (plan 009 R5, reagents and liquids)`,
     section: 'platform',
     fix: 'Apply the change in Venus, then re-import the class',
     test: (a) =>
@@ -41,7 +41,7 @@ const classChecks: KindCheck<LiquidClassAttributes>[] = [
     id: 'volume_known',
     label: 'The volume range is known',
     severity: 'warning',
-    source: `${PLAN}, R7: accuracy changes with volume`,
+    source: `Accuracy changes with volume (plan 009 R7, reagents and liquids)`,
     section: 'use',
     fix: 'Add the smallest and largest volume it is meant for',
     test: (a) => (a.volume?.min && a.volume?.max ? true : 'Not given'),

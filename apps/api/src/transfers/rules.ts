@@ -27,7 +27,7 @@ import { checkPin } from '../records/pins.ts';
  * or reports as readiness, and what `transfers.check` adds live checks to.
  */
 
-export const PLAN = 'Transfer plans (plan 016)';
+export const PLAN = '(plan 016, transfer plans)';
 
 export interface Rule {
   id: string;

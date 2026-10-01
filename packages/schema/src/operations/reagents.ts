@@ -65,7 +65,7 @@ export const reagentsDraftProduct = defineContract({
 export const reagentsScaleRecipe = defineContract({
   id: 'reagents.scale_recipe',
   verbs: { done: 'scaled the recipe of', intent: 'scale the recipe of' },
-  calculator: true,
+  calculator: { title: 'Recipe scaling', group: 'protocols' },
   summary:
     "Work out how much of each component a lab-made product's recipe needs for a target batch (e.g. 250 mL of Reagent Diluent). Use this rather than your own arithmetic",
   effect: 'read',
@@ -78,7 +78,7 @@ export const reagentsScaleRecipe = defineContract({
 
 export const reagentsReceiveLot = defineContract({
   id: 'reagents.receive_lot',
-  verbs: { done: 'received a lot of', intent: 'receive a lot of' },
+  verbs: { done: 'received the lot', intent: 'receive the lot' },
   summary:
     "Record a lot of a product: lot number, expiry, dates and the certificate's values for the product's lot fields. A kit lot lists its component lots; a lab-made batch lists the lots it was made from. Containers holding it are inventory's (plan 010)",
   effect: 'write',

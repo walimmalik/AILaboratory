@@ -15,7 +15,7 @@ import {
 
 import { memoryLinks } from '../memory/links.ts';
 
-const PLAN = 'Inventory (plan 010), V1';
+const PLAN = '(plan 010 V1, inventory)';
 
 const kindWords = (kind: string) => kind.replaceAll('_', ' ');
 

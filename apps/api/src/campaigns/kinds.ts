@@ -25,7 +25,7 @@ export const PINNED_KINDS: readonly string[] = [
   'entity',
 ];
 
-const PLAN = 'Campaigns and experiments (plan 013)';
+const PLAN = '(plan 013, campaigns and experiments)';
 
 const check = (
   id: string,

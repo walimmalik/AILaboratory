@@ -9,6 +9,7 @@ import {
   formatDay,
   formatValue,
   partLabel,
+  plainError,
   problemWords,
   waitingForYou,
 } from './format.ts';
@@ -265,5 +266,17 @@ describe('problemWords', () => {
     expect(problemWords({ label: 'Every volume fits its instrument', message: 'Too much' })).toBe(
       'Too much',
     );
+  });
+});
+
+describe('plainError', () => {
+  it('names the fields of input an operation does not take, without glyphs or the ID', () => {
+    expect(plainError('Invalid input for inventory.where_is:\n✖ Invalid input\n  → at of')).toBe(
+      'the request did not fit what it takes (of)',
+    );
+    expect(
+      plainError('Invalid widget attributes:\n✖ Expected string, received number\n  → at color'),
+    ).toBe('Invalid widget attributes: color: expected string, received number');
+    expect(plainError('PLT-0001 is archived')).toBe('PLT-0001 is archived');
   });
 });

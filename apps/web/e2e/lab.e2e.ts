@@ -245,7 +245,9 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   // The draft waits on the Review page, which opens it.
   await page.getByRole('link', { name: /^Review/ }).click();
   const waiting = page.getByRole('row', { name: `Draft ${record.name}` });
-  await expect(waiting).toContainText('Confirm appearance and volume');
+  // What blocks it leads; the parts left are a count, named on hover.
+  await expect(waiting).toContainText('2 parts to confirm');
+  await expect(waiting.getByTitle('Appearance, Volume')).toBeVisible();
   await waiting.getByRole('link', { name: `Review ${record.name}` }).click();
   await expect(page.getByText('needs your review').first()).toBeVisible();
 
@@ -702,6 +704,7 @@ test('a file added on the documents page becomes a draft document with its file'
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: 'Documents' })
     .click();
+  await page.getByRole('button', { name: 'Add documents' }).click();
   const add = page.getByRole('region', { name: 'Add documents' });
   await add.getByLabel('Files').setInputFiles({
     name: `Coating ${stamp}.md`,

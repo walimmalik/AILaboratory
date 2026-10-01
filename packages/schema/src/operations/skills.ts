@@ -53,7 +53,10 @@ export const operationsDescribe = defineContract({
         id: z.string(),
         summary: z.string(),
         effect: z.enum(['read', 'write']),
-        calculator: z.literal(true).optional(),
+        calculator: z
+          .object({ title: z.string(), group: z.string() })
+          .optional()
+          .describe('A lab calculator: its name and group on the Calculators page'),
         input: z.record(z.string(), z.unknown()).optional(),
         output: z.record(z.string(), z.unknown()).optional(),
       }),

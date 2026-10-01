@@ -41,6 +41,7 @@ import {
   useEditorScope,
   ValueEditor,
 } from './FieldEditor.tsx';
+import { RecordSearch } from './RecordSearch.tsx';
 import { actionWords } from './Sops.tsx';
 import { describeSop, TermAnchor, TermBox, TermCards } from './SopText.tsx';
 
@@ -1267,20 +1268,13 @@ function MaterialPicker({
     .flatMap((q) => q.data ?? [])
     .filter((r) => r.status !== 'archived' || r.id === value);
   return (
-    <select
-      className="field"
-      aria-label={label}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value || undefined)}
-    >
-      <option value="">any that fits</option>
-      {value && !records.some((r) => r.id === value) && <option value={value}>{value}</option>}
-      {records.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.label} ({r.name})
-        </option>
-      ))}
-    </select>
+    <RecordSearch
+      records={records}
+      value={value}
+      onChange={onChange}
+      label={label}
+      empty="any that fits"
+    />
   );
 }
 

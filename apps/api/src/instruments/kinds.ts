@@ -14,7 +14,7 @@ import {
 import { findOf, resolveWith } from './resolve.ts';
 import { workcell } from './workcell-kind.ts';
 
-const LIBRARY = 'Instrument library (plan 008)';
+const LIBRARY = '(plan 008, instrument library)';
 
 /** What instrument and equipment kinds share: mounts, sites and capability providers. */
 interface Parts {
@@ -33,7 +33,7 @@ function partsChecks<A extends Parts>(capabilitiesSection: string): KindCheck<A>
       id: 'mounts_consistent',
       label: 'Mounts and their slots have unique names',
       severity: 'blocker',
-      source: `${LIBRARY}: configurations name a mount and a slot`,
+      source: `Configurations name a mount and a slot ${LIBRARY}`,
       section: 'layout',
       fix: 'Rename the repeated mount or slot',
       test: (a) => {
@@ -52,7 +52,7 @@ function partsChecks<A extends Parts>(capabilitiesSection: string): KindCheck<A>
       id: 'sites_consistent',
       label: 'Sites have unique names and sit on real mounts',
       severity: 'blocker',
-      source: `${LIBRARY}: labware placement names a site`,
+      source: `Labware placement names a site ${LIBRARY}`,
       section: 'layout',
       fix: 'Rename the repeated site, or point it at a mount and slot that exist',
       test: (a) => {
@@ -93,7 +93,7 @@ function partsChecks<A extends Parts>(capabilitiesSection: string): KindCheck<A>
       id: 'limits_known',
       label: 'Capability limits are known',
       severity: 'warning',
-      source: `${LIBRARY}: the scheduler and designers pick instruments by their limits`,
+      source: `The scheduler and designers pick instruments by their limits ${LIBRARY}`,
       section: capabilitiesSection,
       fix: 'Add the limits from the datasheet (the capability catalog says which each one needs)',
       test: (a) => {
@@ -110,7 +110,7 @@ function partsChecks<A extends Parts>(capabilitiesSection: string): KindCheck<A>
       id: 'model_known',
       label: 'Manufacturer and model are known',
       severity: 'warning',
-      source: `${LIBRARY}: needed to match it to a datasheet and to service`,
+      source: `Needed to match it to a datasheet and to service ${LIBRARY}`,
       section: 'identity',
       fix: 'Add the manufacturer and model',
       test: (a) => (a.manufacturer && a.model ? true : 'Manufacturer or model is missing'),
@@ -124,7 +124,7 @@ const instrumentChecks: KindCheck<InstrumentKindAttributes>[] = [
     id: 'does_something',
     label: 'It can do something',
     severity: 'warning',
-    source: `${LIBRARY}: digital SOP steps bind to capabilities`,
+    source: `Digital SOP steps bind to capabilities ${LIBRARY}`,
     section: 'capabilities',
     fix: 'List its capabilities, or the mounts for the equipment that brings them',
     test: (a) =>
@@ -136,7 +136,7 @@ const instrumentChecks: KindCheck<InstrumentKindAttributes>[] = [
     id: 'manual_by_person',
     label: 'Manual stations are worked by a person',
     severity: 'warning',
-    source: `${LIBRARY}: the scheduler books an operator for manual work`,
+    source: `The scheduler books an operator for manual work ${LIBRARY}`,
     section: 'identity',
     fix: 'Set "performed by" to person, or choose another category',
     test: (a) =>
@@ -152,7 +152,7 @@ const equipmentChecks: KindCheck<EquipmentKindAttributes>[] = [
     id: 'placement_consistent',
     label: 'Extra slots follow the allowed slots',
     severity: 'blocker',
-    source: `${LIBRARY}: the resolver works out what equipment takes up`,
+    source: `The resolver works out what equipment takes up ${LIBRARY}`,
     section: 'layout',
     fix: 'Only give extra slots for slots it may go in',
     test: (a) => {
@@ -239,7 +239,7 @@ const instrumentChecksOnInstance: KindCheck<InstrumentAttributes>[] = [
     id: 'identified',
     label: 'Serial number is known',
     severity: 'warning',
-    source: `${LIBRARY}: service, calibration and support go by serial`,
+    source: `Service, calibration and support go by serial ${LIBRARY}`,
     section: 'identity',
     fix: 'Add the serial from the label on the instrument',
     test: (a) => a.serial !== undefined || 'Not given',
@@ -248,7 +248,7 @@ const instrumentChecksOnInstance: KindCheck<InstrumentAttributes>[] = [
     id: 'calibration_due_known',
     label: 'Next calibration date is known',
     severity: 'warning',
-    source: `${LIBRARY}: the scheduler avoids instruments that are due`,
+    source: `The scheduler avoids instruments that are due ${LIBRARY}`,
     section: 'service',
     fix: 'Log the last service with the date calibration is next due',
     test: (a) => a.calibrationDue !== undefined || 'Not given',
@@ -306,7 +306,7 @@ export const instrument = defineKind({
           id: 'configuration_resolves',
           label: 'Installed equipment fits the instrument',
           severity: 'blocker',
-          source: `${LIBRARY}: mounts, sites and equipment on the kinds`,
+          source: `Mounts, sites and equipment on the kinds ${LIBRARY}`,
           section: 'configuration',
           passed: errors.length === 0,
           ...(errors.length > 0 ? { message: errors.join('; ') } : {}),

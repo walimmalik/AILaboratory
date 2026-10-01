@@ -347,11 +347,14 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['review'] }),
   });
   const [sure, setSure] = useState(false);
-  const todo = item.sectionsToConfirm.length
-    ? `Confirm ${new Intl.ListFormat('en', { type: 'conjunction' }).format(item.sectionsToConfirm.map((t) => t.toLowerCase()))}`
-    : item.missing.length
-      ? item.missing.join('; ')
-      : 'Confirm it';
+  const parts = item.sectionsToConfirm;
+  // What blocks the draft leads; the parts left to confirm are a count, named on hover.
+  const toConfirm =
+    parts.length === 0
+      ? undefined
+      : parts.length === 1
+        ? `${parts[0]} to confirm`
+        : `${parts.length} parts to confirm`;
   return (
     <tr aria-label={`Draft ${record.name}`}>
       <td>
@@ -362,7 +365,12 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
         {record.summary && <div className="muted">{record.summary}</div>}
       </td>
       <td>
-        {todo}
+        {item.blockers.join('; ')}
+        {item.blockers.length > 0 && toConfirm && ' · '}
+        {toConfirm && (
+          <span title={parts.length > 1 ? parts.join(', ') : undefined}>{toConfirm}</span>
+        )}
+        {item.blockers.length === 0 && !toConfirm && 'Ready to confirm'}
         {item.assumed > 0 && <span className="agent-ink"> · {item.assumed} unverified</span>}
         {item.unchecked > 0 && (
           <span className="agent-ink">
@@ -526,7 +534,7 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
           {steps.map((step, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: steps are a fixed, ordered list
             <li key={i}>
-              {operationIntent(step.operation)} <TargetName step={step} />
+              {sentence(operationIntent(step.operation))} <TargetName step={step} />
               <StepChanges step={step} />
             </li>
           ))}
@@ -568,4 +576,9 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
       {failed && <p className="error-text">Could not apply: {failed}</p>}
     </article>
   );
+}
+
+/** A step of a change set starts its own line, so its words start with a capital. */
+function sentence(words: string): string {
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

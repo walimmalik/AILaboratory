@@ -280,7 +280,12 @@ function Step({
         <summary>technical details</summary>
         <pre className="json">
           {JSON.stringify(
-            { operation: call.operationId, input: call.input, result: result?.result },
+            {
+              operation: call.operationId,
+              input: call.input,
+              result: result?.result,
+              ...(result?.error ? { error: result.error } : {}),
+            },
             null,
             2,
           )}

@@ -40,6 +40,17 @@ export function discriminator(variants: JsonSchema[]): string | undefined {
   );
 }
 
+/**
+ * Variants told apart by what they hold rather than a `kind` field (an instrument, or limits): for
+ * each, a required property no other variant has. Undefined when some variant has none.
+ */
+export function shapeKeys(variants: JsonSchema[]): string[] | undefined {
+  const keys = variants.map((v) =>
+    (v.required ?? []).find((key) => variants.every((o) => o === v || !o.properties?.[key])),
+  );
+  return keys.every((k): k is string => k !== undefined) ? keys : undefined;
+}
+
 /** Values one line of text can say: numbers, names, quantities ("50 uL") and lists of them. */
 export function typedByText(s: JsonSchema, root: JsonSchema): boolean {
   if (s.type === 'string' || s.type === 'integer' || s.type === 'number' || isQuantity(s))
