@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Actor, Quantity, Readiness, RecordEnvelope, WellState } from '@ailab/schema';
+import type {
+  Actor,
+  Quantity,
+  Readiness,
+  RecordEnvelope,
+  TransferPlanAttributes,
+  TransferRunAttributes,
+  WellState,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -21,6 +29,7 @@ import { plateMapKinds } from '../platemaps/kinds.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import { observeSurveyLow, observeTransferExceptions } from './detectors.ts';
 import { type EchoRow, echoPickList, readEchoReport } from './echo.ts';
 import { transferKinds } from './kinds.ts';
 
@@ -1248,3 +1257,131 @@ async function confirmedAlready(record: RecordEnvelope, section: string) {
   const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
   return state.sections.find((s) => s.id === section)?.state === 'confirmed';
 }
+
+describe('lab memory detectors on Echo reports', () => {
+  it('proposes a quirk when transfers fail in 3 reports on 2 days, and makes it due after 10 quiet reports', async () => {
+    const { echo, pp } = await lab();
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: pp.id, containers: Array.from({ length: 14 }, () => ({})) },
+    );
+    const evidence = containers.map((c) => c.id);
+    const wells = Array.from({ length: 20 }, (_, i) => `B${i + 1}`);
+    const plan = {
+      label: 'Twenty transfers',
+      plates: [
+        { id: 'src', role: 'source', labwareType: { id: pp.id, version: pp.version } },
+        { id: 'assay', role: 'destination', labwareType: { id: pp.id, version: pp.version } },
+      ],
+      groups: [
+        {
+          id: 'g',
+          label: 'Echo',
+          method: 'direct_dispense',
+          instrument: { instrument: echo.id },
+          reason: 'Nanolitres',
+          transfers: wells.map((well) => ({
+            from: { plate: 'src', well: 'A1' },
+            to: { plate: 'assay', well },
+            volume: nL('2500'),
+          })),
+        },
+      ],
+    } as unknown as TransferPlanAttributes;
+    const planned = (plan.groups[0]?.transfers ?? []).map((t) => ({ group: 'g', t }));
+    const execution = (id: string, day: string, failed: number) => ({
+      id,
+      attributes: {
+        at: `${day}T10:00:00.000Z`,
+        exceptions: wells.slice(0, failed).map((well, index) => ({
+          group: 'g',
+          index,
+          from: { plate: 'src', well: 'A1' },
+          to: { plate: 'assay', well },
+          outcome: 'failed',
+          planned: nL('2500'),
+        })),
+      } as unknown as TransferRunAttributes,
+    });
+    const deps = registry.deps;
+    // One failed transfer in 20 is noise; two is a run that shows it.
+    await observeTransferExceptions(
+      deps,
+      person,
+      plan,
+      planned,
+      execution(evidence[13] as string, '2026-09-30', 1),
+    );
+    expect(
+      (await run<{ candidates: unknown[] }>(person, 'memory.candidates', {})).candidates,
+    ).toEqual([]);
+    const days = ['2026-10-01', '2026-10-01', '2026-10-02'];
+    for (const [i, day] of days.entries())
+      await observeTransferExceptions(
+        deps,
+        person,
+        plan,
+        planned,
+        execution(evidence[i] as string, day, 2),
+      );
+    const { candidates } = await run<{
+      candidates: { key: string; status: string; memory: string }[];
+    }>(person, 'memory.candidates', {});
+    expect(candidates).toEqual([
+      expect.objectContaining({ key: `${echo.id}|${pp.id}|no_class|failed`, status: 'proposed' }),
+    ]);
+    const proposal = await run<RecordEnvelope>(person, 'records.get', {
+      id: candidates[0]?.memory,
+    });
+    expect(proposal.attributes).toMatchObject({
+      statement: 'On Echo 1, Echo transfers from Echo 384PP plates fail in 5% or more of transfers',
+      kind: 'quirk',
+      about: [echo.id, pp.id],
+      conditions: { instrument: echo.id, labware: pp.id },
+      source: { from: 'run', note: 'seen in 3 runs on 2 days since 2026-10-01' },
+    });
+    await run(person, 'records.confirm', { id: proposal.id, expectedVersion: proposal.version });
+    for (const id of evidence.slice(3, 13))
+      await observeTransferExceptions(deps, person, plan, planned, execution(id, '2026-10-05', 0));
+    const found = await run<{ memories: { due: boolean; evidence?: unknown }[] }>(
+      agent,
+      'memory.for',
+      { records: [echo.id] },
+    );
+    expect(found.memories[0]).toMatchObject({
+      due: true,
+      evidence: { for: 3, quiet: 10, due: 'quiet' },
+    });
+  });
+
+  it('collects surveys that measure less than the inventory, per labware type', async () => {
+    const { pp } = await lab();
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: pp.id, containers: [{}, {}] },
+    );
+    const compared = (low: number) =>
+      Array.from({ length: 20 }, (_, i) => ({ lwt: pp.id, low: i < low }));
+    await observeSurveyLow(registry.deps, person, containers[0]?.id as string, compared(1));
+    expect(
+      (await run<{ candidates: unknown[] }>(person, 'memory.candidates', {})).candidates,
+    ).toEqual([]);
+    await observeSurveyLow(registry.deps, person, containers[1]?.id as string, compared(3));
+    const { candidates } = await run<{
+      candidates: { key: string; status: string; observations: { note: string }[] }[];
+    }>(person, 'memory.candidates', {});
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        key: `${pp.id}|lower`,
+        status: 'collecting',
+        observations: [
+          expect.objectContaining({
+            note: '3 of 20 wells measured less than the inventory records',
+          }),
+        ],
+      }),
+    ]);
+  });
+});
