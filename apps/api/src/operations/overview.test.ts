@@ -10,6 +10,7 @@ import { instrumentKinds } from '../instruments/kinds.ts';
 import { inventoryKinds } from '../inventory/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
 import { libraryKinds } from '../library/kinds.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import { plateMapKinds } from '../platemaps/kinds.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
@@ -175,6 +176,7 @@ describe('overview builders', () => {
       ...campaignKinds,
       ...plateMapKinds,
       ...transferKinds,
+      ...memoryKinds,
     ].map((k) => k.kind);
     const built = new Set(overviewKinds());
     expect(all.filter((k) => !built.has(k) && !FALLBACK_KINDS.has(k))).toEqual([]);

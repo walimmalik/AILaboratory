@@ -9,6 +9,7 @@ export * from './instruments.ts';
 export * from './labware.ts';
 export * from './liquids.ts';
 export * from './media.ts';
+export * from './memory.ts';
 export * from './mentions.ts';
 export * from './opentrons.ts';
 export * from './platemap.ts';

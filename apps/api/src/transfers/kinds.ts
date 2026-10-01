@@ -4,9 +4,12 @@ import {
   TransferPlanAttributes as TransferPlanSchema,
   type TransferRunAttributes,
   TransferRunAttributes as TransferRunSchema,
+  type WorklistFormatAttributes,
+  WorklistFormatAttributes as WorklistFormatSchema,
 } from '@ailab/schema';
 import { checkPin, stable } from '../records/pins.ts';
 import { planRules, toCheck } from './rules.ts';
+import { formatProblems } from './worklists.ts';
 
 /**
  * A transfer plan (plan 016, T1): plates and groups of transfers, each one method on one instrument
@@ -94,4 +97,36 @@ export const transferRun = defineKind({
   },
 });
 
-export const transferKinds = [transferPlan, transferRun];
+/**
+ * A worklist format (plan 016c, T1, ADR 0061): the CSV the lab's own method on an instrument reads, drafted
+ * from an example file and confirmed by a person. The generic writer fills it from a group.
+ */
+export const worklistFormat = defineKind({
+  kind: 'worklist_format',
+  idPrefix: 'wlf',
+  namePrefix: 'WLF',
+  nameWidth: 4,
+  attributes: WorklistFormatSchema,
+  links: (a: WorklistFormatAttributes) => [
+    { toId: a.instrumentKind, relation: 'read_by' },
+    ...(a.example ? [{ toId: a.example, relation: 'drafted_from' }] : []),
+  ],
+  sections: [
+    {
+      id: 'method',
+      title: 'Instrument and method',
+      fields: ['instrumentKind', 'method', 'example', 'notes'],
+    },
+    { id: 'columns', title: 'Columns', fields: ['layout', 'volumeUnit', 'tips'] },
+  ],
+  related: async (a, { get }) => {
+    const invalid = formatProblems(a);
+    if ((await get(a.instrumentKind))?.kind !== 'instrument_kind')
+      invalid.push(`${a.instrumentKind} is not an instrument kind in this lab`);
+    if (a.example && (await get(a.example))?.kind !== 'file')
+      invalid.push(`${a.example} is not a file in this lab`);
+    return invalid.length ? { invalid } : {};
+  },
+});
+
+export const transferKinds = [transferPlan, transferRun, worklistFormat];

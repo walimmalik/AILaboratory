@@ -43,12 +43,14 @@ export const FALLBACK_KINDS = new Set([
   'liquid_class',
   'liquid_class_verification',
   'liquid_type',
+  'memory',
   'run',
   'set',
   'sop',
   'transfer_plan',
   'transfer_run',
   'workcell',
+  'worklist_format',
 ]);
 
 export const overviewKinds = () => Object.keys(builders);

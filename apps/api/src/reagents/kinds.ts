@@ -5,7 +5,7 @@ import {
   LotAttributes,
   ProductAttributes,
 } from '@ailab/schema';
-
+import { memoryLinks } from '../memory/links.ts';
 import { liquidKinds } from './liquid-kinds.ts';
 
 const PLAN = 'Reagents and liquids (plan 009)';
@@ -98,6 +98,7 @@ export const product = defineKind({
     ...(a.liquidClasses ?? []).map((c) => ({ toId: c, relation: 'uses_class' })),
     ...(a.components ?? []).map((c) => ({ toId: c.product, relation: 'has_component' })),
     ...(a.recipe?.components ?? []).map((c) => ({ toId: c.product, relation: 'made_from' })),
+    ...memoryLinks(a.handlingRules),
   ],
   sections: [
     {

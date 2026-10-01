@@ -1,0 +1,130 @@
+# Lab memory for the demo lab (plan 005a, M18): fictional Demo Lab conventions, preferences,
+# quirks, lessons and facts, as a person in the lab would state them. Loaded as stated memories and
+# confirmed per the seed rule (ADR 0044). No derived memories: there is no real evidence to link.
+# Records are named by kind and label; a memory whose record isn't in the lab yet waits a pass.
+# Personal memories wait for people records (the seed lab's people are names in lab.yaml only),
+# so the people here are named in the statements.
+
+memories:
+  # Conventions
+  - statement: Block ELISA plates with 1% BSA in PBS, never with milk (milk carries biotin that the streptavidin-HRP detects)
+    kind: convention
+    strength: rule
+    about: [{sop: "Human IL-6 sandwich ELISA (DuoSet), 96-well"}]
+  - statement: ELISA standards go in columns 1 and 2, blanks in row H of those columns
+    kind: convention
+    strength: default
+    about: [{sop: "Human IL-6 sandwich ELISA (DuoSet), 96-well"}]
+    conditions: {roles: [standard, blank]}
+  - statement: Run every ELISA standard, blank and sample in duplicate
+    kind: convention
+    strength: default
+    about: [{sop: "Human IL-6 sandwich ELISA (DuoSet), 96-well"}]
+    effect: {effect: set, slot: replicates, value: 2}
+  - statement: Compound screens keep DMSO at or below 0.5% v/v in the assay well
+    kind: convention
+    strength: rule
+    about: [{sop: "Compound screen, single point and dose-response follow-up (Echo 650, 384-well)"}]
+    when: Cell-based assays; biochemical assays may go to 1%
+  - statement: Neutral (DMSO) controls in columns 1 and 2, staurosporine in columns 23 and 24 of every 384-well screen plate
+    kind: convention
+    strength: default
+    about: [{sop: "Compound screen, single point and dose-response follow-up (Echo 650, 384-well)"}]
+    conditions: {roles: [neutral_control, positive_control]}
+  - statement: Live cells spend at most 30 min out of the incubator per handling step
+    kind: convention
+    strength: rule
+    about: [{sop: "Seeding HEK293 cells into 384-well assay plates (Mantis)"}, {sop: "HEK293 routine passaging"}]
+  - statement: Keep Echo source plates sealed whenever they are not on the Echo; DMSO takes up water and shifts the calibration
+    kind: convention
+    strength: rule
+    about: [{instrument_kind: Echo 650}]
+    conditions: {liquidType: {liquid_type: DMSO}}
+  - statement: Add the enzyme last and keep assembly reactions on ice or in the -20 C benchtop cooler during setup
+    kind: convention
+    strength: note
+    about: [{sop: "Gibson / NEBuilder HiFi assembly"}, {sop: "Golden Gate assembly (BsaI-HFv2)"}]
+  - statement: Read luminescence after 10 min at room temperature, not straight from the incubator
+    kind: convention
+    strength: default
+    about: [{sop: "CellTiter-Glo 2.0 viability readout, 384-well"}, {sop: "Nano-Glo HiBiT lytic readout, 384-well"}]
+
+  # Preferences
+  - statement: Use the Flex for liquid handling with fewer than 96 samples; the STAR for larger runs
+    kind: preference
+    strength: default
+    conditions: {samples: {max: 95}, capability: transfer}
+    effect: {effect: prefer, record: {instrument_kind: Opentrons Flex}}
+  - statement: Seed cells on Mondays or Tuesdays so readouts don't fall on the weekend
+    kind: preference
+    strength: note
+    about: [{sop: "Seeding HEK293 cells into 384-well assay plates (Mantis)"}]
+  - statement: Dispense cells with the Mantis HV chip rather than by multichannel for 384-well plates
+    kind: preference
+    strength: default
+    about: [{sop: "Seeding HEK293 cells into 384-well assay plates (Mantis)"}]
+    effect: {effect: prefer, record: {instrument_kind: Formulatrix MANTIS}}
+  - statement: Use the 384LDV source plate for DMSO stocks under 12 uL per well and the 384PP plate above that
+    kind: preference
+    strength: note
+    about: [{instrument_kind: Echo 650}]
+
+  # Quirks
+  - statement: The STAR drips with the default water class below 5 uL; move small water volumes on another instrument
+    kind: quirk
+    strength: default
+    about: [{instrument_kind: Hamilton Microlab STAR}]
+    conditions:
+      instrumentKind: {instrument_kind: Hamilton Microlab STAR}
+      capability: transfer
+      volume: {max: {value: "5", unit: uL}}
+      liquidType: {liquid_type: Aqueous}
+    effect: {effect: avoid, record: {instrument_kind: Hamilton Microlab STAR}}
+  - statement: The Spark's top-left well (A1) reads about 5% high in luminescence; keep it for a blank or leave it empty
+    kind: quirk
+    strength: note
+    about: [{instrument_kind: Tecan Spark Cyto}]
+  - statement: The Mantis HV chip needs a 30 s prime before the first plate, or the first column comes out low
+    kind: quirk
+    strength: note
+    about: [{instrument_kind: Formulatrix MANTIS}]
+  - statement: The XPeel misses about one seal in fifty on LDV plates; look before putting the plate on the Echo
+    kind: quirk
+    strength: note
+    about: [{instrument_kind: Azenta XPeel}, {instrument_kind: Echo 650}]
+  - statement: The BlueWasher leaves about 3 uL per well on flat-bottom 96 plates; add a final aspirate for ELISAs
+    kind: quirk
+    strength: note
+    about: [{instrument_kind: BlueCatBio BlueWasher}]
+
+  # Lessons
+  - statement: Edge wells evaporate in the 37 C incubator after 48 h; fill the outer wells with medium in assays that run that long
+    kind: lesson
+    strength: default
+    conditions: {temperature: {min: {value: "37", unit: degC}}}
+    when: Plates incubated 48 h or more
+  - statement: HEK293 lift off the plate when dispensed faster than 100 uL/s; dispense cells gently
+    kind: lesson
+    strength: rule
+    about: [{sop: "Seeding HEK293 cells into 384-well assay plates (Mantis)"}]
+  - statement: pNPP reactions go non-linear after 30 min at 37 C; read kinetics within the first 20 min
+    kind: lesson
+    strength: note
+    about: [{sop: "Alkaline phosphatase kinetic screen (pNPP, absorbance 405 nm), 96-well"}]
+  - statement: Freshly thawed staurosporine plates give weaker kill than plates thawed the day before; thaw controls overnight at 4 C
+    kind: lesson
+    strength: note
+    about: [{sop: "Compound screen, single point and dose-response follow-up (Echo 650, 384-well)"}]
+
+  # Facts
+  - statement: Priya Nair owns the FlexPod workcell; ask her before changing its deck or schedule
+    kind: fact
+    strength: note
+    about: [{instrument_kind: HighRes Nucleus FlexPod}]
+  - statement: The cold room door alarm sounds after 2 min open
+    kind: fact
+    strength: note
+  - statement: Jordan Lee runs the weekly HEK293 passage on Thursdays
+    kind: fact
+    strength: note
+    about: [{sop: "HEK293 routine passaging"}]
