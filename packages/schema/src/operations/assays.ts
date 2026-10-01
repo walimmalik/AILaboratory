@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { AssayTemplateAttributes, AssayTemplateId } from '../assays.ts';
 import { CampaignId } from '../campaigns.ts';
 import { EvidenceInput } from '../design.ts';
-import { RecordId } from '../ids.ts';
+import { RecordId, recordIdOf } from '../ids.ts';
 import { CapabilityId } from '../instruments.ts';
 import { defineContract } from '../operation.ts';
 import { Quantity } from '../quantity.ts';
@@ -157,5 +157,56 @@ export const designerStart = defineContract({
       })
       .optional(),
     lines: z.array(z.string()).describe('What was drafted, and what was left for later'),
+  }),
+});
+
+export const designerFeasibility = defineContract({
+  id: 'designer.feasibility',
+  verbs: { done: 'checked the feasibility of', intent: 'check the feasibility of' },
+  summary:
+    "Check whether the lab can run an experiment designed from an assay template (plan 017b, D6), before anything is confirmed: for each instrument role and readout, the lab's registered instruments that can do it on this plate format (preferred ones first, with their status); the plates and wells from the template's rules; and the protocol amounts, with what is still missing. Use it after designer.start and after changes, and tell the person what the lab can't do and what it would use instead",
+  effect: 'read',
+  input: z.strictObject({
+    experiment: recordIdOf('exp'),
+    version: z.number().int().positive().optional().describe('Default the current version'),
+  }),
+  output: z.object({
+    template: z.object({ id: AssayTemplateId, name: z.string(), version: z.number().int() }),
+    needs: z.array(
+      z.object({
+        for: z
+          .string()
+          .describe('e.g. "the role reader in assay" or "the readout Absorbance 450 nm"'),
+        capability: CapabilityId,
+        instruments: z.array(
+          z.object({
+            id: RecordId,
+            name: z.string(),
+            label: z.string(),
+            status: z.string(),
+            preferred: z.boolean(),
+          }),
+        ),
+        verdict: z
+          .enum(['ready', 'not_ready', 'missing'])
+          .describe(
+            'ready: one can do it now; not_ready: only ones in maintenance or out of service',
+          ),
+      }),
+    ),
+    totals: z
+      .object({
+        conditions: z.number().int(),
+        plates: z.number().int(),
+        totalPlates: z.number().int(),
+        totalWells: z.number().int(),
+      })
+      .optional(),
+    amounts: z.object({
+      ready: z.boolean(),
+      problems: z.array(z.string()),
+    }),
+    feasible: z.boolean().describe('Every need has a ready instrument and every amount works out'),
+    lines: z.array(z.string()),
   }),
 });
