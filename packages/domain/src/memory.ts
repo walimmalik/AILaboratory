@@ -45,8 +45,8 @@ export const isDue = (checkAgain: string | undefined, today: string) =>
 // ---------------------------------------------------------------------------------------------
 // Which memories apply to a piece of work (plan 005b, M2, M7, M8, change 2 and 4).
 
-/** An active memory as matching reads it. */
-export interface MemoryCandidate {
+/** A confirmed memory as matching reads it. */
+export interface ActiveMemory {
   id: string;
   name: string;
   attributes: MemoryAttributes;
@@ -64,7 +64,7 @@ export interface MemoryRequest {
 }
 
 export interface MemoryMatch {
-  memory: MemoryCandidate;
+  memory: ActiveMemory;
   /** Every condition was evaluated and holds, so code may apply its effect. */
   applies: boolean;
   /** Conditions the request couldn't evaluate (its facts leave the key out). */
@@ -125,10 +125,7 @@ function holds(
  * else, a condition the facts contradict, or a memory neither about the records, nor lab-wide with
  * a condition that held, nor a lab-wide rule.
  */
-export function matchMemory(
-  memory: MemoryCandidate,
-  request: MemoryRequest,
-): MemoryMatch | undefined {
+export function matchMemory(memory: ActiveMemory, request: MemoryRequest): MemoryMatch | undefined {
   const a = memory.attributes;
   const personal = a.appliesTo.to === 'person';
   if (a.appliesTo.to === 'person' && a.appliesTo.user !== request.person) return undefined;
@@ -165,7 +162,7 @@ export function compareMatches(a: MemoryMatch, b: MemoryMatch): number {
 
 /** Every relevant memory for the work, most specific first. */
 export function memoriesFor(
-  memories: readonly MemoryCandidate[],
+  memories: readonly ActiveMemory[],
   request: MemoryRequest,
 ): MemoryMatch[] {
   return memories
@@ -205,9 +202,9 @@ const specificity = (m: MemoryMatch) =>
 /** Pairs of applying memories of equal specificity whose effects clash; code applies neither's lead. */
 export function matchConflicts(
   matches: readonly MemoryMatch[],
-): { memories: [MemoryCandidate, MemoryCandidate]; why: string }[] {
+): { memories: [ActiveMemory, ActiveMemory]; why: string }[] {
   const applying = matches.filter((m) => m.applies && m.memory.attributes.effect);
-  const out: { memories: [MemoryCandidate, MemoryCandidate]; why: string }[] = [];
+  const out: { memories: [ActiveMemory, ActiveMemory]; why: string }[] = [];
   for (const [i, x] of applying.entries())
     for (const y of applying.slice(i + 1)) {
       if (specificity(x) !== specificity(y)) continue;
@@ -255,8 +252,8 @@ type NumberRange = { min?: number | undefined; max?: number | undefined };
  */
 export function memoryConflicts(
   memory: MemoryAttributes,
-  others: readonly MemoryCandidate[],
-): { memory: MemoryCandidate; why: string }[] {
+  others: readonly ActiveMemory[],
+): { memory: ActiveMemory; why: string }[] {
   if (!memory.effect) return [];
   const who = (a: MemoryAttributes) => (a.appliesTo.to === 'lab' ? 'lab' : a.appliesTo.user);
   const count = (a: MemoryAttributes) => Object.keys(a.conditions ?? {}).length;
@@ -274,16 +271,16 @@ export function memoryConflicts(
 }
 
 /** One line for an agent's prompt: name, strength and statement. */
-export const memoryLine = (m: Pick<MemoryCandidate, 'name' | 'attributes'>) =>
+export const memoryLine = (m: Pick<ActiveMemory, 'name' | 'attributes'>) =>
   `${m.name} (${m.attributes.strength}) ${m.attributes.statement}`;
 
 export interface AppliedEffects {
   /** Records to rank first, with the memory that says so. */
-  prefer: Map<string, MemoryCandidate>;
+  prefer: Map<string, ActiveMemory>;
   /** Records to rank last (a default) or refuse (a rule). */
-  avoid: Map<string, MemoryCandidate>;
+  avoid: Map<string, ActiveMemory>;
   /** Slot values to fill. */
-  set: Map<string, { value: unknown; memory: MemoryCandidate }>;
+  set: Map<string, { value: unknown; memory: ActiveMemory }>;
 }
 
 /**
@@ -304,4 +301,42 @@ export function appliedEffects(matches: readonly MemoryMatch[]): AppliedEffects 
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Candidates from detectors (plan 005c-1, M13, M14).
+
+/** The default bar: seen in at least 3 records on at least 2 different days. */
+export const DEFAULT_BAR = { records: 3, days: 2 } as const;
+
+/** How many different records and days the observations cover. */
+export function coverage(observations: readonly { evidence: string; day: string }[]) {
+  return {
+    records: new Set(observations.map((o) => o.evidence)).size,
+    days: new Set(observations.map((o) => o.day)).size,
+    since: observations.map((o) => o.day).sort()[0],
+  };
+}
+
+/**
+ * Whether a candidate is proposed now: it passes its bar, and when its earlier proposal was
+ * rejected, the records seen since then are at least twice those it was proposed with.
+ */
+export function passesBar(
+  observations: readonly { evidence: string; day: string }[],
+  bar: { records: number; days: number },
+  rejectedWith?: number,
+): boolean {
+  const { records, days } = coverage(observations);
+  if (records < bar.records || days < bar.days) return false;
+  return rejectedWith === undefined || records - rejectedWith >= 2 * rejectedWith;
+}
+
+/** The evidence line a proposal shows, e.g. "seen in 4 runs on 3 days since 2026-10-02". */
+export function evidenceLine(
+  observations: readonly { evidence: string; day: string }[],
+  noun: { one: string; many: string },
+): string {
+  const { records, days, since } = coverage(observations);
+  return `seen in ${records} ${records === 1 ? noun.one : noun.many} on ${days} day${days === 1 ? '' : 's'} since ${since}`;
 }

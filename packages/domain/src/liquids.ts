@@ -9,7 +9,7 @@ import type {
   VerificationResult,
 } from '@ailab/schema';
 import { LabDecimal, toDecimalString } from './decimal.ts';
-import type { AppliedEffects, MemoryCandidate } from './memory.ts';
+import type { ActiveMemory, AppliedEffects } from './memory.ts';
 import { compare, convert, formatQuantity } from './units.ts';
 
 /** Liquid calculators (plan 009b): mixtures' liquid types, verification results, class choice. */
@@ -163,11 +163,11 @@ export function misfit(a: LiquidClassAttributes, r: ClassRequest): string | unde
 }
 
 export function resolveClass(request: ClassRequest, classes: ClassInfo[]): ClassChoice {
-  const prefer = request.memory?.prefer ?? new Map<string, MemoryCandidate>();
-  const avoid = request.memory?.avoid ?? new Map<string, MemoryCandidate>();
+  const prefer = request.memory?.prefer ?? new Map<string, ActiveMemory>();
+  const avoid = request.memory?.avoid ?? new Map<string, ActiveMemory>();
   // A lab rule that avoids a class refuses it; a default only ranks it last.
   const refused = (c: ClassInfo) => avoid.get(c.id)?.attributes.strength === 'rule';
-  const cite = (...ms: (MemoryCandidate | undefined)[]) => {
+  const cite = (...ms: (ActiveMemory | undefined)[]) => {
     const used = ms.flatMap((m) =>
       m ? [{ id: m.id, name: m.name, statement: m.attributes.statement }] : [],
     );
@@ -212,7 +212,7 @@ export function resolveClass(request: ClassRequest, classes: ClassInfo[]): Class
 
   const preferred = usable.find((c) => prefer.has(c.id) && fits(c) && serves(c));
   if (preferred) {
-    const m = prefer.get(preferred.id) as MemoryCandidate;
+    const m = prefer.get(preferred.id) as ActiveMemory;
     return {
       ...choice(preferred, 'lab_memory', `Lab memory ${m.name} prefers ${preferred.label}`),
       ...cite(m),
