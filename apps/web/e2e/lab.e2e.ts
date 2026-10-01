@@ -676,7 +676,7 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
 test('scanning a tube opens it and moves it into a box position', async ({ page }) => {
   await signIn(page);
   const stamp = Date.now();
-  await asPerson(page, 'locations.create', {
+  const fridge = await asPerson(page, 'locations.create', {
     label: `Fridge ${stamp}`,
     type: 'fridge',
   });
