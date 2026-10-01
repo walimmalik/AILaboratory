@@ -8,6 +8,7 @@ import { fileKinds } from '../files/kinds.ts';
 import { MemoryFileStore } from '../files/store.ts';
 import { labwareKinds } from '../labware/kinds.ts';
 import { libraryKinds } from '../library/kinds.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import { ActivityBus, createRegistry, type OperationRegistry } from '../operations/index.ts';
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
@@ -44,6 +45,7 @@ beforeEach(async () => {
     ...libraryKinds,
     ...sopKinds,
     ...campaignKinds,
+    ...memoryKinds,
   ])
     kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
@@ -1176,3 +1178,70 @@ async function confirmedAlready(record: RecordEnvelope, section: string) {
   const state = await run<Readiness>(person, 'records.readiness', { id: record.id });
   return state.sections.find((s) => s.id === section)?.state === 'confirmed';
 }
+
+describe('the recurring deviation detector (005c-1)', () => {
+  it('proposes one lesson after the same change in 3 runs on 2 days, and again only once the evidence doubles', async () => {
+    let experiment = await plannedExperiment();
+    const runWith = async (date: string, volume = '90') => {
+      const started = await run(person, 'runs.start', {
+        experiment: experiment.id,
+        expectedVersion: experiment.version,
+        date,
+      });
+      experiment = await run(person, 'records.get', { id: experiment.id });
+      const coated = await run(person, 'runs.record_step', {
+        id: started.id,
+        expectedVersion: started.version,
+        part: 'coating',
+        step: 'coat',
+        changed: [{ name: 'volume', value: { value: volume, unit: 'uL' } }],
+        why: 'The coating solution ran short',
+      });
+      const done = await run(person, 'runs.done_as_planned', {
+        id: coated.id,
+        expectedVersion: coated.version,
+      });
+      return run(person, 'runs.finish', {
+        id: done.id,
+        expectedVersion: done.version,
+        status: 'done',
+      });
+    };
+    const lessons = async () =>
+      (await run<{ memories: RecordEnvelope[] }>(person, 'memory.search', { status: 'draft' }))
+        .memories;
+
+    await runWith('2026-10-01');
+    await runWith('2026-10-01');
+    await runWith('2026-10-01', '110');
+    expect(await lessons()).toEqual([]);
+    await runWith('2026-10-02');
+    const [lesson] = await lessons();
+    expect(lesson?.createdBy).toMatchObject({
+      type: 'agent',
+      agentName: 'Lab memory detector (runs.recurring_deviation)',
+    });
+    expect(lesson?.attributes).toMatchObject({
+      statement: 'Runs of Plate coating record volume in "Coat" lower than the planned 100 µL',
+      kind: 'lesson',
+      strength: 'note',
+      source: { from: 'run', note: 'seen in 3 runs on 2 days since 2026-10-01' },
+    });
+
+    // Discarding it is a rejection: 3 more runs bring nothing, 6 more bring it back.
+    await run(person, 'records.delete_draft', { id: lesson?.id, expectedVersion: lesson?.version });
+    for (const day of ['2026-10-03', '2026-10-03', '2026-10-04']) await runWith(day);
+    expect(await lessons()).toEqual([]);
+    for (const day of ['2026-10-05', '2026-10-05', '2026-10-06']) await runWith(day);
+    expect(await lessons()).toHaveLength(1);
+    const { candidates } = await run<{ candidates: { status: string; proposedWith: number }[] }>(
+      person,
+      'memory.candidates',
+      { detector: 'runs.recurring_deviation' },
+    );
+    expect(candidates.map((c) => [c.status, c.proposedWith])).toEqual([
+      ['proposed', 9],
+      ['collecting', undefined],
+    ]);
+  });
+});

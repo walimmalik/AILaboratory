@@ -1,15 +1,18 @@
 import type { MemoryAttributes } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
 import {
+  type ActiveMemory,
   addMonths,
   appliedEffects,
   checkAgainFor,
   conditionsOverlap,
+  DEFAULT_BAR,
+  evidenceLine,
   isDue,
-  type MemoryCandidate,
   matchConflicts,
   memoriesFor,
   memoryConflicts,
+  passesBar,
 } from './memory.ts';
 
 describe('lab memory dates', () => {
@@ -42,7 +45,7 @@ const flex = id('ink', 2);
 const water = id('lqt', 1);
 const priya = 'usr_01J9Z3K8Q4ABCDEFGHJKMNPQR1';
 let n = 0;
-const mem = (a: Partial<MemoryAttributes>, updatedAt = '2026-10-01T00:00:00Z'): MemoryCandidate => {
+const mem = (a: Partial<MemoryAttributes>, updatedAt = '2026-10-01T00:00:00Z'): ActiveMemory => {
   n++;
   return {
     id: id('mem', n % 10),
@@ -165,5 +168,37 @@ describe('memories that cannot be confirmed together', () => {
     expect(
       memoryConflicts({ ...draft, effect: { effect: 'prefer', record: id('ink', 3) } }, [active]),
     ).toMatchObject([{ why: 'they prefer different records for the same choice' }]);
+  });
+});
+
+describe('memory candidates', () => {
+  const runs = (from: number, to: number, day: (i: number) => string) =>
+    Array.from({ length: to - from }, (_, i) => ({
+      evidence: `run_${from + i}`,
+      day: day(from + i),
+    }));
+  const twoDays = (i: number) => (i < 2 ? '2026-10-01' : '2026-10-02');
+
+  it('proposes after 3 runs on 2 days, and not before', () => {
+    expect(passesBar(runs(0, 2, twoDays), DEFAULT_BAR)).toBe(false);
+    expect(
+      passesBar(
+        runs(0, 3, () => '2026-10-01'),
+        DEFAULT_BAR,
+      ),
+    ).toBe(false);
+    expect(passesBar(runs(0, 3, twoDays), DEFAULT_BAR)).toBe(true);
+    expect(passesBar([...runs(0, 2, twoDays), ...runs(0, 2, twoDays)], DEFAULT_BAR)).toBe(false);
+  });
+
+  it('proposes a rejected candidate again only once the evidence since doubles', () => {
+    expect(passesBar(runs(0, 6, twoDays), DEFAULT_BAR, 3)).toBe(false);
+    expect(passesBar(runs(0, 9, twoDays), DEFAULT_BAR, 3)).toBe(true);
+  });
+
+  it('says what it was seen in', () => {
+    expect(evidenceLine(runs(0, 4, twoDays), { one: 'run', many: 'runs' })).toBe(
+      'seen in 4 runs on 2 days since 2026-10-01',
+    );
   });
 });

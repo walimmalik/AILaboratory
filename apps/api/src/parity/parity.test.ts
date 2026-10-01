@@ -45,6 +45,8 @@ const noScreen: Record<string, string> = {
   'memory.update': notYet('the Lab memory page comes with 005d'),
   'memory.retire': notYet('the Lab memory page comes with 005d'),
   'memory.replace': notYet('the Lab memory page comes with 005d'),
+  'memory.observe':
+    'Detectors and agents reading results report observations; a person states a memory with memory.remember instead',
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),
   'experiments.bind_protocol': notYet('the experiment page shows the protocol only'),
   'instruments.change_configuration': notYet('the instrument page shows it read-only'),

@@ -19,6 +19,7 @@ import { OperationError } from '../operations/errors.ts';
 import { type AgentPolicy, implement, type OperationDeps } from '../operations/registry.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { observeDeviations } from './detectors.ts';
 import { calculateExperiment, recordOf } from './operations.ts';
 
 /**
@@ -269,7 +270,7 @@ export const runOperations = [
             .join(', ')}); tick or skip them, or finish the run as failed or aborted`,
         );
       }
-      return service(deps).update(ctx, run.id, {
+      const finished = await service(deps).update(ctx, run.id, {
         expectedVersion: input.expectedVersion,
         attributes: {
           ...a,
@@ -279,6 +280,8 @@ export const runOperations = [
         },
         reason: input.reason ?? `Finished ${run.name}: ${input.status}`,
       });
+      await observeDeviations(deps, ctx, finished);
+      return finished;
     },
   }),
   implement(runsCorrect, {
