@@ -21,4 +21,5 @@ A) Archive, Restore this version and Discard draft on the record page, Discard o
 ## Consequences
 
 - The rule starts with 40 agent writes on the list, each with its reason: drafting forms (people ask the assistant to draft, then edit and confirm), the transfer plan screens (016c and 016d, after the morning review), and screens that show something read-only today (instrument status and service, container contents, lots, runs). Those are visible now and each screen PR takes its line out.
+- 2026-10-01: `records.create` left the list. Products, lots, places, labware types and vendors have a "New …" form on their registry page (review 2026-10-01 item 14).
 - A calculator's form is only as good as its schema's descriptions; a calculator whose input is hard to fill by hand will want its own form later.

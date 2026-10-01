@@ -25,6 +25,7 @@ import {
 } from '../lib/liquids.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
 import { Head, useLabels } from './Instruments.tsx';
+import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
@@ -60,6 +61,7 @@ export function ReagentsPage() {
       <Head
         page={page('product')}
         lede="What the lab buys and makes: reagents, kits and lab-made solutions, with how they are stored and handled, and their lots."
+        actions={<NewRecordButton kind="product" />}
       />
       <RecordList
         title="Reagents"
@@ -167,6 +169,7 @@ export function LotsPage() {
       <Head
         page={page('lot')}
         lede="Each batch the lab has received or made, with its status and expiry. Certificate values are on each lot."
+        actions={<NewRecordButton kind="lot" />}
       />
       <RecordList
         title="Lots"
