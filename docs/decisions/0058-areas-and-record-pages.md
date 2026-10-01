@@ -20,7 +20,7 @@ Option 1, as decided in plan 004f (N1 to N8):
 
 - The menu is Today, Review, Activity, Scan, Experiments, Inventory, Instruments and Library, plus Calculators, Wiki and All records at the foot. Each area is one page with tabs. A new capability's plan says whether it becomes a menu entry, a tab in an area, a tab on a record page, or a fact on the Overview.
 - Inventory lists everything physical with what it is: products with their lots, entities with their samples, containers, filtered by place. A product and an entity share a row only when linked.
-- Every record page has an identity line, key facts chosen per kind and the record's own picture, then the tabs Overview · the kind's tabs · History · Connections · All fields. Confirmed content is open. The identity line and facts come from the API so agents read the same summary.
+- Every record page has an identity line, key facts chosen per kind and the record's own picture, then the tabs Overview · the kind's tabs · History · Connections · All fields. Confirmed content is open. The identity line and facts come from the API (`records.overview`) so agents read the same summary.
 - Plate maps have no menu entry: they live in their experiment and on their layout (014 P3's two kinds stay).
 - Links show on a Connections tab in two columns, "Based on" and "Used in", grouped by relation in words.
 - Sources are said once per section; a value nobody sourced is marked wherever it shows.
@@ -29,5 +29,5 @@ Option 1, as decided in plan 004f (N1 to N8):
 ## Consequences
 
 - Old paths (`/lots`, `/samples`, `/plate-maps`…) must open the matching tab so links in history, chat and the wiki keep working.
-- Each kind needs a summary definition (identity line and facts) in the API; a kind without one falls back to its label and summary text, and a test lists kinds without one.
+- Each kind needs a summary definition (identity line and facts) in the API; a kind without one falls back to its kind, its one-line summary and its simple top-level values, and a test lists the kinds that use the fallback, so a new kind is a deliberate choice.
 - Inventory needs one read operation joining products, lots, entities, samples, contents and places (`inventory.overview`), named in the inventory skill.

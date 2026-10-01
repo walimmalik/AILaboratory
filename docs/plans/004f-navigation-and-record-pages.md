@@ -44,7 +44,7 @@ Each step is one PR; each is useful alone.
 | Step | Delivers |
 | --- | --- |
 | 004f-0 | This plan, its ADR, the rules above in web-app.md and the wiki |
-| 004f-1 Record page frame | Identity line, key facts and tabs for every kind, from a `summary` the API returns with `records.get` (so agents read the same summary), replacing the FIELDS block and the folded Details block; reading width cap; sources once per section (N7); state words (N8) |
+| 004f-1 Record page frame | Identity line, key facts and tabs for every kind, from the read operation `records.overview` (so agents read the same summary; built per kind in the module that owns it, 004f-1a), replacing the FIELDS block and the folded Details block; reading width cap; sources once per section (N7); state words (N8) |
 | 004f-2 Connections and one timeline | Relation words for every link, the two-column Connections tab, Based on and Used in (N6); versions and the physical ledger as one History timeline |
 | 004f-3 Navigation | The eight entries and the area pages with tabs (N1); old paths open the matching tab |
 | 004f-4 Inventory | One list grouped by what it is (N2, N3) with Where, amount left and earliest expiry, the place tree, the selected row's summary, bulk Move and Discard, agent-proposed rows in agent ink; one read operation `inventory.overview` so an agent sees the same view; the "Where in it" line shared with Scan |

@@ -11,6 +11,7 @@ Every registry and design document is stored as a **record**. This module define
 | Units, conversions, exact decimal arithmetic, ID and name generation, readiness | `packages/domain/src` |
 | Tables | `apps/api/src/db/schema.ts`; migrations in `apps/api/drizzle` (`pnpm generate`) |
 | Record service | `apps/api/src/records/service.ts` |
+| Overviews (identity line and key facts, `records.overview`) | `apps/api/src/records/overview.ts`, one `overview.ts` per module, joined in `apps/api/src/operations/overview.ts` |
 | Tokens, actors, tenants | `apps/api/src/auth.ts` |
 
 ## Kinds
@@ -29,6 +30,10 @@ const labwareType = defineKind({
 ```
 
 ID and name prefixes are unique across kinds; a kind that names records with more than one prefix lists the others in `otherNamePrefixes` (containers: `PLT`, `TUB`, `BOX`…) so they are reserved too. A kind may also declare `related` (ADR 0029): rules that read other records in the lab, run inside every write and readiness read. They see the record as it was (`current`) and who is writing (`actor`), and can read a record as it was at a version (`getVersion`), which is how designs check the versions they pin (ADR 0039, `records/pins.ts`). They return problems that refuse the write, extra readiness checks, and optionally the readable name prefix for a new record (an entity is named with its entity kind's prefix, which must not be one a code kind holds). A kind whose records only one operation may make declares `createdBy` (files: `files.upload`), and `records.create` refuses it. A kind that people review may also declare `sections` and `checks`; see "Draft and confirm" below. `links` reads references out of the attributes; the service keeps `record_links` in sync on every write.
+
+## Overviews
+
+`records.overview {id}` returns what a record's page shows first (plan 004f N4, ADR 0058): an `identity` line (what it is, where, its physical state) and a few `facts`, each with the attribute `field` it comes from, a link to another record when it names one, and a `tone` (`warn`, `crit`) when it needs attention. Each module writes the builders for its own kinds in its `overview.ts` and reads other modules only through their read operations (`OverviewReader.run`), so a container's overview asks inventory for its wells and place, and a lot's asks inventory where it is. Nothing is stored; the overview is worked out on every read. Kinds without a builder use `fallbackOverview` (the kind, its one-line summary and its simple top-level values); `FALLBACK_KINDS` in `operations/overview.ts` lists them and a test fails when a new kind is in neither list.
 
 ## Rules the service enforces
 

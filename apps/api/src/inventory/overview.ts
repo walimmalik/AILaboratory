@@ -5,6 +5,7 @@ import {
   inventoryListPlace,
   inventoryWells,
   inventoryWhereIs,
+  type LabwareTypeAttributes,
   type LocationAttributes,
   type OverviewFact,
   type PlacePath,
@@ -13,6 +14,7 @@ import {
   type SampleAttributes,
   type WellState,
 } from '@ailab/schema';
+import { labwareNoun } from '../labware/overview.ts';
 import {
   amount,
   capital,
@@ -44,7 +46,11 @@ export function placeFact(path: PlacePath, self?: string): OverviewFact | undefi
 /** "−20 °C or colder", "2 to 8 °C", "at least 15 °C". */
 export function storageWords(range: EffectiveStorage['range']): string {
   const t = (q: Quantity) => amount(q);
-  if (range.min && range.max) return `${range.min.value} to ${t(range.max)}`;
+  if (range.min && range.max) {
+    return range.min.value === range.max.value
+      ? `at ${t(range.max)}`
+      : `${range.min.value} to ${t(range.max)}`;
+  }
   if (range.max) return `${t(range.max)} or colder`;
   if (range.min) return `${t(range.min)} or warmer`;
   return 'not given';
@@ -67,11 +73,19 @@ async function sourceName(read: OverviewReader, id: string, names: Map<string, s
 /** "Staurosporine 1 mM + Dimethyl sulfoxide 100 % v/v" for one well's components. */
 async function mixture(read: OverviewReader, state: WellState, names: Map<string, string>) {
   const pieces: string[] = [];
+  const solvents: string[] = [];
   for (const c of state.components) {
     const name = await sourceName(read, c.source, names);
-    pieces.push(c.concentration ? `${name} ${amount(c.concentration)}` : name);
+    // A solvent at 100 % v/v reads as what the rest is dissolved in.
+    if (
+      (c.concentration?.unit === '%v/v' || c.concentration?.unit === '% v/v') &&
+      Number(c.concentration.value) >= 100
+    )
+      solvents.push(name);
+    else pieces.push(c.concentration ? `${name} ${amount(c.concentration)}` : name);
   }
-  return pieces.join(' + ') || 'nothing recorded';
+  if (pieces.length === 0) return solvents.join(' + ') || 'nothing recorded';
+  return solvents.length ? `${pieces.join(' + ')} in ${solvents.join(' + ')}` : pieces.join(' + ');
 }
 
 const container: OverviewBuilder = async (record, read) => {
@@ -131,7 +145,7 @@ const container: OverviewBuilder = async (record, read) => {
 
   return {
     identity: parts(
-      type ? capital(type.summary ?? type.label) : 'Container',
+      type ? capital(labwareNoun(type.attributes as LabwareTypeAttributes)) : 'Container',
       a.sealed && 'sealed',
       a.lidded && 'lidded',
       where && { text: `in ${where.value}`, ...(where.record ? { record: where.record } : {}) },
