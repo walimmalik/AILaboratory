@@ -1,5 +1,6 @@
 import type {
   CheckResult,
+  FieldEvidence,
   KindCheck,
   KindSection,
   Readiness,
@@ -206,6 +207,23 @@ export function readiness(
           ),
         )
       : sectionlessAssumed(record),
+    unchecked: sections.length
+      ? sectionStates.flatMap((s) =>
+          s.fields.flatMap((f) =>
+            f.items
+              ? f.items
+                  .filter((i) => i.state !== 'confirmed' && agentClaim(i.evidence))
+                  .map((i) => i.path)
+              : f.state !== 'confirmed' && agentClaim(f.evidence)
+                ? [f.field]
+                : [],
+          ),
+        )
+      : record.status === 'draft'
+        ? Object.entries(record.evidence)
+            .filter(([, e]) => agentClaim(e))
+            .map(([key]) => key)
+        : [],
     notApplicable: notApplicable(kind, attributes),
   };
 }
@@ -214,6 +232,14 @@ export function readiness(
  * A kind without sections is confirmed whole, when its draft becomes active: until then every value
  * an agent guessed is an estimate, and once active none is.
  */
+/**
+ * A source an agent named that the server can't check (ADR 0049 checks calculations and copies;
+ * "stated" is the person's own word). Such a value is confirmed only by a person looking at it.
+ */
+const UNCHECKED_SOURCES: readonly string[] = ['datasheet', 'imported', 'measured'];
+const agentClaim = (e: FieldEvidence | undefined) =>
+  e?.by.type === 'agent' && UNCHECKED_SOURCES.includes(e.source);
+
 function sectionlessAssumed(record: RecordEnvelope): string[] {
   if (record.status !== 'draft') return [];
   const guessed = Object.entries(record.evidence)

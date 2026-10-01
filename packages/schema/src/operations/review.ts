@@ -52,6 +52,8 @@ export const ReviewDraft = z.object({
   ready: z.boolean(),
   /** How many values are an agent's unconfirmed estimate. */
   assumed: z.number().int().nonnegative(),
+  /** How many values an agent sourced to a datasheet, measurement or import that nothing checked. */
+  unchecked: z.number().int().nonnegative(),
 });
 
 /** A proposed change to an active record, waiting for a person to confirm or reject it. */

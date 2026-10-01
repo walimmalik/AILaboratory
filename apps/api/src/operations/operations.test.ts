@@ -697,26 +697,34 @@ describe('review inbox', () => {
     });
   });
 
-  it('confirms a batch only when nothing in it is a guess, all or nothing', async () => {
-    const clean = await create(agent, {
-      evidence: {
-        color: { source: 'datasheet', reference: 'https://example.org' },
-        volume: { source: 'datasheet', reference: 'https://example.org' },
-      },
-    });
+  it('confirms a batch only when nothing in it is a guess or unchecked, all or nothing', async () => {
+    const stated = { source: 'stated', note: 'Wali said so' };
+    const clean = await create(agent, { evidence: { color: stated, volume: stated } });
     const second = await create(agent, {
       label: 'Second',
-      evidence: {
-        color: { source: 'datasheet', reference: 'https://example.org' },
-        volume: { source: 'datasheet', reference: 'https://example.org' },
-      },
+      evidence: { color: stated, volume: stated },
     });
     const guessed = await create(agent, { label: 'Guessed' });
+    // An agent's word that a value is from a datasheet isn't checked, so a person looks at it.
+    const sheet = { source: 'datasheet', reference: 'https://example.org' };
+    const sourced = await create(agent, {
+      label: 'Sourced',
+      evidence: { color: stated, volume: sheet },
+    });
     const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
     const batchable = listed.items.flatMap((i) =>
       i.type === 'draft' && i.batchable ? [i.record.id] : [],
     );
     expect(batchable.sort()).toEqual([clean.id, second.id].sort());
+    expect(
+      listed.items.find((i) => i.type === 'draft' && i.record.id === sourced.id),
+    ).toMatchObject({ batchable: false, unchecked: 1, assumed: 0 });
+    const unchecked = await refused(
+      registry.execute(person, 'records.confirm_many', {
+        records: [{ id: sourced.id, expectedVersion: sourced.version }],
+      }),
+    );
+    expect(unchecked.message).toContain('1 sourced by an agent and not checked');
 
     const refusedBatch = await refused(
       registry.execute(person, 'records.confirm_many', {
@@ -744,7 +752,7 @@ describe('review inbox', () => {
   });
 
   it('lets warnings pass a batch confirm, counted', async () => {
-    const sourced = { source: 'datasheet', reference: 'https://example.org' };
+    const sourced = { source: 'stated' };
     const warned = await create(agent, {
       attributes: { ...attributes, color: 'unknown' },
       evidence: { color: sourced, volume: sourced },
@@ -762,18 +770,28 @@ describe('review inbox', () => {
       kind: 'gadget',
       label: 'Sourced',
       attributes: { color: 'red' },
-      evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
+      evidence: { color: { source: 'stated' } },
     });
     const guessed = await run<RecordEnvelope>(agent, 'records.create', {
       kind: 'gadget',
       label: 'Guessed',
       attributes: { color: 'blue' },
     });
+    const fromSheet = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'From a sheet',
+      attributes: { color: 'green' },
+      evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
+    });
     const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
     const drafts = listed.items.flatMap((i) => (i.type === 'draft' ? [i] : []));
     expect(drafts.find((i) => i.record.id === guessed.id)).toMatchObject({
       batchable: false,
       assumed: 1,
+    });
+    expect(drafts.find((i) => i.record.id === fromSheet.id)).toMatchObject({
+      batchable: false,
+      unchecked: 1,
     });
     expect(drafts.find((i) => i.record.id === sourced.id)?.batchable).toBe(true);
     const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
