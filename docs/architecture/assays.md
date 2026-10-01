@@ -9,7 +9,7 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 | Field | Holds |
 | --- | --- |
 | `purpose`, `assays` | What it measures; assay names such as ELISA |
-| `parts` | Each a digital SOP pinned at a confirmed version, with the id the template calls it |
+| `parts` | Each a digital SOP pinned at a confirmed version, with the id the template calls it, and `inputs`: values for the SOP's input and default variables that every experiment from the template uses (017b-3). An input the template also asks for is refused |
 | `layout` | The layout template (014) its plates follow, pinned |
 | `roles` | For a part's role: the capability it needs and the instruments the lab prefers (D4), or a default record and version for a material |
 | `essentials` | What the designer asks for and nothing else (D3): `subjects` (record kinds, at most n) or a `variable` (a part's input variable) |
@@ -79,10 +79,20 @@ It is feasible when every need is ready and every amount works out. Stock on han
 
 Values copied from the template carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way.
 
+## Saving an experiment as a template (017b-3)
+
+`assays.save_from_experiment` drafts a template from a confirmed experiment version:
+
+- **Parts.** The experiment's protocol steps become the parts, with the same SOP versions and the values the experiment set. Values for variables the template asks for are left out, since the designer asks for them each time.
+- **Roles.** Each record the experiment bound becomes the role's default record (and version). An instrument it bound goes first in that role's preferred list instead.
+- **Everything else.** When the experiment was designed from a template, the layout, essentials, factors, design, controls, replicates, readouts, quality, analysis, hit rule and notes are copied from that template version, with `template` evidence. Otherwise the caller gives at least the essentials, replicates and readouts. Anything given replaces the copy.
+
+The parts (and roles, when bound) carry `record` evidence from the experiment version. A draft experiment is refused, because copied evidence must come from a confirmed version. `designer.start` puts a part's inputs into the experiment's protocol before the answers to the essential inputs.
+
 ## Seed
 
 `seed/assay-templates.yaml` holds the IL-6 ELISA, compound single-point and dose-response, pNPP kinetic and Dual-Glo templates. A test checks that every role is a material of its part's SOP and every variable asked for is one of the SOP's inputs or defaults. The follow-up link (`next`) is not seeded, since it names a template the seed has not drafted yet. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
 
 ## Not yet
 
-`assays.save_from_experiment`, stock in feasibility and the design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+Stock in feasibility and the design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.

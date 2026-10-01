@@ -120,6 +120,37 @@ export const assaysSearch = defineContract({
   }),
 });
 
+export const assaysSaveFromExperiment = defineContract({
+  id: 'assays.save_from_experiment',
+  verbs: {
+    done: 'saved an experiment as an assay template',
+    intent: 'save an experiment as an assay template',
+  },
+  summary:
+    "Save a confirmed experiment's design as a draft assay template, so the lab can run it again (plan 017). The parts are the experiment's SOP versions with the values it set (variables the template asks for are left to the designer), and the materials it bound become the roles' default records. When the experiment was designed from a template, everything else (layout, essential inputs, factors, controls, replicates, readouts, quality, analysis) is copied from that template's version; otherwise give at least the essential inputs, replicates and readouts. Anything you give replaces what would be copied. A person confirms the template",
+  effect: 'write',
+  input: z.strictObject({
+    experiment: recordIdOf('exp'),
+    version: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Default the experiment's current version; it must be one a person confirmed"),
+    label: z.string().min(1).describe('e.g. "IL-6 ELISA, 1:10 supernatants"'),
+    ...AssayTemplateAttributes.omit({ parts: true }).partial().shape,
+    evidence: z
+      .record(z.string(), EvidenceInput)
+      .optional()
+      .describe('Where the values you give came from, by attribute name'),
+    reason: Reason,
+  }),
+  output: z.object({
+    template: RecordEnvelope,
+    lines: z.array(z.string()).describe('What was copied from where, and what was left out'),
+  }),
+});
+
 export const designerStart = defineContract({
   id: 'designer.start',
   verbs: { done: 'designed an experiment from', intent: 'design an experiment from' },

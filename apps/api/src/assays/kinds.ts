@@ -115,6 +115,22 @@ export const assayTemplate = defineKind({
           invalid.push(`${where}: ${record.name} has no version ${r.version}`);
       }
     }
+    for (const p of a.parts)
+      for (const i of p.inputs ?? []) {
+        const variable = sopOf(p.id)?.variables.find((v) => v.name === i.name);
+        if (pins.get(p.id)?.pinned && (!variable || !['input', 'default'].includes(variable.kind)))
+          invalid.push(
+            `The part ${p.id}: ${pins.get(p.id)?.record?.name} has no input or default variable ${i.name}`,
+          );
+        if (
+          a.essentials.some(
+            (e) => e.input === 'variable' && e.part === p.id && e.variable === i.name,
+          )
+        )
+          invalid.push(
+            `The part ${p.id} sets ${i.name}, which the template also asks for; keep one`,
+          );
+      }
     const subjects = new Set<string>();
     for (const e of a.essentials) {
       if (e.input === 'subjects') {

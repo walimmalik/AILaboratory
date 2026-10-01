@@ -13,13 +13,15 @@ An **assay template** is the lab's ready-made designer for one assay (an IL-6 EL
 
 ## Drafting one
 
-- `assays.draft_template` with `label`, `purpose`, `assays` (e.g. `["ELISA"]`), `parts: [{id, sop: {id, version}}]`, `layout?: {id, version}`, `roles`, `essentials`, `factors?`, `design?`, `controls?`, `replicates: {technical, biological?, reason}`, `readouts`, `quality?`, `analysis?`, `hitRule?`, `next?`.
+- `assays.draft_template` with `label`, `purpose`, `assays` (e.g. `["ELISA"]`), `parts: [{id, sop: {id, version}, inputs?: [{name, value}]}]`, `layout?: {id, version}`, `roles`, `essentials`, `factors?`, `design?`, `controls?`, `replicates: {technical, biological?, reason}`, `readouts`, `quality?`, `analysis?`, `hitRule?`, `next?`.
 - Pin the SOP and layout versions a person confirmed. A draft SOP or layout can be pinned while drafting, but readiness blocks confirming the template until they are confirmed.
 - `roles: [{part, role, capability, preferred?: [instrument kind ids], reason?}]` names an SOP material role by capability, with the instruments the lab prefers; `{part, role, record, version?}` gives a default record (a labware type). The role must be a material role of that part's SOP.
+- A part's `inputs` are values every experiment from the template uses (e.g. `well_volume`), for input or default variables of that SOP that the template doesn't ask for.
 - `essentials` are the few things the designer asks for: `{input: "subjects", id: "samples", label: "Which samples", kinds?, max?}` or `{input: "variable", id, label, part, variable}` naming an input or default variable of that part's SOP.
 - `factors: [{id, label, levels | from | series, baseline?}]`: listed levels, `from` a subjects input (each subject is a level), or a concentration `series`. `design` is `full_factorial` (default) or `one_factor_at_a_time` (needs a baseline per factor).
 - `controls: [{id, label, role, subject?, wells, per: plate | run, reason}]`; every control and replicate rule carries its reason.
 - Build it from the conversation, the SOPs (`sops.search`, `records.get`) and the lab's past experiments (`experiments.where_used`). Mark your own guesses assumed in `evidence`. A person edits it with `records.update` and confirms it with `records.confirm`.
+- To reuse a confirmed experiment, `assays.save_from_experiment` `{experiment, version?, label}` drafts the template for you: the experiment's SOP versions and the values it set become the parts, and the records it bound become default roles. If the experiment came from a template, the rest is copied from it. Otherwise give `essentials`, `replicates` and `readouts`. Any field you give replaces the copied one.
 
 ## Working out a design
 
