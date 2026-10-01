@@ -9,7 +9,7 @@ Code works out every volume, droplet count, concentration and total; you pick th
 
 ## Which instrument
 
-`transfers.options` `{volume, liquid?, wells?}` ranks every instrument in the lab whose transfer or dispense limits are recorded: those that can move the volume first, then those with a verified liquid class for `liquid` (a liquid type ID), then the smallest error, then no tips. Each option says the volume it really moves (whole droplets on an Echo), its error and how it uses tips. Tips are estimated from the device until methods declare them: say so. Devices without recorded volume limits are listed under `unknown`; `notes` says which instruments are down or skip the plate format.
+`transfers.options` `{volume, liquid?, wells?, samples?}` ranks every instrument in the lab whose transfer or dispense limits are recorded: those that can move the volume first, then what lab memory prefers for this work (and what it avoids last among those that fit; each option names the memories in `memory`), then those with a verified liquid class for `liquid` (a liquid type ID), then the smallest error, then no tips. Each option says the volume it really moves (whole droplets on an Echo), its error and how it uses tips. Tips are estimated from the device until methods declare them: say so. Devices without recorded volume limits are listed under `unknown`; `notes` says which instruments are down or skip the plate format.
 
 ## Can the targets be reached
 

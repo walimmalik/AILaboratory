@@ -1,11 +1,21 @@
 import { z } from 'zod';
+import { UserId } from '../actor.ts';
 import { EvidenceInput } from '../design.ts';
 import { RecordId } from '../ids.ts';
-import { MemoryAppliesTo, MemoryFields, MemoryId, MemoryKind, MemoryStrength } from '../memory.ts';
+import {
+  MemoryAppliesTo,
+  MemoryConditions,
+  MemoryEffect,
+  MemoryFacts,
+  MemoryFields,
+  MemoryId,
+  MemoryKind,
+  MemoryStrength,
+} from '../memory.ts';
 import { defineContract } from '../operation.ts';
 import { RecordEnvelope } from '../record.ts';
 
-/** Lab memory operations (plan 005a). */
+/** Lab memory operations (plans 005a and 005b). */
 
 const Reason = z.string().min(1).optional().describe('Why; kept in history');
 
@@ -107,5 +117,76 @@ export const memorySearch = defineContract({
       }),
     ),
     total: z.number().int(),
+  }),
+});
+
+const Applied = z.object({
+  id: MemoryId,
+  name: z.string(),
+  statement: z.string(),
+  kind: MemoryKind,
+  strength: MemoryStrength,
+  effect: MemoryEffect.optional(),
+  applies: z
+    .boolean()
+    .describe('Every condition held, so code applies its effect; false: shown, not applied'),
+  unknown: z
+    .array(MemoryConditions.keyof())
+    .describe('Conditions the facts left out; give them to know whether it applies'),
+  due: z.boolean().describe('Past its check-again date: still used, due for a check'),
+});
+
+export const memoryFor = defineContract({
+  id: 'memory.for',
+  verbs: { done: 'looked up the lab memory for', intent: 'look up the lab memory for' },
+  summary:
+    "The lab memories that apply to a piece of work, most specific first: rules, then defaults, then notes; a person's own before the lab's; more matching conditions and records first. Give the records the work is about or uses and what you know about it (instrument, volume, liquid type, sample count…). A memory whose conditions you didn't give is listed but not applied. Conflicts list memories whose effects clash; code applies neither. `lines` is the same list as one line each, capped, as the in-app assistant gets it for a page",
+  effect: 'read',
+  input: z.strictObject({
+    records: z
+      .array(RecordId)
+      .max(50)
+      .optional()
+      .describe('The records the work is about or uses, e.g. the instrument kind and the SOP'),
+    facts: MemoryFacts.optional().describe('What you know about the work, to check conditions'),
+    nearby: z
+      .boolean()
+      .optional()
+      .describe('Also memories about the records these link to, one step out (a page bundle)'),
+    person: UserId.optional().describe(
+      'Whose personal memories apply; left out, the person you act for',
+    ),
+    limit: z.number().int().min(1).max(100).optional().describe('Default 15'),
+  }),
+  output: z.object({
+    memories: z.array(Applied),
+    more: z
+      .number()
+      .int()
+      .describe('How many more matched past the limit; memory.search finds them'),
+    conflicts: z.array(z.object({ memories: z.array(z.string()), why: z.string() })),
+    lines: z.array(z.string()),
+  }),
+});
+
+export const memoryUsedIn = defineContract({
+  id: 'memory.used_in',
+  verbs: { done: 'listed where a lab memory was used', intent: 'list where a lab memory was used' },
+  summary:
+    'The records with a value copied from this lab memory (memory evidence), at their current version, each with the fields it filled',
+  effect: 'read',
+  input: z.strictObject({ id: MemoryId }),
+  output: z.object({
+    records: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        label: z.string(),
+        kind: z.string(),
+        status: z.string(),
+        version: z.number().int(),
+        fields: z.array(z.string()),
+      }),
+    ),
   }),
 });

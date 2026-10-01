@@ -315,6 +315,8 @@ export interface DeviceOption {
   /** Whether a liquid class for this liquid on this device is verified (009). */
   verifiedClass?: boolean;
   tips: TipRule;
+  /** Lab memory prefers or avoids this device for the work (plan 005b). */
+  memory?: 'prefer' | 'avoid' | undefined;
 }
 
 export interface RankedOption extends DeviceOption {
@@ -324,13 +326,17 @@ export interface RankedOption extends DeviceOption {
 
 /**
  * Devices that could move a volume, best first (T2 `transfers.options`): ones that fit before ones
- * that don't, then a verified liquid class, then the smaller error, then no tips.
+ * that don't, then what lab memory prefers (and what it avoids last among those that fit), then a
+ * verified liquid class, then the smaller error, then no tips.
  */
+const LEAN = { prefer: 1, none: 0, avoid: -1 } as const;
+
 export function rankDevices(volume: Quantity, devices: readonly DeviceOption[]): RankedOption[] {
   const scored = devices.map((d) => ({ ...d, fit: fitVolume(volume, d.limits) }));
   scored.sort(
     (a, b) =>
       Number(b.fit.fits) - Number(a.fit.fits) ||
+      LEAN[b.memory ?? 'none'] - LEAN[a.memory ?? 'none'] ||
       Number(!!b.verifiedClass) - Number(!!a.verifiedClass) ||
       new LabDecimal(a.fit.error).comparedTo(b.fit.error) ||
       Number(a.tips !== 'none') - Number(b.tips !== 'none') ||

@@ -1,3 +1,4 @@
+import { memoryConflicts } from '@ailab/domain';
 import {
   defineKind,
   type MemoryAttributes,
@@ -56,10 +57,39 @@ export const memory = defineKind({
     { id: 'scope', title: 'What and when', fields: ['about', 'when', 'conditions', 'effect'] },
   ],
   // Every named record must exist in the lab (the links check that); a replacement is a memory.
-  related: async (a, { get }: Pick<RelatedContext, 'get'>) =>
-    a.retired?.replacedBy && (await get(a.retired.replacedBy))?.kind !== 'memory'
-      ? { invalid: [`${a.retired.replacedBy} is not a lab memory`] }
-      : {},
+  // Effects that clash with an active memory's at equal specificity block confirming (change 2).
+  related: async (a, { get, list, current }: Pick<RelatedContext, 'get' | 'list' | 'current'>) => {
+    if (a.retired?.replacedBy && (await get(a.retired.replacedBy))?.kind !== 'memory')
+      return { invalid: [`${a.retired.replacedBy} is not a lab memory`] };
+    if (!a.effect || a.retired) return {};
+    const others = (await list('memory'))
+      .filter((r) => r.status === 'active' && r.id !== current?.id)
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        attributes: r.attributes as MemoryAttributes,
+        updatedAt: r.updatedAt,
+      }));
+    const clashes = memoryConflicts(a, others);
+    return {
+      checks: [
+        {
+          id: 'no_clashing_memory',
+          label: 'No confirmed memory says the opposite for the same work',
+          severity: 'blocker',
+          source: 'Plan 005, change 2: one effect for the same work',
+          section: 'scope',
+          passed: clashes.length === 0,
+          ...(clashes.length
+            ? {
+                message: clashes.map((c) => `${c.memory.name}: ${c.why}`).join('; '),
+                fix: 'Narrow the conditions, or replace the other memory with this one (memory.replace)',
+              }
+            : {}),
+        },
+      ],
+    };
+  },
 });
 
 export const memoryKinds = [memory];

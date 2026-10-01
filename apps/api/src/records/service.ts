@@ -545,6 +545,33 @@ export class RecordService {
       .orderBy(asc(recordLinks.relation), asc(recordLinks.toId));
   }
 
+  /**
+   * Records in the lab, at their current version, with a value copied from this record (`from` in
+   * their evidence), and the fields it filled: where a lab memory was used (plan 005b, M11).
+   */
+  async citing(
+    ctx: RecordContext,
+    id: string,
+  ): Promise<{ record: RecordEnvelope; fields: string[] }[]> {
+    const rows = await this.db
+      .select()
+      .from(records)
+      .where(
+        and(
+          eq(records.labId, ctx.labId),
+          sql`exists (select 1 from jsonb_each(${records.evidence}) e where e.value->'from'->>'id' = ${id})`,
+        ),
+      )
+      .orderBy(asc(records.name));
+    return rows.map((row) => ({
+      record: toEnvelope(row),
+      fields: Object.entries(row.evidence)
+        .filter(([, e]) => e.from?.id === id)
+        .map(([field]) => field)
+        .sort(),
+    }));
+  }
+
   /** Where this record is used. */
   async linksTo(ctx: RecordContext, id: string): Promise<RecordLink[]> {
     const record = await findRecord(this.db, ctx, id);

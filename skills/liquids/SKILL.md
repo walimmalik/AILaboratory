@@ -9,7 +9,7 @@ A **liquid type** (`liquid_type`, `LQT-0001`) says how a liquid behaves: aqueous
 
 ## Which class to use
 
-Never pick a class yourself. Call `liquids.resolve_class` with `{liquid: {product} or {liquidType}, instrumentKind, device?, tip?, sourceLabware?, mode?, volume, liquidClass?}`. It returns the class, how it was chosen (`explicit`, `product_override`, `lab_default` or `none`), `why` in plain words, `verified`, and alternatives. Quote `why` to the person. When it returns `none`, tell the person the `issue`; don't substitute a class.
+Never pick a class yourself. Call `liquids.resolve_class` with `{liquid: {product} or {liquidType}, instrumentKind, device?, tip?, sourceLabware?, mode?, volume, liquidClass?}`. It returns the class, how it was chosen (`explicit`, `product_override`, `lab_memory` when a confirmed lab memory prefers it for this work, `lab_default` or `none`), `why` in plain words, `verified`, the lab memories that shaped it (`memory`), and alternatives. A default lab memory that avoids a class puts it last among the lab defaults; a rule that avoids it refuses it. Quote `why` to the person. When it returns `none`, tell the person the `issue`; don't substitute a class.
 
 To see what the lab has (a class for a device, which liquid types have none, which are verified), call `liquids.search_classes` with `{text?, instrumentKind?, device?, tip?, liquidType?, platform?, verified?, status?}`. It lists classes with `verified` and the `lastCheck`. It is for looking around; the choice for a transfer still comes from `liquids.resolve_class`.
 

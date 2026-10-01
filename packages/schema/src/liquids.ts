@@ -251,8 +251,12 @@ export type VerificationResult = z.infer<typeof VerificationResult>;
 export const ClassChoice = z.object({
   liquidClass: LiquidClassId.optional(),
   label: z.string().optional(),
-  how: z.enum(['explicit', 'product_override', 'lab_default', 'none']),
+  how: z.enum(['explicit', 'product_override', 'lab_memory', 'lab_default', 'none']),
   why: z.string().describe('In plain words'),
+  memory: z
+    .array(z.object({ id: z.string(), name: z.string(), statement: z.string() }))
+    .optional()
+    .describe('The lab memories that shaped the choice (plan 005b)'),
   verified: z.boolean().describe('Verified in this lab'),
   issue: z.string().optional().describe('What stands in the way, when no class fits'),
   alternatives: z

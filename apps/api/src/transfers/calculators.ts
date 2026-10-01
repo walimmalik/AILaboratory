@@ -29,6 +29,7 @@ import {
   type WellState,
 } from '@ailab/schema';
 import type { z } from 'zod';
+import { activeMemories, lookup } from '../memory/match.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
@@ -291,9 +292,11 @@ export const transferCalculators = [
         node: string;
         capability: string;
         liquidClass?: { label?: string; verified: boolean; why: string };
+        leaning?: NonNullable<z.infer<typeof transfersOptions.output>['options'][number]['memory']>;
       })[] = [];
       const unknown: z.infer<typeof transfersOptions.output>['unknown'] = [];
       const notes: string[] = [];
+      const memories = await activeMemories(deps, ctx);
       for (const instrument of instruments.filter((i) => i.status !== 'archived')) {
         const a = instrument.attributes as InstrumentAttributes;
         const resolved = await run<ResolvedConfiguration>(deps, ctx, 'instruments.resolve', {
@@ -335,8 +338,46 @@ export const transferCalculators = [
                 why: choice.issue ?? choice.why,
               };
           }
+          // Lab memory about this instrument for this work (plan 005b, M8).
+          const kindOf = a.configuration.equipment.find((e) => e.id === c.node)?.kind;
+          const near = [instrument.id, a.kind, ...(kindOf ? [kindOf] : [])];
+          const { effects } = lookup(memories, ctx, {
+            records: [...near, ...(input.liquid ? [input.liquid] : [])],
+            facts: {
+              capability: c.capability,
+              instrumentKind: a.kind,
+              instrument: instrument.id,
+              ...(kindOf ? { device: kindOf } : {}),
+              volume: input.volume,
+              ...(input.liquid ? { liquidType: input.liquid } : {}),
+              ...(input.samples !== undefined ? { samples: input.samples } : {}),
+            },
+          });
+          const leaning = near.flatMap((id) =>
+            (['prefer', 'avoid'] as const).flatMap((effect) => {
+              const m = effects[effect].get(id);
+              return m
+                ? [
+                    {
+                      name: m.name,
+                      statement: m.attributes.statement,
+                      effect,
+                      strength: m.attributes.strength as 'rule' | 'default',
+                    },
+                  ]
+                : [];
+            }),
+          );
+          const lean = leaning.some((m) => m.effect === 'avoid')
+            ? ('avoid' as const)
+            : leaning.length
+              ? ('prefer' as const)
+              : undefined;
+          for (const m of leaning.filter((m) => m.effect === 'avoid' && m.strength === 'rule'))
+            notes.push(`Lab rule ${m.name} says not to use ${label} for this: ${m.statement}`);
           devices.push({
             id: `${instrument.id}|${c.node}|${c.capability}`,
+            ...(lean ? { memory: lean, leaning } : {}),
             label,
             limits,
             verifiedClass: !!liquidClass?.verified,
@@ -361,6 +402,7 @@ export const transferCalculators = [
             fit: r.fit,
             tips: r.tips,
             ...(d.liquidClass ? { liquidClass: d.liquidClass } : {}),
+            ...(d.leaning ? { memory: d.leaning } : {}),
           };
         }),
         unknown,

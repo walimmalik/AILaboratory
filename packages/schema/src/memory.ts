@@ -29,6 +29,9 @@ export const MemoryStrength = z
   );
 export type MemoryStrength = z.infer<typeof MemoryStrength>;
 
+export const Weekday = z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
+export type Weekday = z.infer<typeof Weekday>;
+
 const Range = <T extends z.ZodType>(of: T) =>
   z
     .strictObject({ min: of.optional(), max: of.optional() })
@@ -58,13 +61,38 @@ export const MemoryConditions = z
     layout: recordIdOf('lyt').optional(),
     samples: Range(z.number().int().min(0)).optional().describe('How many samples the work has'),
     roles: z.array(WellRole).min(1).optional().describe('Wells with these roles'),
-    weekdays: z
-      .array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']))
-      .min(1)
-      .optional(),
+    weekdays: z.array(Weekday).min(1).optional(),
   })
   .refine((c) => Object.keys(c).length > 0, 'give at least one condition, or leave it out');
 export type MemoryConditions = z.infer<typeof MemoryConditions>;
+
+/**
+ * What a consumer knows about the work it is doing (plan 005b), keyed like the conditions: one
+ * value for each range. A condition whose key is left out here can't be evaluated, so the memory
+ * is shown but its effect is not applied.
+ */
+export const MemoryFacts = z.strictObject({
+  capability: CapabilityId.optional(),
+  instrumentKind: recordIdOf('ink').optional(),
+  instrument: recordIdOf('ins').optional(),
+  device: recordIdOf('eqk').optional(),
+  tip: recordIdOf('lwt').optional(),
+  labware: z
+    .array(recordIdOf('lwt'))
+    .max(50)
+    .optional()
+    .describe('Every labware type the work uses'),
+  mode: DispenseMode.optional(),
+  volume: LiquidVolume.optional(),
+  liquidType: recordIdOf('lqt').optional(),
+  temperature: Celsius.optional(),
+  sop: recordIdOf('sop').optional(),
+  layout: recordIdOf('lyt').optional(),
+  samples: z.number().int().min(0).optional(),
+  roles: z.array(WellRole).min(1).optional().describe('The well roles the work fills'),
+  weekday: Weekday.optional(),
+});
+export type MemoryFacts = z.infer<typeof MemoryFacts>;
 
 /** The one thing code may do with a memory (change 1); without it, the memory only informs. */
 export const MemoryEffect = z.discriminatedUnion('effect', [
