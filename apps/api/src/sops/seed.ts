@@ -1,12 +1,13 @@
 import { isUnit } from '@ailab/domain';
-import type {
-  EvidenceInput,
-  Quantity,
-  RecordEnvelope,
-  SopAttributes,
-  SopMaterial,
-  SopStep,
-  SopVariable,
+import {
+  type EvidenceInput,
+  type Quantity,
+  type RecordEnvelope,
+  type SopAttributes,
+  type SopMaterial,
+  type SopStep,
+  type SopVariable,
+  StepAction,
 } from '@ailab/schema';
 import { parse } from 'yaml';
 import type { OperationRegistry } from '../operations/registry.ts';
@@ -15,8 +16,8 @@ import type { RecordContext } from '../records/service.ts';
 /**
  * Loads the lab's own SOPs (`seed/sops/own/`, plan 006) as draft digital SOPs (plan 012a). The
  * front matter gives the materials (seed keys, found in the lab by their seed labels) and the
- * variables; the numbered list becomes the steps, as `manual` steps in the SOP's own words until the
- * digitizer (012c) types them. Each SOP links to its library document when the lab has it.
+ * variables; the numbered list becomes the steps in the SOP's own words, each with the action the
+ * front matter's `actions` names for it (`manual` without one). Each SOP links to its library document when the lab has it.
  */
 
 interface FrontMatter {
@@ -27,6 +28,8 @@ interface FrontMatter {
   status_of_values?: Record<string, string>;
   based_on?: string[];
   notes?: string;
+  /** Each numbered step's action (`StepAction`), in order. */
+  actions?: string[];
 }
 
 /** Where each kind of seed key lives, and the record kind it becomes. */
@@ -76,7 +79,7 @@ function labelsFrom(files: SeedLabels): Record<keyof typeof USES, Map<string, st
 const roleOf = (key: string) => key.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1');
 
 /** The numbered steps of the body: "1. **Coat.** Dilute…" becomes a step titled Coat. */
-export function stepsOf(body: string): SopStep[] {
+export function stepsOf(body: string, actions: readonly SopStep['action'][] = []): SopStep[] {
   const steps: SopStep[] = [];
   let current: string[] | undefined;
   const flush = () => {
@@ -87,7 +90,7 @@ export function stepsOf(body: string): SopStep[] {
     if (titled) text = text.slice(titled[0].length);
     steps.push({
       id: `s${steps.length + 1}`,
-      action: 'manual',
+      action: actions[steps.length] ?? 'manual',
       ...(title ? { title } : {}),
       text: text || (title as string),
     });
@@ -103,6 +106,19 @@ export function stepsOf(body: string): SopStep[] {
   }
   flush();
   return steps;
+}
+
+/** The front matter's step actions, refusing a word that isn't one. */
+function actionsOf(name: string, actions: string[] | undefined): SopStep['action'][] {
+  return (actions ?? []).map((action, i) => {
+    const parsed = StepAction.safeParse(action);
+    if (!parsed.success) {
+      throw new Error(
+        `${name}: step ${i + 1} has action "${action}"; use one of ${StepAction.options.join(', ')}`,
+      );
+    }
+    return parsed.data;
+  });
 }
 
 /** The body's "## Heading" sections by lowercased heading. */
@@ -171,6 +187,12 @@ export function readSeedSops(
       if (typeof v === 'string') skipped.push(v);
       else variables.push(v);
     }
+    const steps = stepsOf(body, actionsOf(name, meta.actions));
+    if (meta.actions && meta.actions.length !== steps.length) {
+      throw new Error(
+        `${name}: ${meta.actions.length} actions for ${steps.length} numbered steps; name one per step`,
+      );
+    }
     const sections = sectionsOf(body);
     const estimated = Object.entries(meta.status_of_values ?? {})
       .filter(([, s]) => s === 'estimated')
@@ -192,7 +214,7 @@ export function readSeedSops(
       attributes: {
         materials,
         variables,
-        steps: stepsOf(body),
+        steps,
         ...(analysis ? { analysis } : {}),
         ...(notes.length ? { notes: notes.join('\n\n') } : {}),
       },
@@ -211,7 +233,9 @@ export function readSeedSops(
         steps: {
           source: 'imported',
           reference,
-          note: 'The numbered steps as written, as manual steps until digitized',
+          note: meta.actions
+            ? 'The numbered steps as written, each with the action the seed file names'
+            : 'The numbered steps as written, as manual steps until digitized',
         },
       },
       skipped,

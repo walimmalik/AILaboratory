@@ -20,6 +20,7 @@ variables:
 status_of_values:
   total_dna: estimated
 notes: Use 60 min instead of 15 min for 4 or more fragments. Check amounts against the current NEB manual.
+actions: [manual, manual, make_solution, incubate, manual]
 ---
 
 # Gibson / NEBuilder HiFi assembly

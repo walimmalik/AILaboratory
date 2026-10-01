@@ -18,6 +18,7 @@ variables:
 status_of_values:
   destination_vector: estimated
 notes: Check amounts and cycling against the current NEB manual. Single-insert assemblies can use 37 °C for 60 min instead of cycling.
+actions: [manual, make_solution, incubate, manual]
 ---
 
 # Golden Gate assembly (BsaI-HFv2)

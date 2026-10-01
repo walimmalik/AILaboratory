@@ -26,6 +26,7 @@ status_of_values:
   read_duration: lab_convention
   compound_conc: lab_convention
 notes: Enzyme amount is set so the no-inhibitor wells stay linear for the whole read; titrate it once per enzyme lot.
+actions: [make_solution, transfer, add, add, read]
 ---
 
 # Alkaline phosphatase kinetic screen (pNPP)

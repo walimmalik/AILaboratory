@@ -18,7 +18,7 @@ The registries that load these files arrive one plan at a time (007 labware, 008
 | `entities.yaml` | Research on cell lines, plasmids, compounds, enzymes | 010 |
 | `entity-library.yaml` | The ten seed entity kinds (plasmid, DNA fragment, oligo, RNA, protein, antibody, enzyme, compound, cell line, bacterial strain) with their typed fields, and the demo lab's entities from `entities.yaml` in the library's shape | 010a (`pnpm --filter @ailab/api seed`) |
 | `inventory.yaml` | Lots, and containers with what is in them and where they are | 009a (lots, via `reagent-library.yaml`) / 010b (containers as proposals) / 010c (samples, fills and the stamp, as proposals) |
-| `sops/own/` | Short SOPs written for this lab, with their variables in front matter | 011 |
+| `sops/own/` | Short SOPs written for this lab, with their variables and each step's action (`actions`, in order) in front matter | 011 |
 | `assays.yaml` | Assay templates that tie SOPs, labware, reagents and instruments together | 012 onward |
 | `campaigns.yaml` | Two demo campaigns (BRD4 degraders, IL-6 reporter panel) with four experiments that follow the assay templates' SOPs | 013 |
 | `layouts.yaml` | Layout templates for the assay templates' plates (ELISA 96, single-point and dose-response 384, pNPP 96, Dual-Glo 384) | 014 |

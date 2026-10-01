@@ -64,15 +64,54 @@ describe('stepsOf', () => {
       { id: 's2', action: 'manual', text: 'Wash 3 times.' },
     ]);
   });
+
+  it('gives each step the action the front matter names', () => {
+    expect(stepsOf('1. Coat.\n2. Wash.\n', ['add', 'wash']).map((s) => s.action)).toEqual([
+      'add',
+      'wash',
+    ]);
+  });
 });
 
 describe('seed SOPs', () => {
+  it('refuses an action that is not one, or a count that does not match the steps', () => {
+    const file = (actions: string) => ({
+      name: 'x.md',
+      text: `---\nkey: x\ntitle: X\nactions: ${actions}\n---\n1. One.\n2. Two.\n`,
+    });
+    const labels = {
+      labware: 'kinds: []',
+      reagentLibrary: 'products: []',
+      entityLibrary: 'entities: []',
+      instrumentLibrary: 'instrument_kinds: []',
+    };
+    expect(() => readSeedSops([file('[add, pour]')], labels)).toThrow(/step 2 has action "pour"/);
+    expect(() => readSeedSops([file('[add]')], labels)).toThrow(/1 actions for 2 numbered steps/);
+  });
+
   it('reads every SOP in seed/sops/own with steps, materials and variables', async () => {
     const sops = await seedSops();
     expect(sops).toHaveLength(11);
     for (const s of sops) expect(s.attributes.steps.length, s.file).toBeGreaterThan(0);
     const elisa = sops.find((s) => s.key === 'sop-elisa-il6');
-    expect(elisa?.attributes.steps[0]).toMatchObject({ title: 'Coat', action: 'manual' });
+    expect(elisa?.attributes.steps.map((s) => s.action)).toEqual([
+      'add',
+      'wash',
+      'add',
+      'serial_dilute',
+      'add',
+      'add',
+      'add',
+      'add',
+      'read',
+    ]);
+    // Every seeded SOP names its actions, so none is all manual steps.
+    for (const s of sops) {
+      expect(
+        s.attributes.steps.some((step) => step.action !== 'manual'),
+        s.file,
+      ).toBe(true);
+    }
     expect(elisa?.attributes.variables.find((v) => v.name === 'well_volume')).toMatchObject({
       kind: 'default',
       value: { value: '100', unit: 'uL' },

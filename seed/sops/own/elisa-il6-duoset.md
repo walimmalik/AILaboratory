@@ -23,6 +23,7 @@ status_of_values:
   detection_ab_working_conc: estimated
   standard_top_conc: estimated
 notes: Values follow the DuoSet general protocol from memory of the vendor sheet and must be checked against the kit insert and CoA before use.
+actions: [add, wash, add, serial_dilute, add, add, add, add, read]
 ---
 
 # Human IL-6 sandwich ELISA (DuoSet), 96-well

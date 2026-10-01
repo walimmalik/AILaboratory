@@ -21,6 +21,7 @@ variables:
 status_of_values:
   medium_volume: lab_convention
 notes: Check volumes, dilutions and signal windows against the current Promega technical manual.
+actions: [manual, wait, add, read, make_solution, add, read]
 ---
 
 # Dual-Glo luciferase reporter assay

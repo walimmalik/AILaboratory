@@ -17,6 +17,7 @@ variables:
 status_of_values:
   cells_per_well: lab_convention
   incubation_time: lab_convention
+actions: [manual, make_solution, add, wait, incubate]
 ---
 
 # Seeding HEK293 cells into 384-well assay plates

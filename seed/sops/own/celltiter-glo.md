@@ -15,6 +15,7 @@ variables:
   reagent_volume: { value: "25", unit: "uL" }
   equilibration_time: { value: "30", unit: min }
   signal_incubation: { value: "10", unit: min }
+actions: [wait, add, shake, incubate, read]
 ---
 
 # CellTiter-Glo 2.0 viability readout

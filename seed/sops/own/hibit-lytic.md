@@ -16,6 +16,7 @@ variables:
   lgbit_dilution: 100
   substrate_dilution: 50
   signal_incubation: { value: "10", unit: min }
+actions: [make_solution, wait, add, incubate, read]
 ---
 
 # Nano-Glo HiBiT lytic readout
