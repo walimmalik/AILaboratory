@@ -607,6 +607,11 @@ describe('transfer plans', () => {
             },
             {
               from: { plate: 'src', well: 'A1' },
+              to: { plate: 'assay', well: 'A3' },
+              volume: nL('3'),
+            },
+            {
+              from: { plate: 'src', well: 'A1' },
               to: { plate: 'assay', well: 'A2' },
               volume: uL('60'),
             },
@@ -617,6 +622,10 @@ describe('transfer plans', () => {
     const ready = await run<Readiness>(person, 'records.readiness', { id: plan.id });
     const byId = new Map(ready.checks.map((c) => [c.id, c]));
     expect(byId.get('volumes_fit')?.message).toContain('1 nL is less than one step of 2.5 nL');
+    expect(byId.get('volumes_fit')?.message).toContain(
+      '3 nL is not a whole number of 2.5 nL steps (it would move 2.5 nL)',
+    );
+    expect(byId.get('volumes_fit')?.message).not.toContain('2.5 nL is not');
     expect(byId.get('wells_hold')?.message).toBe('assay A2 gets 60 µL; it holds 50 µL');
     expect(byId.get('intermediates_first')?.message).toContain('draws from mid A1 before anything');
 
@@ -1068,7 +1077,8 @@ describe('transfers.draft_from_plate_map', () => {
     const h1 = groups[3]?.transfers.find((t) => t.to.well === 'H1');
     expect(h1?.volume).toEqual(nL('25'));
     const ready = await run<Readiness>(person, 'records.readiness', { id: out.plan.id });
-    // Echo volumes fit; the intermediate diluent is too much for it, which readiness says.
+    // Echo volumes fit, the intermediates' stock in whole droplets too; the intermediate diluent is
+    // too much for it, which readiness says.
     expect(ready.checks.find((c) => c.id === 'volumes_fit')?.message).toMatch(
       /^Solvent into the intermediate wells: 2 transfers: .* is above the maximum of 10 µL$/,
     );
