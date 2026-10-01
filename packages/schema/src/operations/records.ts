@@ -3,7 +3,7 @@ import { CheckSeverity, EvidenceInput, KindSection, Readiness } from '../design.
 import { RecordId } from '../ids.ts';
 import { defineContract } from '../operation.ts';
 import { RecordOverview } from '../overview.ts';
-import { RecordEnvelope, RecordLink, RecordStatus, RecordVersion } from '../record.ts';
+import { Connection, RecordEnvelope, RecordStatus, RecordVersion } from '../record.ts';
 
 const Reason = z.string().min(1).optional().describe('Why the change was made; kept in history');
 const ExpectedVersion = z
@@ -222,10 +222,11 @@ export const recordsHistory = defineContract({
 export const recordsLinks = defineContract({
   id: 'records.links',
   verbs: { done: 'looked at the links of', intent: 'look at the links of' },
-  summary: 'List what a record links to ("from") or where it is used ("to")',
+  summary:
+    'List what a record is based on ("from": what it links to) or where it is used ("to": what links to it), each link with its relation in words and the record at the other end',
   effect: 'read',
   input: z.object({ id: RecordId, direction: z.enum(['from', 'to']) }),
-  output: z.object({ links: z.array(RecordLink) }),
+  output: z.object({ links: z.array(Connection) }),
 });
 
 export const recordsKinds = defineContract({

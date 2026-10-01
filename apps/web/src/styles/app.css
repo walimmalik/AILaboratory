@@ -2497,8 +2497,32 @@ span.row-actions {
   text-transform: uppercase;
   color: var(--ink-2);
 }
+.connection-group + .connection-group {
+  margin-top: 10px;
+}
+.connection-group .relation-words {
+  margin: 0 0 2px;
+  font: 500 12px / 1.4 var(--font-ui);
+  color: var(--ink-2);
+}
+.relation-words .relation-count {
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+}
+.record-page .connections {
+  margin: 0;
+}
 .record-page .connections li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
   padding: 3px 0;
+}
+.record-page .connections .when {
+  margin-left: auto;
+  font: 12px var(--font-mono);
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 @media (max-width: 560px) {
   .record-page .part .values {

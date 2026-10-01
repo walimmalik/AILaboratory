@@ -1,4 +1,4 @@
-import type { Actor, RecordEnvelope, RecordOverview } from '@ailab/schema';
+import type { Actor, Connection, RecordEnvelope, RecordOverview } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { campaignKinds } from '../campaigns/kinds.ts';
@@ -159,6 +159,47 @@ describe('records.overview', () => {
     await expect(run(person, 'records.overview', { id: 'not an id' })).rejects.toThrow();
     await expect(run(person, 'records.overview', {})).rejects.toThrow();
     await expect(overview(vendor.id, otherLab)).rejects.toThrow(/not found|no record/i);
+  });
+});
+
+describe('records.links', () => {
+  it('says each relation in words from both ends and names the record at the other end', async () => {
+    const vendor = await create('vendor', 'Cayman Chemical', {});
+    const product = await create('product', 'Staurosporine', {
+      category: 'compound',
+      origin: 'bought',
+      form: 'powder',
+      vendor: vendor.id,
+    });
+
+    const based = await run<{ links: Connection[] }>(agent, 'records.links', {
+      id: product.id,
+      direction: 'from',
+    });
+    expect(based.links).toEqual([
+      expect.objectContaining({
+        relation: 'sold_by',
+        words: 'sold by',
+        other: expect.objectContaining({ id: vendor.id, label: 'Cayman Chemical', kind: 'vendor' }),
+      }),
+    ]);
+
+    const used = await run<{ links: Connection[] }>(person, 'records.links', {
+      id: vendor.id,
+      direction: 'to',
+    });
+    expect(used.links).toEqual([
+      expect.objectContaining({
+        words: 'sells',
+        other: expect.objectContaining({ id: product.id, status: 'draft' }),
+      }),
+    ]);
+    await expect(
+      run(person, 'records.links', { id: vendor.id, direction: 'sideways' }),
+    ).rejects.toThrow();
+    await expect(
+      run(otherLab, 'records.links', { id: vendor.id, direction: 'to' }),
+    ).rejects.toThrow(/not found|no record/i);
   });
 });
 

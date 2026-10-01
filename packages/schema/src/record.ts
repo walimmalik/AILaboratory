@@ -74,3 +74,20 @@ export const RecordLink = z.object({
   relation: z.string().regex(/^[a-z][a-z0-9_]*$/, 'must be snake_case'),
 });
 export type RecordLink = z.infer<typeof RecordLink>;
+
+/**
+ * A link as a person reads it (plan 004f N6): the relation in words from this record's end and
+ * the record at the other end, named, with its state and when it last changed.
+ */
+export const Connection = RecordLink.extend({
+  words: z.string().describe('The relation in words from this end ("sold by", "lots")'),
+  other: z.object({
+    id: RecordId,
+    kind: z.string(),
+    name: RecordName,
+    label: z.string(),
+    status: RecordStatus,
+    updatedAt: z.iso.datetime(),
+  }),
+});
+export type Connection = z.infer<typeof Connection>;

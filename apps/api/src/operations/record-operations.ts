@@ -19,6 +19,7 @@ import {
   recordsRestore,
   recordsUnarchive,
   recordsUpdate,
+  relationWords,
 } from '@ailab/schema';
 import { z } from 'zod';
 import { markSeen, seenVersion } from '../records/seen.ts';
@@ -307,12 +308,32 @@ export const recordOperations = [
     run: async (ctx, input, deps) => ({ versions: await service(deps).history(ctx, input.id) }),
   }),
   implement(recordsLinks, {
-    run: async (ctx, input, deps) => ({
-      links:
-        input.direction === 'from'
-          ? await service(deps).linksFrom(ctx, input.id)
-          : await service(deps).linksTo(ctx, input.id),
-    }),
+    run: async (ctx, input, deps) => {
+      const records = service(deps);
+      const from = input.direction === 'from';
+      const links = from
+        ? await records.linksFrom(ctx, input.id)
+        : await records.linksTo(ctx, input.id);
+      const others = new Map(
+        (await records.list(ctx, { ids: links.map((l) => (from ? l.toId : l.fromId)) })).map(
+          (r) => [r.id, r],
+        ),
+      );
+      return {
+        links: links.flatMap((link) => {
+          const other = others.get(from ? link.toId : link.fromId);
+          if (!other) return [];
+          const { id, kind, name, label, status, updatedAt } = other;
+          return [
+            {
+              ...link,
+              words: relationWords(link.relation, input.direction),
+              other: { id, kind, name, label, status, updatedAt },
+            },
+          ];
+        }),
+      };
+    },
   }),
 ];
 

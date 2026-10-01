@@ -21,6 +21,7 @@ export * from './platemaps.ts';
 export * from './quantity.ts';
 export * from './reagents.ts';
 export * from './record.ts';
+export * from './relations.ts';
 export * from './session.ts';
 export * from './sops.ts';
 export * from './transfers.ts';
