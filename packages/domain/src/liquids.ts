@@ -9,6 +9,7 @@ import type {
   VerificationResult,
 } from '@ailab/schema';
 import { LabDecimal, toDecimalString } from './decimal.ts';
+import type { AppliedEffects, MemoryCandidate } from './memory.ts';
 import { compare, convert, formatQuantity } from './units.ts';
 
 /** Liquid calculators (plan 009b): mixtures' liquid types, verification results, class choice. */
@@ -141,6 +142,8 @@ export interface ClassRequest {
   liquidTypeLabel?: string | undefined;
   explicit?: string | undefined;
   productOverrides?: string[] | undefined;
+  /** What lab memory prefers and avoids among the classes (plan 005b). */
+  memory?: Pick<AppliedEffects, 'prefer' | 'avoid'> | undefined;
 }
 
 /** Why a class doesn't fit the request, or undefined when it does. */
@@ -160,7 +163,17 @@ export function misfit(a: LiquidClassAttributes, r: ClassRequest): string | unde
 }
 
 export function resolveClass(request: ClassRequest, classes: ClassInfo[]): ClassChoice {
-  const usable = classes.filter((c) => c.active);
+  const prefer = request.memory?.prefer ?? new Map<string, MemoryCandidate>();
+  const avoid = request.memory?.avoid ?? new Map<string, MemoryCandidate>();
+  // A lab rule that avoids a class refuses it; a default only ranks it last.
+  const refused = (c: ClassInfo) => avoid.get(c.id)?.attributes.strength === 'rule';
+  const cite = (...ms: (MemoryCandidate | undefined)[]) => {
+    const used = ms.flatMap((m) =>
+      m ? [{ id: m.id, name: m.name, statement: m.attributes.statement }] : [],
+    );
+    return used.length ? { memory: used } : {};
+  };
+  const usable = classes.filter((c) => c.active && (!refused(c) || c.id === request.explicit));
   const fits = (c: ClassInfo) => misfit(c.attributes, request) === undefined;
   const serves = (c: ClassInfo) =>
     request.liquidType !== undefined && c.attributes.liquidTypes.includes(request.liquidType);
@@ -197,6 +210,15 @@ export function resolveClass(request: ClassRequest, classes: ClassInfo[]): Class
     );
   }
 
+  const preferred = usable.find((c) => prefer.has(c.id) && fits(c) && serves(c));
+  if (preferred) {
+    const m = prefer.get(preferred.id) as MemoryCandidate;
+    return {
+      ...choice(preferred, 'lab_memory', `Lab memory ${m.name} prefers ${preferred.label}`),
+      ...cite(m),
+    };
+  }
+
   const liquid = request.liquidTypeLabel ?? 'this liquid type';
   if (!request.liquidType) {
     return none('The liquid has no liquid type; set one on the product first', alternatives);
@@ -209,9 +231,21 @@ export function resolveClass(request: ClassRequest, classes: ClassInfo[]): Class
       alternatives,
     );
   }
-  const best = defaults.find((c) => c.verified) ?? defaults[0];
+  const kept = defaults.filter((c) => !avoid.has(c.id));
+  const best = kept.find((c) => c.verified) ?? kept[0] ?? defaults[0];
   if (best) {
-    return choice(best, 'lab_default', `The lab's default for ${liquid} on this device and tip`);
+    const avoided = avoid.get(best.id);
+    const passed = defaults
+      .filter((c) => c !== best && avoid.has(c.id))
+      .map((c) => avoid.get(c.id));
+    const why = avoided
+      ? `The lab's default for ${liquid} on this device and tip, though lab memory ${avoided.name} avoids it and nothing else fits`
+      : `The lab's default for ${liquid} on this device and tip${
+          passed.length
+            ? `; lab memory ${passed.map((m) => m?.name).join(', ')} passed over another`
+            : ''
+        }`;
+    return { ...choice(best, 'lab_default', why), ...cite(avoided, ...passed) };
   }
   const drafts = classes.filter((c) => !c.active && serves(c) && fits(c));
   return none(

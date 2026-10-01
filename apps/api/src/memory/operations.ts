@@ -2,12 +2,14 @@ import { checkAgainFor, isDue } from '@ailab/domain';
 import {
   type MemoryAttributes,
   type MemoryInput,
+  memoryFor,
   memoryPropose,
   memoryRemember,
   memoryReplace,
   memoryRetire,
   memorySearch,
   memoryUpdate,
+  memoryUsedIn,
   type RecordEnvelope,
 } from '@ailab/schema';
 import type { z } from 'zod';
@@ -15,8 +17,9 @@ import { OperationError } from '../operations/errors.ts';
 import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { activeMemories, bundle, lookup, nearby } from './match.ts';
 
-/** Lab memory operations (plan 005a). */
+/** Lab memory operations (plans 005a and 005b). */
 
 const service = (deps: Pick<OperationDeps, 'db' | 'kinds'>) =>
   new RecordService(deps.db, deps.kinds);
@@ -200,6 +203,35 @@ export const memoryOperations = [
           due: m.status === 'active' && isDue((m.attributes as MemoryAttributes).checkAgain, now),
         })),
         total: found.length,
+      };
+    },
+  }),
+  implement(memoryFor, {
+    run: async (ctx, input, deps) => {
+      const records = input.records ?? [];
+      const around = input.nearby ? await nearby(deps, ctx, records) : [];
+      const { matches } = lookup(await activeMemories(deps, ctx), ctx, {
+        records: [...records, ...around],
+        facts: input.facts,
+        person: input.person,
+      });
+      return bundle(matches, input.limit ?? 15);
+    },
+  }),
+  implement(memoryUsedIn, {
+    run: async (ctx, input, deps) => {
+      await memoryOf(deps, ctx, input.id);
+      const citing = await service(deps).citing(ctx, input.id);
+      return {
+        records: citing.map(({ record, fields }) => ({
+          id: record.id,
+          name: record.name,
+          label: record.label,
+          kind: record.kind,
+          status: record.status,
+          version: record.version,
+          fields,
+        })),
       };
     },
   }),

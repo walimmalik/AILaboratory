@@ -162,4 +162,47 @@ describe('resolveClass', () => {
       resolveClass(request, [cls(2, { labDefault: true }, { active: false })]).issue,
     ).toContain('draft Class 2 would fit once confirmed');
   });
+
+  it('takes the class lab memory prefers, and passes over one it avoids', () => {
+    const memory = (n: number, strength: 'rule' | 'default') => ({
+      id: id('mem', n),
+      name: `MEM-000${n}`,
+      updatedAt: '2026-10-01T00:00:00Z',
+      attributes: {
+        statement: `Memory ${n}`,
+        kind: 'quirk' as const,
+        strength,
+        appliesTo: { to: 'lab' as const },
+        source: { from: 'stated' as const },
+      },
+    });
+    const classes = [
+      cls(1, { labDefault: true }, { verified: true }),
+      cls(2, { labDefault: true }),
+      cls(3),
+    ];
+    const prefer = new Map([[id('lqc', 3), memory(1, 'default')]]);
+    expect(
+      resolveClass({ ...request, memory: { prefer, avoid: new Map() } }, classes),
+    ).toMatchObject({
+      liquidClass: id('lqc', 3),
+      how: 'lab_memory',
+      memory: [{ name: 'MEM-0001' }],
+    });
+    const avoid = new Map([[id('lqc', 1), memory(2, 'default')]]);
+    const passed = resolveClass({ ...request, memory: { prefer: new Map(), avoid } }, classes);
+    expect(passed).toMatchObject({
+      liquidClass: id('lqc', 2),
+      how: 'lab_default',
+      memory: [{ name: 'MEM-0002' }],
+    });
+    const refused = resolveClass(
+      {
+        ...request,
+        memory: { prefer: new Map(), avoid: new Map([[id('lqc', 1), memory(3, 'rule')]]) },
+      },
+      [cls(1, { labDefault: true })],
+    );
+    expect(refused).toMatchObject({ how: 'none' });
+  });
 });

@@ -181,6 +181,23 @@ describe('tips and devices', () => {
     expect(tipChanges(afterWet, 'lab_default')).toEqual([true, true]);
   });
 
+  it('ranks what lab memory prefers first and what it avoids last among devices that fit', () => {
+    const device = (id: string, memory?: 'prefer' | 'avoid') => ({
+      id,
+      label: id,
+      limits: { min: q('0.5', 'uL') },
+      tips: 'new_each' as const,
+      ...(memory ? { memory } : {}),
+    });
+    const ranked = rankDevices(q('3', 'uL'), [
+      device('star', 'avoid'),
+      device('flex'),
+      device('vantage', 'prefer'),
+      { ...device('mantis', 'prefer'), limits: { min: q('5', 'uL') } },
+    ]);
+    expect(ranked.map((r) => r.id)).toEqual(['vantage', 'flex', 'star', 'mantis']);
+  });
+
   it('ranks devices: what fits, a verified class, less error, no tips', () => {
     const ranked = rankDevices(q('25', 'nL'), [
       {

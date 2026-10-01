@@ -21,6 +21,24 @@ Plan [005](../plans/005-lab-memory.md): what a good lab manager knows but no reg
 
 `memory.search` and `memory.propose` are in the assistant's core toolset (ADR 0055); a memory page offers the `memory` tools.
 
+## What applies to a piece of work (005b, M7, M8, changes 2 and 4)
+
+- `packages/domain/src/memory.ts`: `matchMemory` and `memoriesFor` take active memories and a request (`records`, `facts` keyed like the conditions with one value per range, and the person). A memory is relevant when it is about one of the records, or is lab-wide with a condition that held, or is a lab-wide rule; a personal memory only for its person; a condition the facts contradict drops it. A condition the facts leave out keeps it with `applies: false` and the key in `unknown`; code applies only memories whose every condition held. `compareMatches` is the total order: strength, personal, conditions held, matching links, newer, name.
+- `appliedEffects` takes the most specific `prefer`, `avoid` and `set` per record or slot from memories that apply; two that clash at equal specificity (`matchConflicts`, `effectClash`) apply neither.
+- `memoryConflicts` blocks confirming a memory whose effect clashes with an active one for the same people, about the same records (or both lab-wide), under overlapping conditions (`conditionsOverlap`), at equal strength and numbers of conditions and links: the kind's `no_clashing_memory` blocker.
+- `apps/api/src/memory/match.ts`: `activeMemories`, `lookup` (matches and effects for one piece of work), `nearby` (the records a page links to, one step out) and `bundle` (one line each, capped, with "N more: memory.search" and the conflicts). Every consumer reads memory through it.
+
+| Operation | Agents | Does |
+| --- | --- | --- |
+| `memory.for` | read | The memories for records and facts (and, with `nearby`, the records they link to), ranked, with conflicts and lines; default limit 15 |
+| `memory.used_in` | read | The records whose current evidence copies a value from the memory, and the fields (`RecordService.citing`) |
+
+Consumers:
+
+- **The assistant** (M7): the system prompt carries the bundle for the record on the page the latest message came from and the records it links to, plus every lab-wide rule, at most 15 lines. `memory.for` is in the core toolset.
+- **`liquids.resolve_class`**: after an explicit class and the product's own, a class lab memory prefers for the work (`how: "lab_memory"`); among lab defaults, one memory avoids goes last, and a rule that avoids a class refuses it. The choice names the memories (`memory`).
+- **`transfers.options`**: per device, facts from the instrument, its kind, the device, capability, volume, liquid and `samples`; a preferred instrument ranks first and an avoided one last among those that fit (`rankDevices`), and each option names its memories. An avoiding rule also adds a note.
+
 ## Memory in other records (005a, M1)
 
 - A handling rule (`RuleSource`) or SOP timing window from `lab_memory` must name its memory (`memory: mem_…`); a lab convention may. Products, entity kinds, entities and SOPs link to it as `from_memory`.
@@ -32,4 +50,4 @@ Plan [005](../plans/005-lab-memory.md): what a good lab manager knows but no reg
 
 ## Not yet
 
-`memory.for`, the page bundle, "used in" and effects applied in the resolvers (005b); `memory.observe`, candidates, Review's Lab memory section and detectors (005c-1); weights and decay (005c-2); screens (005d). A personal memory drafted by an agent can still be confirmed by anyone in the lab through `records.confirm`; ownership on confirm comes with 005c-1's Review section. Seed handling rules marked `lab_convention` don't name a memory yet: they load before the memories that describe them.
+`memory.observe`, candidates, Review's Lab memory section and detectors (005c-1); weights and decay (005c-2); screens (005d). The "for your information" notice on drafts that used a retired or replaced memory comes with 005c-1's Review section. A readiness warning on designs that use what a rule avoids comes with the designers that apply rules (017, 018, 019); the transfer plan only shows it in `transfers.options` for now. A personal memory drafted by an agent can still be confirmed by anyone in the lab through `records.confirm`; ownership on confirm comes with 005c-1's Review section. Seed handling rules marked `lab_convention` don't name a memory yet: they load before the memories that describe them.

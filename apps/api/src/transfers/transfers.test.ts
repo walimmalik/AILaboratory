@@ -10,6 +10,7 @@ import { fileKinds } from '../files/kinds.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
 import { inventoryKinds } from '../inventory/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -53,6 +54,7 @@ beforeEach(async () => {
     ...transferKinds,
     ...plateMapKinds,
     ...fileKinds,
+    ...memoryKinds,
   ]) {
     kinds.register(kind);
   }
@@ -380,6 +382,34 @@ describe('transfers.options', () => {
       { volume: uL('50') },
     );
     expect(large.options[0]).toMatchObject({ device: 'Flex 1 (left)', fit: { fits: true } });
+  });
+
+  it('ranks an instrument lab memory avoids for the work last, and leaves other work alone', async () => {
+    const { echo } = await lab();
+    const echoKind = (echo.attributes as { kind: string }).kind;
+    type Options = {
+      options: { device: string; memory?: { name: string; effect: string }[] }[];
+    };
+    const order = async (volume: unknown) =>
+      (await run<Options>(agent, 'transfers.options', { volume })).options;
+    expect((await order(uL('5'))).map((o) => o.device)).toEqual(['Echo 1', 'Flex 1 (left)']);
+    await run(person, 'memory.remember', {
+      statement: 'The Echo misfires above 4 uL from this plate; move larger volumes on the Flex',
+      kind: 'quirk',
+      strength: 'default',
+      about: [echoKind],
+      conditions: { instrumentKind: echoKind, capability: 'transfer', volume: { min: uL('4') } },
+      effect: { effect: 'avoid', record: echoKind },
+      source: { from: 'stated' },
+    });
+    const avoided = await order(uL('5'));
+    expect(avoided.map((o) => o.device)).toEqual(['Flex 1 (left)', 'Echo 1']);
+    expect(avoided[1]?.memory).toEqual([
+      expect.objectContaining({ name: 'MEM-0001', effect: 'avoid' }),
+    ]);
+    const small = await order(uL('2'));
+    expect(small.map((o) => o.device)).toEqual(['Echo 1', 'Flex 1 (left)']);
+    expect(small[0]?.memory).toBeUndefined();
   });
 
   it('refuses a volume without a volume unit, and sees nothing of other labs', async () => {

@@ -12,8 +12,8 @@ import type { ModelTool } from './model.ts';
 
 /**
  * Always offered: reading records and what waits for people, discovery, drafting records, change sets,
- * the proposals the assistant left, and lab memory (searching it, and proposing what a person says
- * generally, plan 005a).
+ * the proposals the assistant left, and lab memory (searching it, what applies to a piece of work, and
+ * proposing what a person says generally, plans 005a and 005b).
  */
 const CORE = new Set([
   'records.get',
@@ -32,6 +32,7 @@ const CORE = new Set([
   'skills.get',
   'operations.describe',
   'memory.search',
+  'memory.for',
   'memory.propose',
 ]);
 
