@@ -6,7 +6,8 @@
 - Must land before 017 (Wali, 2026-09-30).
 - Built (005a, ADR 0062): the memory record, `memory.propose/remember/update/retire/replace/search`, `memory` evidence, rules and timing windows naming their memory, `seed/memory.yaml`, the memory skill. See [memory.md](../architecture/memory.md).
 - Built (005b): `memory.for` with the total order and effect conflicts, the clash blocker on confirm, the assistant's page bundle, `memory.used_in`, and lab memory applied in `liquids.resolve_class` and `transfers.options`.
-- Built (005c-1a): `memory.observe` and `memory.candidates` with the bar and rejections (the `memory_candidates` table), and the recurring run deviation detector. Next: 005c-1b, Review's Lab memory section, the "possible lab memory" hint and the repeated-override detector.
+- Built (005c-1a): `memory.observe` and `memory.candidates` with the bar and rejections (the `memory_candidates` table), and the recurring run deviation detector.
+- Built (005c-1b): the repeated-override detector (registry write listeners), the "possible lab memory" hint in the assistant, and proposed memories grouped in `review.list` (rules never batch-confirmed). Next: 005c-2 once a detector reports negatives; 005d screens.
 
 ## What this plan delivers
 
