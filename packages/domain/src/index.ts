@@ -1,5 +1,6 @@
 export * from './contents.ts';
 export * from './decimal.ts';
+export * from './design.ts';
 export * from './diff.ts';
 export * from './entities.ts';
 export * from './expressions.ts';
