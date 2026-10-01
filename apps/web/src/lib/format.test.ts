@@ -6,6 +6,7 @@ import {
   describeToolStep,
   diffRecords,
   foldRepeats,
+  formatDay,
   formatValue,
   partLabel,
   problemWords,
@@ -15,6 +16,12 @@ import {
 const me = { user: { id: 'usr_A' } } as unknown as Me;
 
 describe('plain language', () => {
+  it('says a day without the year in the current year', () => {
+    const now = new Date('2026-10-01T12:00:00Z');
+    expect(formatDay('2026-10-01T09:00:00Z', now)).toBe('1 Oct');
+    expect(formatDay('2025-03-31T09:00:00Z', now)).toBe('31 Mar 2025');
+  });
+
   it('names people and agents from the reader’s point of view', () => {
     expect(actorLabel({ type: 'user', userId: 'usr_A' }, me)).toBe('you');
     expect(actorLabel({ type: 'agent', agentName: 'Claude', onBehalfOf: 'usr_A' }, me)).toBe(

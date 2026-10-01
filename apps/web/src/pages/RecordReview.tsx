@@ -1,109 +1,21 @@
 import {
   type Actor,
   type CheckResult,
-  type FieldEvidence,
   labwareUseStandardPositions,
   type Me,
   type Readiness,
   type ReadinessSection,
   type RecordEnvelope,
   recordsConfirm,
-  recordsConfirmSection,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.ts';
-import { useAssistant } from '../assistant.tsx';
-import { fieldLabel, formatWhen, isAgent, partLabel, problemWords } from '../lib/format.ts';
+import { partLabel, problemWords } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
-import { LinkedName } from './Value.tsx';
 
 export { fieldLabel } from '../lib/format.ts';
-
-import { useMe } from '../session.ts';
-import { SectionEditor } from './SectionEditor.tsx';
-
-/**
- * Draft and confirm (plan 004c): the record as a person reviews it. One block per section with what
- * changed since it was confirmed and where each value came from, then what still stands in the way.
- */
-export function ReviewBlocks({
-  record,
-  readiness,
-  renderValue,
-  aside,
-}: {
-  record: RecordEnvelope;
-  readiness: Readiness;
-  renderValue: (value: unknown, field?: string) => ReactNode;
-  /** Shown between the readiness block and the sections, e.g. a labware drawing. */
-  aside?: ReactNode;
-}) {
-  const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
-  const blocked = readiness.checks.some((c) => !c.passed && c.severity === 'blocker');
-  // Confirming the last section of a draft that nothing blocks also activates it (plan 004d, R6).
-  const activates = record.status === 'draft' && toReview.length === 1 && !blocked;
-  const [editing, setEditing] = useState<string>();
-  const [scrollTo, setScrollTo] = useState<string>();
-  useEffect(() => {
-    if (!scrollTo) return;
-    const block = document.getElementById(`section-${scrollTo}`);
-    block?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    block?.querySelector<HTMLElement>('input, select, textarea')?.focus({ preventScroll: true });
-    setScrollTo(undefined);
-  }, [scrollTo]);
-  const fix = (section: string) => {
-    setEditing(section);
-    setScrollTo(section);
-  };
-  const titles = Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]));
-  // A confirmed active record leads with its content (the drawing, the bench view, the deck).
-  // Readiness and the sections fold into one block below it, one line each, opened on demand.
-  const settled =
-    record.status === 'active' &&
-    readiness.ready &&
-    readiness.checks.every((c) => c.passed || c.severity !== 'blocker');
-  if (settled && !editing) {
-    return (
-      <>
-        {aside}
-        <SettledDetails
-          record={record}
-          readiness={readiness}
-          titles={titles}
-          renderValue={renderValue}
-          onEdit={fix}
-        />
-      </>
-    );
-  }
-  return (
-    <>
-      <ReadinessBlock
-        record={record}
-        readiness={readiness}
-        titles={titles}
-        onFix={fix}
-        editing={editing}
-      />
-      {aside}
-      {readiness.sections.map((section) => (
-        <SectionBlock
-          key={section.id}
-          record={record}
-          version={readiness.version}
-          section={section}
-          activates={activates && section.state === 'needs_review'}
-          renderValue={renderValue}
-          editing={editing === section.id}
-          onEdit={(on) => setEditing(on ? section.id : undefined)}
-          notApplicable={readiness.notApplicable}
-        />
-      ))}
-    </>
-  );
-}
 
 function useInvalidate(id: string) {
   const queryClient = useQueryClient();
@@ -152,9 +64,13 @@ export function ReadinessBlock({
       api.run(recordsConfirm, { id: record.id, expectedVersion: readiness.version }),
     onSuccess: invalidate,
   });
+  const warnings = readiness.checks.filter((c) => !c.passed && c.severity !== 'blocker').length;
+  // The header already says "confirmed"; here, only what is left.
   const state = !draft
     ? readiness.ready
-      ? { text: '✓ confirmed', tone: 'ok-ink' }
+      ? warnings > 0
+        ? { text: `${warnings} recommended`, tone: 'warn-ink' }
+        : { text: '✓ confirmed', tone: 'ok-ink' }
       : { text: 'changed since it was confirmed', tone: 'warn-ink' }
     : readiness.ready
       ? { text: 'ready to confirm', tone: 'ok-ink' }
@@ -168,11 +84,13 @@ export function ReadinessBlock({
       ? 'Fix what blocks it first.'
       : ''
     : `${
-        confirmable.length === 0
-          ? 'Everything is confirmed.'
-          : confirmable.length === all
-            ? `Confirms ${all === 1 ? 'it' : `all ${all} parts`} as they stand.`
-            : `Confirms ${words(confirmable)} as they stand.`
+        readiness.sections.length === 0
+          ? 'Confirms it as it stands.'
+          : confirmable.length === 0
+            ? 'Everything is confirmed.'
+            : confirmable.length === all
+              ? `Confirms ${all === 1 ? 'it' : `all ${all} parts`} as they stand.`
+              : `Confirms ${words(confirmable)} as they stand.`
       }${activates ? ` ${record.name} becomes active for the lab.` : ''}${
         waiting.length
           ? ` ${capital(words(waiting))} ${waiting.length === 1 ? 'waits' : 'wait'} for the fixes above.`
@@ -293,144 +211,6 @@ export function Estimates({
 }
 
 const capital = (text: string) => `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
-
-/**
- * A record's readiness and sections as one block: a line each, saying who confirmed it and how many
- * of its fields hold a value, opened in place. Editing a section opens the full review (the SOP page
- * opens its whole-page editor).
- */
-export function SettledDetails({
-  record,
-  readiness,
-  titles,
-  renderValue,
-  onEdit,
-  checks = true,
-}: {
-  record: RecordEnvelope;
-  readiness: Readiness;
-  titles: Record<string, string>;
-  renderValue: (value: unknown, field?: string) => ReactNode;
-  onEdit: (section: string) => void;
-  /** Whether the checks get a line here; off when a readiness block above already lists them. */
-  checks?: boolean;
-}) {
-  const me = useMe();
-  const [open, setOpen] = useState<string>();
-  const toggle = (id: string) => setOpen(open === id ? undefined : id);
-  const warnings = readiness.checks.filter((c) => !c.passed).length;
-  const passing = readiness.checks.length - warnings;
-  const toReview = readiness.sections.filter((s) => s.state === 'needs_review').length;
-  return (
-    <section className="block" aria-label="Details">
-      <header>
-        <h2>Details</h2>
-        {toReview === 0 ? (
-          <span className="state ok-ink">✓ confirmed</span>
-        ) : (
-          <span className="state warn-ink">
-            {toReview === 1 ? '1 part needs review' : `${toReview} parts need review`}
-          </span>
-        )}
-      </header>
-      <div className="body">
-        <ul className="settled">
-          {checks && readiness.checks.length > 0 && (
-            <li>
-              <button
-                type="button"
-                className="settled-line"
-                aria-expanded={open === 'readiness'}
-                onClick={() => toggle('readiness')}
-              >
-                <b>Checks</b>
-                <span className="muted">
-                  {passing} {passing === 1 ? 'check passes' : 'checks pass'}
-                  {warnings > 0 && (
-                    <span className="warn-ink">
-                      {' '}
-                      · {warnings} {warnings === 1 ? 'warning' : 'warnings'}
-                    </span>
-                  )}
-                </span>
-              </button>
-              {open === 'readiness' && (
-                <Checks
-                  checks={readiness.checks}
-                  titles={titles}
-                  onFix={onEdit}
-                  target={{ id: record.id, version: readiness.version }}
-                />
-              )}
-            </li>
-          )}
-          {readiness.sections.map((section) => {
-            return (
-              <li key={section.id} id={`section-${section.id}`}>
-                <button
-                  type="button"
-                  className="settled-line"
-                  aria-expanded={open === section.id}
-                  onClick={() => toggle(section.id)}
-                >
-                  <b>{section.title}</b>
-                  <span className="muted">
-                    {filledWords(section)}
-                    {section.state === 'needs_review' ? (
-                      <span className="warn-ink"> · needs review</span>
-                    ) : (
-                      section.review &&
-                      ` · confirmed by ${who(section.review.confirmedBy, me)} ${formatWhen(section.review.confirmedAt)}`
-                    )}
-                  </span>
-                </button>
-                {open === section.id && (
-                  <>
-                    <SectionValues
-                      section={section}
-                      me={me}
-                      renderValue={renderValue}
-                      notApplicable={readiness.notApplicable}
-                      hideEmpty
-                    />
-                    {record.status !== 'archived' && (
-                      <div className="actions">
-                        <button type="button" className="btn" onClick={() => onEdit(section.id)}>
-                          Edit {section.title.toLowerCase()}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        <details className="tech">
-          <summary>technical details</summary>
-          <pre className="json">{JSON.stringify(record, null, 2)}</pre>
-        </details>
-      </div>
-    </section>
-  );
-}
-
-/** "11 steps", "6 materials · 2 solutions" for sections of lists; "2 of 7 filled" otherwise. */
-function filledWords(section: ReadinessSection): string {
-  const values = section.fields.filter((f) => !isEmpty(f.value));
-  if (values.length === 0) return 'empty';
-  if (values.every((f) => Array.isArray(f.value)))
-    return values
-      .map((f) => `${(f.value as unknown[]).length} ${fieldLabel(f.field).toLowerCase()}`)
-      .join(' · ');
-  return `${values.length} of ${section.fields.length} filled`;
-}
-
-const isEmpty = (value: unknown) =>
-  value === undefined ||
-  value === null ||
-  value === '' ||
-  (Array.isArray(value) && value.length === 0);
 
 const rank = (c: CheckResult) => (c.passed ? 2 : c.severity === 'blocker' ? 0 : 1);
 
@@ -572,163 +352,11 @@ function QuickFix({ fix, target }: { fix: NonNullable<CheckResult['quickFix']>; 
   );
 }
 
-function SectionBlock({
-  record,
-  version,
-  section,
-  activates,
-  renderValue,
-  editing,
-  onEdit,
-  notApplicable,
-}: {
-  record: RecordEnvelope;
-  /** The version the readiness report describes: what the person is looking at and confirming. */
-  version: number;
-  section: ReadinessSection;
-  /** Whether confirming this section also makes the draft active. */
-  activates: boolean;
-  renderValue: (value: unknown, field?: string) => ReactNode;
-  editing: boolean;
-  onEdit: (on: boolean) => void;
-  notApplicable: string[];
-}) {
-  const me = useMe();
-  const invalidate = useInvalidate(record.id);
-  const confirm = useMutation({
-    mutationFn: () =>
-      api.run(recordsConfirmSection, {
-        id: record.id,
-        expectedVersion: version,
-        section: section.id,
-      }),
-    onSuccess: invalidate,
-  });
-  const confirmed = section.state === 'confirmed';
-  const changed = section.fields.some((f) => f.state === 'changed');
-
-  return (
-    <section className="block" aria-label={section.title} id={`section-${section.id}`}>
-      <header>
-        <h2>{section.title}</h2>
-        {confirmed && section.review ? (
-          <span className="state ok-ink">
-            ✓ confirmed by {who(section.review.confirmedBy, me)}{' '}
-            {formatWhen(section.review.confirmedAt)}
-          </span>
-        ) : (
-          <span className="state warn-ink">
-            {changed ? 'changed, needs review' : 'needs review'}
-          </span>
-        )}
-      </header>
-      <div className="body">
-        {editing ? (
-          <SectionEditor
-            record={record}
-            fields={section.fields.map((f) => f.field)}
-            notApplicable={notApplicable}
-            onDone={() => onEdit(false)}
-          />
-        ) : (
-          <SectionValues
-            section={section}
-            me={me}
-            renderValue={renderValue}
-            notApplicable={notApplicable}
-          />
-        )}
-        {!editing && record.status !== 'archived' && (
-          <div className="actions">
-            <button type="button" className="btn" onClick={() => onEdit(true)}>
-              Edit {section.title.toLowerCase()}
-            </button>
-            {!confirmed && (
-              <button
-                type="button"
-                className="link-btn"
-                disabled={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                confirm only {section.title.toLowerCase()}
-                {activates && `, which makes ${record.name} active`}
-              </button>
-            )}
-            {!confirmed && changed && (
-              <span className="muted">Highlighted values changed since they were confirmed.</span>
-            )}
-          </div>
-        )}
-        {confirm.error && <p className="error-text">{confirm.error.message}</p>}
-      </div>
-    </section>
-  );
-}
-
-function SectionValues({
-  section,
-  me,
-  renderValue,
-  notApplicable,
-  hideEmpty = false,
-}: {
-  section: ReadinessSection;
-  me: Me | undefined;
-  renderValue: (value: unknown, field?: string) => ReactNode;
-  notApplicable: string[];
-  /** Leaves out fields with no value, for a confirmed record read rather than reviewed. */
-  hideEmpty?: boolean;
-}) {
-  const [showEmpty, setShowEmpty] = useState(false);
-  const emptyCount = hideEmpty ? section.fields.filter((f) => isEmpty(f.value)).length : 0;
-  return (
-    <div className="table-wrap">
-      <table className="review-fields">
-        <tbody>
-          {section.fields
-            .filter((f) => !(notApplicable.includes(f.field) && f.value === undefined))
-            .filter((f) => !hideEmpty || showEmpty || !isEmpty(f.value))
-            .map((f) => (
-              <tr key={f.field} className={f.state === 'changed' ? 'changed' : undefined}>
-                <td className="name">{fieldLabel(f.field)}</td>
-                <td>
-                  {f.state === 'changed' && (
-                    <>
-                      <span className="was">{renderValue(f.confirmedValue, f.field)}</span>{' '}
-                    </>
-                  )}
-                  <span className={f.state === 'changed' ? 'now' : undefined}>
-                    {renderValue(f.value, f.field)}
-                  </span>
-                  {f.items && f.state !== 'confirmed' && <ItemChanges field={f} />}
-                </td>
-                <td className="source">
-                  {f.assumed ? (
-                    <span className="agent-ink">
-                      unverified · entered by {who(f.evidence?.by, me)}, no source
-                    </span>
-                  ) : (
-                    <Evidence evidence={f.evidence} me={me} />
-                  )}
-                </td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
-      {emptyCount > 0 && (
-        <button type="button" className="link-btn" onClick={() => setShowEmpty(!showEmpty)}>
-          {showEmpty ? 'hide empty fields' : `show ${emptyCount} empty fields`}
-        </button>
-      )}
-    </div>
-  );
-}
-
 /**
  * What changed in a keyed list since it was confirmed (ADR 0049): which items changed, were added or
  * removed, whether the order moved, and which are guesses. Unchanged items stay confirmed.
  */
-function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
+export function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
   const items = field.items ?? [];
   const by = (state: string) => items.filter((i) => i.state === state).map((i) => i.key);
   const parts = [
@@ -751,72 +379,8 @@ function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
   );
 }
 
-const sourceWords: Record<FieldEvidence['source'], string> = {
-  // Only shown once a person has confirmed the value; before that it reads "assumed by …".
-  assumed: 'entered without a source',
-  stated: 'stated',
-  person: 'entered',
-  datasheet: 'from a datasheet',
-  imported: 'imported',
-  measured: 'measured',
-  calculated: 'calculated',
-  record: 'from',
-  template: 'template default from',
-  memory: 'lab memory',
-};
-
-function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: Me | undefined }) {
-  const assistant = useAssistant();
-  if (!evidence) return <span className="muted">—</span>;
-  const by = evidence.by;
-  const words =
-    evidence.source === 'person'
-      ? `entered by ${who(by, me)}`
-      : evidence.source === 'stated' && by.type === 'agent'
-        ? `stated by ${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} to ${by.agentName}`
-        : evidence.from
-          ? sourceWords[evidence.source]
-          : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;
-  const conversation =
-    evidence.source === 'stated' && by.type === 'agent' && by.sessionRef?.startsWith('cnv_')
-      ? by.sessionRef
-      : undefined;
-  return (
-    // Only guesses and what a person told an agent are in agent ink (plan 004e R5).
-    <span className={evidence.source === 'stated' ? 'agent-ink' : 'muted'}>
-      {words}
-      {evidence.from && (
-        <>
-          {' '}
-          <LinkedName id={evidence.from.id} /> v{evidence.from.version}
-        </>
-      )}
-      {conversation && (
-        <>
-          {' · '}
-          <button type="button" className="link-btn" onClick={() => assistant.show(conversation)}>
-            conversation
-          </button>
-        </>
-      )}
-      {evidence.note && ` · ${evidence.note}`}
-      {evidence.reference &&
-        (/^https?:\/\//.test(evidence.reference) ? (
-          <>
-            {' · '}
-            <a href={evidence.reference} target="_blank" rel="noreferrer">
-              source
-            </a>
-          </>
-        ) : (
-          ` · ${evidence.reference}`
-        ))}
-    </span>
-  );
-}
-
 /** "you", "a lab member", or the agent's name. */
-function who(actor: Actor | undefined, me: Me | undefined): string {
+export function who(actor: Actor | undefined, me: Me | undefined): string {
   if (!actor) return 'someone';
   if (actor.type === 'agent') return actor.agentName;
   return me && actor.userId === me.user.id ? 'you' : 'a lab member';

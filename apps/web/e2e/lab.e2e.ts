@@ -84,6 +84,7 @@ test('an agent proposes a change, a person confirms it on the Review page, and t
   await page.getByRole('searchbox', { name: 'Find all records' }).fill(record.name);
   await page.getByRole('row', { name: new RegExp(record.name) }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${label} (ELISA)`);
+  await page.getByRole('link', { name: /^History/ }).click();
   const history = page.getByRole('row', { name: /v2/ });
   await expect(history).toContainText('E2E agent for you');
   await expect(history).toContainText('“Match the ELISA SOP”');
@@ -252,19 +253,24 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   const appearance = page.getByRole('region', { name: 'Appearance' });
   const volume = page.getByRole('region', { name: 'Volume' });
 
-  // What the agent assumed is marked and named; what it took from a datasheet says so.
-  await expect(appearance.getByText(/unverified · entered by E2E agent, no source/)).toBeVisible();
-  await expect(
-    volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
-  ).toBeVisible();
+  // What the agent assumed is named on the Overview, with one Confirm.
   await expect(
     readiness.getByText(/One value was entered by an agent without a source: color/),
   ).toBeVisible();
   await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
+  // All fields says once per part where its values came from (plan 004f N7).
+  await page.getByRole('link', { name: /^All fields/ }).click();
+  await expect(
+    appearance.getByText(/Color entered by E2E agent with no source given, unverified/),
+  ).toBeVisible();
+  await expect(
+    volume.getByText(/Volume from the datasheet per E2E agent \(Vendor sheet, p\. 2\)/),
+  ).toBeVisible();
+
   // One part can still be confirmed on its own.
   await volume.getByRole('button', { name: 'confirm only volume' }).click();
-  await expect(volume.getByText(/confirmed by you/)).toBeVisible();
+  await expect(volume.getByText(/Confirmed by you/)).toBeVisible();
 
   // The agent changes a confirmed value: the section goes back to review, showing the change.
   await asAgent(request, 'records.update', {
@@ -277,12 +283,14 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   await expect(volume.locator('.now')).toHaveText('250 µL');
 
   // One Confirm takes everything that is left, and the draft becomes active.
+  await page.getByRole('link', { name: /^Overview/ }).click();
   await readiness.getByRole('button', { name: `Confirm ${record.name}` }).click();
-  await expect(page.locator('.chip.active')).toBeVisible();
-  // Once active and confirmed, the sections fold into one Details block.
-  await expect(
-    page.getByRole('region', { name: 'Details' }).getByText('✓ confirmed'),
-  ).toBeVisible();
+  await expect(page.locator('.chip.active')).toHaveText('confirmed');
+  // Confirmed content stays open (plan 004f), each part saying who confirmed it.
+  await page.getByRole('link', { name: /^All fields/ }).click();
+  await expect(volume.getByText(/Confirmed by you/)).toBeVisible();
+  await expect(volume.locator('.now')).toHaveCount(0);
+  await page.getByRole('link', { name: /^History/ }).click();
   await expect(page.getByRole('row', { name: /v4/ })).toContainText(/confirmed .+ and activated/);
 });
 
@@ -356,23 +364,26 @@ test('a failing check links to its section, where a person fills in the value an
   await expect(drawing.getByText('127.76 mm × 85.48 mm · wells 4.5 mm apart')).toBeVisible();
   await expect(drawing.getByText(/Wells drawn 4.5 mm apart/)).toBeVisible();
 
+  // The fix opens the part on All fields, in its editor.
   await readiness.getByRole('button', { name: 'Fix in geometry' }).first().click();
   await geometry.getByRole('textbox', { name: 'height', exact: true }).first().fill('30.5');
   await geometry.getByRole('button', { name: 'Measured' }).click();
   await geometry.getByRole('textbox', { name: 'Note' }).fill('calipers');
   await geometry.getByRole('button', { name: 'Save' }).click();
 
-  await expect(geometry.getByText(/measured · calipers/).first()).toBeVisible();
+  await expect(geometry.getByText(/measured \(calipers\)/).first()).toBeVisible();
+  await page.getByRole('link', { name: /^Overview/ }).click();
   await expect(readiness.getByText('Length, width or height is missing')).toHaveCount(0);
 
   // Positions the standard gives are one click away, cited to the standard.
   await expect(readiness.getByText('Pitch or A1 offset is missing')).toBeVisible();
   await readiness.getByRole('button', { name: 'Use the standard SBS positions' }).click();
   await expect(readiness.getByText('Pitch or A1 offset is missing')).toHaveCount(0);
-  await expect(
-    geometry.getByText(/calculated · Pitch and A1 offset.*ANSI\/SLAS 4-2004/).first(),
-  ).toBeVisible();
   await expect(drawing.getByText(/Wells drawn 4.5 mm apart/)).toHaveCount(0);
+  await page.getByRole('link', { name: /^All fields/ }).click();
+  await expect(
+    geometry.getByText(/calculated \(Pitch and A1 offset.*ANSI\/SLAS 4-2004/).first(),
+  ).toBeVisible();
 });
 
 test("an editor open while an agent changes the record doesn't write over the agent's change", async ({
@@ -390,7 +401,7 @@ test("an editor open while an agent changes the record doesn't write over the ag
     },
   });
   const id = drafted.output.id;
-  await page.goto(`/records/${id}`);
+  await page.goto(`/records/${id}?tab=fields`);
   const volumes = page.getByRole('region', { name: 'Volumes' });
   await volumes.getByRole('button', { name: 'Edit volumes' }).click();
   const dead = volumes.getByRole('textbox', { name: 'dead volume', exact: true }).first();
@@ -439,7 +450,7 @@ test('a draft of a kind without sections is confirmed on its own page', async ({
   await page.goto(`/records/${drafted.output.id}`);
   const readiness = page.getByRole('region', { name: 'Readiness' });
   await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
-  await expect(page.getByText('active', { exact: true })).toBeVisible();
+  await expect(page.locator('.chip.active')).toHaveText('confirmed');
   await expect(readiness).toHaveCount(0);
 });
 
@@ -859,7 +870,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
   // One Confirm settles every part and makes the SOP active.
   await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
   await expect(readiness).toContainText('✓ confirmed');
-  await expect(page.getByRole('region', { name: 'Details' })).toContainText('✓ confirmed');
+  await expect(page.locator('.chip.active')).toHaveText('confirmed');
 });
 
 /** A person confirms every section of a draft at once, which activates it. */
@@ -1054,6 +1065,7 @@ test('a person restores a version, archives and unarchives a record, and discard
   const heading = page.getByRole('heading', { level: 1 });
   await expect(heading).toContainText(`Renamed ${label}`);
 
+  await page.getByRole('link', { name: /^History/ }).click();
   await page.getByRole('button', { name: 'Restore version 1' }).click();
   await page.getByRole('button', { name: 'Restore v1' }).click();
   await expect(heading).not.toContainText('Renamed');

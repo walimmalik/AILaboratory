@@ -121,6 +121,16 @@ export function formatWhen(iso: string, now = new Date()): string {
       });
 }
 
+/** "1 Oct", or "1 Oct 2025" in another year, in the reader's time zone. */
+export function formatDay(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  return at.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}
+
 export interface FieldChange {
   /** Unique within one diff: a record's own status and an attribute named status both show. */
   key: string;
