@@ -47,7 +47,7 @@ export async function recordActivity(
     ? await db
         .select({ id: records.id, name: records.name })
         .from(records)
-        .where(inArray(records.id, rest.recordIds))
+        .where(and(eq(records.labId, ctx.labId), inArray(records.id, rest.recordIds)))
     : [];
   const full: ActivityEntry = {
     ...rest,
