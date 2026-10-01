@@ -8,13 +8,13 @@ import type {
   OperationErrorBody,
   PageContext,
 } from '@ailab/schema';
-import { and, asc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { labs, proposals, users } from '../db/schema.ts';
+import { activity, labs, proposals, users } from '../db/schema.ts';
 import { activeMemories, bundle, lookup, nearby } from '../memory/match.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
-import type { RecordContext } from '../records/service.ts';
+import { type RecordContext, RecordService } from '../records/service.ts';
 import { findSkill } from '../skills/skills.ts';
 import type { ModelSetup } from './config.ts';
 import { type ChatModel, ModelError, type ModelMessage } from './model.ts';
@@ -120,7 +120,11 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const system = `${await systemPrompt(db, ctx, conversationId)}${await memoryNote(
+    const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(
+      deps,
+      ctx,
+      conversationId,
+    )}${await memoryNote(
       deps,
       ctx,
       (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
@@ -428,7 +432,52 @@ async function decidedProposals(
           : `confirmed, but it failed when applied${row.error ? `: ${row.error.message}` : ''}`;
     return `- ${row.id}, ${row.operationId}${what}: ${outcome}`;
   });
-  return `\n\nWhat people decided about the changes you proposed in this conversation. Don't propose a rejected change again unless the person asks; if the reason says what to change, do that.\n${lines.join('\n')}`;
+  return `\n\nWhat people decided about the changes you proposed in this conversation. Don't propose a rejected change again unless the person asks; if the reason says what to change, do that. A reason that says how the lab always does something is a possible lab memory: ask once whether to remember it for the lab, then memory.propose.\n${lines.join('\n')}`;
+}
+
+/**
+ * Values this conversation filled that a person has since changed (plan 005c-1b, M15): each one
+ * may be how the lab does things, so the agent is told and asks once whether to remember it.
+ */
+async function personEdits(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  conversationId: string,
+): Promise<string> {
+  const rows = await deps.db
+    .select({ recordIds: activity.recordIds })
+    .from(activity)
+    .where(
+      and(
+        eq(activity.labId, ctx.labId),
+        eq(activity.outcome, 'succeeded'),
+        sql`${activity.actor}->>'sessionRef' = ${conversationId}`,
+      ),
+    )
+    .orderBy(desc(activity.at))
+    .limit(50);
+  const ids = [...new Set(rows.flatMap((r) => r.recordIds))].slice(0, 20);
+  const records = new RecordService(deps.db, deps.kinds);
+  const lines: string[] = [];
+  for (const id of ids) {
+    const record = await records.get(ctx, id).catch(() => undefined);
+    if (!record) continue;
+    const history = await records.history(ctx, id);
+    for (const [field, now] of Object.entries(record.evidence ?? {})) {
+      if (now.source !== 'person' || field.startsWith('/')) continue;
+      const mine = history.find((v) => {
+        const by = v.snapshot.evidence?.[field]?.by;
+        return by?.type === 'agent' && by.sessionRef === conversationId;
+      });
+      if (!mine) continue;
+      const was = JSON.stringify((mine.snapshot.attributes as Record<string, unknown>)[field]);
+      const is = JSON.stringify((record.attributes as Record<string, unknown>)[field]);
+      if (was === is) continue;
+      lines.push(`- ${record.name} ${field}: you filled ${was}; a person changed it to ${is}`);
+    }
+  }
+  if (lines.length === 0) return '';
+  return `\n\nValues you filled in this conversation that a person has since changed. When a change looks like how the lab always does it (not a one-off), it is a possible lab memory: ask once whether to remember it for the lab, then memory.propose.\n${lines.slice(0, 10).join('\n')}`;
 }
 
 /**

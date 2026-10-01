@@ -129,9 +129,9 @@ export type MemoryAppliesTo = z.infer<typeof MemoryAppliesTo>;
 export const MemorySource = z
   .strictObject({
     from: z
-      .enum(['stated', 'conversation', 'experiment', 'run', 'analysis'])
+      .enum(['stated', 'conversation', 'experiment', 'run', 'analysis', 'edits'])
       .describe(
-        'stated: a person said it; conversation: from a chat with the assistant; experiment, run, analysis: learned from results',
+        'stated: a person said it; conversation: from a chat with the assistant; experiment, run, analysis: learned from results; edits: people changing the same filled-in value the same way',
       ),
     evidence: z
       .array(RecordId)
@@ -193,3 +193,59 @@ export const MemoryAttributes = MemoryFields.superRefine((a, ctx) => {
     });
 });
 export type MemoryAttributes = z.infer<typeof MemoryAttributes>;
+
+/**
+ * What a memory proposed by a detector would say (plan 005c-1): the fields of memory.propose that
+ * describe it. Strength is a note or a default, never a rule (change 3).
+ */
+export const MemoryDraft = MemoryFields.pick({
+  statement: true,
+  kind: true,
+  about: true,
+  when: true,
+  conditions: true,
+}).extend({
+  strength: z.enum(['note', 'default']).optional().describe('Left out: note'),
+});
+export type MemoryDraft = z.infer<typeof MemoryDraft>;
+
+/** When a candidate is proposed (M14): seen in enough records, on enough different days. */
+export const MemoryBar = z
+  .strictObject({
+    records: z.number().int().min(1).max(100).describe('Different records it was seen in'),
+    days: z.number().int().min(1).max(100).describe('Different days'),
+  })
+  .describe('Left out: 3 records on 2 days');
+export type MemoryBar = z.infer<typeof MemoryBar>;
+
+/** One observation a detector or agent reports (M13): one record that shows the pattern. */
+export const MemoryObservationEntry = z.object({
+  evidence: RecordId,
+  day: z.iso.date(),
+  at: z.iso.datetime(),
+  note: z.string().optional(),
+});
+export type MemoryObservationEntry = z.infer<typeof MemoryObservationEntry>;
+
+/**
+ * A memory candidate (plan 005c-1, M14): observations a detector collects under one key until they
+ * pass its bar, then one proposed memory. A rejected candidate is proposed again only once the
+ * observations since its proposal double the count it was proposed with.
+ */
+export const MemoryCandidate = z.object({
+  id: z.string(),
+  detector: z.string(),
+  key: z.string(),
+  draft: MemoryDraft,
+  source: MemorySource.shape.from.exclude(['stated', 'conversation']),
+  bar: MemoryBar,
+  observations: z.array(MemoryObservationEntry),
+  status: z
+    .enum(['collecting', 'proposed', 'confirmed', 'rejected'])
+    .describe(
+      'collecting: below its bar; proposed: a draft memory waits for a person; confirmed: a person made it active; rejected: the draft was discarded',
+    ),
+  memory: MemoryId.optional().describe('The memory it proposed'),
+  proposedWith: z.number().int().optional().describe('How many records it was proposed with'),
+});
+export type MemoryCandidate = z.infer<typeof MemoryCandidate>;

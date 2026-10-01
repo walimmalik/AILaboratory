@@ -72,7 +72,7 @@ The **Review** page lists everything waiting for a person, grouped by kind: draf
 
 ## Lab memory (plan 005, locked)
 
-Built so far: 005a, the memory record and its operations (ADR 0062), and 005b, `memory.for`, the assistant's page bundle, `memory.used_in` and lab memory applied in the liquid class and instrument choice ([memory.md](../architecture/memory.md)).
+Built so far: 005a, the memory record and its operations (ADR 0062), and 005b, `memory.for`, the assistant's page bundle, `memory.used_in` and lab memory applied in the liquid class and instrument choice, and 005c-1a, `memory.observe` with candidates that become proposals at 3 runs on 2 days and the recurring run deviation detector, and 005c-1b, the repeated-override detector, the "possible lab memory" hint and proposed memories grouped in Review ([memory.md](../architecture/memory.md)).
 
 - **What it holds:** conventions, preferences, quirks, lessons and facts that no registry has a field for. A memory that implies a typed value (a handling rule, a timing window) proposes it on the record, which stays the one place code reads.
 - **Strength:** a rule is followed, or a design breaking it shows a readiness warning accepted with a reason; a default fills a choice no confirmed record decides, in normal ink with its source; a note only informs. A memory never silently overrides a confirmed SOP or template: the agent proposes changing it.

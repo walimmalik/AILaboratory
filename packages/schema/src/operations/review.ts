@@ -56,6 +56,19 @@ export const ReviewDraft = z.object({
   assumed: z.number().int().nonnegative(),
   /** How many values an agent sourced to a datasheet, measurement or import that nothing checked. */
   unchecked: z.number().int().nonnegative(),
+  /**
+   * For a proposed lab memory (plan 005c-1b, M16): where it came from, to group proposals by
+   * source, and its evidence line. A rule is never confirmed in a batch.
+   */
+  memory: z
+    .object({
+      group: z
+        .string()
+        .describe('e.g. "Lab memory detector (runs.recurring_deviation)" or "From a conversation"'),
+      strength: z.enum(['rule', 'default', 'note']),
+      evidence: z.string().optional().describe('e.g. "seen in 3 runs on 2 days since 2026-10-01"'),
+    })
+    .optional(),
 });
 
 /** A proposed change to an active record, waiting for a person to confirm or reject it. */

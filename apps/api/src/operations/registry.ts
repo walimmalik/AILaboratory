@@ -71,6 +71,13 @@ export function implement<I extends z.ZodType, O extends z.ZodType>(
   return { contract, ...implementation };
 }
 
+/** Called after a person's write is committed, with the records it touched. */
+export type WriteListener = (
+  ctx: RecordContext,
+  recordIds: string[],
+  deps: OperationDeps,
+) => Promise<void>;
+
 export interface ExecuteOptions {
   preview?: boolean;
   /** Set when a person approved a proposal: run the change as the proposing agent without re-proposing. */
@@ -89,6 +96,7 @@ class PreviewRollback extends Error {
  */
 export class OperationRegistry {
   readonly #operations = new Map<string, OperationImplementation>();
+  readonly #listeners: WriteListener[] = [];
   readonly deps: OperationDeps;
 
   constructor(deps: Omit<OperationDeps, 'registry'>) {
@@ -104,6 +112,15 @@ export class OperationRegistry {
       }
       this.#operations.set(id, operation);
     }
+    return this;
+  }
+
+  /**
+   * Listens to every write a person makes, after it is committed: the records it touched. Lab
+   * memory detectors use it (plan 005c-1b). A listener's failure never fails the write.
+   */
+  onWrite(listener: WriteListener): this {
+    this.#listeners.push(listener);
     return this;
   }
 
@@ -179,16 +196,23 @@ export class OperationRegistry {
         this.#run(operation, ctx, input, { ...deps, db: tx }),
       );
       if (operation.ledger === false) return { status: 'done', output };
+      const recordIds = touched(operation, input, output, this);
       await recordActivity(db, this.deps.bus, ctx, {
         operationId: id,
         outcome: operation.outcome?.(output) ?? 'succeeded',
-        recordIds: touched(operation, input, output, this),
+        recordIds,
         nameHints: nameHints(output),
         ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
         input,
         durationMs: Date.now() - started,
       });
       operation.after?.(ctx, input, output, deps);
+      // Only a person's own top-level write; steps inside a change set arrive with the set.
+      if (ctx.actor.type === 'user' && db === this.deps.db)
+        for (const listener of this.#listeners)
+          await listener(ctx, recordIds, deps).catch((error: unknown) =>
+            console.error(`A write listener failed after ${id}:`, error),
+          );
       return { status: 'done', output };
     } catch (error) {
       if (operation.ledger === false) throw error;

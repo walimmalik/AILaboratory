@@ -29,7 +29,9 @@ export { ActivityBus } from './activity.ts';
 import { conclusionOperations } from '../campaigns/conclusions.ts';
 import { campaignOperations } from '../campaigns/operations.ts';
 import { runOperations } from '../campaigns/runs.ts';
+import { candidateOperations } from '../memory/candidates.ts';
 import { memoryOperations } from '../memory/operations.ts';
+import { observeOverrides } from '../memory/overrides.ts';
 import { plateMapOperations } from '../platemaps/operations.ts';
 import { sopOperations } from '../sops/operations.ts';
 import { transferCalculators } from '../transfers/calculators.ts';
@@ -64,37 +66,40 @@ export function createRegistry(
     protocols = noProtocolWriter,
   }: { files?: FileStore; converter?: Converter; protocols?: ProtocolWriter } = {},
 ) {
-  return new OperationRegistry({ db, kinds, bus, assistant, files, converter, protocols }).register(
-    ...recordOperations,
-    ...overviewOperations,
-    ...proposalOperations,
-    ...changeSetOperations,
-    ...reviewOperations,
-    ...skillOperations,
-    ...labwareOperations,
-    ...instrumentOperations,
-    ...workcellOperations,
-    ...reagentOperations,
-    ...liquidOperations,
-    ...entityOperations,
-    ...inventoryOperations,
-    ...contentsOperations,
-    ...fileOperations,
-    ...libraryOperations,
-    ...mentionOperations,
-    ...sopOperations,
-    ...campaignOperations,
-    ...runOperations,
-    ...conclusionOperations,
-    ...plateMapOperations,
-    ...memoryOperations,
-    ...transferCalculators,
-    ...transferPlanOperations,
-    draftFromPlateMap,
-    ...deckOperations,
-    ...exportOperations,
-    ...worklistOperations,
-    ...reportOperations,
-    ...assistantOperations,
-  );
+  return new OperationRegistry({ db, kinds, bus, assistant, files, converter, protocols })
+    .register(
+      ...recordOperations,
+      ...overviewOperations,
+      ...proposalOperations,
+      ...changeSetOperations,
+      ...reviewOperations,
+      ...skillOperations,
+      ...labwareOperations,
+      ...instrumentOperations,
+      ...workcellOperations,
+      ...reagentOperations,
+      ...liquidOperations,
+      ...entityOperations,
+      ...inventoryOperations,
+      ...contentsOperations,
+      ...fileOperations,
+      ...libraryOperations,
+      ...mentionOperations,
+      ...sopOperations,
+      ...campaignOperations,
+      ...runOperations,
+      ...conclusionOperations,
+      ...plateMapOperations,
+      ...memoryOperations,
+      ...candidateOperations,
+      ...transferCalculators,
+      ...transferPlanOperations,
+      draftFromPlateMap,
+      ...deckOperations,
+      ...exportOperations,
+      ...worklistOperations,
+      ...reportOperations,
+      ...assistantOperations,
+    )
+    .onWrite(observeOverrides);
 }

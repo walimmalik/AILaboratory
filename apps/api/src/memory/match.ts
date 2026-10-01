@@ -1,8 +1,8 @@
 import {
+  type ActiveMemory,
   type AppliedEffects,
   appliedEffects,
   isDue,
-  type MemoryCandidate,
   type MemoryMatch,
   matchConflicts,
   memoriesFor,
@@ -26,7 +26,7 @@ export const personOf = (ctx: RecordContext) =>
 export async function activeMemories(
   deps: Pick<OperationDeps, 'db' | 'kinds'>,
   ctx: RecordContext,
-): Promise<MemoryCandidate[]> {
+): Promise<ActiveMemory[]> {
   const list = await new RecordService(deps.db, deps.kinds).list(ctx, {
     kind: 'memory',
     status: 'active',
@@ -48,7 +48,7 @@ export interface MemoryLookup {
 
 /** The matches for one piece of work and the effects code applies from them. */
 export function lookup(
-  memories: readonly MemoryCandidate[],
+  memories: readonly ActiveMemory[],
   ctx: RecordContext,
   work: MemoryLookup,
 ): { matches: MemoryMatch[]; effects: AppliedEffects } {

@@ -216,6 +216,42 @@ describe('assistant.ask', () => {
     expect(systems.at(-1)).not.toContain('Keep the vendor name');
   });
 
+  it('tells the model which values it filled a person changed since, as possible lab memory', async () => {
+    const scripted = new ScriptedModel();
+    const systems: string[] = [];
+    const model: ChatModel = {
+      provider: 'scripted',
+      model: 'scripted',
+      complete: (request) => {
+        systems.push(request.system);
+        return scripted.complete(request);
+      },
+    };
+    const { assistant, registry } = setup(model);
+    const first = await ask(
+      registry,
+      assistant,
+      `/op records.create ${JSON.stringify({ kind: 'widget', label: 'Stock', attributes })}`,
+    );
+    const {
+      records: [record],
+    } = (await output(registry.execute(person, 'records.list', { kind: 'widget' }))) as {
+      records: RecordEnvelope[];
+    };
+    if (!record) throw new Error('The assistant made no widget');
+    await registry.execute(person, 'records.update', {
+      id: record.id,
+      expectedVersion: record.version,
+      attributes: { ...attributes, color: 'amber' },
+    });
+    await ask(registry, assistant, 'Again', { conversationId: first.id });
+    const system = systems.at(-1) ?? '';
+    expect(system).toContain(
+      'Values you filled in this conversation that a person has since changed',
+    );
+    expect(system).toContain('color: you filled "teal"; a person changed it to "amber"');
+  });
+
   it('continues a conversation with the history so far', async () => {
     const model = new FakeModel([
       { text: 'Hello.', toolCalls: [], stop: 'end' },
