@@ -300,6 +300,55 @@ export function pathLabel(path: string): string {
   return [fieldLabel(one), key, ...inside.map(fieldLabel)].join(' ');
 }
 
+/** The item of a keyed list with this key, and where it sits (ADR 0049). */
+function findItem(
+  list: unknown,
+  key: string,
+  keyField: string | undefined,
+): { item: Record<string, unknown>; position: number } | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const fields = keyField ? [keyField] : ['id', 'name', 'role', 'key'];
+  const position = list.findIndex(
+    (i) =>
+      i && typeof i === 'object' && fields.some((f) => (i as Record<string, unknown>)[f] === key),
+  );
+  return position < 0 ? undefined : { item: list[position], position };
+}
+
+/** What an item is called in the lab: its label, title or name, before its technical key. */
+export function itemName(item: Record<string, unknown>): string | undefined {
+  for (const field of ['label', 'title', 'name', 'role', 'id']) {
+    const v = item[field];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return undefined;
+}
+
+/**
+ * A readiness or diff path named the way the record names it (UI rule 9): "/steps/s2" → "step 2
+ * Wash", "/variables/wash_volume" → "Wash volume", "/steps/s2/text" → "step 2 Wash · text". Without
+ * the item in hand it falls back to the technical key.
+ */
+export function partLabel(
+  path: string,
+  attributes: Record<string, unknown> | undefined,
+  items: Readonly<Record<string, string>> = {},
+  fallback?: Record<string, unknown>,
+): string {
+  if (!path.startsWith('/')) return fieldLabel(path);
+  const [list = '', key, ...inside] = path
+    .split('/')
+    .slice(1)
+    .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'));
+  if (key === undefined) return fieldLabel(list);
+  const found =
+    findItem(attributes?.[list], key, items[list]) ?? findItem(fallback?.[list], key, items[list]);
+  if (!found) return pathLabel(path);
+  const name = itemName(found.item) ?? key;
+  const head = list === 'steps' ? `step ${found.position + 1} ${name}` : name;
+  return [head, ...inside.map(fieldLabel)].join(' · ');
+}
+
 /** Whether a proposed change would change this record, alone or as a step of a change set (ADR 0051). */
 export function proposalTouches(proposal: Pick<Proposal, 'operationId' | 'input'>, id: string) {
   const idOf = (input: unknown) => (input as { id?: unknown } | undefined)?.id;

@@ -281,7 +281,7 @@ describe('finding records', () => {
       status: 'active',
     });
     const [entry] = (
-      await run<{ entries: { outcome: string; recordNames: Record<string, string> }[] }>(
+      await run<{ entries: { outcome: string; recordIds: string[] }[] }>(
         person,
         'activity.list',
         {},
@@ -712,6 +712,20 @@ describe('review inbox', () => {
         )
       ).code,
     ).toBe('forbidden');
+  });
+
+  it('lets warnings pass a batch confirm, counted', async () => {
+    const sourced = { source: 'datasheet', reference: 'https://example.org' };
+    const warned = await create(agent, {
+      attributes: { ...attributes, color: 'unknown' },
+      evidence: { color: sourced, volume: sourced },
+    });
+    const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(listed.items[0]).toMatchObject({ batchable: true, warnings: 1 });
+    const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
+      records: [{ id: warned.id, expectedVersion: warned.version }],
+    });
+    expect(done.confirmed.map((r) => r.status)).toEqual(['active']);
   });
 
   it('confirms a batch of drafts whose kind has no sections, and counts their guesses', async () => {

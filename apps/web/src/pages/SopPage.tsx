@@ -5,14 +5,13 @@ import {
   recordsConfirm,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.ts';
-import { pathLabel } from '../lib/format.ts';
-import { kindsQuery } from '../queries.ts';
+import { kindsQuery, readinessQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
-import { Checks, fieldLabel, SettledDetails } from './RecordReview.tsx';
+import { Checks, Estimates, fieldLabel, SettledDetails } from './RecordReview.tsx';
 import { EditForm, SaveBar, useFieldEdits } from './SectionEditor.tsx';
-import { sopListEditors } from './SopEditors.tsx';
+import { GuessContext, type Guesses, sopListEditors } from './SopEditors.tsx';
 import { SopBlocks } from './Sops.tsx';
 
 /**
@@ -105,15 +104,7 @@ function SopStatus({
         <span className={`state ${state.tone}`}>{state.text}</span>
       </header>
       <div className="body">
-        {readiness.assumed.length > 0 && (
-          <p className="agent-ink">
-            {readiness.assumed.length === 1
-              ? 'One part holds'
-              : `${readiness.assumed.length} parts hold`}{' '}
-            an agent's estimate: {readiness.assumed.map(pathLabel).join(', ')}. Check before you
-            confirm.
-          </p>
-        )}
+        <Estimates record={record} readiness={readiness} onOpen={(path) => onEdit(partFor(path))} />
         {readiness.checks.some((c) => !c.passed) && (
           <Checks
             checks={readiness.checks}
@@ -147,7 +138,9 @@ function SopStatus({
                       ? 'Confirms the whole SOP as it stands.'
                       : `Confirms ${words(confirmable)} as they stand.`
                 }${activates ? ` ${record.name} becomes active for the lab.` : ''}${
-                  waiting.length ? ` ${capital(words(waiting))} wait for the fixes above.` : ''
+                  waiting.length
+                    ? ` ${capital(words(waiting))} ${waiting.length === 1 ? 'waits' : 'wait'} for the fixes above.`
+                    : ''
                 }`
               : toReview.length > 0
                 ? 'Fix what blocks it first.'
@@ -192,6 +185,13 @@ const whole = new Set(['materials', 'variables', 'steps']);
 /** The editor's part for each readiness section, so "Fix in …" lands in the right place. */
 const partOf: Record<string, string> = { analysis: 'layout', timing: 'layout' };
 
+/** The editor part that holds a readiness path, so an estimate's name opens its box. */
+function partFor(path: string): string {
+  const field = path.startsWith('/') ? (path.split('/')[1] ?? '') : path;
+  const part = parts.find((p) => p.fields.includes(field));
+  return part?.id ?? partOf[field] ?? 'overview';
+}
+
 /** The whole SOP as one form: every part at once, one Save. */
 function SopEditor({
   record,
@@ -204,6 +204,8 @@ function SopEditor({
 }) {
   const kinds = useQuery(kindsQuery).data;
   const definition = kinds?.find((k) => k.kind === record.kind);
+  const readiness = useQuery(readinessQuery(record.id)).data;
+  const guesses = useMemo(() => guessesOf(record, readiness), [record, readiness]);
   const edits = useFieldEdits(
     record,
     parts.flatMap((p) => p.fields),
@@ -220,60 +222,87 @@ function SopEditor({
   const kindOfPrefix = Object.fromEntries(kinds?.map((k) => [k.idPrefix, k.kind]) ?? []);
 
   return (
-    <EditorScope
-      root={root}
-      kindOfPrefix={kindOfPrefix}
-      hidden={new Set()}
-      recordId={record.id}
-      document={{ ...edits.base.attributes, ...edits.values }}
-      listEditors={sopListEditors}
-    >
-      <EditForm edits={edits} className="editor sop-edit">
-        {parts.map((part) => (
-          <section
-            key={part.id}
-            className="block"
-            id={`sop-edit-${part.id}`}
-            aria-label={part.title}
-          >
-            <header>
-              <h2>{part.title}</h2>
-            </header>
-            <div className="body">
-              {part.fields.map((field) => {
-                const schema = root.properties?.[field];
-                if (!schema) return null;
-                const editor = (
-                  <ValueEditor
-                    key={field}
-                    schema={schema}
-                    value={edits.values[field]}
-                    onChange={(next) => edits.set(field, next)}
-                    label={fieldLabel(field)}
-                    path={field}
-                  />
-                );
-                return whole.has(field) ? (
-                  <div key={field}>{editor}</div>
-                ) : (
-                  <div key={field} className="form-rows">
-                    <FormRow label={fieldLabel(field)} hint={schema.description}>
-                      {editor}
-                    </FormRow>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-        <div className="save-bar">
-          <SaveBar
-            edits={edits}
-            compact
-            words={(f) => (f === 'variables' ? 'values' : fieldLabel(f))}
-          />
-        </div>
-      </EditForm>
-    </EditorScope>
+    <GuessContext.Provider value={guesses}>
+      <EditorScope
+        root={root}
+        kindOfPrefix={kindOfPrefix}
+        hidden={new Set()}
+        recordId={record.id}
+        document={{ ...edits.base.attributes, ...edits.values }}
+        listEditors={sopListEditors}
+      >
+        <EditForm edits={edits} className="editor sop-edit">
+          {parts.map((part) => (
+            <section
+              key={part.id}
+              className="block"
+              id={`sop-edit-${part.id}`}
+              aria-label={part.title}
+            >
+              <header>
+                <h2>{part.title}</h2>
+              </header>
+              <div className="body">
+                {part.fields.map((field) => {
+                  const schema = root.properties?.[field];
+                  if (!schema) return null;
+                  const editor = (
+                    <ValueEditor
+                      key={field}
+                      schema={schema}
+                      value={edits.values[field]}
+                      onChange={(next) => edits.set(field, next)}
+                      label={fieldLabel(field)}
+                      path={field}
+                    />
+                  );
+                  return whole.has(field) ? (
+                    <div key={field}>{editor}</div>
+                  ) : (
+                    <div key={field} className="form-rows">
+                      <FormRow label={fieldLabel(field)} hint={schema.description}>
+                        {editor}
+                        {guesses.get(field) &&
+                          JSON.stringify(guesses.get(field)?.stored) ===
+                            JSON.stringify(edits.values[field]) && (
+                            <div className="agent-ink hint">
+                              agent's estimate
+                              {guesses.get(field)?.note ? `: ${guesses.get(field)?.note}` : ''}
+                            </div>
+                          )}
+                      </FormRow>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          <div className="save-bar">
+            <SaveBar
+              edits={edits}
+              compact
+              words={(f) => (f === 'variables' ? 'values' : fieldLabel(f))}
+            />
+          </div>
+        </EditForm>
+      </EditorScope>
+    </GuessContext.Provider>
   );
+}
+
+/** The agent's estimates readiness names, with the value each held and the agent's note. */
+function guessesOf(record: RecordEnvelope, readiness: Readiness | undefined): Guesses {
+  const paths = new Set(readiness?.assumed ?? []);
+  return {
+    get: (path) => {
+      if (!paths.has(path)) return undefined;
+      const [list = '', key] = path.split('/').slice(1);
+      const stored = path.startsWith('/')
+        ? (record.attributes[list] as Record<string, unknown>[] | undefined)?.find((item) =>
+            [item.id, item.name, item.role].includes(key),
+          )
+        : record.attributes[path];
+      return { stored, note: record.evidence[path]?.note };
+    },
+  };
 }

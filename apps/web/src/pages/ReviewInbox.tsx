@@ -12,18 +12,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
-import {
-  actorLabel,
-  diffRecords,
-  formatWhen,
-  operationIntent,
-  operationVerb,
-} from '../lib/format.ts';
+import { actorLabel, formatWhen, operationIntent, operationVerb } from '../lib/format.ts';
 import { kindPage } from '../lib/kinds.ts';
-import { decidedProposalsQuery, recordQuery, reviewKindQuery, reviewQuery } from '../queries.ts';
+import {
+  decidedProposalsQuery,
+  kindsQuery,
+  recordQuery,
+  reviewKindQuery,
+  reviewQuery,
+} from '../queries.ts';
 import { useMe } from '../session.ts';
-import { fieldLabel } from './RecordReview.tsx';
-import { renderValue } from './Value.tsx';
+import { estimatesIn, ItemDiff, itemChanges } from './ItemDiff.tsx';
 
 /**
  * Everything waiting for you (plan 004d): drafts to review and confirm, and changes agents proposed
@@ -127,7 +126,7 @@ export function ReviewPage() {
                 ))}
               </fieldset>
             )}
-            <BatchConfirm items={items} complete={leftOut === 0} />
+            <BatchConfirm items={items} />
             <DraftTable items={items} me={me} />
             {leftOut > 0 && (
               <p className="muted">
@@ -261,15 +260,17 @@ const decisionWords: Record<Proposal['status'], string> = {
 type DraftItem = Extract<ReviewItem, { type: 'draft' }>;
 
 /**
- * Confirm a whole list in one press (plan 004e R3): offered only when every draft in view holds no
- * guess, no failing check and no changed confirmed value, and the whole list is in view.
+ * Confirm the drafts in view that need no one's judgement in one press (plan 004e R3, review
+ * 2026-10-01): those holding no guess, no failing blocker and no changed confirmed value. Warnings
+ * are counted on the button's line, and the rest are named as left to open one by one.
  */
-function BatchConfirm({ items, complete }: { items: DraftItem[]; complete: boolean }) {
+function BatchConfirm({ items }: { items: DraftItem[] }) {
   const queryClient = useQueryClient();
+  const clean = items.filter((i) => i.batchable);
   const confirm = useMutation({
     mutationFn: () =>
       api.run(recordsConfirmMany, {
-        records: items.map((i) => ({ id: i.record.id, expectedVersion: i.record.version })),
+        records: clean.map((i) => ({ id: i.record.id, expectedVersion: i.record.version })),
       }),
     onSuccess: () =>
       Promise.all([
@@ -278,29 +279,31 @@ function BatchConfirm({ items, complete }: { items: DraftItem[]; complete: boole
         queryClient.invalidateQueries({ queryKey: ['record'] }),
       ]),
   });
-  if (items.length < 2) return null;
-  const open = items.filter((i) => !i.batchable).length;
+  if (clean.length < 2) return null;
+  const left = items.length - clean.length;
+  const warned = clean.filter((i) => i.warnings > 0).length;
+  const many = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : more}`;
   return (
     <div className="actions batch">
-      {open === 0 && complete ? (
-        <button
-          type="button"
-          className="btn primary"
-          disabled={confirm.isPending}
-          onClick={() => confirm.mutate()}
-        >
-          Confirm all {items.length}
-        </button>
-      ) : (
-        <span className="muted">
-          {open > 0
-            ? `${open} of ${items.length} hold an estimate, a failing check or a changed value, so each opens on its own.`
-            : 'Some drafts are not listed; pick a kind to confirm them together.'}
-        </span>
-      )}
-      {open === 0 && complete && (
-        <span className="muted">Nothing in these is a guess and every check passes.</span>
-      )}
+      <button
+        type="button"
+        className="btn primary"
+        disabled={confirm.isPending}
+        onClick={() => confirm.mutate()}
+      >
+        {left === 0 ? `Confirm all ${clean.length}` : `Confirm the ${clean.length} ready ones`}
+      </button>
+      <span className="muted">
+        {left === 0
+          ? 'Nothing in these is a guess and nothing blocks them.'
+          : `They hold no guess and nothing blocks them; ${many(left, 'other opens', 'others open')} on its own.`}
+        {warned > 0 && (
+          <span className="warn-ink">
+            {' '}
+            {many(warned, 'has a warning', 'have warnings')}, confirmed as they stand.
+          </span>
+        )}
+      </span>
       {confirm.error && <p className="error-text">{confirm.error.message}</p>}
     </div>
   );
@@ -447,32 +450,31 @@ function TargetName({ step }: { step: Step }) {
   return <span className="mono">{name ?? 'a new record'}</span>;
 }
 
-/** What one step would change, field by field, against the record as it is now. */
+/**
+ * What one step would change, row by row against the record as it is now (UI rule: a diff is rows
+ * of what changed), with the agent's guesses marked and counted, since confirming accepts them.
+ */
 function StepChanges({ step }: { step: Step }) {
   const id = targetId(step.input);
   const current = useQuery({ ...recordQuery(id ?? ''), enabled: Boolean(id) });
+  const kinds = useQuery(kindsQuery).data;
   const after = asRecord(step.output);
-  const changes = diffRecords(id ? current.data : undefined, after);
+  if (!after) return null;
+  const before = id ? current.data : undefined;
+  if (id && !before) return null;
+  const items = kinds?.find((k) => k.kind === after.kind)?.items ?? {};
+  const changes = itemChanges(before, after, items);
+  const estimates = estimatesIn(changes, after, items);
   return (
     <>
-      {changes.length > 0 && (
-        <table className="diff">
-          <caption className="sr-only">What would change</caption>
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Now</th>
-              <th>After</th>
-            </tr>
-          </thead>
-          <tbody>
-            {changes.map((c) => (
-              <Change key={c.key} field={c.field} before={c.before} after={c.after} isNew={!id} />
-            ))}
-          </tbody>
-        </table>
+      <ItemDiff kind={after.kind} before={before} after={after} changes={changes} isNew={!id} />
+      {estimates > 0 && (
+        <p className="agent-ink">
+          Confirming accepts {estimates} {estimates === 1 ? 'estimate' : 'estimates'} of the
+          agent's.
+        </p>
       )}
-      {id && current.data && after && current.data.version >= after.version && (
+      {id && current.data && current.data.version >= after.version && (
         <p className="warn-ink">
           The record has changed since this was proposed; confirming will fail.
         </p>
@@ -564,27 +566,5 @@ function PendingProposal({ proposal }: { proposal: Proposal }) {
       )}
       {failed && <p className="error-text">Could not apply: {failed}</p>}
     </article>
-  );
-}
-
-function Change({
-  field,
-  before,
-  after,
-  isNew,
-}: {
-  field: string;
-  before: unknown;
-  after: unknown;
-  isNew: boolean;
-}) {
-  return (
-    <tr>
-      <td className="field-name">{fieldLabel(field)}</td>
-      <td className={`before ${isNew || before === undefined ? 'none' : ''}`}>
-        {isNew ? '—' : renderValue(before)}
-      </td>
-      <td className="after">{renderValue(after)}</td>
-    </tr>
   );
 }

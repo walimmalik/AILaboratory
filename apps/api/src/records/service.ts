@@ -311,11 +311,13 @@ export class RecordService {
     id: string,
     input: TransitionInput,
   ): Promise<RecordEnvelope> {
+    // A kind without sections is confirmed whole, so its history reads as an activation.
+    const sectioned = !!this.kinds.get((await findRecord(this.db, ctx, id)).kind).sections?.length;
     return this.#change(
       ctx,
       id,
       input.expectedVersion,
-      'confirm_section',
+      sectioned ? 'confirm_section' : 'activate',
       input.reason,
       async (record, kind, tx) => {
         if (record.status === 'archived') {

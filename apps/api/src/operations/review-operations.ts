@@ -64,10 +64,8 @@ export const reviewOperations = [
             },
             byAgent: record.createdBy.type === 'agent',
             batchable:
-              summary.assumed === 0 &&
-              summary.blockers === 0 &&
-              summary.warnings === 0 &&
-              summary.changed.length === 0,
+              summary.assumed === 0 && summary.blockers === 0 && summary.changed.length === 0,
+            warnings: summary.warnings,
             sectionsToConfirm: summary.sectionsLeft,
             missing: state.missing,
             ready: summary.ready,

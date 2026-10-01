@@ -228,7 +228,7 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await expect(panel.getByText('You said: thanks')).toBeVisible();
 });
 
-test('an agent drafts a record, a person reviews it section by section, and the last confirm activates it', async ({
+test('an agent drafts a record, a person reviews it, and one Confirm activates it', async ({
   page,
   request,
 }) => {
@@ -252,16 +252,16 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   const appearance = page.getByRole('region', { name: 'Appearance' });
   const volume = page.getByRole('region', { name: 'Volume' });
 
-  // What the agent assumed is marked; what it took from a datasheet says so.
+  // What the agent assumed is marked and named; what it took from a datasheet says so.
   await expect(appearance.getByText('assumed by E2E agent')).toBeVisible();
   await expect(
     volume.getByText(/from a datasheet by E2E agent · Vendor sheet, p\. 2/),
   ).toBeVisible();
-  await expect(readiness.getByText('Appearance is not confirmed')).toBeVisible();
-  // Kinds with sections have no separate final Confirm: the last section's confirm activates.
-  await expect(readiness.getByRole('button', { name: `Confirm ${record.name}` })).toHaveCount(0);
+  await expect(readiness.getByText(/One value is an agent's estimate: color/)).toBeVisible();
+  await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
-  await volume.getByRole('button', { name: 'Confirm volume' }).click();
+  // One part can still be confirmed on its own.
+  await volume.getByRole('button', { name: 'confirm only volume' }).click();
   await expect(volume.getByText(/confirmed by you/)).toBeVisible();
 
   // The agent changes a confirmed value: the section goes back to review, showing the change.
@@ -273,20 +273,15 @@ test('an agent drafts a record, a person reviews it section by section, and the 
   await expect(volume.getByText('changed, needs review')).toBeVisible();
   await expect(volume.locator('.was')).toHaveText('200 µL');
   await expect(volume.locator('.now')).toHaveText('250 µL');
-  await expect(readiness.getByText('Volume changed since it was confirmed')).toBeVisible();
 
-  await volume.getByRole('button', { name: 'Confirm volume' }).click();
-  await expect(volume.getByText(/confirmed by you/)).toBeVisible();
-  // The last section's button says it activates the record, and it does.
-  await appearance.getByRole('button', { name: 'Confirm appearance and activate' }).click();
+  // One Confirm takes everything that is left, and the draft becomes active.
+  await readiness.getByRole('button', { name: `Confirm ${record.name}` }).click();
   await expect(page.locator('.chip.active')).toBeVisible();
   // Once active and confirmed, the sections fold into one Details block.
   await expect(
     page.getByRole('region', { name: 'Details' }).getByText('✓ confirmed'),
   ).toBeVisible();
-  await expect(page.getByRole('row', { name: /v5/ })).toContainText(
-    'confirmed appearance and activated',
-  );
+  await expect(page.getByRole('row', { name: /v4/ })).toContainText(/confirmed .+ and activated/);
 });
 
 test('labware has its own page in the library, and the Review page groups drafts by kind', async ({

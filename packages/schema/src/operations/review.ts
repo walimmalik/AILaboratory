@@ -38,10 +38,13 @@ export const ReviewDraft = z.object({
   /** Made by an agent, so a person may discard it from Review. */
   byAgent: z.boolean(),
   /**
-   * Nothing in it is a guess, no check fails and no confirmed value changed, so it may be confirmed
-   * with others in one step (R3, `records.confirm_many`).
+   * Nothing in it is a guess, no blocker fails and no confirmed value changed, so it may be
+   * confirmed with others in one step (R3, `records.confirm_many`); warnings are counted, not
+   * refused.
    */
   batchable: z.boolean(),
+  /** How many warning checks fail: shown with a batch confirm, which lets them pass. */
+  warnings: z.number().int().nonnegative(),
   /** Titles of the sections still to confirm. */
   sectionsToConfirm: z.array(z.string()),
   /** What stands in the way, in plain words. */

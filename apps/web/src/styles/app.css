@@ -900,6 +900,20 @@ table.review-fields .was {
 table.review-fields .now {
   font-weight: 600;
 }
+/* A diff as rows of what changed: the part's name, before, after. */
+table.item-diff th {
+  width: 1%;
+  min-width: 10em;
+  font: 13px var(--font-ui);
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  vertical-align: top;
+  color: var(--ink-2);
+}
+table.item-diff tr.agent-said th {
+  color: var(--agent);
+}
 table.checks td.mark {
   width: 1%;
   font-family: var(--font-mono);
