@@ -30,6 +30,7 @@ import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LayoutBlocks, PlateMapBlocks } from './PlateMaps.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
+import { RecordActions, RestoreVersion } from './RecordActions.tsx';
 import { fieldLabel, ReadinessBlock, ReviewBlocks } from './RecordReview.tsx';
 import { SectionEditor } from './SectionEditor.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
@@ -91,6 +92,7 @@ export function RecordPage() {
               {actorLabel(r.updatedBy, me)}
             </span>
           </p>
+          <RecordActions record={r} />
         </div>
         <StatusChip record={r} />
       </div>
@@ -216,6 +218,9 @@ export function RecordPage() {
                   <th>When</th>
                   <th>Who</th>
                   <th>What changed</th>
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -243,6 +248,9 @@ export function RecordPage() {
                           <span className="muted"> ({changed.join(', ')})</span>
                         )}
                         {v.reason && <span className="muted"> · “{v.reason}”</span>}
+                      </td>
+                      <td>
+                        <RestoreVersion record={r} version={v.version} />
                       </td>
                     </tr>
                   );

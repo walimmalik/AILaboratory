@@ -7,6 +7,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
+import { CalculatorsPage } from './pages/Calculators.tsx';
 import { DocumentsPage } from './pages/Documents.tsx';
 import { CampaignsPage, ExperimentsPage, RunsPage, SetsPage } from './pages/Experiments.tsx';
 import {
@@ -202,6 +203,12 @@ const record = createRoute({
   component: RecordPage,
 });
 
+const calculators = createRoute({
+  getParentRoute: () => app,
+  path: '/calculators',
+  component: CalculatorsPage,
+});
+
 const wiki = createRoute({
   getParentRoute: () => app,
   path: '/wiki',
@@ -245,6 +252,7 @@ const routeTree = root.addChildren([
     layouts,
     records,
     record,
+    calculators,
     wiki,
     wikiPage,
   ]),
