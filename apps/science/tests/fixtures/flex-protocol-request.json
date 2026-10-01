@@ -1,0 +1,83 @@
+{
+  "name": "TFP-0001 v2 buffer",
+  "description": "Flex: buffer and standards into the ELISA plate. From transfer plan TFP-0001 version 2, group buffer, on Flex 1 with the Flex 1-Channel 1000 uL (left mount).",
+  "pipette": {
+    "loadName": "flex_1channel_1000",
+    "mount": "left",
+    "nozzles": "all"
+  },
+  "trash": {
+    "kind": "trash_bin",
+    "slot": "A3"
+  },
+  "tipRacks": [
+    {
+      "loadName": "opentrons_flex_96_filtertiprack_1000ul",
+      "slot": "C1"
+    }
+  ],
+  "labware": [
+    {
+      "id": "reservoir",
+      "label": "Reagent diluent (RES-000001)",
+      "loadName": "nest_12_reservoir_15ml",
+      "slot": "D2"
+    },
+    {
+      "id": "elisa",
+      "label": "ELISA plate",
+      "loadName": "corning_96_wellplate_360ul_flat",
+      "slot": "D3"
+    }
+  ],
+  "transfers": [
+    {
+      "from": {
+        "labware": "reservoir",
+        "well": "A1"
+      },
+      "to": {
+        "labware": "elisa",
+        "well": "A1"
+      },
+      "volume": 100,
+      "newTip": true
+    },
+    {
+      "from": {
+        "labware": "reservoir",
+        "well": "A1"
+      },
+      "to": {
+        "labware": "elisa",
+        "well": "B1"
+      },
+      "volume": 100,
+      "newTip": false
+    },
+    {
+      "from": {
+        "labware": "reservoir",
+        "well": "A2"
+      },
+      "to": {
+        "labware": "elisa",
+        "well": "A1"
+      },
+      "volume": 50,
+      "newTip": true
+    },
+    {
+      "from": {
+        "labware": "reservoir",
+        "well": "A2"
+      },
+      "to": {
+        "labware": "elisa",
+        "well": "B1"
+      },
+      "volume": 250,
+      "newTip": true
+    }
+  ]
+}

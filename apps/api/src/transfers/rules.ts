@@ -3,11 +3,12 @@ import {
   allWells,
   compare,
   convert,
-  countTips,
   type DeviceLimits,
+  deckProblems,
   fitVolume,
   formatQuantity,
   TransferError,
+  tipChanges,
 } from '@ailab/domain';
 import type {
   CheckResult,
@@ -31,7 +32,7 @@ export interface Rule {
   id: string;
   label: string;
   severity: 'blocker' | 'warning';
-  section: 'plates' | 'transfers';
+  section: 'plates' | 'transfers' | 'decks';
   problems: string[];
   fix: string;
 }
@@ -224,6 +225,7 @@ export async function planRules(
   const unpicked = a.plates
     .filter((p) => p.role === 'source' && !p.container)
     .map((p) => p.label ?? p.id);
+  const decks = await deckRules(a, context, invalid, unconfirmed);
   const rules: Rule[] = [
     {
       id: 'has_transfers',
@@ -281,22 +283,87 @@ export async function planRules(
       problems: newer,
       fix: 'Look at what changed, then adopt the newer version or keep this one',
     },
+    decks,
   ];
   return { invalid, rules, labware };
 }
 
+/** Whether each transfer of a group takes a new tip, over the plan's order (T5). */
+export function groupTips(a: TransferPlanAttributes, group: TransferGroup): boolean[] {
+  const wet = new Set<string>();
+  for (const g of a.groups) {
+    if (g.id === group.id) break;
+    for (const t of g.transfers) wet.add(`${t.to.plate}|${t.to.well}`);
+  }
+  const moves = group.transfers.map((t) => {
+    const to = `${t.to.plate}|${t.to.well}`;
+    const intoLiquid = wet.has(to);
+    wet.add(to);
+    return { source: `${t.from.plate}|${t.from.well}`, intoLiquid };
+  });
+  return tipChanges(moves, group.tips ?? 'lab_default');
+}
+
 /** How many tips the plan uses, from each group's tip rule (estimated until methods declare it). */
 export function tipsOf(a: TransferPlanAttributes): number {
-  const wet = new Set<string>();
-  let tips = 0;
+  return a.groups.reduce((n, g) => n + groupTips(a, g).filter(Boolean).length, 0);
+}
+
+/** The plates a group uses, in the plan's order. */
+export const platesUsed = (a: TransferPlanAttributes, group: TransferGroup) => {
+  const used = new Set(group.transfers.flatMap((t) => [t.from.plate, t.to.plate]));
+  return a.plates.filter((p) => used.has(p.id)).map((p) => p.id);
+};
+
+/**
+ * The deck layout rules (016b-4, T6): every group on an Opentrons Flex has one, it places what the
+ * group uses on slots that were free with enough tip racks, the tip racks are confirmed tip rack
+ * types, and the instrument is confirmed.
+ */
+async function deckRules(
+  a: TransferPlanAttributes,
+  context: Pick<RelatedContext, 'get' | 'getVersion'>,
+  invalid: string[],
+  unconfirmed: string[],
+): Promise<Rule> {
+  const problems: string[] = [];
+  const groups = new Map(a.groups.map((g) => [g.id, g]));
+  for (const d of duplicates((a.decks ?? []).map((d) => d.group)))
+    invalid.push(`The group ${d} has two deck layouts`);
+  for (const deck of a.decks ?? [])
+    if (!groups.has(deck.group))
+      invalid.push(`A deck layout is for ${deck.group}, which the plan doesn't have`);
   for (const g of a.groups) {
-    const transfers = g.transfers.map((t) => {
-      const to = `${t.to.plate}|${t.to.well}`;
-      const intoLiquid = wet.has(to);
-      wet.add(to);
-      return { source: `${t.from.plate}|${t.from.well}`, intoLiquid };
-    });
-    tips += countTips(transfers, g.tips ?? 'lab_default');
+    if (!g.instrument) continue;
+    const instrument = await context.get(g.instrument.instrument);
+    if (instrument?.kind !== 'instrument') continue;
+    const kind = await context.get((instrument.attributes as { kind: string }).kind);
+    if ((kind?.attributes as { model?: string } | undefined)?.model !== 'Opentrons Flex') continue;
+    const deck = a.decks?.find((d) => d.group === g.id);
+    if (!deck) {
+      problems.push(`${g.label}: no deck layout yet`);
+      continue;
+    }
+    if (instrument.status !== 'active')
+      problems.push(`${g.label}: ${instrument.label} is not confirmed`);
+    for (const site of deck.sites) {
+      if (!('tipRack' in site)) continue;
+      const pin = await checkPin(context, site.tipRack, 'labware_type', 'a labware type');
+      if (pin.invalid || !pin.pinned) invalid.push(`${g.label}, ${site.slot}: ${pin.invalid}`);
+      else if ((pin.pinned.attributes as LabwareTypeAttributes).family !== 'tip_rack')
+        problems.push(`${g.label}, ${site.slot}: ${pin.pinned.label} is not a tip rack`);
+      if (pin.unconfirmed) unconfirmed.push(`${g.label}, ${site.slot}: ${pin.unconfirmed}`);
+    }
+    const tips = groupTips(a, g).filter(Boolean).length;
+    for (const problem of deckProblems(deck.sites, deck.free, platesUsed(a, g), tips))
+      problems.push(`${g.label}: ${problem}`);
   }
-  return tips;
+  return {
+    id: 'decks_fit',
+    label: 'Every Flex group has a deck layout that fits',
+    severity: 'blocker',
+    section: 'decks',
+    problems,
+    fix: 'Lay the deck out again with transfers.set_deck (left out, code lays it out), then confirm it',
+  };
 }
