@@ -68,26 +68,39 @@ export const recordOperations = [
     },
   }),
   implement(recordsKinds, {
-    run: async (_ctx, _input, deps) => ({
-      kinds: deps.kinds.list().map((definition) => ({
-        kind: definition.kind,
-        idPrefix: definition.idPrefix,
-        namePrefix: definition.namePrefix,
-        attributes: z.toJSONSchema(definition.attributes, {
-          target: 'draft-2020-12',
-          io: 'input',
-          unrepresentable: 'any',
-        }) as Record<string, unknown>,
-        sections: definition.sections ?? [],
-        checks: (definition.checks ?? []).map(({ id, label, severity, source, section }) => ({
-          id,
-          label,
-          severity,
-          source,
-          ...(section ? { section } : {}),
+    run: async (_ctx, input, deps) => {
+      // Asking for a kind by name refuses names the lab doesn't have, so a typo isn't an empty list.
+      const definitions = input.kinds
+        ? input.kinds.map((kind) => deps.kinds.get(kind))
+        : deps.kinds.list();
+      return {
+        kinds: definitions.map((definition) => ({
+          kind: definition.kind,
+          idPrefix: definition.idPrefix,
+          namePrefix: definition.namePrefix,
+          sections: definition.sections ?? [],
+          ...(definition.items ? { items: definition.items } : {}),
+          ...(input.summary
+            ? {}
+            : {
+                attributes: z.toJSONSchema(definition.attributes, {
+                  target: 'draft-2020-12',
+                  io: 'input',
+                  unrepresentable: 'any',
+                }) as Record<string, unknown>,
+                checks: (definition.checks ?? []).map(
+                  ({ id, label, severity, source, section }) => ({
+                    id,
+                    label,
+                    severity,
+                    source,
+                    ...(section ? { section } : {}),
+                  }),
+                ),
+              }),
         })),
-      })),
-    }),
+      };
+    },
   }),
   implement(recordsGet, {
     run: (ctx, input, deps) => service(deps).get(ctx, input.id),

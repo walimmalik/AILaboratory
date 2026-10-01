@@ -26,9 +26,19 @@ export class ScriptedModel implements ChatModel {
       const json = file ? match[2]?.replaceAll('$attached', file) : match[2];
       const input = json ? (JSON.parse(json) as Record<string, unknown>) : {};
       this.#calls += 1;
+      // An operation that isn't a named tool this turn goes through run_operation, as a model would.
+      const named = request.tools.some((t) => t.name === name);
       return {
         text: `Running ${match[1]}.`,
-        toolCalls: [{ id: `call_${this.#calls}`, name, input }],
+        toolCalls: [
+          named
+            ? { id: `call_${this.#calls}`, name, input }
+            : {
+                id: `call_${this.#calls}`,
+                name: 'run_operation',
+                input: { operation: match[1], input },
+              },
+        ],
         stop: 'tool_use',
       };
     }

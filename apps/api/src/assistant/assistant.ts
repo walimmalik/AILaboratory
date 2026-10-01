@@ -11,13 +11,12 @@ import type {
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { labs, users } from '../db/schema.ts';
-import { describeOperation } from '../operations/describe.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
 import { findSkill } from '../skills/skills.ts';
 import type { ModelSetup } from './config.ts';
-import { type ChatModel, ModelError, type ModelMessage, type ModelTool } from './model.ts';
+import { type ChatModel, ModelError, type ModelMessage } from './model.ts';
 import {
   appendMessage,
   type MessageRow,
@@ -26,6 +25,7 @@ import {
   toSummary,
   updateConversation,
 } from './store.ts';
+import { callable, pageNamespaces, RUN_OPERATION, toolName, toolsFor } from './toolset.ts';
 
 /** How many model turns one message may take before the assistant stops and says so. */
 export const MAX_STEPS = 16;
@@ -117,7 +117,6 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const tools = toolsFor(registry);
     const system = await systemPrompt(db, ctx);
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
@@ -126,7 +125,9 @@ export class Assistant {
 
     try {
       for (let step = 0; step < MAX_STEPS; step++) {
-        const history = toModelMessages(await messageRows(db, conversationId), model);
+        const rows = await messageRows(db, conversationId);
+        const tools = toolsFor(registry, namespacesOf(rows, deps));
+        const history = toModelMessages(rows, model, new Set(tools.operationOf.keys()));
         const turn = await model.complete({
           system,
           messages: history,
@@ -146,11 +147,10 @@ export class Assistant {
           {
             role: 'assistant',
             text,
-            toolCalls: turn.toolCalls.map((call) => ({
-              id: call.id,
-              operationId: tools.operationOf.get(call.name) ?? call.name,
-              input: call.input ?? call.rawInput ?? '',
-            })),
+            toolCalls: turn.toolCalls.map((call) => {
+              const { operationId, input } = resolveCall(tools.operationOf, call);
+              return { id: call.id, operationId, input: input ?? call.rawInput ?? '' };
+            }),
             model: model.model,
           },
           { provider: model.provider, model: model.model, raw: turn.raw },
@@ -160,19 +160,14 @@ export class Assistant {
 
         const files = attachmentsOf(await messageRows(db, conversationId));
         for (const call of turn.toolCalls) {
-          const operationId = tools.operationOf.get(call.name);
-          const outcome = await runTool(
-            registry,
-            agentCtx,
-            operationId ?? call.name,
-            call.input,
-            files,
-            { known: operationId !== undefined },
-          );
+          const { operationId, input, known } = resolveCall(tools.operationOf, call);
+          const outcome = await runTool(registry, agentCtx, operationId, input, files, {
+            known: known && callable(registry, operationId),
+          });
           const result = await appendMessage(db, conversationId, {
             role: 'tool',
             toolCallId: call.id,
-            operationId: operationId ?? call.name,
+            operationId,
             ...outcome,
           });
           this.publish(conversationId, { type: 'message', message: result });
@@ -278,42 +273,21 @@ export function withFiles(input: unknown, files: Map<string, Attachment>): Recor
   return swap(input) as Record<string, unknown>;
 }
 
-/** Every operation an agent may call, as a tool. People-only operations and the assistant's own are left out. */
-export function toolsFor(registry: OperationRegistry): {
-  list: ModelTool[];
-  operationOf: Map<string, string>;
-} {
-  const list: ModelTool[] = [];
-  const operationOf = new Map<string, string>();
-  for (const contract of registry.list()) {
-    if (contract.id.startsWith('assistant.')) continue;
-    if (registry.get(contract.id).actors === 'people') continue;
-    const name = toolName(contract.id);
-    const { $schema: _, ...inputSchema } = describeOperation(contract).input;
-    list.push({
-      name,
-      description:
-        contract.effect === 'write'
-          ? `${contract.summary}. Changes data; may be proposed for a person to confirm instead of applied.`
-          : `${contract.summary}. Read only.`,
-      inputSchema,
-    });
-    operationOf.set(name, contract.id);
-  }
-  return { list, operationOf };
-}
-
-/** "records.delete_draft" → "records_delete_draft": a name every provider accepts. */
-export function toolName(operationId: string): string {
-  return operationId.replaceAll('.', '_');
-}
-
 /**
  * The stored conversation as model messages. Replies from the same provider and model go back in
  * their original form (Claude requires its thinking blocks unchanged); calls that never got a result
  * (the run was cut off) get one saying so, because every provider requires it.
  */
-export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMessage[] {
+export function toModelMessages(
+  rows: MessageRow[],
+  model: ChatModel,
+  named?: ReadonlySet<string>,
+): ModelMessage[] {
+  // A call to an operation that isn't a named tool this turn replays as run_operation (ADR 0055).
+  const asTool = (operationId: string, input: unknown) =>
+    !named || named.has(toolName(operationId))
+      ? { name: toolName(operationId), input }
+      : { name: RUN_OPERATION, input: { operation: operationId, input } };
   const messages: ModelMessage[] = [];
   const answered = new Set(
     rows.flatMap((row) => (row.body.role === 'tool' ? [row.body.toolCallId] : [])),
@@ -330,13 +304,18 @@ export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMess
       messages.push({
         role: 'assistant',
         text: body.text,
-        toolCalls: body.toolCalls.map((call) => ({
-          id: call.id,
-          name: toolName(call.operationId),
-          ...(typeof call.input === 'string'
-            ? { input: undefined, rawInput: call.input }
-            : { input: call.input as Record<string, unknown> }),
-        })),
+        toolCalls: body.toolCalls.map((call) => {
+          if (typeof call.input === 'string') {
+            return {
+              id: call.id,
+              name: toolName(call.operationId),
+              input: undefined,
+              rawInput: call.input,
+            };
+          }
+          const tool = asTool(call.operationId, call.input);
+          return { id: call.id, name: tool.name, input: tool.input as Record<string, unknown> };
+        }),
         ...(same ? { raw: providerRaw } : {}),
       });
       for (const call of body.toolCalls) {
@@ -344,7 +323,7 @@ export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMess
         messages.push({
           role: 'tool',
           toolCallId: call.id,
-          name: toolName(call.operationId),
+          name: asTool(call.operationId, undefined).name,
           content: JSON.stringify({ code: 'internal', message: 'This call was not run.' }),
           isError: true,
         });
@@ -357,7 +336,7 @@ export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMess
       messages.push({
         role: 'tool',
         toolCallId: body.toolCallId,
-        name: toolName(body.operationId),
+        name: asTool(body.operationId, undefined).name,
         content,
         isError: body.outcome === 'failed',
       });
@@ -366,10 +345,48 @@ export function toModelMessages(rows: MessageRow[], model: ChatModel): ModelMess
   return messages;
 }
 
+/** A model's tool call as the operation it runs: a named tool, or run_operation's operation. */
+function resolveCall(
+  operationOf: ReadonlyMap<string, string>,
+  call: { name: string; input?: Record<string, unknown> | undefined },
+): { operationId: string; input: Record<string, unknown> | undefined; known: boolean } {
+  if (call.name === RUN_OPERATION) {
+    const operation = call.input?.operation;
+    const inner = call.input?.input;
+    return typeof operation === 'string'
+      ? {
+          operationId: operation,
+          input: inner && typeof inner === 'object' ? (inner as Record<string, unknown>) : {},
+          known: true,
+        }
+      : { operationId: RUN_OPERATION, input: undefined, known: false };
+  }
+  const operationId = operationOf.get(call.name);
+  return { operationId: operationId ?? call.name, input: call.input, known: Boolean(operationId) };
+}
+
+/**
+ * The modules whose tools this turn names: the page the latest message came from, and every module
+ * the conversation already used, so earlier calls replay under their own names.
+ */
+function namespacesOf(rows: MessageRow[], deps: OperationDeps): string[] {
+  const used = rows.flatMap((row) =>
+    row.body.role === 'assistant'
+      ? row.body.toolCalls.map((c) => c.operationId.split('.')[0] ?? '')
+      : [],
+  );
+  const lastAsk = rows.findLast((row) => row.body.role === 'user')?.body;
+  const page = lastAsk?.role === 'user' ? pageNamespaces(lastAsk.page, deps.kinds) : [];
+  return [...new Set([...page, ...used])];
+}
+
 function withPage(text: string, page: PageContext | undefined): string {
   if (!page) return text;
   const where = page.title ? `${page.title} (${page.path})` : page.path;
-  return `${text}\n\n[Sent from the page: ${where}]`;
+  const record = page.record
+    ? `; it shows ${page.record.name} (${page.record.id}) at version ${page.record.version}`
+    : '';
+  return `${text}\n\n[Sent from the page: ${where}${record}]`;
 }
 
 async function systemPrompt(db: Db, ctx: RecordContext): Promise<string> {
@@ -382,7 +399,8 @@ async function systemPrompt(db: Db, ctx: RecordContext): Promise<string> {
 
 You act only through the lab's operations, which are your tools. Everything you change is recorded in the lab's activity ledger under your name, on behalf of that person.
 
-- Look things up before you change them. Read tools change nothing. Before creating a record, read records_kinds for the kinds and their attributes.
+- Look things up before you change them. Read tools change nothing. Before creating a record, read records_kinds (summary: true lists the kinds; kinds: ["sop"] gives one kind's attributes).
+- Your named tools cover records, review, skills, the calculators and the module of the page you are on. For anything else, find the operation with operations_describe (by namespace, e.g. "sops") and call it with run_operation.
 - Some changes are proposed rather than made: the result then has status "proposed" and waits for a person to confirm it on the Review page. Say that plainly; never say a proposed change is done.
 - You draft; people confirm. Create records as drafts. Values you set are marked "assumed" until a person confirms them. Say where each value came from in "evidence": "stated" for values the person told you (e.g. {"color": {"source": "stated"}}), "datasheet", "imported" or "measured" with a reference when you used one; "calculated" with the "calculation" handle a calculator returned (and "output", a pointer into its output, when the value is one part of it); "record" or "template" with "from": {id, version} when you copied the value from a confirmed record. For a list the kind keys by item (an SOP's steps by id, variables by name), evidence can name one item as "/steps/<id>". Values you estimated get no evidence and show as assumed. Never name a source you did not use.
 - A person confirms each section of a draft on its page; confirming the last one makes it active. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
@@ -401,3 +419,5 @@ The calculators skill, which you always follow:
 
 ${findSkill('calculators')?.text ?? ''}`;
 }
+
+export { toolName, toolsFor } from './toolset.ts';
