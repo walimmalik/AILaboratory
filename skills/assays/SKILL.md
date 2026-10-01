@@ -1,6 +1,6 @@
 ---
 name: ailab-assays
-description: Work with assay templates in AILaboratory through its MCP tools: find the lab's templates, draft a template from a conversation and the lab's SOPs, and work out what a template gives for a request (missing inputs, conditions, wells and plates) instead of counting yourself.
+description: Work with assay templates in AILaboratory through its MCP tools: find the lab's templates, draft a template from a conversation and the lab's SOPs, work out what a template gives for a request (missing inputs, conditions, wells and plates) instead of counting yourself, and design an experiment from a confirmed template in one step.
 ---
 
 # Assay templates in AILaboratory
@@ -26,3 +26,9 @@ An **assay template** is the lab's ready-made designer for one assay (an IL-6 EL
 - `assays.design` `{template, version?, answers?, wellsPerPlate?, show?}` (or `attributes` to try a template without saving it) returns the essential inputs still missing, the conditions (factors combined), and the wells, plates and runs from the replicate and control rules. Answers go by essential input id: a subjects input takes a count or the record ids, a variable its value.
 - Plates hold the template layout's well count unless you give `wellsPerPlate`.
 - Use its numbers; never count conditions, wells or plates yourself (ADR 0024). While a factor waits for its input, `conditions` is 0 and totals are left out.
+
+## Designing an experiment from a template
+
+1. `assays.search` for the template, then `assays.design` `{template, answers}` with what the person already told you. Ask the person only for what `missing` lists.
+2. `designer.start` `{template, campaign, aim?, label?, question?, answers}` drafts the experiment, with the template's SOP versions, default records, your variable values, subjects, conditions, controls, readouts and success criteria. When the template has a layout and the subjects are given as records, it drafts the plate map too. The template version must be confirmed. Without `question`, the template's purpose is used and marked assumed.
+3. Tell the person what was drafted (`lines`) and that they review and confirm each draft. Adjust with `experiments.bind_protocol` and `records.update`. Transfer plans come from the transfers tools once the sources and instrument are known.

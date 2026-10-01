@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
+import { campaignKinds } from '../campaigns/kinds.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
@@ -55,6 +56,7 @@ beforeEach(async () => {
     ...sopKinds,
     ...plateMapKinds,
     ...assayKinds,
+    ...campaignKinds,
   ])
     kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
@@ -374,5 +376,139 @@ describe('assay templates', () => {
       ],
       records: [{ role: 2, kind: 'labware_type' }],
     });
+  });
+});
+
+describe('designer.start', () => {
+  async function ready() {
+    const { template } = await setup();
+    const saved = await confirm(await run(agent, 'assays.draft_template', template));
+    const campaign = await confirm(
+      await run(agent, 'campaigns.draft', {
+        label: 'IL-6 in supernatants',
+        goal: 'Measure IL-6 after stimulation',
+        aims: [{ id: 'aim_1', text: 'Measure IL-6', success: 'Every sample read' }],
+      }),
+    );
+    const kind = await run(agent, 'entities.draft_kind', {
+      label: 'Supernatant',
+      attributes: { base: 'other', prefix: 'SUP', fields: [] },
+    });
+    const samples: RecordEnvelope[] = [];
+    for (const n of [1, 2, 3])
+      samples.push(
+        await run(agent, 'entities.draft', { label: `Supernatant ${n}`, entityKind: kind.id }),
+      );
+    return { saved, campaign, samples };
+  }
+
+  it('drafts the experiment and its plate map from a confirmed template in one step', async () => {
+    const { saved, campaign, samples } = await ready();
+    const result = await run<{
+      experiment: RecordEnvelope;
+      plateMap?: RecordEnvelope;
+      totals?: Record<string, number>;
+      lines: string[];
+    }>(agent, 'designer.start', {
+      template: saved.id,
+      campaign: campaign.id,
+      aim: 'aim_1',
+      answers: { samples: samples.map((s) => s.id), dilution: '10' },
+    });
+    const e = result.experiment;
+    expect(e).toMatchObject({
+      kind: 'experiment',
+      status: 'draft',
+      label: 'IL-6 ELISA: 3 subjects',
+    });
+    expect(e.attributes).toMatchObject({
+      question: 'IL-6 in supernatants',
+      template: { id: saved.id, version: saved.version },
+      subjects: samples.map((s) => ({ record: s.id })),
+      protocol: [{ id: 'assay', inputs: [{ name: 'sample_dilution', value: '10' }] }],
+      conditions: [
+        { id: 'sample', label: 'Sample', text: 'Supernatant 1, Supernatant 2, Supernatant 3' },
+      ],
+      controls: [
+        { id: 'std', role: 'standard', text: '14 wells per plate; Curve' },
+        { id: 'blank', role: 'blank' },
+      ],
+      readouts: [{ id: 'od', label: 'Absorbance 450 nm', text: 'read absorbance' }],
+    });
+    expect(e.evidence?.question).toMatchObject({ source: 'assumed' });
+    expect(e.evidence?.protocol).toMatchObject({ source: 'template', from: { id: saved.id } });
+    expect(result.plateMap).toMatchObject({ kind: 'plate_map', status: 'draft' });
+    expect(result.plateMap?.attributes).toMatchObject({
+      experiment: e.id,
+      subjects: samples.map((s) => ({ record: s.id })),
+    });
+    expect(result.totals).toEqual({ conditions: 3, plates: 1, totalPlates: 1, totalWells: 22 });
+    const links = await run<{ links: { toId: string; relation: string }[] }>(
+      person,
+      'records.links',
+      {
+        id: e.id,
+        direction: 'from',
+      },
+    );
+    expect(links.links).toContainEqual(
+      expect.objectContaining({ relation: 'from_template', toId: saved.id }),
+    );
+  });
+
+  it('asks for what is missing, and refuses a draft template and another lab', async () => {
+    const { saved, campaign, samples } = await ready();
+    expect(
+      (
+        await refused(
+          run(agent, 'designer.start', {
+            template: saved.id,
+            campaign: campaign.id,
+            answers: { samples: samples.map((s) => s.id) },
+          }),
+        )
+      ).message,
+    ).toBe('Still needed: Sample dilution');
+    const { template } = await setup();
+    const draft = await run(agent, 'assays.draft_template', { ...template, label: 'Draft ELISA' });
+    expect(
+      (
+        await refused(
+          run(agent, 'designer.start', {
+            template: draft.id,
+            campaign: campaign.id,
+            answers: { samples: 3, dilution: '10' },
+          }),
+        )
+      ).message,
+    ).toContain('is not confirmed');
+    expect(
+      (
+        await refused(
+          run(otherLab, 'designer.start', {
+            template: saved.id,
+            campaign: campaign.id,
+            answers: { samples: 3, dilution: '10' },
+          }),
+        )
+      ).code,
+    ).toBe('not_found');
+  });
+
+  it('drafts the experiment without a plate map when only a count of subjects is given', async () => {
+    const { saved, campaign } = await ready();
+    const result = await run<{ plateMap?: RecordEnvelope; lines: string[] }>(
+      agent,
+      'designer.start',
+      {
+        template: saved.id,
+        campaign: campaign.id,
+        label: 'ELISA, 40 supernatants',
+        question: 'How much IL-6 do the stimulated cells release?',
+        answers: { samples: 40, dilution: '10' },
+      },
+    );
+    expect(result.plateMap).toBeUndefined();
+    expect(result.lines).toContain('No plate map yet: give the subjects as records to place them');
   });
 });

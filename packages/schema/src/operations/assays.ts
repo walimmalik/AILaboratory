@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AssayTemplateAttributes, AssayTemplateId } from '../assays.ts';
+import { CampaignId } from '../campaigns.ts';
 import { EvidenceInput } from '../design.ts';
 import { RecordId } from '../ids.ts';
 import { CapabilityId } from '../instruments.ts';
@@ -29,6 +30,20 @@ export const assaysDraftTemplate = defineContract({
   output: RecordEnvelope,
 });
 
+const Answers = z
+  .record(
+    LocalName,
+    z.union([
+      z.number().int().min(1).max(5000),
+      z.array(RecordId).min(1).max(5000),
+      Quantity,
+      z.string().min(1),
+    ]),
+  )
+  .describe(
+    'By essential input id: a subjects input takes a count or the records; a variable its value',
+  );
+
 const Condition = z.object({
   id: z.string(),
   levels: z.record(z.string(), z.string()),
@@ -46,20 +61,7 @@ export const assaysDesign = defineContract({
     template: AssayTemplateId.optional(),
     version: z.number().int().positive().optional(),
     attributes: AssayTemplateAttributes.optional().describe('A template to try without saving it'),
-    answers: z
-      .record(
-        LocalName,
-        z.union([
-          z.number().int().min(1).max(5000),
-          z.array(RecordId).min(1).max(5000),
-          Quantity,
-          z.string().min(1),
-        ]),
-      )
-      .optional()
-      .describe(
-        'By essential input id: a subjects input takes a count or the records; a variable its value',
-      ),
+    answers: Answers.optional(),
     wellsPerPlate: z.number().int().min(1).max(1536).optional(),
     show: z.number().int().min(0).max(500).optional().describe('Conditions to list; default 50'),
   }),
@@ -115,5 +117,45 @@ export const assaysSearch = defineContract({
         essentials: z.array(z.string()),
       }),
     ),
+  }),
+});
+
+export const designerStart = defineContract({
+  id: 'designer.start',
+  verbs: { done: 'designed an experiment from', intent: 'design an experiment from' },
+  summary:
+    "Design an experiment from a confirmed assay template in one step (plan 017b): give the template, the campaign (and aim) it serves, and the answers to every essential input (check what is still needed with assays.design). It drafts the experiment with the template's SOP versions, its default role bindings and your variable values, the subjects, conditions, controls and readouts, and, when the template has a layout and the subjects are records, the plate map. Everything is drafted for a person to review and confirm; values from the template are marked as copied from it. Change the drafts with records.update and experiments.bind_protocol",
+  effect: 'write',
+  input: z.strictObject({
+    template: AssayTemplateId,
+    version: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Default the template's current version; it must be one a person confirmed"),
+    campaign: CampaignId,
+    aim: LocalName.optional().describe("The campaign aim it serves, by the aim's id"),
+    label: z.string().min(1).optional().describe('Default "<template>: <n> <subjects>"'),
+    question: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("What it asks; default the template's purpose, marked assumed"),
+    answers: Answers,
+    reason: Reason,
+  }),
+  output: z.object({
+    experiment: RecordEnvelope,
+    plateMap: RecordEnvelope.optional(),
+    totals: z
+      .object({
+        conditions: z.number().int(),
+        plates: z.number().int(),
+        totalPlates: z.number().int(),
+        totalWells: z.number().int(),
+      })
+      .optional(),
+    lines: z.array(z.string()).describe('What was drafted, and what was left for later'),
   }),
 });

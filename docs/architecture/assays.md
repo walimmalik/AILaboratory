@@ -56,10 +56,25 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 | `assays.design` | Calculator: for a saved template (any version) or attributes to try, and the answers given so far, the essential inputs still missing, the conditions (the first 50 listed), and wells, plates and runs from `designTotals`. Subjects answers are a count or record ids (each record a level, by its label); plates take the layout's well count unless `wellsPerPlate` is given. While a factor waits for its input, conditions are 0 and totals are left out |
 | `assays.search` | The lab's templates, confirmed first, by words, assay name or readout capability |
 
+## The designer (017b-1)
+
+`apps/api/src/assays/designer.ts`, ADR [0067](../decisions/0067-designer-drafts-from-a-confirmed-template.md). `designer.start` takes a confirmed template version, the campaign and aim, and an answer for every essential input; anything missing is refused with "Still needed: …". In one write it drafts:
+
+- **The experiment** (013), pinned to the template (`template`, linked `from_template`). It holds:
+  - the template's SOP parts, with default records bound (definitions by version, physical things by id) and the answered variables as inputs;
+  - the subjects;
+  - one condition per factor, listing its levels;
+  - the controls an experiment can name (standard, blank, neutral, positive, negative, vehicle), with wells and reason;
+  - the readouts;
+  - the quality criteria as success criteria.
+- **The plate map** (014), when the template has a layout and the only factor is the subjects, given as records. It uses the layout's control regions where a control names its subject, and the template's default plate type.
+
+Values copied from the template carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way.
+
 ## Seed
 
 `seed/assay-templates.yaml` holds the IL-6 ELISA template. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
 
 ## Not yet
 
-`assays.save_from_experiment`, the designer and feasibility (017b); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+`assays.save_from_experiment`, feasibility and the design page (017b-2); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.
