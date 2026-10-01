@@ -77,7 +77,7 @@ From the review of how the existing twins are built (`/mnt/project-files/twins/t
 Wali, 2026-10-01:
 
 - **T7 to T12: A.** On T7 Wali asked why "data only" meant no 3D twin. It doesn't: every package carries its 3D model (`model.glb`). "Data only" means there is no runnable code in a package; behaviour that needs code comes from the app's tested templates.
-- **T13:** Codex (Astra), which built the twins, gets a plan and audit task for echo650-twin, with the review included: verify the review, audit every twin against the standard, then (in small PRs there) add the schema and checker, move all timing into typed models, map commands to capabilities, give twins their sites and access poses, and export every lab twin as a standard package. Then the packages are uploaded into this app. The task is `/mnt/project-files/twins/codex-astra-prompt.md`.
+- **T13:** Codex (Astra), which built the twins, gets a plan and audit task for echo650-twin, with the review included: verify the review, audit every twin against the standard, then (in small PRs there) add the schema and checker, move all timing into typed models, map commands to capabilities, give twins their sites and access poses, and export every lab twin as a standard package. Wali added (2026-10-01): the same task builds the five missing twins (Hamilton Vantage, Tecan Spark Cyto, CyBio FeliX, qTOWER3 auto, Bio-Rad PTC Tempo) to the standard from the start, and deepens the thin MicroSpin, BlueWasher and Cytomat twins, so every instrument in the lab has a twin. Then the packages are uploaded into this app. The task is `/mnt/project-files/twins/codex-astra-prompt.md`.
 
 ## Defaults I'm assuming (say if any is wrong)
 
@@ -94,4 +94,4 @@ Wali, 2026-10-01:
 - **015b:** the remaining behaviour templates as needed by the first twins (acoustic, dispenser, liquid handler, plate robot, storage), configuration mapping from the registry (T3), `twins.simulate` and `twins.get`, simulation runs, skill.
 - **015c:** twin workcell import and the both-ways member check (replaces ADR 0047's warning).
 - **015d:** 3D views on the instrument and workcell pages.
-- **Alongside, in echo650-twin (T13, done by Codex):** the audit, schema and checker, timing models, capabilities, templates and the exporter; then each exported package is uploaded here and confirmed. Each newly built twin (Vantage, Spark Cyto, FeliX, qTOWER3, PTC Tempo) is just an upload.
+- **Alongside, in echo650-twin (T13, done by Codex):** the audit, schema and checker, timing models, capabilities, templates and the exporter; then each exported package is uploaded here and confirmed. The five missing twins (Vantage, Spark Cyto, FeliX, qTOWER3, PTC Tempo) are built there to the standard too, and each arrives here as just an upload.
