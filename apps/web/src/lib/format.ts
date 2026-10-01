@@ -1,4 +1,4 @@
-import { formatQuantity, isUnit } from '@ailab/domain';
+import { formatQuantity, isUnit, keyOf } from '@ailab/domain';
 import {
   type ActivityEntry,
   type Actor,
@@ -342,10 +342,8 @@ function findItem(
 ): { item: Record<string, unknown>; position: number } | undefined {
   if (!Array.isArray(list)) return undefined;
   const fields = keyField ? [keyField] : ['id', 'name', 'role', 'key'];
-  const position = list.findIndex(
-    (i) =>
-      i && typeof i === 'object' && fields.some((f) => (i as Record<string, unknown>)[f] === key),
-  );
+  // A composite key ("plate+well") is matched whole (ADR 0065).
+  const position = list.findIndex((i) => fields.some((f) => keyOf(i, f) === key));
   return position < 0 ? undefined : { item: list[position], position };
 }
 

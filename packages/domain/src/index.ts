@@ -6,6 +6,7 @@ export * from './expressions.ts';
 export * from './handling.ts';
 export * from './ids.ts';
 export * from './instruments.ts';
+export * from './keyed.ts';
 export * from './labware.ts';
 export * from './liquids.ts';
 export * from './media.ts';

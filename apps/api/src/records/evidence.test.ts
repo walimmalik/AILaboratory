@@ -8,7 +8,7 @@ import { saveCalculation } from './calculations.ts';
 import { RecordError } from './errors.ts';
 import { KindRegistry } from './kinds.ts';
 import { type RecordContext, RecordService } from './service.ts';
-import { protocol, widget } from './test-kinds.ts';
+import { layoutPlan, protocol, widget } from './test-kinds.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -25,7 +25,10 @@ beforeEach(async () => {
     ...person,
     actor: { type: 'agent', agentName: 'Claude', onBehalfOf: tenant.userId },
   };
-  service = new RecordService(db, new KindRegistry().register(widget).register(protocol));
+  service = new RecordService(
+    db,
+    new KindRegistry().register(widget).register(protocol).register(layoutPlan),
+  );
 });
 afterEach(() => close());
 
@@ -131,6 +134,78 @@ describe('evidence by item (ADR 0049)', () => {
       }),
     );
     expect(error.message).toMatch(/not an item/);
+  });
+
+  it('keys items by several fields, and items inside items, each with its own evidence (ADR 0065)', async () => {
+    const uL = (value: string) => ({ value, unit: 'uL' });
+    const attributes = {
+      overrides: [
+        { plate: 'p1', well: 'A1', content: 'blank' },
+        { plate: 'p2', well: 'A1', content: 'control' },
+      ],
+      groups: [
+        {
+          id: 'g1',
+          head: '96',
+          transfers: [
+            { from: 'A1', to: 'B1', volume: uL('10') },
+            { from: 'A2', to: 'B2', volume: uL('10') },
+          ],
+        },
+      ],
+    };
+    const draft = await service.create(agent, {
+      kind: 'layout_plan',
+      label: 'Plan',
+      attributes,
+      evidence: {
+        '/overrides/p2+A1': { source: 'datasheet', reference: 'https://example.org/map' },
+        '/groups/g1/transfers/A2+B2': { source: 'datasheet', reference: 'https://example.org/t' },
+      },
+    });
+    expect(draft.evidence['/overrides/p2+A1']?.source).toBe('datasheet');
+    expect(draft.evidence['/overrides/p1+A1']?.source).toBe('assumed');
+    expect(draft.evidence['/groups/g1/transfers/A2+B2']?.source).toBe('datasheet');
+    const confirmed = await service.confirmSection(person, draft.id, {
+      expectedVersion: 1,
+      section: 'plan',
+    });
+
+    // One transfer's volume changes: only that transfer needs a look again.
+    const group = attributes.groups[0] as (typeof attributes.groups)[number];
+    const edited = await service.update(agent, draft.id, {
+      expectedVersion: confirmed.version,
+      attributes: {
+        ...attributes,
+        groups: [
+          {
+            ...group,
+            transfers: [group.transfers[0], { ...group.transfers[1], volume: uL('12') }],
+          },
+        ],
+      },
+    });
+    expect(edited.evidence['/groups/g1/transfers/A2+B2']?.source).toBe('assumed');
+    expect(edited.evidence['/groups/g1']?.source).toBe('assumed');
+    expect(edited.evidence['/groups/g1/transfers/A1+B1']?.source).toBe('assumed');
+    const field = readiness(edited, layoutPlan).sections[0]?.fields[1];
+    expect(field?.items?.map((i) => [i.key, i.state])).toEqual([
+      ['g1', 'confirmed'],
+      ['g1 · A1+B1', 'confirmed'],
+      ['g1 · A2+B2', 'changed'],
+    ]);
+    expect(
+      (
+        await refused(
+          service.create(agent, {
+            kind: 'layout_plan',
+            label: 'Plan',
+            attributes,
+            evidence: { '/groups/g1/transfers/A9+B9': { source: 'datasheet' } },
+          }),
+        )
+      ).message,
+    ).toMatch(/not an item of a list this kind keys \(overrides by plate\+well/);
   });
 });
 

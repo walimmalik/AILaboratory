@@ -1,7 +1,10 @@
 import {
+  entriesByPath,
   formatName,
-  itemPath,
+  keyedEntries,
   keyedItems,
+  keyedSegments,
+  keyFields,
   newId,
   readiness,
   runChecks,
@@ -768,12 +771,10 @@ function holdsAgentValues(
   return section.fields.some((field) => {
     const confirmed = review?.values[field];
     if (review && sameValue(confirmed, values[field])) return false;
-    const keyField = items[field];
-    if (!keyField) return byAgent(field);
-    const was = keyedItems(confirmed, keyField);
-    return [...keyedItems(values[field], keyField)].some(
-      ([key, item]) =>
-        byAgent(itemPath(field, key)) && !(was.has(key) && sameValue(was.get(key), item)),
+    if (!items[field]) return byAgent(field);
+    const was = new Map(keyedEntries(confirmed, field, items).map((e) => [e.path, e.own]));
+    return keyedEntries(values[field], field, items).some(
+      (e) => byAgent(e.path) && !(was.has(e.path) && sameValue(was.get(e.path), e.own)),
     );
   });
 }
@@ -796,14 +797,14 @@ function nextEvidence(
   named: Record<string, EvidenceInput> | undefined,
   items: Readonly<Record<string, string>> = {},
 ): Record<string, FieldEvidence> {
+  const itemsAfter = entriesByPath(after, items);
   for (const key of Object.keys(named ?? {})) {
     if (key.startsWith('/')) {
-      const [, list = '', item = ''] = key.split('/');
-      const keyField = items[list];
-      if (!keyField || !keyedItems(after[list], keyField).has(item)) {
+      if (!itemsAfter.has(key)) {
+        const keyed = Object.entries(items).map(([list, spec]) => `${list} by ${spec}`);
         throw new RecordError(
           'invalid_input',
-          `Evidence names "${key}", which is not an item of a list this kind keys by ${keyField ?? 'id'}`,
+          `Evidence names "${key}", which is not an item of a list this kind keys (${keyed.join(', ') || 'none'})`,
         );
       }
     } else if (!(key in after)) {
@@ -836,12 +837,10 @@ function nextEvidence(
     else if (changed) evidence[field] = fallback();
     else if (current[field]) evidence[field] = current[field];
 
-    const keyField = items[field];
-    if (!keyField) continue;
-    const was = keyedItems(before?.[field], keyField);
-    for (const [key, item] of keyedItems(value, keyField)) {
-      const path = itemPath(field, key);
-      const itemChanged = !before || !was.has(key) || !sameValue(was.get(key), item);
+    if (!items[field]) continue;
+    const was = new Map(keyedEntries(before?.[field], field, items).map((e) => [e.path, e.own]));
+    for (const { path, own: item } of keyedEntries(value, field, items)) {
+      const itemChanged = !before || !was.has(path) || !sameValue(was.get(path), item);
       const own = named?.[path] ?? (itemChanged ? given : undefined);
       if (own) evidence[path] = stamp(own);
       else if (itemChanged) evidence[path] = fallback();
@@ -871,9 +870,8 @@ async function checkCalculatedEvidence(
         `${key} is marked calculated without a calculation handle; name the handle the calculator returned`,
       );
     }
-    const [, list = '', item = ''] = key.split('/');
     const value = key.startsWith('/')
-      ? keyedItems(attributes[list], items[list] ?? 'id').get(item)
+      ? entriesByPath(attributes, items).get(key)?.value
       : attributes[key];
     await checkCalculated(db, ctx, key, value, given.calculation, given.output);
   }
@@ -931,13 +929,12 @@ async function checkCopiedEvidence(
     }
     if (!from.path) continue;
     const found = valueAt(version.snapshot.attributes, from.path, kinds.get(source.kind).items);
-    const [, list = '', item = ''] = key.split('/');
-    const keyField = key.startsWith('/') ? (items[list] ?? 'id') : undefined;
-    const value = keyField ? keyedItems(attributes[list], keyField).get(item) : attributes[key];
+    const spec = key.startsWith('/') ? itemSpec(key, items) : undefined;
+    const value = spec ? entriesByPath(attributes, items).get(key)?.value : attributes[key];
     // A copied list item keeps its own key here, so the key itself isn't compared.
     const withoutKey = (v: unknown) =>
-      keyField && v && typeof v === 'object' && !Array.isArray(v)
-        ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== keyField))
+      spec && v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v).filter(([k]) => !keyFields(spec).includes(k)))
         : v;
     if (found === undefined || !sameValue(withoutKey(value), withoutKey(found))) {
       throw new RecordError(
@@ -958,12 +955,14 @@ function valueAt(
     .split('/')
     .slice(1)
     .map((p) => p.replaceAll('~1', '/').replaceAll('~0', '~'));
+  const keyed = keyedSegments(parts, items);
   let at: unknown = attributes;
   for (const [depth, part] of parts.entries()) {
     if (Array.isArray(at)) {
-      const keyField = depth === 1 ? items[parts[0] ?? ''] : undefined;
-      at = keyField
-        ? keyedItems(at, keyField).get(part)
+      const list = keyed.get(depth);
+      const spec = list ? items[list] : undefined;
+      at = spec
+        ? keyedItems(at, spec).get(part)
         : /^\d+$/.test(part)
           ? at[Number(part)]
           : keyedItems(at, 'id').get(part);
@@ -974,6 +973,13 @@ function valueAt(
     }
   }
   return at;
+}
+
+/** The key spec of the keyed list an evidence path's last item belongs to. */
+function itemSpec(path: string, items: Readonly<Record<string, string>>): string | undefined {
+  const parts = path.split('/').slice(1);
+  const list = keyedSegments(parts, items).get(parts.length - 1);
+  return list ? items[list] : undefined;
 }
 
 function parseAttributes(kind: KindDefinition, attributes: unknown): Record<string, unknown> {

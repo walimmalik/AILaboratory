@@ -1,4 +1,4 @@
-import { diffValues, type ValueChange } from '@ailab/domain';
+import { diffValues, evidenceKeyOf, keyOf, type ValueChange } from '@ailab/domain';
 import type { FieldEvidence, SopVariable } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -37,11 +37,8 @@ export function itemChanges(
   ];
 }
 
-/** The evidence key a diff path's value is kept under: an item of a keyed list, or its field. */
-function evidenceKey(path: string, items: Readonly<Record<string, string>>): string {
-  const [list = '', key] = path.split('/').slice(1);
-  return items[list] && key !== undefined ? `/${list}/${key}` : list;
-}
+/** The evidence key a diff path's value is kept under: its deepest keyed item, or its field. */
+const evidenceKey = evidenceKeyOf;
 
 /** Whether this value is an agent's guess, or something an agent says its person told it. */
 function agentSaid(
@@ -113,10 +110,8 @@ export function ItemDiff({
   }
   const folded = [...touched].flatMap(([list, keys]) => {
     const now = after?.attributes?.[list];
-    const keyField = items[list] ?? 'id';
-    const rest = Array.isArray(now)
-      ? now.filter((i) => !keys.has(String((i as Record<string, unknown>)?.[keyField]))).length
-      : 0;
+    const spec = items[list] ?? 'id';
+    const rest = Array.isArray(now) ? now.filter((i) => !keys.has(keyOf(i, spec) ?? '')).length : 0;
     return rest > 0 ? [`${rest} other ${rest === 1 ? singular(list) : list} unchanged`] : [];
   });
 
