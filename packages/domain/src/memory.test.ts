@@ -14,6 +14,7 @@ import {
   memoryConflicts,
   memoryEvidence,
   passesBar,
+  showsPattern,
 } from './memory.ts';
 
 describe('lab memory dates', () => {
@@ -237,5 +238,12 @@ describe('memory candidates', () => {
     };
     const got = memoriesFor([weak, strong], { records: [star], facts: {} });
     expect(got.map((m) => m.memory.id)).toEqual([strong.id, weak.id]);
+  });
+
+  it('counts a report as showing a pattern from 2 items and 5% of them', () => {
+    expect(showsPattern(1, 10)).toBe(false);
+    expect(showsPattern(2, 20)).toBe(true);
+    expect(showsPattern(2, 41)).toBe(false);
+    expect(showsPattern(0, 0)).toBe(false);
   });
 });
