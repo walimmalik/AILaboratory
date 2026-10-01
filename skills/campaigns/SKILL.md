@@ -26,7 +26,7 @@ A **campaign** is a lab project with a goal and aims. An **experiment** is one q
 
 ## Recording a run
 
-- `runs.start` `{experiment, label?, date?, operator?}` starts a run of a planned experiment. The run lists every step with its planned values. From an agent it is a proposal.
+- `runs.start` `{experiment, expectedVersion, label?, date?, operator?}` starts a run of a planned experiment at the version you looked at; if the experiment changed since, the start (or its approval) is refused with `version_conflict`. The run lists every step with its planned values. From an agent it is a proposal.
 - `runs.record_step` `{id, expectedVersion, part, step}` ticks a step as done as planned. Only when something differed, add `changed: [{name, value}]` and `why` (and `impact` if known); `skipped: true` with `why` records a step not done. `runs.done_as_planned` ticks every remaining step.
 - `runs.record_deviation` `{what, why, impact?}` records anything else that went differently. `runs.attach_data` `{file, part?, step?, container?, note?}` links an uploaded file (`files.upload`) to the run.
 - `runs.finish` `{status: done | failed | aborted, note?}`. Done needs every step ticked or skipped.
