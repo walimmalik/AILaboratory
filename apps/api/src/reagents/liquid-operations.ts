@@ -15,6 +15,7 @@ import {
   ProductAttributes,
   VerificationAttributes,
 } from '@ailab/schema';
+import { activeMemories, lookup } from '../memory/match.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
@@ -90,8 +91,27 @@ export const liquidOperations = [
         active: r.status === 'active',
         verified: verified.has(r.id),
       }));
+      // Lab memory may prefer or avoid a class for this work (plan 005b).
+      const { effects } = lookup(await activeMemories(deps, ctx), ctx, {
+        records: [
+          input.instrumentKind,
+          ...(liquidType ? [liquidType] : []),
+          ...(input.device ? [input.device] : []),
+          ...classes.map((c) => c.id),
+        ],
+        facts: {
+          instrumentKind: input.instrumentKind,
+          ...(input.device ? { device: input.device } : {}),
+          ...(input.tip ? { tip: input.tip } : {}),
+          ...(input.sourceLabware ? { labware: [input.sourceLabware] } : {}),
+          ...(input.mode ? { mode: input.mode } : {}),
+          volume: input.volume,
+          ...(liquidType ? { liquidType } : {}),
+        },
+      });
       return resolveClass(
         {
+          memory: effects,
           instrumentKind: input.instrumentKind,
           device: input.device,
           tip: input.tip,

@@ -8,6 +8,7 @@ import { instrumentKinds } from '../instruments/kinds.ts';
 import { loadSeedInstruments, readSeedInstruments } from '../instruments/seed.ts';
 import { labwareKinds } from '../labware/kinds.ts';
 import { loadSeedLabware, readDefinitions } from '../labware/seed.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -40,7 +41,8 @@ beforeEach(async () => {
     labId: other.labId,
   };
   const kinds = new KindRegistry();
-  for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds]) kinds.register(kind);
+  for (const kind of [...labwareKinds, ...instrumentKinds, ...reagentKinds, ...memoryKinds])
+    kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus());
 });
 afterEach(() => close());
@@ -146,6 +148,38 @@ describe('liquids.resolve_class', () => {
     expect(await run<ClassChoice>(agent, 'liquids.resolve_class', request)).toMatchObject({
       liquidClass: slow.id,
       how: 'product_override',
+    });
+  });
+
+  it('takes the class lab memory prefers for the work, only when its conditions hold', async () => {
+    const { flex, p1000, aqueous, cls } = await lab();
+    const water = await cls('Water', { labDefault: true });
+    const slow = await cls('Water, slow', {});
+    await confirm(water);
+    await confirm(slow);
+    const memory = await run<RecordEnvelope>(person, 'memory.remember', {
+      statement: 'Below 20 uL of water on the Flex, the slow class is more accurate',
+      kind: 'lesson',
+      strength: 'default',
+      about: [flex.id],
+      conditions: { instrumentKind: flex.id, volume: { max: uL('20') }, liquidType: aqueous.id },
+      effect: { effect: 'prefer', record: slow.id },
+      source: { from: 'stated' },
+    });
+    const request = (volume: string) => ({
+      liquid: { liquidType: aqueous.id },
+      instrumentKind: flex.id,
+      device: p1000.id,
+      volume: uL(volume),
+    });
+    expect(await run<ClassChoice>(agent, 'liquids.resolve_class', request('10'))).toMatchObject({
+      liquidClass: slow.id,
+      how: 'lab_memory',
+      memory: [{ id: memory.id, name: memory.name }],
+    });
+    expect(await run<ClassChoice>(agent, 'liquids.resolve_class', request('100'))).toMatchObject({
+      liquidClass: water.id,
+      how: 'lab_default',
     });
   });
 

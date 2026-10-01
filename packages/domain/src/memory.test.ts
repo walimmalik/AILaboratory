@@ -1,5 +1,16 @@
+import type { MemoryAttributes } from '@ailab/schema';
 import { describe, expect, it } from 'vitest';
-import { addMonths, checkAgainFor, isDue } from './memory.ts';
+import {
+  addMonths,
+  appliedEffects,
+  checkAgainFor,
+  conditionsOverlap,
+  isDue,
+  type MemoryCandidate,
+  matchConflicts,
+  memoriesFor,
+  memoryConflicts,
+} from './memory.ts';
 
 describe('lab memory dates', () => {
   it('adds months, keeping to the end of shorter months', () => {
@@ -21,5 +32,138 @@ describe('lab memory dates', () => {
     expect(isDue('2026-10-01', '2026-09-30')).toBe(false);
     expect(isDue('2026-10-01', '2026-10-01')).toBe(true);
     expect(isDue(undefined, '2030-01-01')).toBe(false);
+  });
+});
+
+const id = (prefix: string, n: number) => `${prefix}_01J9Z3K8Q4ABCDEFGHJKMNPQR${n}`;
+const uL = (value: string) => ({ value, unit: 'uL' as const });
+const star = id('ink', 1);
+const flex = id('ink', 2);
+const water = id('lqt', 1);
+const priya = 'usr_01J9Z3K8Q4ABCDEFGHJKMNPQR1';
+let n = 0;
+const mem = (a: Partial<MemoryAttributes>, updatedAt = '2026-10-01T00:00:00Z'): MemoryCandidate => {
+  n++;
+  return {
+    id: id('mem', n % 10),
+    name: `MEM-000${n}`,
+    updatedAt,
+    attributes: {
+      statement: `Memory ${n}`,
+      kind: 'quirk',
+      strength: 'default',
+      appliesTo: { to: 'lab' },
+      source: { from: 'stated' },
+      ...a,
+    },
+  };
+};
+
+describe('which memories apply', () => {
+  const drip = mem({
+    about: [star],
+    conditions: { instrumentKind: star, volume: { max: uL('5') }, liquidType: water },
+    effect: { effect: 'avoid', record: star },
+  });
+  const work = (volume: string) => ({
+    records: [star, flex, water],
+    facts: { instrumentKind: star, volume: uL(volume), liquidType: water },
+  });
+
+  it('applies a memory whose conditions all hold, and drops it when one does not', () => {
+    expect(memoriesFor([drip], work('3'))).toMatchObject([
+      { applies: true, conditions: 3, links: 1 },
+    ]);
+    expect(
+      memoriesFor([drip], {
+        ...work('3'),
+        facts: { ...work('3').facts, volume: { value: '3000', unit: 'nL' } },
+      }),
+    ).toHaveLength(1);
+    expect(memoriesFor([drip], work('20'))).toEqual([]);
+  });
+
+  it('shows a memory it cannot evaluate without applying it', () => {
+    const [m] = memoriesFor([drip], { records: [star], facts: { instrumentKind: star } });
+    expect(m).toMatchObject({ applies: false, unknown: ['volume', 'liquidType'] });
+  });
+
+  it('leaves out memories about other records, lab-wide notes without a matching condition, and other people', () => {
+    const other = mem({ about: [flex] });
+    const labNote = mem({ strength: 'note' });
+    const labRule = mem({ strength: 'rule' });
+    const hers = mem({ about: [star], appliesTo: { to: 'person', user: priya } });
+    const got = memoriesFor([other, labNote, labRule, hers], { records: [star], facts: {} });
+    expect(got.map((m) => m.memory)).toEqual([labRule]);
+    expect(
+      memoriesFor([hers], { records: [star], facts: {}, person: priya }).map((m) => m.memory),
+    ).toEqual([hers]);
+  });
+
+  it('orders by strength, then personal, conditions, links and newest', () => {
+    const note = mem({ about: [star], strength: 'note' });
+    const rule = mem({ about: [star], strength: 'rule' });
+    const mine = mem({ about: [star], appliesTo: { to: 'person', user: priya } });
+    const narrow = mem({ about: [star], conditions: { instrumentKind: star } });
+    const old = mem({ about: [star] }, '2026-01-01T00:00:00Z');
+    const fresh = mem({ about: [star] }, '2026-09-01T00:00:00Z');
+    const got = memoriesFor([note, old, fresh, narrow, mine, rule], {
+      records: [star],
+      facts: { instrumentKind: star },
+      person: priya,
+    });
+    expect(got.map((m) => m.memory)).toEqual([rule, mine, narrow, fresh, old, note]);
+  });
+
+  it('applies the most specific effect per record and neither of two that clash', () => {
+    const prefer = mem({ about: [star], effect: { effect: 'prefer', record: flex } });
+    const wider = mem({
+      about: [star],
+      conditions: { instrumentKind: star },
+      effect: { effect: 'avoid', record: flex },
+    });
+    const request = { records: [star], facts: { instrumentKind: star } };
+    const effects = appliedEffects(memoriesFor([prefer, wider], request));
+    expect([...effects.avoid.keys()]).toEqual([flex]);
+    expect(effects.prefer.size).toBe(0);
+
+    const two = mem({ about: [star], effect: { effect: 'set', slot: 'replicates', value: 2 } });
+    const three = mem({ about: [star], effect: { effect: 'set', slot: 'replicates', value: 3 } });
+    const matches = memoriesFor([two, three], request);
+    expect(matchConflicts(matches)).toMatchObject([
+      { why: 'they set replicates to different values' },
+    ]);
+    expect(appliedEffects(matches).set.size).toBe(0);
+  });
+});
+
+describe('memories that cannot be confirmed together', () => {
+  it('overlaps conditions key by key', () => {
+    expect(conditionsOverlap({ volume: { max: uL('5') } }, { volume: { min: uL('2') } })).toBe(
+      true,
+    );
+    expect(conditionsOverlap({ volume: { max: uL('5') } }, { volume: { min: uL('10') } })).toBe(
+      false,
+    );
+    expect(conditionsOverlap({ instrumentKind: star }, { liquidType: water })).toBe(true);
+    expect(conditionsOverlap({ samples: { max: 95 } }, { samples: { min: 96 } })).toBe(false);
+    expect(conditionsOverlap({ roles: ['standard'] }, { roles: ['blank'] })).toBe(false);
+  });
+
+  it('blocks clashing effects at equal specificity, not a more specific one', () => {
+    const active = mem({ about: [star], effect: { effect: 'prefer', record: flex } });
+    const draft = {
+      ...mem({ about: [star], effect: { effect: 'avoid', record: flex } }).attributes,
+    };
+    expect(memoryConflicts(draft, [active])).toMatchObject([
+      { memory: active, why: 'one prefers and the other avoids the same record' },
+    ]);
+    expect(memoryConflicts({ ...draft, conditions: { instrumentKind: star } }, [active])).toEqual(
+      [],
+    );
+    expect(memoryConflicts({ ...draft, strength: 'rule' }, [active])).toEqual([]);
+    expect(
+      memoryConflicts({ ...draft, effect: { effect: 'prefer', record: id('ink', 3) } }, [active]),
+    ).toMatchObject([{ why: 'they prefer different records for the same choice' }]);
   });
 });

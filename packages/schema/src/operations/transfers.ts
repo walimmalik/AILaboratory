@@ -215,7 +215,7 @@ export const transfersOptions = defineContract({
   verbs: { done: 'compared transfer instruments', intent: 'compare transfer instruments' },
   calculator: true,
   summary:
-    'Every instrument in the lab that could move a volume, best first: whether its transfer or dispense limits allow it, the volume it really moves (droplets or steps) and its error, its liquid class for the liquid and whether that class is verified, and how it uses tips (estimated). Instruments without volume limits are listed apart. Pick from these and say why',
+    'Every instrument in the lab that could move a volume, best first: whether its transfer or dispense limits allow it, the volume it really moves (droplets or steps) and its error, its liquid class for the liquid and whether that class is verified, and how it uses tips (estimated). Instruments without volume limits are listed apart. Lab memory that prefers an instrument puts it first among those that fit, and one that avoids it puts it last; each option names the memories. Pick from these and say why',
   effect: 'read',
   input: z.strictObject({
     volume: LiquidVolume,
@@ -226,6 +226,12 @@ export const transfersOptions = defineContract({
       .positive()
       .optional()
       .describe('The plate format moved into, to leave out devices that do not handle it'),
+    samples: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('How many samples the work has, for lab memories that depend on it'),
   }),
   output: z.object({
     options: z.array(
@@ -240,6 +246,17 @@ export const transfersOptions = defineContract({
         liquidClass: z
           .object({ label: z.string().optional(), verified: z.boolean(), why: z.string() })
           .optional(),
+        memory: z
+          .array(
+            z.object({
+              name: z.string(),
+              statement: z.string(),
+              effect: z.enum(['prefer', 'avoid']),
+              strength: z.enum(['rule', 'default']),
+            }),
+          )
+          .optional()
+          .describe('Lab memories that moved this option up or down (plan 005b)'),
       }),
     ),
     unknown: z.array(

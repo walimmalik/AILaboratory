@@ -11,6 +11,7 @@ import type {
 import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { labs, proposals, users } from '../db/schema.ts';
+import { activeMemories, bundle, lookup, nearby } from '../memory/match.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -31,6 +32,8 @@ import { callable, pageNamespaces, RUN_OPERATION, toolName, toolsFor } from './t
 export const MAX_STEPS = 16;
 /** Longest tool result sent back to the model, in characters. */
 const MAX_RESULT_CHARS = 30_000;
+/** Lab memory lines the assistant gets for a page (M7). */
+const MEMORY_LINES = 15;
 const MODEL_TIMEOUT_MS = 180_000;
 
 export type AssistantEvent =
@@ -117,7 +120,11 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const system = await systemPrompt(db, ctx, conversationId);
+    const system = `${await systemPrompt(db, ctx, conversationId)}${await memoryNote(
+      deps,
+      ctx,
+      (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
+    )}`;
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
       this.publish(conversationId, { type: 'status', conversation: toSummary(row) });
@@ -422,6 +429,23 @@ async function decidedProposals(
     return `- ${row.id}, ${row.operationId}${what}: ${outcome}`;
   });
   return `\n\nWhat people decided about the changes you proposed in this conversation. Don't propose a rejected change again unless the person asks; if the reason says what to change, do that.\n${lines.join('\n')}`;
+}
+
+/**
+ * The lab memory the assistant gets without asking (plan 005b, M7): memories about the record on
+ * the page and the records it links to, plus the lab-wide rules, one line each, capped.
+ */
+async function memoryNote(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  ask: MessageRow['body'] | undefined,
+): Promise<string> {
+  const page = ask?.role === 'user' ? ask.page?.record?.id : undefined;
+  const records = page ? [page, ...(await nearby(deps, ctx, [page]))] : [];
+  const { matches } = lookup(await activeMemories(deps, ctx), ctx, { records });
+  const { lines } = bundle(matches, MEMORY_LINES);
+  if (lines.length === 0) return '';
+  return `\n\nLab memory${page ? ' for this page' : ''}, confirmed by people. Follow a rule, or say why you didn't; use a default unless the person or a confirmed record says otherwise; a note only informs. Name the memory (e.g. MEM-0004) when it shaped what you did. memory.for gives the memories for a particular piece of work.\n${lines.map((l) => `- ${l}`).join('\n')}`;
 }
 
 async function systemPrompt(db: Db, ctx: RecordContext, conversationId: string): Promise<string> {

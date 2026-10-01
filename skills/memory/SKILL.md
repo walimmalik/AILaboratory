@@ -16,6 +16,12 @@ A **lab memory** (`memory`, `MEM-0001`) is what a good lab manager knows but no 
 
 ## Reading
 
+The in-app assistant gets the memories for the page it is on without asking: memories about the record on the page and the records it links to, plus every lab-wide rule, one line each, at most 15. Outside agents get the same with `memory.for {records, nearby: true}`.
+
+`memory.for {records?, facts?, nearby?, person?, limit?}` lists the memories that apply to one piece of work, most specific first: rules, then defaults, then notes; a person's own before the lab's; more matching conditions, then more matching records, then newer. Give the records the work is about or uses (the instrument kind, the SOP, the liquid type) and the facts you know: `capability`, `instrumentKind`, `instrument`, `device`, `tip`, `labware` (a list), `mode`, `volume`, `liquidType`, `temperature`, `sop`, `layout`, `samples`, `roles`, `weekday`. A memory whose conditions you didn't give comes back with `applies: false` and the keys in `unknown`; give them to know. `conflicts` names memories whose effects clash; code applies neither, so ask the person. `lines` is the list as one line each.
+
+The calculators already apply memory: `liquids.resolve_class` takes a class lab memory prefers (`how: "lab_memory"`) and passes over one it avoids, and `transfers.options` puts an instrument memory prefers first and one it avoids last among those that fit (give `samples` when you know it). Each names the memories in `memory`; say which memory shaped your choice.
+
 `memory.search {text?, about?, kind?, strength?, person?, status?}` finds memories, rules first. Check it before designing (an ELISA, a transfer plan) and before proposing a new memory, so the lab doesn't keep the same thing twice. `due: true` means it is past its check-again date: still used, but say so. When you fill a value from a memory, mark it with `memory` evidence: `{source: "memory", from: {id, version}}` of the confirmed memory.
 
 ## Writing
@@ -28,6 +34,10 @@ A **lab memory** (`memory`, `MEM-0001`) is what a good lab manager knows but no 
 - `memory.remember` is a person's own "remember that…", active at once. People only; when a person asks you to remember something, call `memory.propose` and they confirm it.
 - `memory.update {id, expectedVersion, …changes}` changes a memory: direct on drafts, proposed on an active one.
 - `memory.retire {id, expectedVersion, why}` retires a memory that no longer holds (proposed when you ask). `memory.replace {id, expectedVersion, with, why}` retires an active memory in favour of a new one and links them (proposed when you ask).
+
+`memory.used_in {id}` lists the records with a value copied from the memory (its `memory` evidence) and the fields it filled.
+
+A memory with an effect can't be confirmed beside a confirmed one whose effect clashes (prefer and avoid the same record, set one slot to different values, prefer two records of the same kind) for the same people and records, under conditions that overlap, at equal strength and number of conditions: readiness shows `no_clashing_memory`. Narrow the conditions, or `memory.replace` the old one.
 
 ## Rules and timing from memory
 
