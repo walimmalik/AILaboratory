@@ -5,9 +5,11 @@ import type {
   RecordId as RecordIdType,
 } from '@ailab/schema';
 import { RecordId } from '@ailab/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
+import { records } from '../db/schema.ts';
 import type { FileStore } from '../files/store.ts';
 import type { Converter } from '../library/convert.ts';
 import { saveCalculation } from '../records/calculations.ts';
@@ -155,11 +157,11 @@ export class OperationRegistry {
         const preview = await this.#dryRun(operation, ctx, input, deps);
         const reason = (input as { reason?: string }).reason;
         const proposal = await createProposal(db, ctx, { operationId: id, input, preview, reason });
+        // A preview's new records were rolled back, so a proposal names only records that exist.
         await recordActivity(db, this.deps.bus, ctx, {
           operationId: id,
           outcome: 'proposed',
-          recordIds: touched(operation, input, preview, this),
-          nameHints: nameHints(preview),
+          recordIds: await existing(db, ctx, touched(operation, input, preview, this)),
           proposalId: proposal.id,
           input,
           durationMs: Date.now() - started,
@@ -302,6 +304,17 @@ function touched(
     ? operation.touches(input, output, registry)
     : [(input as { id?: unknown })?.id, (output as { id?: unknown } | undefined)?.id];
   return [...new Set(ids.filter((id): id is string => RecordId.safeParse(id).success))];
+}
+
+/** The ones of these records that exist in the lab. */
+async function existing(db: Db, ctx: RecordContext, ids: RecordIdType[]): Promise<RecordIdType[]> {
+  if (!ids.length) return [];
+  const found = await db
+    .select({ id: records.id })
+    .from(records)
+    .where(and(inArray(records.id, ids), eq(records.labId, ctx.labId)));
+  const there = new Set(found.map((r) => r.id));
+  return ids.filter((id) => there.has(id));
 }
 
 /** A record envelope's readable name, so the ledger can name records that no longer (or don't yet) exist. */

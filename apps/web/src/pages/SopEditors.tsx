@@ -8,7 +8,7 @@ import {
   sopsSuggest,
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { type NamedValue, nameFor, readSetting } from '../lib/formulas.ts';
@@ -45,6 +45,33 @@ import { describeSop, TermAnchor, TermBox, TermCards } from './SopText.tsx';
  */
 
 type Item = Record<string, unknown>;
+
+/**
+ * The agent's estimates in the SOP being edited (rule 6, review 2026-10-01): by readiness path, the
+ * value as stored and the agent's note. A box still holding that value is marked in agent ink;
+ * once a person types over it, it is theirs.
+ */
+export interface Guesses {
+  get(path: string): { stored: unknown; note?: string | undefined } | undefined;
+}
+export const GuessContext = createContext<Guesses>({ get: () => undefined });
+
+/** The agent's note when this item still holds the agent's estimate, '' without one. */
+function useGuess(path: string | undefined, now: unknown): string | undefined {
+  const guess = useContext(GuessContext).get(path ?? '');
+  if (!path || !guess || JSON.stringify(guess.stored) !== JSON.stringify(now)) return undefined;
+  return guess.note ?? '';
+}
+
+/** "unverified: entered by an agent without a source", with the agent's note when it gave one. */
+function GuessNote({ note }: { note: string | undefined }) {
+  if (note === undefined) return null;
+  return (
+    <span className="agent-ink">
+      unverified · entered by an agent, no source{note ? ` (${note})` : ''}
+    </span>
+  );
+}
 
 /** The SOP as edited so far, and the names its text can use. */
 function useSop() {
@@ -265,6 +292,7 @@ function ValueRow({
   const suggest = useSuggest();
   // The assistant's reason while its suggestion stands; typing over it makes it the person's.
   const [suggested, setSuggested] = useState<string>();
+  const guess = useGuess(v.name && `/variables/${v.name}`, v);
   const fillIn = () =>
     v.name &&
     suggest.mutate(
@@ -320,7 +348,7 @@ function ValueRow({
           mode="formula"
           label={`${called}: value or formula`}
           placeholder="100 µL, a formula, or Material.field"
-          assumed={!!suggested}
+          assumed={!!suggested || guess !== undefined}
           check={(t) => {
             const r = readValue(t, terms, perRun);
             return r.ok ? {} : { problem: r.problem, fix: r.fix };
@@ -357,7 +385,10 @@ function ValueRow({
               {v.max === undefined ? '…' : formatValue(v.max)}
             </span>
           )}
-          {suggested && <span className="agent-ink">assistant: {suggested}</span>}
+          {suggested && (
+            <span className="agent-ink">suggested by the assistant, unverified: {suggested}</span>
+          )}
+          {!suggested && <GuessNote note={guess} />}
           {canFill && (!text.trim() || !read.ok) && fillButton('Fill in with the assistant')}
           <button
             type="button"
@@ -397,7 +428,7 @@ function ValueRow({
                     })
                   }
                 />{' '}
-                Ask each run
+                Set per run
               </label>
             )}
             {perRun && (
@@ -521,6 +552,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
   const set = (patch: Item) => onChange(without({ ...value, ...patch }));
   const suggest = useSuggest();
   const [suggested, setSuggested] = useState<string>();
+  const guess = useGuess(step.id && `/steps/${step.id}`, value);
   // Counts suggestions taken, so the setting rows start again from what came back.
   const [round, setRound] = useState(0);
   const parameters = step.parameters ?? [];
@@ -591,7 +623,7 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
               label={`Step ${index + 1}: what to do`}
               placeholder="In lab words, close to the source: Add Well volume of Wash buffer…"
               check={(t) => (t.trim() ? {} : { problem: 'Say what to do' })}
-              assumed={!!suggested}
+              assumed={!!suggested || guess !== undefined}
               onChange={(t) => {
                 setDraft(t);
                 setSuggested(undefined);
@@ -599,6 +631,11 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
               }}
               onBlur={() => setDraft(undefined)}
             />
+            {!suggested && guess !== undefined && (
+              <p className="step-read">
+                <GuessNote note={guess} />
+              </p>
+            )}
             <p className="step-read">
               {(step.uses?.length ?? 0) > 0 && (
                 <span>
@@ -666,7 +703,11 @@ function StepEditor({ schema, value, onChange, index }: ItemEditorProps) {
                 </button>
               )}
             </p>
-            {suggested && <p className="agent-ink step-note">assistant: {suggested}</p>}
+            {suggested && (
+              <p className="agent-ink step-note">
+                suggested by the assistant, unverified: {suggested}
+              </p>
+            )}
             {suggest.error && <p className="error-text">{suggest.error.message}</p>}
           </div>
         </FormRow>
@@ -880,7 +921,9 @@ function StepsEditor({ schema, value, onChange }: ListEditorProps) {
           What a step uses and its settings are read from its words: a material named, a value (Add
           Well volume) or an amount (2 h, 37 °C). Anything else goes under More.
         </p>
-        {drafted && <p className="agent-ink step-note">assistant: {drafted}</p>}
+        {drafted && (
+          <p className="agent-ink step-note">drafted by the assistant, unverified: {drafted}</p>
+        )}
         <div className="step-line">
           <button
             type="button"
@@ -1028,8 +1071,10 @@ function MaterialRow({
   const [open, setOpen] = useState(false);
   const set = (patch: Item) => onChange(without({ ...m, ...patch }) as Partial<SopMaterial>);
   const called = m.label || 'This material';
+  const guess = useGuess(m.role && `/materials/${m.role}`, m);
   return (
-    <div className="material-row">
+    <div className={`material-row${guess === undefined ? '' : ' assumed'}`}>
+      <GuessNote note={guess} />
       <div className="material-line">
         <input
           className="field material-name"
@@ -1068,11 +1113,11 @@ function MaterialRow({
           value={m.requirements ?? ''}
           onChange={(e) => set({ requirements: e.target.value || undefined })}
         />
-        <span className="muted">usually</span>
+        <span className="muted">default</span>
         <MaterialPicker
           type={m.type ?? 'reagent'}
           value={m.default}
-          label={`${called}: usually`}
+          label={`${called}: default record`}
           onChange={(id) => set({ default: id })}
         />
       </div>

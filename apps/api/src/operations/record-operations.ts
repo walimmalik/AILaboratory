@@ -1,5 +1,6 @@
 import { diffValues } from '@ailab/domain';
 import {
+  type RecordEnvelope,
   recordsActivate,
   recordsArchive,
   recordsConfirm,
@@ -146,8 +147,9 @@ export const recordOperations = [
     run: (ctx, { id, ...input }, deps) => service(deps).confirmAll(ctx, id, transition(input)),
   }),
   implement(recordsConfirmMany, {
-    // Batch confirm (plan 004e R3, ADR 0050): only what holds no guess, no failing check and no
-    // changed confirmed value; all or nothing, and each record gets its own confirmation.
+    // Batch confirm (plan 004e R3, ADR 0050): only what holds no guess, no failing blocker and no
+    // changed confirmed value (a person sees the warnings counted on Review); all or nothing, and
+    // each record gets its own confirmation.
     actors: 'people',
     agentPolicy: 'direct',
     touches: (input) => input.records.map((r) => r.id),
@@ -162,7 +164,7 @@ export const recordOperations = [
           record.version !== target.expectedVersion &&
             `changed since you looked (v${record.version})`,
           state.assumed.length > 0 && `${state.assumed.length} assumed`,
-          state.checks.some((c) => !c.passed) && 'a failing check',
+          state.checks.some((c) => !c.passed && c.severity === 'blocker') && 'a failing check',
           state.sections.some((s) => s.state === 'needs_review' && s.review) &&
             'values changed since they were confirmed',
         ].filter(Boolean);
@@ -209,7 +211,18 @@ export const recordOperations = [
       service(deps).restore(ctx, id, { version, ...transition(input) }),
   }),
   implement(recordsDeleteDraft, {
-    agentPolicy: 'direct',
+    // Deleting takes the history with it, so an agent does it directly only to a draft that agents
+    // working for the same person made alone, with nothing confirmed. A person's work is a proposal.
+    agentPolicy: async (ctx, input, deps) => {
+      const records = service(deps);
+      const record = await records.get(ctx, input.id);
+      const principal = ctx.actor.type === 'agent' ? ctx.actor.onBehalfOf : undefined;
+      const ours = (actor: RecordEnvelope['createdBy']) =>
+        actor.type === 'agent' && actor.onBehalfOf === principal;
+      if (Object.keys(record.reviews).length > 0) return 'propose';
+      const versions = await records.history(ctx, record.id);
+      return versions.every((v) => ours(v.actor)) ? 'direct' : 'propose';
+    },
     run: async (ctx, input, deps) => {
       await service(deps).deleteDraft(ctx, input.id, { expectedVersion: input.expectedVersion });
       return { deleted: true as const, id: input.id };

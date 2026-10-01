@@ -7,15 +7,16 @@ import {
   type Readiness,
   type ReadinessSection,
   type RecordEnvelope,
-  recordsActivate,
+  recordsConfirm,
   recordsConfirmSection,
 } from '@ailab/schema';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
-import { fieldLabel, formatWhen, isAgent, pathLabel } from '../lib/format.ts';
+import { fieldLabel, formatWhen, isAgent, partLabel, problemWords } from '../lib/format.ts';
+import { kindsQuery } from '../queries.ts';
 import { LinkedName } from './Value.tsx';
 
 export { fieldLabel } from '../lib/format.ts';
@@ -107,6 +108,12 @@ function useInvalidate(id: string) {
     ]);
 }
 
+/**
+ * What stands between the record and the lab, and one Confirm (ADR 0046, review 2026-10-01): it
+ * confirms every part that nothing blocks, as it stands, and a draft left with nothing to do becomes
+ * active. Which parts are confirmed sits under technical details; each part can still be confirmed
+ * on its own from its block below.
+ */
 export function ReadinessBlock({
   record,
   readiness,
@@ -120,23 +127,45 @@ export function ReadinessBlock({
   onFix: (section: string) => void;
 }) {
   const invalidate = useInvalidate(record.id);
+  const draft = record.status === 'draft';
+  const failing = readiness.checks.filter((c) => !c.passed && c.severity === 'blocker');
+  const held = new Set(failing.flatMap((c) => (c.section ? [c.section] : [])));
+  const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
+  const confirmable = toReview.filter((s) => !held.has(s.id));
+  const waiting = toReview.filter((s) => held.has(s.id));
+  const activates = draft && failing.length === 0;
+  const canConfirm = confirmable.length > 0 || (activates && toReview.length === 0);
   const confirm = useMutation({
     mutationFn: () =>
-      api.run(recordsActivate, { id: record.id, expectedVersion: readiness.version }),
+      api.run(recordsConfirm, { id: record.id, expectedVersion: readiness.version }),
     onSuccess: invalidate,
   });
-  const draft = record.status === 'draft';
-  const toReview = readiness.sections.filter((s) => s.state === 'needs_review').length;
-  // Kinds with sections activate with their last section's confirm (plan 004d); only kinds without
-  // sections, or a draft left ready, need the record-level Confirm.
-  const sectioned = readiness.sections.length > 0;
   const state = !draft
     ? readiness.ready
       ? { text: '✓ confirmed', tone: 'ok-ink' }
       : { text: 'changed since it was confirmed', tone: 'warn-ink' }
     : readiness.ready
       ? { text: 'ready to confirm', tone: 'ok-ink' }
-      : { text: `${readiness.missing.length} to do`, tone: 'warn-ink' };
+      : failing.length > 0
+        ? { text: `${failing.length} to fix`, tone: 'warn-ink' }
+        : { text: 'ready to confirm', tone: 'ok-ink' };
+  const words = (parts: ReadinessSection[]) => parts.map((s) => s.title.toLowerCase()).join(', ');
+  const all = readiness.sections.length;
+  const what = !canConfirm
+    ? failing.length > 0
+      ? 'Fix what blocks it first.'
+      : ''
+    : `${
+        confirmable.length === 0
+          ? 'Everything is confirmed.'
+          : confirmable.length === all
+            ? `Confirms ${all === 1 ? 'it' : `all ${all} parts`} as they stand.`
+            : `Confirms ${words(confirmable)} as they stand.`
+      }${activates ? ` ${record.name} becomes active for the lab.` : ''}${
+        waiting.length
+          ? ` ${capital(words(waiting))} ${waiting.length === 1 ? 'waits' : 'wait'} for the fixes above.`
+          : ''
+      }`;
 
   return (
     <section className="block" aria-label="Readiness">
@@ -145,25 +174,16 @@ export function ReadinessBlock({
         <span className={`state ${state.tone}`}>{state.text}</span>
       </header>
       <div className="body">
-        {readiness.missing.some((m) => !readiness.checks.some((c) => c.message === m)) && (
-          <ul className="todo">
-            {readiness.missing
-              .filter((m) => !readiness.checks.some((c) => c.message === m))
-              .map((m) => (
-                <li key={m}>{m}</li>
-              ))}
-          </ul>
-        )}
-        {readiness.assumed.length > 0 && (
-          <p className="agent-ink">
-            {readiness.assumed.length === 1
-              ? 'One value is'
-              : `${readiness.assumed.length} values are`}{' '}
-            an agent's estimate: {readiness.assumed.map(pathLabel).join(', ')}. Check{' '}
-            {readiness.assumed.length === 1 ? 'it' : 'them'} before you confirm.
-          </p>
-        )}
-        {readiness.checks.length > 0 && (
+        <Estimates
+          record={record}
+          readiness={readiness}
+          onOpen={(path) => {
+            const field = path.startsWith('/') ? (path.split('/')[1] ?? '') : path;
+            const section = readiness.sections.find((s) => s.fields.some((f) => f.field === field));
+            if (section) onFix(section.id);
+          }}
+        />
+        {readiness.checks.some((c) => !c.passed) && (
           <Checks
             checks={readiness.checks}
             titles={titles}
@@ -171,39 +191,90 @@ export function ReadinessBlock({
             target={{ id: record.id, version: readiness.version }}
           />
         )}
-        {draft &&
-          (sectioned && !readiness.ready ? (
-            <p className="muted">
-              {toReview > 0
-                ? `Confirm ${toReview === 1 ? 'the last section' : `the ${toReview} sections`} below. Confirming the last one makes ${record.name} active.`
-                : 'Fix what blocks it first.'}
-            </p>
-          ) : (
-            <div className="actions">
+        {record.status !== 'archived' && (canConfirm || what) && (
+          <div className="actions">
+            {canConfirm && (
               <button
                 type="button"
                 className="btn primary"
-                disabled={!readiness.ready || confirm.isPending}
+                disabled={confirm.isPending}
                 onClick={() => confirm.mutate()}
               >
-                Confirm {record.name}
+                {draft ? `Confirm ${record.name}` : 'Confirm the changes'}
               </button>
-              <span className="muted">
-                {readiness.ready
-                  ? 'Everything is confirmed. Confirm it to make it active for the lab.'
-                  : 'Fix what blocks it first.'}
-              </span>
-            </div>
-          ))}
+            )}
+            <span className="muted">
+              {toReview.length > 1 && `${toReview.length} parts to confirm. `}
+              {what}
+            </span>
+          </div>
+        )}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
         <details className="tech">
           <summary>technical details</summary>
+          {readiness.sections.length > 0 && (
+            <ul className="plain">
+              {readiness.sections.map((s) => (
+                <li key={s.id}>
+                  {s.title}: {s.state === 'confirmed' ? 'confirmed' : 'needs review'}
+                  {s.review && ` (last confirmed at version ${s.review.version})`}
+                </li>
+              ))}
+            </ul>
+          )}
           <pre className="json">{JSON.stringify(record, null, 2)}</pre>
         </details>
       </div>
     </section>
   );
 }
+
+const SHOWN_ESTIMATES = 6;
+
+/**
+ * The agent's estimates a confirm would accept (rule 6), each by the name the record gives it and
+ * opening where it is edited; past a handful, the rest fold to a count (UI rule: no overload).
+ */
+export function Estimates({
+  record,
+  readiness,
+  onOpen,
+}: {
+  record: RecordEnvelope;
+  readiness: Readiness;
+  onOpen: (path: string) => void;
+}) {
+  const items = useQuery(kindsQuery).data?.find((k) => k.kind === record.kind)?.items;
+  const [all, setAll] = useState(false);
+  const paths = readiness.assumed;
+  if (paths.length === 0) return null;
+  const shown = all ? paths : paths.slice(0, SHOWN_ESTIMATES);
+  return (
+    <p className="agent-ink estimates">
+      {paths.length === 1 ? 'One value was' : `${paths.length} values were`} entered by an agent
+      without a source:{' '}
+      {shown.map((path, i) => (
+        <span key={path}>
+          {i > 0 && ', '}
+          <button type="button" className="link-btn agent-ink" onClick={() => onOpen(path)}>
+            {partLabel(path, record.attributes, items)}
+          </button>
+        </span>
+      ))}
+      {paths.length > shown.length && (
+        <>
+          {' '}
+          <button type="button" className="link-btn" onClick={() => setAll(true)}>
+            and {paths.length - shown.length} more
+          </button>
+        </>
+      )}
+      . Verify {paths.length === 1 ? 'it' : 'them'} before you confirm.
+    </p>
+  );
+}
+
+const capital = (text: string) => `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
 
 /**
  * A record's readiness and sections as one block: a line each, saying who confirmed it and how many
@@ -370,9 +441,22 @@ export function Checks({
       </table>
     </div>
   );
+  const required = failing.filter((c) => c.severity === 'blocker');
+  const recommended = failing.filter((c) => c.severity !== 'blocker');
   return (
     <>
-      {failing.length > 0 && table(failing)}
+      {required.length > 0 && (
+        <>
+          <p className="check-group crit-ink">Required before confirming</p>
+          {table(required)}
+        </>
+      )}
+      {recommended.length > 0 && (
+        <>
+          <p className="check-group warn-ink">Recommended</p>
+          {table(recommended)}
+        </>
+      )}
       {passing.length > 0 && (
         <details className="passing">
           <summary className="ok-ink">
@@ -417,8 +501,7 @@ function CheckRow({
         {mark}
       </td>
       <td>
-        {check.label}
-        {!check.passed && check.message && <span className={tone}> · {check.message}</span>}
+        {check.passed ? check.label : problemWords(check)}
         {!check.passed && (check.fix || section || check.record) && (
           <div className="muted">
             {check.fix}
@@ -539,28 +622,22 @@ function SectionBlock({
         )}
         {!editing && record.status !== 'archived' && (
           <div className="actions">
-            {!confirmed && (
-              <button
-                type="button"
-                className={activates ? 'btn primary' : 'btn'}
-                disabled={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                Confirm {section.title.toLowerCase()}
-                {activates && ' and activate'}
-              </button>
-            )}
             <button type="button" className="btn" onClick={() => onEdit(true)}>
               Edit {section.title.toLowerCase()}
             </button>
             {!confirmed && (
-              <span className="muted">
-                {changed
-                  ? 'Highlighted values changed since this was last confirmed.'
-                  : 'Check these values, correct any that are wrong, then confirm.'}
-                {activates &&
-                  ` This is the last section, so ${record.name} becomes active for the lab.`}
-              </span>
+              <button
+                type="button"
+                className="link-btn"
+                disabled={confirm.isPending}
+                onClick={() => confirm.mutate()}
+              >
+                confirm only {section.title.toLowerCase()}
+                {activates && `, which makes ${record.name} active`}
+              </button>
+            )}
+            {!confirmed && changed && (
+              <span className="muted">Highlighted values changed since they were confirmed.</span>
             )}
           </div>
         )}
@@ -609,7 +686,9 @@ function SectionValues({
                 </td>
                 <td className="source">
                   {f.assumed ? (
-                    <span className="agent-ink">assumed by {who(f.evidence?.by, me)}</span>
+                    <span className="agent-ink">
+                      unverified · entered by {who(f.evidence?.by, me)}, no source
+                    </span>
                   ) : (
                     <Evidence evidence={f.evidence} me={me} />
                   )}
@@ -656,8 +735,8 @@ function ItemChanges({ field }: { field: ReadinessSection['fields'][number] }) {
 
 const sourceWords: Record<FieldEvidence['source'], string> = {
   // Only shown once a person has confirmed the value; before that it reads "assumed by …".
-  assumed: 'estimated',
-  stated: 'told',
+  assumed: 'entered without a source',
+  stated: 'stated',
   person: 'entered',
   datasheet: 'from a datasheet',
   imported: 'imported',
@@ -676,7 +755,7 @@ function Evidence({ evidence, me }: { evidence: FieldEvidence | undefined; me: M
     evidence.source === 'person'
       ? `entered by ${who(by, me)}`
       : evidence.source === 'stated' && by.type === 'agent'
-        ? `${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} told ${by.agentName}`
+        ? `stated by ${me && by.onBehalfOf === me.user.id ? 'you' : 'a lab member'} to ${by.agentName}`
         : evidence.from
           ? sourceWords[evidence.source]
           : `${sourceWords[evidence.source]}${isAgent(by) ? ` by ${who(by, me)}` : ''}`;

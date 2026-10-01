@@ -28,13 +28,34 @@ export async function seenVersion(
 
 /** Remembers that the person has seen the record at this version. */
 export async function markSeen(db: Db, ctx: RecordContext, recordId: string, version: number) {
+  return markSeenBy(db, seenBy(ctx.actor), ctx.labId, recordId, version);
+}
+
+/** Remembers that this person has seen the record at this version. */
+export async function markSeenBy(
+  db: Db,
+  userId: string,
+  labId: string,
+  recordId: string,
+  version: number,
+) {
   const at = new Date();
   await db
     .insert(recordSeen)
-    .values({ userId: seenBy(ctx.actor), recordId, labId: ctx.labId, version, at })
+    .values({ userId, recordId, labId, version, at })
     .onConflictDoUpdate({
       target: [recordSeen.userId, recordSeen.recordId],
       set: { version, at },
     });
   return at;
+}
+
+/**
+ * The person whose own write this is (ADR 0053, plan 004e): a person writing a version, or a person
+ * approving the proposal it applies. They have seen what they wrote, so it never shows them as
+ * "changed since you last looked". An agent working on its own moves nobody's marker.
+ */
+export function writtenBySeer(ctx: RecordContext): string | undefined {
+  const by = ctx.approvedBy ?? ctx.actor;
+  return by.type === 'user' ? by.userId : undefined;
 }

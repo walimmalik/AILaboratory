@@ -7,6 +7,8 @@ import {
   diffRecords,
   foldRepeats,
   formatValue,
+  partLabel,
+  problemWords,
   waitingForYou,
 } from './format.ts';
 
@@ -219,5 +221,42 @@ describe('foldRepeats', () => {
       ['e', 0],
       ['f', 0],
     ]);
+  });
+});
+
+describe('partLabel', () => {
+  const attributes = {
+    steps: [
+      { id: 's1', title: 'Coat' },
+      { id: 's2', title: 'Wash' },
+    ],
+    variables: [{ name: 'wash_volume', label: 'Wash volume' }],
+  };
+  const items = { steps: 'id', variables: 'name' };
+  it('names parts the way the record names them', () => {
+    expect(partLabel('/steps/s2', attributes, items)).toBe('step 2 Wash');
+    expect(partLabel('/steps/s2/text', attributes, items)).toBe('step 2 Wash · text');
+    expect(partLabel('/variables/wash_volume', attributes, items)).toBe('Wash volume');
+    expect(partLabel('deadVolume', attributes, items)).toBe('dead volume');
+  });
+  it('finds a removed item on the other side, and falls back to the key', () => {
+    expect(
+      partLabel('/steps/s3', attributes, items, { steps: [{ id: 's3', title: 'Block' }] }),
+    ).toBe('step 1 Block');
+    expect(partLabel('/steps/s9', attributes, items)).toBe('step s9');
+  });
+});
+
+describe('problemWords', () => {
+  it('names what is wrong without restating the passing condition', () => {
+    expect(
+      problemWords({ label: 'Outer size is known', message: 'Length, width or height is missing' }),
+    ).toBe('Outer size: length, width or height is missing');
+    expect(problemWords({ label: 'Tip length is known', message: 'Not given' })).toBe(
+      'Tip length: not given',
+    );
+    expect(problemWords({ label: 'Every volume fits its instrument', message: 'Too much' })).toBe(
+      'Too much',
+    );
   });
 });

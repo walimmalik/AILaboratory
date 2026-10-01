@@ -495,13 +495,13 @@ export function valueText(v: Partial<SopVariable>, terms: Terms): string {
 
 /** A value's kind in a couple of words, shown next to it. */
 export function kindWords(v: Partial<SopVariable>, terms: Terms): string {
-  if (v.kind === 'computed') return 'worked out';
-  if (v.kind === 'input') return 'asked each run';
+  if (v.kind === 'computed') return 'calculated';
+  if (v.kind === 'input') return 'set per run';
   if (v.kind === 'record') {
     const m = terms.materials.find((x) => x.name === v.readFrom?.role);
-    return `read from ${m?.label ?? v.readFrom?.role ?? 'a material'}`;
+    return `from ${m?.label ?? v.readFrom?.role ?? 'a material'}`;
   }
-  return 'usual value';
+  return 'protocol default';
 }
 
 /** Step words in lab words: `` `well_volume` `` → "Well volume". Unknown names stay as written. */

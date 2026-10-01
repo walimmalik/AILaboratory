@@ -167,8 +167,8 @@ describe("a value's kind comes from its text", () => {
     expect(valueText(volume ?? {}, terms)).toBe('100 µL');
     expect(valueText(coating ?? {}, terms)).toBe('Wells × Well volume × 1.1');
     expect(valueText(capture ?? {}, terms)).toBe('Capture antibody.working concentration');
-    expect(kindWords(wells ?? {}, terms)).toBe('usual value');
-    expect(kindWords(capture ?? {}, terms)).toBe('read from Capture antibody');
+    expect(kindWords(wells ?? {}, terms)).toBe('protocol default');
+    expect(kindWords(capture ?? {}, terms)).toBe('from Capture antibody');
     expect(plainValue('50 minutes')).toBeUndefined();
   });
 
