@@ -11,7 +11,7 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 
 - `sops.draft` with `label` and the sections: `materials` (roles like `coating_plate` with `type`, `requirements` and a `default` record id when you know it), `solutions`, `variables`, `steps`, `layout`, `timing`, `questions`, plus `purpose`, `assays` and `source: {document}` when you work from a library document.
 - Steps: `{id: "coat", action: "add", text: "…in plain lab words…", uses: ["coating_plate", "capture_ab"], parameters: [{name: "volume", variable: "well_volume"}], produces: [{role: "coated_plate", label: "Coated plate"}]}`. Use `manual` for anything the other actions don't fit; `repeat: 3` for "wash 3 times".
-- Variables: `input` for what each run chooses (samples, replicates), `default` for usual values, `record` for values read from a bound material (`readFrom: {role, field}`, with the typical value as `value`), `computed` with an `expression`.
+- Variables: `input` for what each run chooses (samples, replicates), `default` for the protocol's default values, `record` for values read from a bound material (`readFrom: {role, field}`, with the typical value as `value`), `computed` with an `expression`.
 - Cite the passage for every step and value (`cite: [{document, passage, page, quote}]`), and put anything the source leaves unclear in `questions` with your suggestion rather than guessing. Mark your own estimates assumed in `evidence`.
 - Check `records.readiness`: open questions, broken formulas and timing that isn't a time block confirming.
 - `sops.calculate` with `{sop, bindings: [{role: "capture_ab", record: "lot_…"}], inputs: [{name: "n_samples", value: "24"}]}` gives every variable for a run and where it came from: a picked lot's certificate value, a plate type's `deadVolume`, a product's typical value until a lot is picked. Roles without a binding use their default. Tell the person which values are still typical. Inputs outside a variable's `min`/`max`, in the wrong kind of unit, or given twice are refused; ask the person rather than forcing a value.
@@ -23,13 +23,24 @@ A digital SOP (plan 012) is a lab procedure as a structured document: materials 
 3. Where the source is unclear (it contradicts itself, says "about", leaves a speed or time out), add an open question with the `passages` involved and your `suggestion`. Don't pick silently.
 4. Run `sops.check_citations`. Fix every `not_found` quote (copy the source's words) and every `found_elsewhere` one (cite the passage it names in `foundIn`), then check again.
 5. Run `sops.review` (`{sop, expectedVersion}`) to have the reviewer check the draft against the source, then read what it changed with `sops.reviews` and tell the person.
-6. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms sections.
+6. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms the draft.
 
 `library.read` with `passages: [id, …]` reads cited passages back by id.
 
 ## Filling in part of an SOP
 
 `sops.suggest` asks the assistant's model for one part of an SOP while a person edits it: `{sop, attributes?, value: "diluent"}` for a value, `step: "coat"` for a step's settings and uses, `newStep: "wash three times"` for a new step, or `steps: true` to draft every step from the source document. Give exactly one, and pass `attributes` when the SOP as edited differs from what is stored. The answer is checked (formulas with the calculator, steps against the SOP's materials and values) and returned; nothing is saved. The editor uses it; when you draft or change an SOP yourself, write the parts directly with `sops.draft` or `records.update` instead.
+
+## Common refusals
+
+| Refusal | What to do |
+| --- | --- |
+| A step uses a material or value the SOP doesn't have (`invalid_attributes`) | Add the material or variable in the same update, or use one that exists |
+| A formula names a value that doesn't exist, or mixes units that don't add (a volume plus a time) | Fix the expression; check it with `sops.evaluate` first |
+| `sops.calculate`: an input outside its `min`/`max`, in the wrong kind of unit, given twice, or given for a computed value | Ask the person for the value; give a computed value's inputs instead |
+| `sops.answer_question` with `acceptSuggestion` on a question without one | Give an `answer` |
+| `sops.review` on an SOP that isn't a draft, or at an old `expectedVersion` | Read it again with `records.get` |
+| `invalid_state`: no model is set up for the reviewer or the assistant | Tell the person; the lab's model is set in its `.env` |
 
 ## The benchmark
 

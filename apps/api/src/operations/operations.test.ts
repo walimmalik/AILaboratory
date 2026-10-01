@@ -200,6 +200,21 @@ describe('writes', () => {
     expect(await ledger()).toMatchObject([{ operationId: 'records.create', outcome: 'succeeded' }]);
   });
 
+  it('reads a record brief, without the confirmations, for agents with long records', async () => {
+    const record = await create(agent);
+    await run(person, 'records.confirm_section', {
+      id: record.id,
+      expectedVersion: 1,
+      section: 'appearance',
+    });
+    const full = await run<RecordEnvelope>(agent, 'records.get', { id: record.id });
+    expect(Object.keys(full.reviews)).toEqual(['appearance']);
+    const brief = await run<RecordEnvelope>(agent, 'records.get', { id: record.id, brief: true });
+    expect(brief).not.toHaveProperty('reviews');
+    expect(brief.attributes).toEqual(full.attributes);
+    expect(brief.evidence.volume?.source).toBe('assumed');
+  });
+
   it('previews a change without saving it or logging it', async () => {
     const result = await registry.execute(
       person,
@@ -644,6 +659,15 @@ describe('review inbox', () => {
 
     const output = await run<{ items: ReviewItem[]; counts: unknown }>(person, 'review.list', {});
     expect(() => reviewList.output.parse(output)).not.toThrow();
+    // Counts come first, so a reader whose view is cut keeps the totals; limit lists fewer.
+    expect(Object.keys(output)).toEqual(['counts', 'items']);
+    const one = await run<{ items: ReviewItem[]; counts: { total: number } }>(
+      person,
+      'review.list',
+      { limit: 1 },
+    );
+    expect(one.items).toHaveLength(1);
+    expect(one.counts.total).toBe(2);
     const { items } = output;
     expect(output.counts).toEqual({
       total: 2,

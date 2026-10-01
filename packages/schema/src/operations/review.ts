@@ -89,13 +89,15 @@ export const reviewList = defineContract({
       .optional()
       .describe('Only drafts of this kind; proposed changes and mentions are left out'),
     mine: z.boolean().optional().describe('Only items addressed to you'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('List at most this many items; counts still cover everything'),
   }),
   output: z.object({
-    items: z
-      .array(ReviewItem)
-      .describe(
-        'Newest first; at most 200 drafts, so compare with counts to see what was left out',
-      ),
     counts: z
       .object({
         total: z
@@ -119,5 +121,10 @@ export const reviewList = defineContract({
           .describe('Drafts waiting per kind, all of them, not only those listed'),
       })
       .describe('Counts over everything waiting, whatever the filter and limit'),
+    items: z
+      .array(ReviewItem)
+      .describe(
+        'Newest first; at most 200 drafts and at most limit items, so compare with counts to see what was left out',
+      ),
   }),
 });

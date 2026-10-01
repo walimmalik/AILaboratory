@@ -104,7 +104,18 @@ export const recordOperations = [
     },
   }),
   implement(recordsGet, {
-    run: (ctx, input, deps) => service(deps).get(ctx, input.id),
+    run: async (ctx, input, deps) => {
+      const record = await service(deps).get(ctx, input.id);
+      if (!input.brief) return record;
+      // Item evidence is keyed "/list/key"; a field's own evidence has no slash.
+      const { reviews: _, ...rest } = record;
+      return {
+        ...rest,
+        evidence: Object.fromEntries(
+          Object.entries(record.evidence).filter(([key]) => !key.startsWith('/')),
+        ),
+      };
+    },
   }),
   implement(recordsList, {
     run: async (ctx, input, deps) => ({ records: await service(deps).list(ctx, input) }),

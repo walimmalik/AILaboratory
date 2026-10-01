@@ -175,6 +175,47 @@ describe('assistant.ask', () => {
     });
   });
 
+  it("tells the model which of its proposals people rejected, and why, when it's asked again", async () => {
+    const scripted = new ScriptedModel();
+    const systems: string[] = [];
+    const model: ChatModel = {
+      provider: 'scripted',
+      model: 'scripted',
+      complete: (request) => {
+        systems.push(request.system);
+        return scripted.complete(request);
+      },
+    };
+    const { assistant, registry } = setup(model);
+    const made = await registry.execute(person, 'records.create', {
+      kind: 'widget',
+      label: 'Stock',
+      attributes,
+      status: 'active',
+    });
+    const record = (made as { output: RecordEnvelope }).output;
+    const first = await ask(
+      registry,
+      assistant,
+      `/op records.update ${JSON.stringify({ id: record.id, expectedVersion: 1, label: 'Renamed', reason: 'Clearer name' })}`,
+    );
+    expect(systems[0]).not.toContain('What people decided');
+    const { proposals } = (await output(
+      registry.execute(person, 'proposals.list', { status: 'pending' }),
+    )) as { proposals: { id: string }[] };
+    await registry.execute(person, 'proposals.reject', {
+      id: proposals[0]?.id as string,
+      reason: 'Keep the vendor name',
+    });
+    await ask(registry, assistant, 'Try again', { conversationId: first.id });
+    const system = systems.at(-1) ?? '';
+    expect(system).toContain('What people decided about the changes you proposed');
+    expect(system).toContain('records.update (Clearer name): rejected: "Keep the vendor name"');
+    // Another conversation hears nothing of it.
+    await ask(registry, assistant, 'Hello');
+    expect(systems.at(-1)).not.toContain('Keep the vendor name');
+  });
+
   it('continues a conversation with the history so far', async () => {
     const model = new FakeModel([
       { text: 'Hello.', toolCalls: [], stop: 'end' },
@@ -383,7 +424,8 @@ describe('tools and history', () => {
     expect(names).toContain('operations_describe');
     expect(names).toContain('sops_evaluate');
     expect(names).toContain('run_operation');
-    expect(names).not.toContain('proposals_list');
+    expect(names).toContain('proposals_list');
+    expect(names).toContain('changes_apply');
     expect(names).not.toContain('sops_draft');
     expect(names).not.toContain('proposals_approve');
     expect(names.some((n) => n.startsWith('assistant_'))).toBe(false);

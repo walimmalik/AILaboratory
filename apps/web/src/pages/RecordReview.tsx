@@ -80,7 +80,13 @@ export function ReviewBlocks({
   }
   return (
     <>
-      <ReadinessBlock record={record} readiness={readiness} titles={titles} onFix={fix} />
+      <ReadinessBlock
+        record={record}
+        readiness={readiness}
+        titles={titles}
+        onFix={fix}
+        editing={editing}
+      />
       {aside}
       {readiness.sections.map((section) => (
         <SectionBlock
@@ -119,12 +125,18 @@ export function ReadinessBlock({
   readiness,
   titles,
   onFix,
+  editing,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
   /** Section titles by ID, for the "Fix in …" links. */
   titles: Record<string, string>;
   onFix: (section: string) => void;
+  /**
+   * The section open in an editor: Confirm waits until it is saved or cancelled, so it never
+   * confirms the stored values while the screen shows different ones (QA 2026-10-01 Q1).
+   */
+  editing?: string | undefined;
 }) {
   const invalidate = useInvalidate(record.id);
   const draft = record.status === 'draft';
@@ -197,15 +209,21 @@ export function ReadinessBlock({
               <button
                 type="button"
                 className="btn primary"
-                disabled={confirm.isPending}
+                disabled={confirm.isPending || editing !== undefined}
                 onClick={() => confirm.mutate()}
               >
                 {draft ? `Confirm ${record.name}` : 'Confirm the changes'}
               </button>
             )}
             <span className="muted">
-              {toReview.length > 1 && `${toReview.length} parts to confirm. `}
-              {what}
+              {editing !== undefined && canConfirm ? (
+                `Save or cancel your edit of ${(titles[editing] ?? 'this part').toLowerCase()} first: Confirm takes the saved values.`
+              ) : (
+                <>
+                  {toReview.length > 1 && `${toReview.length} parts to confirm. `}
+                  {what}
+                </>
+              )}
             </span>
           </div>
         )}

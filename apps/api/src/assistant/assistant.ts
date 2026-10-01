@@ -8,9 +8,9 @@ import type {
   OperationErrorBody,
   PageContext,
 } from '@ailab/schema';
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
-import { labs, users } from '../db/schema.ts';
+import { labs, proposals, users } from '../db/schema.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -117,7 +117,7 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const system = await systemPrompt(db, ctx);
+    const system = await systemPrompt(db, ctx, conversationId);
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
       this.publish(conversationId, { type: 'status', conversation: toSummary(row) });
@@ -389,7 +389,42 @@ function withPage(text: string, page: PageContext | undefined): string {
   return `${text}\n\n[Sent from the page: ${where}${record}]`;
 }
 
-async function systemPrompt(db: Db, ctx: RecordContext): Promise<string> {
+/**
+ * What people decided about the changes this conversation proposed, so the assistant knows which
+ * were rejected and why before it answers again (review 2026-10-01 I13).
+ */
+async function decidedProposals(
+  db: Db,
+  ctx: RecordContext,
+  conversationId: string,
+): Promise<string> {
+  const rows = await db
+    .select()
+    .from(proposals)
+    .where(
+      and(
+        eq(proposals.labId, ctx.labId),
+        sql`${proposals.proposedBy}->>'sessionRef' = ${conversationId}`,
+        ne(proposals.status, 'pending'),
+      ),
+    )
+    .orderBy(asc(proposals.proposedAt));
+  if (rows.length === 0) return '';
+  const lines = rows.map((row) => {
+    const why = row.decisionReason ? `: "${row.decisionReason}"` : '';
+    const what = row.reason ? ` (${row.reason})` : '';
+    const outcome =
+      row.status === 'approved'
+        ? 'confirmed and applied'
+        : row.status === 'rejected'
+          ? `rejected${why}`
+          : `confirmed, but it failed when applied${row.error ? `: ${row.error.message}` : ''}`;
+    return `- ${row.id}, ${row.operationId}${what}: ${outcome}`;
+  });
+  return `\n\nWhat people decided about the changes you proposed in this conversation. Don't propose a rejected change again unless the person asks; if the reason says what to change, do that.\n${lines.join('\n')}`;
+}
+
+async function systemPrompt(db: Db, ctx: RecordContext, conversationId: string): Promise<string> {
   const [user] = await db
     .select({ name: users.displayName })
     .from(users)
@@ -403,9 +438,11 @@ You act only through the lab's operations, which are your tools. Everything you 
 - Your named tools cover records, review, skills, the calculators and the module of the page you are on. For anything else, find the operation with operations_describe (by namespace, e.g. "sops") and call it with run_operation.
 - Some changes are proposed rather than made: the result then has status "proposed" and waits for a person to confirm it on the Review page. Say that plainly; never say a proposed change is done.
 - You draft; people confirm. Create records as drafts. Values you set are marked "assumed" until a person confirms them. Say where each value came from in "evidence": "stated" for values the person told you (e.g. {"color": {"source": "stated"}}), "datasheet", "imported" or "measured" with a reference when you used one; "calculated" with the "calculation" handle a calculator returned (and "output", a pointer into its output, when the value is one part of it); "record" or "template" with "from": {id, version} when you copied the value from a confirmed record. For a list the kind keys by item (an SOP's steps by id, variables by name), evidence can name one item as "/steps/<id>". Values you estimated get no evidence and show as assumed. Never name a source you did not use.
-- A person confirms each section of a draft on its page; confirming the last one makes it active. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
+- A person confirms a draft with one Confirm on its page or on Review, which makes it active; you can't confirm. Use records_readiness to see what is confirmed, what changed, what was assumed and which checks fail.
+- Changes that belong together (a record and the records it links to, several edits for one ask) go in one changes_apply call with a reason: they run in order, all or nothing, and when any step needs a person the whole set is one proposal they confirm or reject at once. Don't propose them one by one.
 - The app adds a linked "Waiting for you" line under your reply listing the drafts and proposed changes you left, so don't write one yourself; just say briefly what you did and anything you assumed.
-- To edit a record, read it first (records_get) for its current version and attributes, then send records_update the complete attributes with your change, and that version as expectedVersion.
+- To edit a record, read it first (records_get with brief: true, which leaves out the confirmations) for its current version and attributes, then send records_update the complete attributes with your change, and that version as expectedVersion.
+- Long results are cut at ${MAX_RESULT_CHARS / 1000}k characters. Ask for less: review_list puts its counts first and takes a limit; operations_describe with schema: false lists a namespace's operations without their schemas, then ask for the ones you need by ids.
 - The person may attach files; each shows as [Attached file file_…] with the start of its text. To give a whole file to a tool, put {"$file": "file_…"} where the value goes (e.g. labware_import_opentrons with {"definition": {"$file": "file_…"}}); never retype a file's contents.
 - Some tools return a file (an Opentrons definition, a worklist; their description says so). The app shows it under your reply with Download and Copy buttons, so don't copy its contents into your reply: say what it is and answer questions about it briefly.
 - Every quantity has a unit, e.g. {"value": "50", "unit": "uL"}.
@@ -417,7 +454,7 @@ You act only through the lab's operations, which are your tools. Everything you 
 
 The calculators skill, which you always follow:
 
-${findSkill('calculators')?.text ?? ''}`;
+${findSkill('calculators')?.text ?? ''}${await decidedProposals(db, ctx, conversationId)}`;
 }
 
 export { toolName, toolsFor } from './toolset.ts';

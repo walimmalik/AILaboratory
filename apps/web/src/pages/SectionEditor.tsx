@@ -2,6 +2,7 @@ import { type EvidenceInput, type RecordEnvelope, recordsUpdate } from '@ailab/s
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
+import { untouchedSuggestions } from '../lib/suggestions.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { fieldLabel } from './RecordReview.tsx';
@@ -34,6 +35,8 @@ export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: 
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [invalid, setInvalid] = useState(false);
+  // List items the assistant filled in, as it filled them, with its reason (review 2026-10-01 I11).
+  const [suggested, setSuggested] = useState<Record<string, { item: unknown; note: string }>>({});
   const form = useRef<HTMLFormElement>(null);
   // Values also change without a typed change event (a pick, a suggested fix), so validity is read
   // again after every change; fields set their own validity first, in their effects.
@@ -67,13 +70,15 @@ export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: 
               ...(note.trim() ? { note: note.trim() } : {}),
             };
       const withValue = changed.filter((f) => values[f] !== undefined);
+      const evidence: Record<string, EvidenceInput> = {
+        ...(given ? Object.fromEntries(withValue.map((f) => [f, given])) : {}),
+        ...untouchedSuggestions(suggested, attributes),
+      };
       return api.run(recordsUpdate, {
         id: record.id,
         expectedVersion: base.version,
         attributes,
-        ...(given && withValue.length > 0
-          ? { evidence: Object.fromEntries(withValue.map((f) => [f, given])) }
-          : {}),
+        ...(Object.keys(evidence).length > 0 ? { evidence } : {}),
       });
     },
     onSuccess: async () => {
@@ -90,6 +95,8 @@ export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: 
     base,
     values,
     set: (field: string, next: unknown) => setValues((v) => ({ ...v, [field]: next })),
+    suggest: (path: string, item: unknown, note: string) =>
+      setSuggested((s) => ({ ...s, [path]: { item, note } })),
     changed,
     theirs,
     takeTheirs,

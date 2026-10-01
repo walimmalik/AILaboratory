@@ -44,7 +44,7 @@ export const skillOperations = [
         .filter((c) => !input.namespace || c.id.startsWith(`${input.namespace}.`))
         .filter((c) => !input.ids || input.ids.includes(c.id))
         .filter((c) => !input.calculators || c.calculator)
-        .map(describeOperation),
+        .map((c) => describeOperation(c, { schema: input.schema !== false })),
     }),
   }),
 ];

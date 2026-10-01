@@ -49,16 +49,22 @@ export function createMcpServer(registry: OperationRegistry, ctx: RecordContext)
           .describe(
             'Only the lab calculators: volumes, concentrations and amounts to use instead of your own arithmetic',
           ),
+        schema: z
+          .boolean()
+          .optional()
+          .describe(
+            'false lists IDs and summaries only, without the JSON Schemas; then ask for the ones you will call by ids',
+          ),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ namespace, ids, calculators }) => {
+    async ({ namespace, ids, calculators, schema }) => {
       const contracts = registry
         .list()
         .filter((c) => !namespace || c.id.startsWith(`${namespace}.`))
         .filter((c) => !ids || ids.includes(c.id))
         .filter((c) => !calculators || c.calculator);
-      const operations = contracts.map(describeOperation);
+      const operations = contracts.map((c) => describeOperation(c, { schema: schema !== false }));
       return {
         content: [{ type: 'text', text: JSON.stringify({ operations }, null, 2) }],
         structuredContent: { operations },
