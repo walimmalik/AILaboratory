@@ -404,6 +404,18 @@ describe('agents', () => {
         .status,
     ).toBe('proposed');
 
+    // Another agent's draft, even one working for the same person, is not its own (C5).
+    const other = { ...agent, actor: { ...agent.actor, agentName: 'Another agent' } };
+    const byOther = await create(other);
+    expect(
+      (
+        await registry.execute(agent, 'records.delete_draft', {
+          id: byOther.id,
+          expectedVersion: 1,
+        })
+      ).status,
+    ).toBe('proposed');
+
     // An agent's draft a person has worked on is the person's too.
     const shared = await create(agent);
     await run(person, 'records.update', { id: shared.id, expectedVersion: 1, label: 'Edited' });
@@ -695,15 +707,15 @@ describe('review inbox', () => {
   it('confirms a batch only when nothing in it is a guess, all or nothing', async () => {
     const clean = await create(agent, {
       evidence: {
-        color: { source: 'datasheet', reference: 'https://example.org' },
-        volume: { source: 'datasheet', reference: 'https://example.org' },
+        color: { source: 'stated' },
+        volume: { source: 'stated' },
       },
     });
     const second = await create(agent, {
       label: 'Second',
       evidence: {
-        color: { source: 'datasheet', reference: 'https://example.org' },
-        volume: { source: 'datasheet', reference: 'https://example.org' },
+        color: { source: 'stated' },
+        volume: { source: 'stated' },
       },
     });
     const guessed = await create(agent, { label: 'Guessed' });
@@ -739,7 +751,7 @@ describe('review inbox', () => {
   });
 
   it('lets warnings pass a batch confirm, counted', async () => {
-    const sourced = { source: 'datasheet', reference: 'https://example.org' };
+    const sourced = { source: 'stated' };
     const warned = await create(agent, {
       attributes: { ...attributes, color: 'unknown' },
       evidence: { color: sourced, volume: sourced },
@@ -753,10 +765,18 @@ describe('review inbox', () => {
   });
 
   it('confirms a batch of drafts whose kind has no sections, and counts their guesses', async () => {
+    // Stated by the person the agent works for: batchable. A datasheet only the agent vouches for
+    // is a source to check, so it opens on its own (C4, Wali 2026-10-01).
     const sourced = await run<RecordEnvelope>(agent, 'records.create', {
       kind: 'gadget',
       label: 'Sourced',
       attributes: { color: 'red' },
+      evidence: { color: { source: 'stated' } },
+    });
+    const cited = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'Cited',
+      attributes: { color: 'green' },
       evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
     });
     const guessed = await run<RecordEnvelope>(agent, 'records.create', {
@@ -771,6 +791,11 @@ describe('review inbox', () => {
       assumed: 1,
     });
     expect(drafts.find((i) => i.record.id === sourced.id)?.batchable).toBe(true);
+    expect(drafts.find((i) => i.record.id === cited.id)).toMatchObject({
+      batchable: false,
+      sourcesToCheck: 1,
+      assumed: 0,
+    });
     const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
       records: [{ id: sourced.id, expectedVersion: sourced.version }],
     });

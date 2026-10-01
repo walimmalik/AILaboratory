@@ -295,8 +295,8 @@ function BatchConfirm({ items }: { items: DraftItem[] }) {
       </button>
       <span className="muted">
         {left === 0
-          ? 'None holds an unverified value and nothing blocks them.'
-          : `They hold no unverified value and nothing blocks them; ${many(left, 'other opens', 'others open')} on its own.`}
+          ? 'None holds an unverified value or a source to check, and nothing blocks them.'
+          : `They hold no unverified value or source to check, and nothing blocks them; ${many(left, 'other opens', 'others open')} on its own.`}
         {warned > 0 && (
           <span className="warn-ink">
             {' '}
@@ -364,6 +364,12 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
       <td>
         {todo}
         {item.assumed > 0 && <span className="agent-ink"> · {item.assumed} unverified</span>}
+        {item.sourcesToCheck > 0 && (
+          <span className="agent-ink">
+            {' '}
+            · {item.sourcesToCheck} {item.sourcesToCheck === 1 ? 'source' : 'sources'} to check
+          </span>
+        )}
       </td>
       <td className="when">
         {formatWhen(item.at)}

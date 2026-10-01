@@ -38,7 +38,7 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `records.create` | direct for drafts, proposed when `status: "active"` |
 | `records.update`, `records.restore` | direct on drafts, proposed on active records |
 | `records.activate`, `records.archive`, `records.unarchive` | proposed |
-| `records.delete_draft` | direct |
+| `records.delete_draft` | direct for the agent's own draft (it alone wrote every version, for the same person, and nothing is confirmed); proposed otherwise (C5) |
 | `labware.import_opentrons` | direct (creates a draft) |
 | `labware.use_standard_positions` | direct on drafts, proposed on active records |
 | `instruments.register` | direct (creates a draft) |
