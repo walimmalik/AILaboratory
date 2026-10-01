@@ -653,7 +653,7 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await expect(page.getByRole('row', { name: new RegExp(plate.name) })).toBeVisible();
 
   // Stock lists the reagent once, with how much is left and where, and moves the plate.
-  const fridge = await asPerson(page, 'locations.create', {
+  await asPerson(page, 'locations.create', {
     label: `Fridge ${stamp}`,
     type: 'fridge',
   });
@@ -676,7 +676,7 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
 test('scanning a tube opens it and moves it into a box position', async ({ page }) => {
   await signIn(page);
   const stamp = Date.now();
-  const fridge = await asPerson(page, 'locations.create', {
+  await asPerson(page, 'locations.create', {
     label: `Fridge ${stamp}`,
     type: 'fridge',
   });
