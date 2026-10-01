@@ -1,10 +1,14 @@
 import { formatQuantity } from '@ailab/domain';
 import {
   type AssayTemplateAttributes,
+  type CapabilityId,
+  designerFeasibility,
   designerStart,
   type ExperimentAttributes,
+  type InstrumentAttributes,
   type LayoutAttributes,
   type RecordEnvelope,
+  type ResolvedConfiguration,
 } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
@@ -44,7 +48,7 @@ async function run<T>(deps: OperationDeps, ctx: RecordContext, id: string, input
   return result.output as T;
 }
 
-export const designerOperations = [
+export const designerOperations: ReturnType<typeof implement>[] = [
   implement(designerStart, {
     agentPolicy: 'direct',
     run: async (ctx, input, deps) => {
@@ -238,3 +242,142 @@ export const designerOperations = [
     },
   }),
 ];
+
+/** The answers a drafted experiment gives back to its template: subjects and variable inputs. */
+function answersOf(a: AssayTemplateAttributes, e: ExperimentAttributes): Answers {
+  const answers: Answers = {};
+  const subjects = (e.subjects ?? []).map((s) => s.record);
+  for (const input of a.essentials) {
+    if (input.input === 'subjects') {
+      if (subjects.length) answers[input.id] = subjects;
+      continue;
+    }
+    const value = e.protocol
+      .find((p) => p.id === input.part)
+      ?.inputs?.find((i) => i.name === input.variable)?.value;
+    if (value !== undefined && !Array.isArray(value)) answers[input.id] = value;
+  }
+  return answers;
+}
+
+designerOperations.push(
+  implement(designerFeasibility, {
+    run: async (ctx, input, deps) => {
+      const experiment = await recordAt(deps, ctx, input.experiment, input.version);
+      if (experiment?.kind !== 'experiment')
+        throw new OperationError('not_found', `${input.experiment} is not an experiment`);
+      const e = experiment.attributes as ExperimentAttributes;
+      if (!e.template)
+        throw new OperationError(
+          'invalid_input',
+          `${experiment.name} was not designed from an assay template; check its amounts with experiments.calculate`,
+        );
+      const template = await recordAt(deps, ctx, e.template.id, e.template.version);
+      if (template?.kind !== 'assay_template')
+        throw new OperationError('not_found', `${e.template.id} is not an assay template`);
+      const a = template.attributes as AssayTemplateAttributes;
+      const layout = a.layout
+        ? await recordAt(deps, ctx, a.layout.id, a.layout.version)
+        : undefined;
+      const wells = layout ? (layout.attributes as LayoutAttributes).wells : undefined;
+
+      // What each registered instrument can do now, on this plate format.
+      const records = new RecordService(deps.db, deps.kinds);
+      const instruments = (await records.list(ctx, { kind: 'instrument', limit: 500 })).filter(
+        (i) => i.status !== 'archived',
+      );
+      const can = new Map<string, Set<string>>();
+      for (const instrument of instruments) {
+        const resolved = await deps.registry
+          .execute(ctx, 'instruments.resolve', { instrument: instrument.id }, {}, deps.db)
+          .then((r) => (r.status === 'done' ? (r.output as ResolvedConfiguration) : undefined))
+          .catch(() => undefined);
+        can.set(
+          instrument.id,
+          new Set(
+            (resolved?.capabilities ?? [])
+              .filter((c) => !wells || !c.limits?.wellCounts || c.limits.wellCounts.includes(wells))
+              .map((c) => c.capability),
+          ),
+        );
+      }
+      const needOf = (what: string, capability: string, preferred: string[] = []) => {
+        const able = instruments
+          .filter((i) => can.get(i.id)?.has(capability))
+          .map((i) => {
+            const ia = i.attributes as InstrumentAttributes;
+            return {
+              id: i.id,
+              name: i.name,
+              label: i.label,
+              status: ia.status,
+              preferred: preferred.includes(i.id) || preferred.includes(ia.kind),
+            };
+          })
+          .sort((x, y) => Number(y.preferred) - Number(x.preferred));
+        const verdict = able.some((i) => i.status === 'ready' || i.status === 'in_use')
+          ? ('ready' as const)
+          : able.length
+            ? ('not_ready' as const)
+            : ('missing' as const);
+        return { for: what, capability: capability as CapabilityId, instruments: able, verdict };
+      };
+      const needs = [
+        ...(a.roles ?? []).flatMap((r) =>
+          r.capability
+            ? [needOf(`the role ${r.role} in ${r.part}`, r.capability, r.preferred)]
+            : [],
+        ),
+        ...a.readouts
+          .filter((r) => !(a.roles ?? []).some((x) => x.capability === r.capability))
+          .map((r) => needOf(`the readout ${r.label}`, r.capability)),
+      ];
+
+      const worked = await workOut(deps, ctx, a, answersOf(a, e), wells).catch(() => undefined);
+      const calculated = await run<{
+        parts: { part: string; problems: string[] }[];
+        ready: boolean;
+      }>(deps, ctx, 'experiments.calculate', { id: experiment.id, version: experiment.version });
+      const problems = calculated.parts.flatMap((p) => p.problems.map((x) => `${p.part}: ${x}`));
+
+      const lines = needs.map((n) => {
+        const words = n.capability.replaceAll('_', ' ');
+        if (n.verdict === 'missing')
+          return `No instrument in the lab can ${words}${wells ? ` on ${wells}-well plates` : ''}`;
+        const first = n.instruments[0];
+        const named = `${first?.label} ${first?.name}`;
+        return n.verdict === 'ready'
+          ? `${capitalize(words)}: ${n.instruments
+              .filter((i) => i.status === 'ready' || i.status === 'in_use')
+              .map((i) => `${i.label} ${i.name}`)
+              .join(', ')}`
+          : `${capitalize(words)}: only ${named}, which is ${first?.status.replaceAll('_', ' ')}`;
+      });
+      if (worked?.totals) lines.push(...worked.lines.filter((l) => !l.startsWith('Still needed')));
+      else lines.push('Plates and wells wait for the subjects, given as records');
+      if (problems.length) lines.push(...problems.map((p) => `Amounts: ${p}`));
+      lines.push(
+        'Stock on hand is not checked yet; reagent volumes against stock come with reservations',
+      );
+      return {
+        template: { id: template.id, name: template.name, version: e.template.version },
+        needs,
+        ...(worked?.totals
+          ? {
+              totals: {
+                conditions: worked.totals.conditions,
+                plates: worked.totals.plates,
+                totalPlates: worked.totals.totalPlates,
+                totalWells: worked.totals.totalWells,
+              },
+            }
+          : {}),
+        amounts: { ready: calculated.ready, problems },
+        feasible: calculated.ready && needs.every((n) => n.verdict === 'ready'),
+        lines,
+      };
+    },
+  }),
+);
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);

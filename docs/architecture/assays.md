@@ -69,6 +69,14 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
   - the quality criteria as success criteria.
 - **The plate map** (014), when the template has a layout and the only factor is the subjects, given as records. It uses the layout's control regions where a control names its subject, and the template's default plate type.
 
+`designer.feasibility` (017b-2) checks a drafted experiment against the lab, for the template version it pins:
+
+- **Instruments.** For every role with a capability, and every readout no role covers, it lists the registered instruments whose resolved configuration offers that capability on the layout's plate format. Preferred instruments or kinds come first. Each need is ready, `not_ready` (only instruments in maintenance or out of service) or missing.
+- **Totals.** Plates and wells come from `workOut`, with the experiment's subjects and inputs as the answers. They wait for subjects given as records.
+- **Amounts.** `experiments.calculate` supplies its problems.
+
+It is feasible when every need is ready and every amount works out. Stock on hand against reagent volumes comes with reservations.
+
 Values copied from the template carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way.
 
 ## Seed
@@ -77,4 +85,4 @@ Values copied from the template carry `template` evidence from the confirmed ver
 
 ## Not yet
 
-`assays.save_from_experiment`, feasibility and the design page (017b-2); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+`assays.save_from_experiment`, stock in feasibility and the design page (017b-3); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.

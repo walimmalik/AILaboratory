@@ -142,7 +142,12 @@ async function setup() {
   const reader = await run(person, 'records.create', {
     kind: 'instrument_kind',
     label: 'Spark',
-    attributes: { model: 'Spark', category: 'plate_reader', performedBy: 'machine' },
+    attributes: {
+      model: 'Spark',
+      category: 'plate_reader',
+      performedBy: 'machine',
+      capabilities: [{ capability: 'read_absorbance' }],
+    },
   });
   const template = {
     label: 'IL-6 ELISA',
@@ -510,5 +515,62 @@ describe('designer.start', () => {
     );
     expect(result.plateMap).toBeUndefined();
     expect(result.lines).toContain('No plate map yet: give the subjects as records to place them');
+  });
+});
+
+describe('designer.feasibility', () => {
+  it('names the instruments that can do each step, the totals and what does not work out', async () => {
+    const { template, reader } = await setup();
+    const saved = await confirm(await run(agent, 'assays.draft_template', template));
+    const campaign = await confirm(
+      await run(agent, 'campaigns.draft', {
+        label: 'IL-6',
+        goal: 'Measure IL-6',
+        aims: [{ id: 'aim_1', text: 'Measure IL-6', success: 'Every sample read' }],
+      }),
+    );
+    const { experiment } = await run<{ experiment: RecordEnvelope }>(agent, 'designer.start', {
+      template: saved.id,
+      campaign: campaign.id,
+      answers: { samples: 40, dilution: '10' },
+    });
+    type Feasibility = {
+      needs: {
+        capability: string;
+        verdict: string;
+        instruments: { label: string; preferred: boolean }[];
+      }[];
+      totals?: Record<string, number>;
+      feasible: boolean;
+      lines: string[];
+    };
+    const none = await run<Feasibility>(agent, 'designer.feasibility', {
+      experiment: experiment.id,
+    });
+    expect(none.needs).toEqual([
+      expect.objectContaining({
+        capability: 'read_absorbance',
+        verdict: 'missing',
+        instruments: [],
+      }),
+    ]);
+    expect(none.feasible).toBe(false);
+    expect(none.lines[0]).toBe('No instrument in the lab can read absorbance on 96-well plates');
+
+    await run(agent, 'instruments.register', { label: 'Spark 1', kind: reader.id });
+    const found = await run<Feasibility>(agent, 'designer.feasibility', {
+      experiment: experiment.id,
+    });
+    expect(found.needs[0]).toMatchObject({
+      verdict: 'ready',
+      instruments: [expect.objectContaining({ label: 'Spark 1', preferred: true })],
+    });
+    expect(found.totals).toBeUndefined();
+    expect(found.lines).toContain('Plates and wells wait for the subjects, given as records');
+    expect(found.lines[0]).toBe('Read absorbance: Spark 1 INS-0001');
+
+    expect(
+      (await refused(run(otherLab, 'designer.feasibility', { experiment: experiment.id }))).code,
+    ).toBe('not_found');
   });
 });
