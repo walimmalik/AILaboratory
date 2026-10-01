@@ -13,7 +13,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0001](../decisions/0001-typescript-core-python-science.md) | TypeScript core (API, web) plus a Python science service for statistics, curve fits, chemistry and sequences |
 | [0002](../decisions/0002-postgres.md) | Postgres with pgvector as the one database |
 | [0003](../decisions/0003-react-vite.md) | React and Vite for the web app; static SPA, no server rendering |
-| [0004](../decisions/0004-port-echo650-twin.md) | Port echo650-twin's twins and scheduler into this repo (plans 015, 019); don't rebuild them |
+| [0004](../decisions/0004-port-echo650-twin.md) | Port echo650-twin's scheduler into this repo (plan 019); its twin half is superseded by plan 015 (twins are uploaded as standard packages) |
 | [0005](../decisions/0005-agent-runtime.md) | In-app agent over our MCP server; amended by 0020 |
 | [0006](../decisions/0006-tenancy.md) | `org_id` and `lab_id` on every record from day one |
 | [0007](../decisions/0007-local-compose-first.md) | Local Docker Compose first, internal Docker cluster later |
@@ -183,6 +183,26 @@ G1 our own schema with fixed sections; LabOP as a test and import path. G2 typed
 ## 013 Campaigns and experiments (E1 to E12, all as recommended)
 
 E1 campaign, experiment, run. E2 an experiment is the design; a run is one execution. E3 hypotheses with an optional testable prediction. E4 fixed stages, separate from record status. E5 experiments pin confirmed SOP versions and bind their roles and inputs. E6 013 builds the full experiment record; 017 adds templates. E7 the run view is a checklist: tick per step, "all done as planned", type only deviations. E8 a confirmed design is frozen per version. E9 runs attach data files; conclusions per hypothesis. E10 sets carry results to the next experiment. E11 agents draft; planning, concluding and stage changes are proposals. E12 everyone in the lab sees everything; owners and contributors for filters. [Plan 013](../plans/013-campaigns-and-experiments.md)
+
+## 015 Digital twins (T1 to T13)
+
+| # | Decision |
+| --- | --- |
+| T1 | Twins are uploaded into this app; echo650-twin is only where they are built. No code sync |
+| T2 | Twins run headless in the API (times, checks, scheduling) and in the browser (3D) from the same code |
+| T3 | A twin's setup is derived from the instrument's registry configuration; mismatches are warnings |
+| T4 | The FlexPod layout is made in the twin studio and imported as a versioned layout; the member check runs on import |
+| T5 | Instruments without a full twin get a generic twin from their kind (estimated times), replaced on upload |
+| T6 | Headless simulation first, 3D pages second |
+| T7 | A package is data plus its 3D model, never code; behaviour comes from tested templates in the app |
+| T8 | Every phase's time is a typed model in seconds with min, typical and max, computed before animation |
+| T9 | One provenance list for every value: measured, vendor, derived, estimated, unknown |
+| T10 | Commands that do lab work name a capability from the catalogue; device-only commands are internal |
+| T11 | Parts move between named positions; robot-loaded sites carry access poses; collision optional |
+| T12 | Uploads are checked (closed schema, plain-language errors), land as drafts a person confirms, versioned |
+| T13 | Codex (Astra) audits and standardizes the existing twins in echo650-twin and exports them as packages |
+
+[Plan 015](../plans/015-digital-twins.md), [twin package standard](../plans/015-twin-package-standard.md)
 
 ## Designers: 014 plate maps, 016 transfers, 017 experiment designer (all as recommended)
 
