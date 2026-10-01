@@ -103,15 +103,18 @@ export const designerOperations: ReturnType<typeof implement>[] = [
             },
           ];
         });
-        const inputs = a.essentials.flatMap((e) => {
-          if (e.input !== 'variable' || e.part !== p.id) return [];
-          const value = input.answers[e.id];
-          return value === undefined || Array.isArray(value) || typeof value === 'number'
-            ? typeof value === 'number'
-              ? [{ name: e.variable, value: String(value) }]
-              : []
-            : [{ name: e.variable, value }];
-        });
+        const inputs = [
+          ...(p.inputs ?? []),
+          ...a.essentials.flatMap((e) => {
+            if (e.input !== 'variable' || e.part !== p.id) return [];
+            const value = input.answers[e.id];
+            return value === undefined || Array.isArray(value) || typeof value === 'number'
+              ? typeof value === 'number'
+                ? [{ name: e.variable, value: String(value) }]
+                : []
+              : [{ name: e.variable, value }];
+          }),
+        ];
         return {
           id: p.id,
           sop: p.sop,

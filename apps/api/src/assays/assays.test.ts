@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import {
   type Actor,
   AssayTemplateAttributes,
+  type ExperimentAttributes,
   type Readiness,
   type RecordEnvelope,
 } from '@ailab/schema';
@@ -282,6 +283,13 @@ describe('assay templates', () => {
         essentials: [{ input: 'variable', id: 'x', label: 'X', part: 'assay', variable: 'nope' }],
       }),
     ).toContain('has no input or default variable nope');
+    const part = template.parts[0] as object;
+    expect(
+      await message({ parts: [{ ...part, inputs: [{ name: 'nope', value: '1' }] }] }),
+    ).toContain('has no input or default variable nope');
+    expect(
+      await message({ parts: [{ ...part, inputs: [{ name: 'sample_dilution', value: '5' }] }] }),
+    ).toContain('sets sample_dilution, which the template also asks for');
     expect(
       await message({ factors: [{ id: 'sample', label: 'Sample', from: 'dilution' }] }),
     ).toContain('dilution is not a subjects input');
@@ -622,6 +630,100 @@ describe('designer.feasibility', () => {
 
     expect(
       (await refused(run(otherLab, 'designer.feasibility', { experiment: experiment.id }))).code,
+    ).toBe('not_found');
+  });
+  it('saves a confirmed experiment as a template that designs the same way', async () => {
+    const { template, reader, sop } = await setup();
+    const saved = await confirm(await run(agent, 'assays.draft_template', template));
+    const campaign = await confirm(
+      await run(agent, 'campaigns.draft', {
+        label: 'IL-6',
+        goal: 'Measure IL-6',
+        aims: [{ id: 'aim_1', text: 'Measure IL-6', success: 'Every sample read' }],
+      }),
+    );
+    const start = () =>
+      run<{ experiment: RecordEnvelope }>(agent, 'designer.start', {
+        template: saved.id,
+        campaign: campaign.id,
+        answers: { samples: 40, dilution: '10' },
+      });
+    const { experiment: drafted } = await start();
+    const spark = await run(agent, 'instruments.register', { label: 'Spark 1', kind: reader.id });
+    const a = drafted.attributes as ExperimentAttributes;
+    const step = a.protocol[0] as ExperimentAttributes['protocol'][number];
+    const edited = await run(person, 'records.update', {
+      id: drafted.id,
+      expectedVersion: drafted.version,
+      attributes: {
+        ...a,
+        protocol: [
+          {
+            ...step,
+            bindings: [{ role: 'reader', record: spark.id }],
+            inputs: [
+              ...(step.inputs ?? []),
+              { name: 'well_volume', value: { value: '50', unit: 'uL' } },
+            ],
+          },
+        ],
+      },
+    });
+    const experiment = await confirm(edited);
+
+    const { template: copy, lines } = await run<{ template: RecordEnvelope; lines: string[] }>(
+      agent,
+      'assays.save_from_experiment',
+      { experiment: experiment.id, label: 'IL-6 ELISA, 50 µL wells' },
+    );
+    expect(copy).toMatchObject({ kind: 'assay_template', status: 'draft' });
+    expect(copy.attributes).toMatchObject({
+      purpose: 'IL-6 in supernatants',
+      parts: [
+        {
+          id: 'assay',
+          sop: { id: sop.id, version: sop.version },
+          inputs: [{ name: 'well_volume', value: { value: '50', unit: 'uL' } }],
+        },
+      ],
+      roles: [{ role: 'reader', preferred: [spark.id, reader.id] }],
+      essentials: template.essentials,
+      replicates: template.replicates,
+      layout: template.layout,
+    });
+    expect(copy.evidence?.parts).toMatchObject({
+      source: 'record',
+      from: { id: experiment.id, version: experiment.version },
+    });
+    expect(copy.evidence?.essentials).toMatchObject({ source: 'template' });
+    expect(lines).toContain('Parts: 1 SOP at the versions it used, keeping well_volume');
+
+    // Designing from the saved template sets the kept value again.
+    const confirmed = await confirm(copy);
+    const again = await run<{ experiment: RecordEnvelope }>(agent, 'designer.start', {
+      template: confirmed.id,
+      campaign: campaign.id,
+      answers: { samples: 8, dilution: '2' },
+    });
+    expect((again.experiment.attributes as ExperimentAttributes).protocol[0]?.inputs).toEqual([
+      { name: 'well_volume', value: { value: '50', unit: 'uL' } },
+      { name: 'sample_dilution', value: '2' },
+    ]);
+
+    const { experiment: draft } = await start();
+    expect(
+      (
+        await refused(
+          run(agent, 'assays.save_from_experiment', { experiment: draft.id, label: 'X' }),
+        )
+      ).message,
+    ).toContain('is not confirmed');
+    expect(
+      (
+        await refused(
+          run(otherLab, 'assays.save_from_experiment', { experiment: experiment.id, label: 'X' }),
+        )
+      ).code,
     ).toBe('not_found');
   });
 });

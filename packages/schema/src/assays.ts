@@ -26,6 +26,18 @@ const LocalName = z
 export const TemplatePart = z.strictObject({
   id: LocalName.describe('How the template names this part, e.g. assay or seeding'),
   sop: pinOf(SopId),
+  inputs: z
+    .array(
+      z.strictObject({
+        name: SopName,
+        value: z.union([DecimalString, Quantity, z.array(z.union([DecimalString, Quantity]))]),
+      }),
+    )
+    .max(50)
+    .optional()
+    .describe(
+      "Values for the SOP's input and default variables that every experiment from the template uses, e.g. well_volume = 50 µL",
+    ),
   note: z.string().min(1).optional(),
 });
 export type TemplatePart = z.infer<typeof TemplatePart>;
