@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   type Actor,
   operationContracts,
   type Proposal,
@@ -256,6 +257,34 @@ describe('finding records', () => {
     ).entries;
     expect(entry?.outcome).toBe('proposed');
     expect(Object.values(entry?.recordNames ?? {})).toEqual(['GDG-0001']);
+  });
+
+  it("never names another lab's record, even when a write touching it fails", async () => {
+    const other = await createTenant(db, {
+      orgName: 'Other',
+      labName: 'Other lab',
+      userName: 'Sam',
+    });
+    const sam: RecordContext = {
+      actor: { type: 'user', userId: other.userId },
+      orgId: other.orgId,
+      labId: other.labId,
+    };
+    const theirs = await run<RecordEnvelope>(sam, 'records.create', {
+      kind: 'gadget',
+      label: 'Secret',
+      attributes: { color: 'teal' },
+    });
+    const live: ActivityEntry[] = [];
+    bus.subscribe(person.labId, (e) => live.push(e));
+    const error = await refused(
+      registry.execute(person, 'records.delete_draft', { id: theirs.id, expectedVersion: 1 }),
+    );
+    expect(error.code).toBe('not_found');
+    const [entry] = (await run<{ entries: ActivityEntry[] }>(person, 'activity.list', {})).entries;
+    expect(entry).toMatchObject({ outcome: 'failed', recordIds: [theirs.id] });
+    expect(entry?.recordNames).toEqual({});
+    expect(live.map((e) => e.recordNames)).toEqual([{}]);
   });
 });
 
