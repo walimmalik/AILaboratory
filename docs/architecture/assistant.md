@@ -5,7 +5,7 @@ The assistant panel in the web app talks to a model of your choice, which works 
 ## How it works
 
 1. A person sends a message with `assistant.ask` (people only). It saves the message, marks the conversation `running`, and starts the loop in the background once the write is committed.
-2. The loop (`apps/api/src/assistant/assistant.ts`) sends the model a system prompt, the conversation so far, and one tool per operation an agent may call (people-only operations and `assistant.*` are left out).
+2. The loop (`apps/api/src/assistant/assistant.ts`) sends the model a system prompt (which includes the calculators skill in full, ADR 0054), the conversation so far, and one tool per operation an agent may call (people-only operations and `assistant.*` are left out).
 3. Each tool call runs through `OperationRegistry.execute` as an agent: `{type: "agent", agentName, onBehalfOf: <the person>, sessionRef: <conversation id>}`. Agent policies apply as for any outside agent, so changes to active records come back `proposed` and wait on the Review page. After each turn the panel adds a "Waiting for you" line linking the drafts the turn wrote and the changes it proposed that still wait (computed from the turn's tool results and the live `review.list`, not written by the model). The ledger shows each change under the assistant's name, and the ledger line links back to the conversation.
 4. Results go back to the model until it answers without calling a tool, or until 16 steps; the conversation then becomes `idle` or `failed` with a message that says what happened.
 

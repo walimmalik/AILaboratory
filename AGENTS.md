@@ -35,6 +35,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 - Numbers agents rely on (volumes, concentrations, dilutions, droplet counts, feasibility, totals) come from calculator operations backed by `packages/domain`, never from the model's own arithmetic. See ADR 0024.
 - Each module owns its tables. Other modules go through operations.
 - Every operation has tests for valid input, invalid input and permission.
+- Every operation is named in its module's skill (`skills/<module>/SKILL.md`); a test fails otherwise, and `pnpm generate` bundles the skills for the API (ADR 0054).
 - Every record carries `org_id` and `lab_id`.
 - A module that owns outcome data (runs, run logs, ledgers, schedules, results) ships detectors that report to lab memory through `memory.observe`, or its plan says why it has none (plan 005).
 - Small PRs, one plan step each. CI green before review.

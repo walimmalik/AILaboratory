@@ -14,6 +14,7 @@ import { libraryOperations } from '../library/operations.ts';
 import { liquidOperations } from '../reagents/liquid-operations.ts';
 import { reagentOperations } from '../reagents/operations.ts';
 import type { KindRegistry } from '../records/kinds.ts';
+import { skillOperations } from '../skills/skills.ts';
 import { ActivityBus } from './activity.ts';
 import { assistantOperations } from './assistant-operations.ts';
 import { changeSetOperations } from './change-set.ts';
@@ -62,6 +63,7 @@ export function createRegistry(
     ...proposalOperations,
     ...changeSetOperations,
     ...reviewOperations,
+    ...skillOperations,
     ...labwareOperations,
     ...instrumentOperations,
     ...workcellOperations,

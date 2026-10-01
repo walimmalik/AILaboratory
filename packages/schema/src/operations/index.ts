@@ -14,5 +14,6 @@ export * from './proposals.ts';
 export * from './reagents.ts';
 export * from './records.ts';
 export * from './review.ts';
+export * from './skills.ts';
 export * from './sops.ts';
 export * from './transfers.ts';

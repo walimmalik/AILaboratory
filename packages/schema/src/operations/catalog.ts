@@ -14,6 +14,7 @@ import * as proposals from './proposals.ts';
 import * as reagents from './reagents.ts';
 import * as records from './records.ts';
 import * as review from './review.ts';
+import * as skills from './skills.ts';
 import * as sops from './sops.ts';
 import * as transfers from './transfers.ts';
 
@@ -46,6 +47,7 @@ export const operationContracts: ReadonlyMap<string, OperationContract> = new Ma
     reagents,
     records,
     review,
+    skills,
     sops,
     transfers,
   ]

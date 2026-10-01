@@ -15,6 +15,7 @@ import { describeOperation } from '../operations/describe.ts';
 import { toErrorBody } from '../operations/errors.ts';
 import type { OperationDeps, OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
+import { findSkill } from '../skills/skills.ts';
 import type { ModelSetup } from './config.ts';
 import { type ChatModel, ModelError, type ModelMessage, type ModelTool } from './model.ts';
 import {
@@ -393,5 +394,10 @@ You act only through the lab's operations, which are your tools. Everything you 
 - If a tool refuses, read its message, fix the input and try again, or tell the person what you need.
 - Never invent records, results or instrument behaviour. If you don't know, say so.
 - Answer briefly, in plain lab language. Call records by their name (e.g. WDG-0001), not their internal ID, unless asked.
-- The person's messages may end with the page they sent it from; "this" usually means what is on that page.`;
+- The person's messages may end with the page they sent it from; "this" usually means what is on that page.
+- Each module has a skill that explains its operations (skills_list lists them). Read a module's skill with skills_get before you first work in it.
+
+The calculators skill, which you always follow:
+
+${findSkill('calculators')?.text ?? ''}`;
 }
