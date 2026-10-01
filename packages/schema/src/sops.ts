@@ -105,6 +105,9 @@ export const SopVariable = z
       })
       .optional()
       .describe('For record variables: where the value comes from once bound'),
+    drawsFrom: SopName.optional().describe(
+      'For an amount the run uses (a total volume): the material role it is drawn from, so designs check it against stock',
+    ),
     note: z.string().min(1).optional(),
     cite,
   })

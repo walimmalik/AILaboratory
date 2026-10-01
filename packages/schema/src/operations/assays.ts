@@ -195,7 +195,7 @@ export const designerFeasibility = defineContract({
   id: 'designer.feasibility',
   verbs: { done: 'checked the feasibility of', intent: 'check the feasibility of' },
   summary:
-    "Check whether the lab can run an experiment designed from an assay template (plan 017b, D6), before anything is confirmed: for each instrument role and readout, the lab's registered instruments that can do it on this plate format (preferred ones first, with their status); the plates and wells from the template's rules; and the protocol amounts, with what is still missing. Use it after designer.start and after changes, and tell the person what the lab can't do and what it would use instead",
+    "Check whether the lab can run an experiment designed from an assay template (plan 017b, D6), before anything is confirmed: for each instrument role and readout, the lab's registered instruments that can do it on this plate format (preferred ones first, with their status); the plates and wells from the template's rules; the protocol amounts, with what is still missing; and, for every SOP amount that names the material it is drawn from, the stock on hand less what confirmed transfer plans reserve. Use it after designer.start and after changes, and tell the person what the lab can't do and what it would use instead",
   effect: 'read',
   input: z.strictObject({
     experiment: recordIdOf('exp'),
@@ -237,7 +237,28 @@ export const designerFeasibility = defineContract({
       ready: z.boolean(),
       problems: z.array(z.string()),
     }),
-    feasible: z.boolean().describe('Every need has a ready instrument and every amount works out'),
+    stock: z.array(
+      z.object({
+        part: z.string(),
+        variable: z.string().describe('The SOP amount, e.g. total_detection_ab'),
+        role: z.string().describe('The material role it is drawn from'),
+        record: z.object({ id: RecordId, name: z.string(), label: z.string() }).optional(),
+        needed: Quantity.optional(),
+        holds: Quantity.optional().describe("What the material's wells hold now"),
+        reserved: Quantity.optional().describe('What confirmed transfer plans have reserved'),
+        available: Quantity.optional(),
+        short: Quantity.optional(),
+        verdict: z
+          .enum(['enough', 'short', 'unknown'])
+          .describe('unknown: no record bound, no amount worked out, or wells without a volume'),
+        note: z.string().optional(),
+      }),
+    ),
+    feasible: z
+      .boolean()
+      .describe(
+        'Every need has a ready instrument, every amount works out and no material is short',
+      ),
     lines: z.array(z.string()),
   }),
 });

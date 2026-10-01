@@ -18,5 +18,6 @@ export * from './platemap.ts';
 export * from './readiness.ts';
 export * from './reagents.ts';
 export * from './sop-benchmark.ts';
+export * from './stock.ts';
 export * from './transfers.ts';
 export * from './units.ts';
