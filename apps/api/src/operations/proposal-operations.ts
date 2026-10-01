@@ -4,6 +4,9 @@ import { OperationError, toErrorBody } from './errors.ts';
 import { decideProposal, findProposal, listProposals, toProposal } from './proposal-store.ts';
 import { implement } from './registry.ts';
 
+/** What each approval's applied run touched, by proposal, until its ledger entry is written. */
+const applied = new Map<string, string[]>();
+
 export const proposalOperations = [
   implement(proposalsList, {
     run: async (ctx, input, deps) => ({
@@ -13,9 +16,13 @@ export const proposalOperations = [
   implement(proposalsApprove, {
     actors: 'people',
     agentPolicy: 'direct',
+    // The records the applied run touched, not the proposal's preview, whose new records were
+    // rolled back and got other IDs when they were made for real.
     touches: (_input, output) => {
-      const preview = output?.preview as { id?: string } | undefined;
-      return preview?.id ? [preview.id] : [];
+      if (!output) return [];
+      const ids = applied.get(output.id) ?? [];
+      applied.delete(output.id);
+      return ids;
     },
     outcome: (output) => (output.status === 'approved' ? 'approved' : 'failed'),
     run: async (ctx, input, deps) => {
@@ -25,8 +32,9 @@ export const proposalOperations = [
       }
       // The approver reviewed the change, so it confirms the sections it touches (ADR 0021).
       const agentCtx = { ...ctx, actor: row.proposedBy, approvedBy: ctx.actor };
+      let ran: Awaited<ReturnType<typeof deps.registry.execute>>;
       try {
-        await deps.registry.execute(
+        ran = await deps.registry.execute(
           agentCtx,
           row.operationId,
           row.input,
@@ -41,11 +49,15 @@ export const proposalOperations = [
           error: toErrorBody(error),
         });
       }
-      return decideProposal(deps.db, row.id, {
+      const decided = await decideProposal(deps.db, row.id, {
         status: 'approved',
         decidedBy: ctx.actor,
         reason: input.reason,
       });
+      if (ran.status === 'done') {
+        applied.set(decided.id, deps.registry.touchedBy(row.operationId, row.input, ran.output));
+      }
+      return decided;
     },
   }),
   implement(proposalsReject, {

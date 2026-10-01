@@ -1,5 +1,6 @@
 import { diffValues } from '@ailab/domain';
 import {
+  type RecordEnvelope,
   recordsActivate,
   recordsArchive,
   recordsConfirm,
@@ -209,7 +210,18 @@ export const recordOperations = [
       service(deps).restore(ctx, id, { version, ...transition(input) }),
   }),
   implement(recordsDeleteDraft, {
-    agentPolicy: 'direct',
+    // Deleting takes the history with it, so an agent does it directly only to a draft that agents
+    // working for the same person made alone, with nothing confirmed. A person's work is a proposal.
+    agentPolicy: async (ctx, input, deps) => {
+      const records = service(deps);
+      const record = await records.get(ctx, input.id);
+      const principal = ctx.actor.type === 'agent' ? ctx.actor.onBehalfOf : undefined;
+      const ours = (actor: RecordEnvelope['createdBy']) =>
+        actor.type === 'agent' && actor.onBehalfOf === principal;
+      if (Object.keys(record.reviews).length > 0) return 'propose';
+      const versions = await records.history(ctx, record.id);
+      return versions.every((v) => ours(v.actor)) ? 'direct' : 'propose';
+    },
     run: async (ctx, input, deps) => {
       await service(deps).deleteDraft(ctx, input.id, { expectedVersion: input.expectedVersion });
       return { deleted: true as const, id: input.id };

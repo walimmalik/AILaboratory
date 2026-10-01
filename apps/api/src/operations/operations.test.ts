@@ -73,6 +73,39 @@ describe('calculation handles (ADR 0049)', () => {
     expect(error.message).toMatch(/did not give this value/);
   });
 
+  it('checks values marked as copied against the record they name', async () => {
+    const source = await create(person, { status: 'active' });
+    const draft = await create(person, { label: 'Draft source' });
+    const update = (evidence: Record<string, unknown>, color = 'teal') =>
+      registry.execute(agent, 'records.update', {
+        id: target.id,
+        expectedVersion: target.version,
+        attributes: { ...attributes, color },
+        evidence,
+      });
+    const target = await create(agent, { label: 'Target' });
+    const from = (extra: Record<string, unknown> = {}) => ({
+      color: { source: 'record', from: { id: source.id, version: 1, ...extra } },
+    });
+    expect((await refused(update(from({ id: 'wdg_01J9ZS4K8D6W3M5T7V9X1Y2Z3A' })))).message).toMatch(
+      /not a record in this lab/,
+    );
+    expect((await refused(update(from({ version: 4 })))).message).toMatch(/doesn't have/);
+    expect(
+      (await refused(update({ color: { source: 'record', from: { id: draft.id, version: 1 } } })))
+        .message,
+    ).toMatch(/was draft, not confirmed/);
+    expect((await refused(update(from({ path: '/color' }), 'red'))).message).toMatch(
+      /the value there is different/,
+    );
+    expect(
+      (await refused(update({ color: { source: 'memory', from: { id: source.id, version: 1 } } })))
+        .message,
+    ).toMatch(/lab memory/);
+    const ok = await update(from({ path: '/color' }));
+    expect(ok.status).toBe('done');
+  });
+
   it('refuses record evidence that does not say which record', async () => {
     const w = await create(agent);
     const error = await refused(
@@ -254,8 +287,34 @@ describe('finding records', () => {
         {},
       )
     ).entries;
+    // The preview's record was rolled back, so the proposal names no record that doesn't exist.
     expect(entry?.outcome).toBe('proposed');
-    expect(Object.values(entry?.recordNames ?? {})).toEqual(['GDG-0001']);
+    expect(entry?.recordIds).toEqual([]);
+  });
+
+  it("names the records an approval made, not the proposal's preview", async () => {
+    const { proposal } = (await registry.execute(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'New',
+      attributes: { color: 'teal' },
+      status: 'active',
+    })) as { proposal: Proposal };
+    const previewId = (proposal.preview as RecordEnvelope).id;
+    await run(person, 'proposals.approve', { id: proposal.id });
+    const [made] = (await run<{ records: RecordEnvelope[] }>(person, 'records.list', {})).records;
+    expect(made?.id).not.toBe(previewId);
+    const entries = (
+      await run<{ entries: { operationId: string; outcome: string; recordIds: string[] }[] }>(
+        person,
+        'activity.list',
+        {},
+      )
+    ).entries;
+    expect(entries.map((e) => [e.outcome, e.recordIds])).toEqual([
+      ['approved', [made?.id]],
+      ['succeeded', [made?.id]],
+      ['proposed', []],
+    ]);
   });
 });
 
@@ -315,6 +374,33 @@ describe('agents', () => {
       expectedVersion: 1,
     });
     expect(result.status).toBe('proposed');
+  });
+
+  it("delete their own drafts directly, and propose deleting a person's", async () => {
+    const theirs = await create(agent);
+    expect(
+      (await registry.execute(agent, 'records.delete_draft', { id: theirs.id, expectedVersion: 1 }))
+        .status,
+    ).toBe('done');
+
+    const mine = await create(person);
+    expect(
+      (await registry.execute(agent, 'records.delete_draft', { id: mine.id, expectedVersion: 1 }))
+        .status,
+    ).toBe('proposed');
+
+    // An agent's draft a person has worked on is the person's too.
+    const shared = await create(agent);
+    await run(person, 'records.update', { id: shared.id, expectedVersion: 1, label: 'Edited' });
+    await run(agent, 'records.update', { id: shared.id, expectedVersion: 2, label: 'Again' });
+    expect(
+      (
+        await registry.execute(agent, 'records.delete_draft', {
+          id: shared.id,
+          expectedVersion: 3,
+        })
+      ).status,
+    ).toBe('proposed');
   });
 
   it('may not approve or reject proposals', async () => {
@@ -482,21 +568,26 @@ describe('draft and confirm', () => {
     );
     expect(blocked).toMatchObject({ code: 'invalid_state' });
     expect(blocked.message).toContain('Volume');
-    const gadget = await run<RecordEnvelope>(person, 'records.create', {
-      kind: 'gadget',
-      label: 'g',
-      attributes: { color: 'red' },
-    });
-    expect(
-      (
-        await refused(
-          registry.execute(person, 'records.confirm', { id: gadget.id, expectedVersion: 1 }),
-        )
-      ).code,
-    ).toBe('invalid_input');
     expect(
       (await refused(registry.execute(person, 'records.confirm', { id: draft.id }))).code,
     ).toBe('invalid_input');
+  });
+
+  it('confirms a draft of a kind without sections by making it active', async () => {
+    const draft = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'gadget',
+      label: 'Clip',
+      attributes: { color: 'red' },
+    });
+    const done = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: draft.id,
+      expectedVersion: 1,
+    });
+    expect(done.status).toBe('active');
+    const again = await refused(
+      registry.execute(person, 'records.confirm', { id: draft.id, expectedVersion: 2 }),
+    );
+    expect(again.message).toBe('GDG-0001 is already confirmed');
   });
 
   it('only people confirm everything at once', async () => {
@@ -621,6 +712,31 @@ describe('review inbox', () => {
         )
       ).code,
     ).toBe('forbidden');
+  });
+
+  it('confirms a batch of drafts whose kind has no sections, and counts their guesses', async () => {
+    const sourced = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'Sourced',
+      attributes: { color: 'red' },
+      evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
+    });
+    const guessed = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'Guessed',
+      attributes: { color: 'blue' },
+    });
+    const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    const drafts = listed.items.flatMap((i) => (i.type === 'draft' ? [i] : []));
+    expect(drafts.find((i) => i.record.id === guessed.id)).toMatchObject({
+      batchable: false,
+      assumed: 1,
+    });
+    expect(drafts.find((i) => i.record.id === sourced.id)?.batchable).toBe(true);
+    const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
+      records: [{ id: sourced.id, expectedVersion: sourced.version }],
+    });
+    expect(done.confirmed.map((r) => r.status)).toEqual(['active']);
   });
 
   it('stores the readiness summary with the record at every write', async () => {
@@ -844,6 +960,33 @@ describe('what changed (ADR 0053)', () => {
     expect(
       (await refused(registry.execute(person, 'records.diff', { id: w.id, from: 3, to: 2 }))).code,
     ).toBe('invalid_input');
+  });
+
+  it("counts a person's own writes and approvals as seen", async () => {
+    const w = await create(agent);
+    await run(person, 'records.update', { id: w.id, expectedVersion: 1, label: 'Mine' });
+    expect(await run<Diff>(person, 'records.diff', { id: w.id })).toMatchObject({
+      from: 2,
+      to: 2,
+      since: 'seen',
+      changes: [],
+    });
+    // An agent's own write leaves the marker where it was.
+    await run(agent, 'records.update', { id: w.id, expectedVersion: 2, label: 'Agent' });
+    expect(await run<Diff>(person, 'records.diff', { id: w.id })).toMatchObject({ from: 2, to: 3 });
+
+    const active = await create(person, { status: 'active' });
+    const { proposal } = (await registry.execute(agent, 'records.update', {
+      id: active.id,
+      expectedVersion: 1,
+      label: 'Proposed',
+    })) as { proposal: Proposal };
+    await run(person, 'proposals.approve', { id: proposal.id });
+    expect(await run<Diff>(person, 'records.diff', { id: active.id })).toMatchObject({
+      from: 2,
+      to: 2,
+      changes: [],
+    });
   });
 
   it('keeps the seen marker to people and out of the ledger', async () => {

@@ -174,4 +174,11 @@ describe('readiness', () => {
     expect(readiness(empty, { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
     expect(readiness(widget(), { sections, checks: withFix }).checks[0]?.quickFix).toBeUndefined();
   });
+
+  it('counts the guesses of a draft whose kind has no sections, until it is active', () => {
+    const draft = readiness(widget(), { checks });
+    expect(draft.assumed).toEqual(['color']);
+    expect(draft.ready).toBe(true);
+    expect(readiness(widget({ status: 'active' }), { checks }).assumed).toEqual([]);
+  });
 });
