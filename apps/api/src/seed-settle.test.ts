@@ -1,7 +1,9 @@
+import { newId } from '@ailab/domain';
 import type { Actor, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from './auth.ts';
 import type { Db } from './db/client.ts';
+import { users } from './db/schema.ts';
 import { createTestDb } from './db/testing.ts';
 import { createRegistry, type OperationRegistry } from './operations/index.ts';
 import { KindRegistry } from './records/kinds.ts';
@@ -56,6 +58,14 @@ describe('settling the seed', () => {
     });
     // Another agent's draft and proposal are not the seed's to settle.
     const theirs = await run<RecordEnvelope>(other, 'records.create', widgetOf('Theirs', '5'));
+    // Nor is a draft from an agent of the same name working for someone else in the lab.
+    const samId = newId('usr');
+    await db.insert(users).values({ id: samId, orgId: person.orgId, displayName: 'Sam' });
+    const sams = await run<RecordEnvelope>(
+      { ...loader, actor: { type: 'agent', agentName: 'Seed loader', onBehalfOf: samId } },
+      'records.create',
+      widgetOf('Sam’s', '5'),
+    );
     await run(other, 'records.update', { id: active.id, expectedVersion: 1, label: 'Rack (red)' });
 
     const report = await settleSeed(registry, db, person, loader, 'Imported from seed');
@@ -72,6 +82,9 @@ describe('settling the seed', () => {
       'draft',
     );
     expect((await run<RecordEnvelope>(person, 'records.get', { id: theirs.id })).status).toBe(
+      'draft',
+    );
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: sams.id })).status).toBe(
       'draft',
     );
     const pending = await run<{ proposals: unknown[] }>(person, 'proposals.list', {

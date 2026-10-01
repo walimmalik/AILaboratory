@@ -1,5 +1,5 @@
 import { readiness, summarizeReadiness } from '@ailab/domain';
-import { type Actor, type FieldEvidence, type ReviewItem, reviewList } from '@ailab/schema';
+import { type Actor, type ReviewItem, reviewList } from '@ailab/schema';
 import { and, count, eq } from 'drizzle-orm';
 import { records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
@@ -15,23 +15,6 @@ const DRAFT_LIMIT = 200;
 
 /** Who an item is for: the person an agent worked for, or the person who acted. */
 const addressee = (actor: Actor) => (actor.type === 'agent' ? actor.onBehalfOf : actor.userId);
-
-/** Sources the server can't check, so an agent naming one is taken on its word (C4). */
-const UNCHECKED = new Set(['datasheet', 'imported', 'measured']);
-
-/**
- * How many values an agent gave an unchecked source: one per field, or per item of a keyed list
- * (whose list-level evidence is then not counted again).
- */
-function sourcesToCheck(
-  evidence: Record<string, FieldEvidence>,
-  items: Readonly<Record<string, string>> = {},
-): number {
-  return Object.entries(evidence).filter(
-    ([key, e]) =>
-      (key.startsWith('/') || !items[key]) && e.by.type === 'agent' && UNCHECKED.has(e.source),
-  ).length;
-}
 
 export const reviewOperations = [
   implement(reviewList, {
@@ -64,7 +47,6 @@ export const reviewOperations = [
           // The stored summary includes checks that read other records (ADR 0050); older rows
           // written before it existed fall back to the kind's own checks.
           const summary = record.readiness ?? summarizeReadiness(state);
-          const toCheck = sourcesToCheck(record.evidence, kind.items);
           const item: ReviewItem = {
             type: 'draft',
             tier: 'to_confirm',
@@ -83,15 +65,15 @@ export const reviewOperations = [
             byAgent: record.createdBy.type === 'agent',
             batchable:
               summary.assumed === 0 &&
-              toCheck === 0 &&
+              state.unchecked.length === 0 &&
               summary.blockers === 0 &&
               summary.changed.length === 0,
-            sourcesToCheck: toCheck,
             warnings: summary.warnings,
             sectionsToConfirm: summary.sectionsLeft,
             missing: state.missing,
             ready: summary.ready,
             assumed: summary.assumed,
+            unchecked: state.unchecked.length,
           };
           return [item];
         }),

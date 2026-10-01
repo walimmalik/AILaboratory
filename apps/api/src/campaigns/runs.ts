@@ -80,6 +80,12 @@ export const runOperations = [
     run: async (ctx, input, deps) => {
       const records = service(deps);
       const experiment = await recordOf(records, ctx, input.experiment, 'experiment', 'experiment');
+      // A proposal replays this later: start the version that was reviewed, or nothing.
+      if (experiment.version !== input.expectedVersion)
+        throw new OperationError(
+          'version_conflict',
+          `${experiment.name} is at version ${experiment.version}, not ${input.expectedVersion}; look at what changed, then start it again`,
+        );
       const e = experiment.attributes as ExperimentAttributes;
       if (
         experiment.status !== 'active' ||

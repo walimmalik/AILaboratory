@@ -604,6 +604,7 @@ export class RecordService {
         return rows.map(toEnvelope);
       },
       current: current ? toEnvelope(current) : undefined,
+      actor: ctx.actor,
       reservedPrefixes: this.kinds.list().flatMap(namePrefixesOf),
     });
     if (refuse && result.invalid?.length) {

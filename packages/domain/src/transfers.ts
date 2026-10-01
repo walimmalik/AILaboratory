@@ -197,10 +197,12 @@ export function dilutionOptions(input: DilutionInput): DilutionPoint[] {
   const factors = input.factors ?? ['10', '100', '1000'];
   for (const f of factors)
     if (new LabDecimal(f).lte(1)) throw new TransferError('A dilution factor is more than 1');
+  // Mildest first, so the search can stop at the first intermediate already below the target.
+  const ascending = [...factors].sort((a, b) => new LabDecimal(a).comparedTo(b));
   return input.targets.map((target) => {
     const direct = directDispense({ ...input, target });
     if (direct.ok) return { target, direct, reachable: true };
-    for (const factor of factors) {
+    for (const factor of ascending) {
       const concentration: Quantity = {
         value: round(dec(input.stock).dividedBy(factor)),
         unit: input.stock.unit,
@@ -405,6 +407,7 @@ export function optimizeDilution(input: OptimizeInput): OptimizeResult {
   const wells: Omit<IntermediateWell, 'id' | 'plate' | 'well'>[] = [];
   const dead = inUnit(plate.deadVolume, unit);
   const max = inUnit(plate.maxVolume, unit);
+  const step = input.device.step ? inUnit(input.device.step, unit) : undefined;
   if (dead.gte(max))
     throw new TransferError('The intermediate plate keeps back more than a well holds');
 
@@ -453,8 +456,9 @@ export function optimizeDilution(input: OptimizeInput): OptimizeResult {
       }, new LabDecimal(0));
     const chosen =
       covers.sort((a, b) => a.length - b.length || errorOf(a).comparedTo(errorOf(b)))[0] ?? [];
-    // Each point's dispenses, in order, filled into wells of its dilution until a well is full.
-    const room = max.minus(dead);
+    // Each point's dispenses, in order, filled into wells of its dilution until a well is full,
+    // leaving space to round its stock up to whole steps of the device.
+    const roomFor = (factor: string) => max.minus(dead).minus(step ? step.times(factor) : 0);
     const open = new Map<string, number>();
     for (const r of routes) {
       if (!r.options.length) continue;
@@ -473,6 +477,7 @@ export function optimizeDilution(input: OptimizeInput): OptimizeResult {
         .filter((o) => chosen.includes(o.factor))
         .reduce((a, b) => (new LabDecimal(a.dispense.error).lte(b.dispense.error) ? a : b));
       const each = inUnit(pick.dispense.volume.achieved, unit);
+      const room = roomFor(pick.factor);
       if (each.gt(room))
         throw new TransferError(
           `One dispense of ${formatQuantity(pick.dispense.volume.achieved)} is more than an intermediate well can give`,
@@ -513,10 +518,12 @@ export function optimizeDilution(input: OptimizeInput): OptimizeResult {
       });
     }
   }
-  // What each intermediate well is made of: stock, then solvent up to what is drawn plus dead.
+  // What each intermediate well is made of: stock, then solvent up to at least what is drawn plus
+  // dead. The device moves the stock, so it is whole steps, and the well grows to keep the factor.
   for (const w of wells) {
-    const volume = new LabDecimal(w.drawn.value).plus(dead);
-    const stock = volume.dividedBy(w.factor);
+    let stock = new LabDecimal(w.drawn.value).plus(dead).dividedBy(w.factor);
+    if (step) stock = stock.dividedBy(step).toDecimalPlaces(0, LabDecimal.ROUND_CEIL).times(step);
+    const volume = stock.times(w.factor);
     w.volume = { value: round(volume), unit };
     w.stock = { value: round(stock), unit };
     w.diluent = { value: round(volume.minus(stock)), unit };

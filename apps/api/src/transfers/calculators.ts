@@ -10,6 +10,7 @@ import {
   subtract,
   type TipRule,
   TransferError,
+  UnitError,
 } from '@ailab/domain';
 import {
   type ClassChoice,
@@ -48,7 +49,8 @@ export async function calculating<T>(work: () => T | Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    if (error instanceof TransferError) throw new OperationError('invalid_input', error.message);
+    if (error instanceof TransferError || error instanceof UnitError)
+      throw new OperationError('invalid_input', error.message);
     throw error;
   }
 }

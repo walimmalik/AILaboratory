@@ -64,19 +64,60 @@ const noScreen: Record<string, string> = {
   'runs.correct': notYet('the run page shows the log read-only'),
 };
 
-const webSource = (() => {
+const IMPORT = /import\s+(type\s+)?\{([^}]*)\}\s+from\s+'@ailab\/schema';?/g;
+
+/**
+ * The contracts a source file calls: the names it imports from `@ailab/schema` as values (not
+ * `type` imports) and then uses in its code, outside comments and the import itself. A name in a
+ * comment, a string or an unused import doesn't count.
+ */
+function contractsCalled(source: string): Set<string> {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const imported: [exported: string, local: string][] = [];
+  for (const [, typeOnly, specifiers = ''] of code.matchAll(IMPORT)) {
+    if (typeOnly) continue;
+    for (const spec of specifiers.split(',')) {
+      const words = spec.trim().split(/\s+/);
+      if (!words[0] || words[0] === 'type') continue;
+      imported.push([words[0], words.at(-1) as string]);
+    }
+  }
+  const body = code.replace(IMPORT, '').replace(/'[^'\n]*'|"[^"\n]*"/g, "''");
+  return new Set(
+    imported.filter(([, local]) => new RegExp(`\\b${local}\\b`).test(body)).map(([name]) => name),
+  );
+}
+
+const webCalls = (() => {
   const root = join(import.meta.dirname, '../../../web/src');
-  const files: string[] = [];
+  const called = new Set<string>();
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) walk(path);
-      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(path);
+      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name))
+        for (const c of contractsCalled(readFileSync(path, 'utf8'))) called.add(c);
     }
   };
   walk(root);
-  return files.map((f) => readFileSync(f, 'utf8')).join('\n');
+  return called;
 })();
+
+describe('what counts as a web caller', () => {
+  it('is a contract imported and used, not a comment, a string or an unused import', () => {
+    const source = [
+      "import { recordsUpdate, type RecordEnvelope, recordsArchive as archive } from '@ailab/schema';",
+      "import type { recordsDelete } from '@ailab/schema';",
+      "import { recordsCreate, recordsRestore } from '@ailab/schema';",
+      'api.run(recordsUpdate, input);',
+      'const go = () => api.run(archive, input);',
+      '// recordsCreate, someday',
+      "const label = 'recordsRestore';",
+      'let x: RecordEnvelope;',
+    ].join('\n');
+    expect([...contractsCalled(source)]).toEqual(['recordsUpdate', 'recordsArchive']);
+  });
+});
 
 describe('people parity (ADR 0057)', () => {
   it('every write an agent can make has a web caller or a stated reason', async () => {
@@ -97,7 +138,7 @@ describe('people parity (ADR 0057)', () => {
         .filter((c) => !(c.id in noScreen))
         .filter((c) => {
           const name = names.get(c.id);
-          return !name || !new RegExp(`\\b${name}\\b`).test(webSource);
+          return !name || !webCalls.has(name);
         })
         .map((c) => c.id);
       expect(
@@ -105,7 +146,7 @@ describe('people parity (ADR 0057)', () => {
         'agent writes with no web caller; add a screen or a reason to noScreen',
       ).toEqual([]);
       const stale = Object.keys(noScreen).filter(
-        (id) => names.get(id) && new RegExp(`\\b${names.get(id)}\\b`).test(webSource),
+        (id) => names.get(id) && webCalls.has(names.get(id) as string),
       );
       expect(stale, 'these have a web caller now; take them out of noScreen').toEqual([]);
     } finally {

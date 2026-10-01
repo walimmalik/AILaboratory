@@ -364,10 +364,10 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
       <td>
         {todo}
         {item.assumed > 0 && <span className="agent-ink"> · {item.assumed} unverified</span>}
-        {item.sourcesToCheck > 0 && (
+        {item.unchecked > 0 && (
           <span className="agent-ink">
             {' '}
-            · {item.sourcesToCheck} {item.sourcesToCheck === 1 ? 'source' : 'sources'} to check
+            · {item.unchecked} {item.unchecked === 1 ? 'source' : 'sources'} to check
           </span>
         )}
       </td>

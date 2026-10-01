@@ -104,6 +104,21 @@ describe('dilution options', () => {
     });
     expect(points[2]?.reachable).toBe(false);
   });
+
+  it('gives the same answer whatever order the factors come in', () => {
+    const input = {
+      stock: q('10', 'mM'),
+      finalVolume: q('10', 'uL'),
+      device: { min: q('2', 'uL'), max: q('100', 'uL'), step: q('0.1', 'uL') },
+      maxSolventPercent: '100',
+      tolerance: '0.05',
+      targets: [q('1', 'mM')],
+    };
+    const sorted = dilutionOptions({ ...input, factors: ['10', '1000'] });
+    const unsorted = dilutionOptions({ ...input, factors: ['1000', '10'] });
+    expect(sorted[0]).toMatchObject({ reachable: true, intermediate: { factor: '10' } });
+    expect(unsorted).toEqual(sorted);
+  });
 });
 
 describe('source volumes', () => {
@@ -216,16 +231,17 @@ describe('the dilution optimizer', () => {
     expect(result.plates).toBe(1);
   });
 
-  it('makes each intermediate well with what is drawn plus the dead volume', () => {
+  it('makes each intermediate well with what is drawn plus the dead volume, in whole droplets', () => {
     const [first] = optimizeDilution(input).intermediates;
     // Points 2 and 3 of cmp1, twice each: 2 × 82.5 nL + 2 × 27.5 nL = 0.22 µL, plus 15 µL dead.
+    // A tenth of 15.22 µL is 608.8 droplets of stock; 609 make 15.225 µL at exactly 10 fold.
     expect(first).toMatchObject({
       concentration: q('1', 'mM'),
       drawn: q('0.22', 'uL'),
       dead: q('15', 'uL'),
-      volume: q('15.22', 'uL'),
-      stock: q('1.522', 'uL'),
-      diluent: q('13.698', 'uL'),
+      volume: q('15.225', 'uL'),
+      stock: q('1.5225', 'uL'),
+      diluent: q('13.7025', 'uL'),
     });
   });
 
@@ -236,8 +252,9 @@ describe('the dilution optimizer', () => {
         { id: 'cmp1', stock: q('10', 'mM'), points: [curve[1] as never], wellsPerPoint: 700 },
       ],
     });
-    // 700 × 82.5 nL = 57.75 µL; a well gives 50 µL above its 15 µL dead volume.
-    expect(many.intermediates.map((w) => w.drawn)).toEqual([q('49.995', 'uL'), q('7.755', 'uL')]);
+    // 700 × 82.5 nL = 57.75 µL; a well gives 50 µL above its 15 µL dead volume, less 25 nL kept
+    // to round its stock up to whole droplets.
+    expect(many.intermediates.map((w) => w.drawn)).toEqual([q('49.9125', 'uL'), q('7.8375', 'uL')]);
     expect(many.points[0]?.intermediate).toBe('I1, I2');
 
     const deep = optimizeDilution({

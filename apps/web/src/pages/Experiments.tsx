@@ -254,7 +254,8 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
     onSuccess: refresh,
   });
   const start = useMutation({
-    mutationFn: () => api.run(runsStart, { experiment: record.id }),
+    mutationFn: () =>
+      api.run(runsStart, { experiment: record.id, expectedVersion: record.version }),
     onSuccess: async (run) => {
       await refresh();
       await navigate({ to: '/records/$id', params: { id: run.id } });

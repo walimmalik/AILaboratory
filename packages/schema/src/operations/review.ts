@@ -38,17 +38,11 @@ export const ReviewDraft = z.object({
   /** Made by an agent, so a person may discard it from Review. */
   byAgent: z.boolean(),
   /**
-   * Nothing in it is a guess or a source only an agent vouches for, no blocker fails and no
+   * Nothing in it is a guess or an unchecked source, no blocker fails and no
    * confirmed value changed, so it may be confirmed with others in one step (R3,
    * `records.confirm_many`); warnings are counted, not refused.
    */
   batchable: z.boolean(),
-  /**
-   * Values an agent says came from a datasheet, an import or a measurement: the server can't check
-   * those, so a person opens the draft to see them (C4, Wali 2026-10-01). Stated values, and
-   * calculated or copied ones the server checks, don't count.
-   */
-  sourcesToCheck: z.number().int().nonnegative(),
   /** How many warning checks fail: shown with a batch confirm, which lets them pass. */
   warnings: z.number().int().nonnegative(),
   /** Titles of the sections still to confirm. */
@@ -58,6 +52,8 @@ export const ReviewDraft = z.object({
   ready: z.boolean(),
   /** How many values are an agent's unconfirmed estimate. */
   assumed: z.number().int().nonnegative(),
+  /** How many values an agent sourced to a datasheet, measurement or import that nothing checked. */
+  unchecked: z.number().int().nonnegative(),
 });
 
 /** A proposed change to an active record, waiting for a person to confirm or reject it. */

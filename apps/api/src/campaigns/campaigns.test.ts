@@ -1,4 +1,4 @@
-import type { Actor, Readiness, RecordEnvelope } from '@ailab/schema';
+import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -337,6 +337,7 @@ describe('experiment stages and runs', () => {
 
     const day1 = await run(person, 'runs.start', {
       experiment: planned.id,
+      expectedVersion: planned.version,
       label: 'Day 1',
       date: '2026-10-01',
     });
@@ -662,7 +663,10 @@ async function plannedExperiment() {
 describe('recording runs (013c)', () => {
   it('starts a run as a checklist of planned steps and records ticks, changes, skips, data and the finish', async () => {
     const experiment = await plannedExperiment();
-    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
     expect(started.status).toBe('active');
     expect(started.attributes).toMatchObject({
       status: 'in_progress',
@@ -820,17 +824,29 @@ describe('recording runs (013c)', () => {
       question: 'Does it work?',
     });
     await expect(
-      registry.execute(person, 'runs.start', { experiment: draft.id }),
+      registry.execute(person, 'runs.start', {
+        experiment: draft.id,
+        expectedVersion: draft.version,
+      }),
     ).rejects.toMatchObject({ code: 'invalid_state' });
 
     const experiment = await plannedExperiment();
-    const proposal = await registry.execute(agent, 'runs.start', { experiment: experiment.id });
+    const proposal = await registry.execute(agent, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
     expect(proposal.status).toBe('proposed');
     await expect(
-      registry.execute(otherLab, 'runs.start', { experiment: experiment.id }),
+      registry.execute(otherLab, 'runs.start', {
+        experiment: experiment.id,
+        expectedVersion: experiment.version,
+      }),
     ).rejects.toMatchObject({ code: 'not_found' });
 
-    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
     const done = await run(person, 'runs.done_as_planned', {
       id: started.id,
       expectedVersion: started.version,
@@ -846,9 +862,36 @@ describe('recording runs (013c)', () => {
     expect(finished.attributes).toMatchObject({ status: 'done' });
   });
 
+  it('starts only the experiment version that was reviewed', async () => {
+    const experiment = await plannedExperiment();
+    const start = { experiment: experiment.id, expectedVersion: experiment.version };
+    const alone = await registry.execute(agent, 'runs.start', start);
+    const inSet = await registry.execute(agent, 'changes.apply', {
+      steps: [{ operation: 'runs.start', input: start }],
+    });
+    expect([alone.status, inSet.status]).toEqual(['proposed', 'proposed']);
+    // The experiment changes after the proposals were made.
+    await run(person, 'records.update', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      label: 'Changed after review',
+    });
+    for (const proposed of [alone, inSet]) {
+      const decided = await run<Proposal>(person, 'proposals.approve', {
+        id: (proposed as { proposal: Proposal }).proposal.id,
+      });
+      expect(decided).toMatchObject({ status: 'failed', error: { code: 'version_conflict' } });
+    }
+    const runs = await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'run' });
+    expect(runs.records).toEqual([]);
+  });
+
   it('corrects a finished run late: a step value stays structured, anything else is a deviation', async () => {
     const experiment = await plannedExperiment();
-    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
     const correct = (ctx: typeof person, target: RecordEnvelope, input: object) =>
       registry.execute(ctx, 'runs.correct', {
         id: target.id,
@@ -914,6 +957,71 @@ describe('recording runs (013c)', () => {
   });
 });
 
+describe('runs keep their record whatever writes them (ADR 0041)', () => {
+  it('refuses generic writes that change the checklist, reopen a finished run or skip runs.correct', async () => {
+    const experiment = await plannedExperiment();
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
+    type Steps = { planned: { name: string; value: unknown }[]; status: string }[];
+    const update = (target: RecordEnvelope, change: (a: Record<string, unknown>) => object) =>
+      registry.execute(person, 'records.update', {
+        id: target.id,
+        expectedVersion: target.version,
+        attributes: change(target.attributes as Record<string, unknown>),
+      });
+    const replan = (a: Record<string, unknown>) => ({
+      ...a,
+      steps: (a.steps as Steps).map((s, i) => (i === 0 ? { ...s, planned: [] } : s)),
+    });
+    await expect(update(started, replan)).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('keeps the steps and planned values'),
+    });
+
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    const finished = await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    await expect(
+      update(finished, (a) => ({ ...a, status: 'in_progress', steps: [] })),
+    ).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('runs.correct'),
+    });
+    await expect(
+      update(finished, (a) => ({
+        ...a,
+        steps: (a.steps as Steps).map((s, i) => (i === 0 ? { ...s, status: 'skipped' } : s)),
+      })),
+    ).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('changed after the run finished'),
+    });
+    await expect(
+      update(finished, (a) => ({ ...a, deviations: [{ what: 'Late note', why: 'Forgot' }] })),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    // Notes are still anyone's to add, and runs.correct still corrects.
+    const noted = await update(finished, (a) => ({ ...a, notes: 'Reader was warm' }));
+    expect(noted.status).toBe('done');
+    const corrected = await registry.execute(person, 'runs.correct', {
+      id: finished.id,
+      expectedVersion: finished.version + 1,
+      part: 'coating',
+      step: 'coat',
+      changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      why: 'Coating solution ran short',
+    });
+    expect(corrected.status).toBe('done');
+  });
+});
+
 describe('conclusions and sets (013c)', () => {
   it('concludes from finished runs with a verdict per hypothesis, and hands hits on as a set', async () => {
     const experiment = await plannedExperiment();
@@ -924,7 +1032,10 @@ describe('conclusions and sets (013c)', () => {
         summary: 'Nothing yet',
       }),
     ).rejects.toMatchObject({ code: 'invalid_state' });
-    const started = await run(person, 'runs.start', { experiment: experiment.id });
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
     const running = await run(person, 'records.get', { id: experiment.id });
     await expect(
       registry.execute(person, 'experiments.conclude', {

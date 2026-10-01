@@ -1,4 +1,5 @@
 import {
+  type ActivityEntry,
   type Actor,
   operationContracts,
   type Proposal,
@@ -330,6 +331,34 @@ describe('finding records', () => {
       ['succeeded', [made?.id]],
       ['proposed', []],
     ]);
+  });
+
+  it("never names another lab's record, even when a write touching it fails", async () => {
+    const other = await createTenant(db, {
+      orgName: 'Other',
+      labName: 'Other lab',
+      userName: 'Sam',
+    });
+    const sam: RecordContext = {
+      actor: { type: 'user', userId: other.userId },
+      orgId: other.orgId,
+      labId: other.labId,
+    };
+    const theirs = await run<RecordEnvelope>(sam, 'records.create', {
+      kind: 'gadget',
+      label: 'Secret',
+      attributes: { color: 'teal' },
+    });
+    const live: ActivityEntry[] = [];
+    bus.subscribe(person.labId, (e) => live.push(e));
+    const error = await refused(
+      registry.execute(person, 'records.delete_draft', { id: theirs.id, expectedVersion: 1 }),
+    );
+    expect(error.code).toBe('not_found');
+    const [entry] = (await run<{ entries: ActivityEntry[] }>(person, 'activity.list', {})).entries;
+    expect(entry).toMatchObject({ outcome: 'failed', recordIds: [theirs.id] });
+    expect(entry?.recordNames).toEqual({});
+    expect(live.map((e) => e.recordNames)).toEqual([{}]);
   });
 });
 
@@ -704,26 +733,34 @@ describe('review inbox', () => {
     });
   });
 
-  it('confirms a batch only when nothing in it is a guess, all or nothing', async () => {
-    const clean = await create(agent, {
-      evidence: {
-        color: { source: 'stated' },
-        volume: { source: 'stated' },
-      },
-    });
+  it('confirms a batch only when nothing in it is a guess or unchecked, all or nothing', async () => {
+    const stated = { source: 'stated', note: 'Wali said so' };
+    const clean = await create(agent, { evidence: { color: stated, volume: stated } });
     const second = await create(agent, {
       label: 'Second',
-      evidence: {
-        color: { source: 'stated' },
-        volume: { source: 'stated' },
-      },
+      evidence: { color: stated, volume: stated },
     });
     const guessed = await create(agent, { label: 'Guessed' });
+    // An agent's word that a value is from a datasheet isn't checked, so a person looks at it.
+    const sheet = { source: 'datasheet', reference: 'https://example.org' };
+    const sourced = await create(agent, {
+      label: 'Sourced',
+      evidence: { color: stated, volume: sheet },
+    });
     const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
     const batchable = listed.items.flatMap((i) =>
       i.type === 'draft' && i.batchable ? [i.record.id] : [],
     );
     expect(batchable.sort()).toEqual([clean.id, second.id].sort());
+    expect(
+      listed.items.find((i) => i.type === 'draft' && i.record.id === sourced.id),
+    ).toMatchObject({ batchable: false, unchecked: 1, assumed: 0 });
+    const unchecked = await refused(
+      registry.execute(person, 'records.confirm_many', {
+        records: [{ id: sourced.id, expectedVersion: sourced.version }],
+      }),
+    );
+    expect(unchecked.message).toContain('1 sourced by an agent and not checked');
 
     const refusedBatch = await refused(
       registry.execute(person, 'records.confirm_many', {
@@ -773,16 +810,16 @@ describe('review inbox', () => {
       attributes: { color: 'red' },
       evidence: { color: { source: 'stated' } },
     });
-    const cited = await run<RecordEnvelope>(agent, 'records.create', {
-      kind: 'gadget',
-      label: 'Cited',
-      attributes: { color: 'green' },
-      evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
-    });
     const guessed = await run<RecordEnvelope>(agent, 'records.create', {
       kind: 'gadget',
       label: 'Guessed',
       attributes: { color: 'blue' },
+    });
+    const fromSheet = await run<RecordEnvelope>(agent, 'records.create', {
+      kind: 'gadget',
+      label: 'From a sheet',
+      attributes: { color: 'green' },
+      evidence: { color: { source: 'datasheet', reference: 'https://example.org' } },
     });
     const listed = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
     const drafts = listed.items.flatMap((i) => (i.type === 'draft' ? [i] : []));
@@ -790,12 +827,11 @@ describe('review inbox', () => {
       batchable: false,
       assumed: 1,
     });
-    expect(drafts.find((i) => i.record.id === sourced.id)?.batchable).toBe(true);
-    expect(drafts.find((i) => i.record.id === cited.id)).toMatchObject({
+    expect(drafts.find((i) => i.record.id === fromSheet.id)).toMatchObject({
       batchable: false,
-      sourcesToCheck: 1,
-      assumed: 0,
+      unchecked: 1,
     });
+    expect(drafts.find((i) => i.record.id === sourced.id)?.batchable).toBe(true);
     const done = await run<{ confirmed: { status: string }[] }>(person, 'records.confirm_many', {
       records: [{ id: sourced.id, expectedVersion: sourced.version }],
     });
