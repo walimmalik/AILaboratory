@@ -6,6 +6,7 @@ import type { KindPage } from '../lib/kinds.ts';
 import { libraryPages } from '../lib/kinds.ts';
 import { recordsQuery } from '../queries.ts';
 import { ImportOpentrons } from './ImportOpentrons.tsx';
+import { NewRecordButton } from './NewRecord.tsx';
 import { RecordList } from './Records.tsx';
 
 const page = (kind: string) => libraryPages.find((p) => p.kind === kind) as KindPage;
@@ -69,7 +70,12 @@ export function LabwarePage() {
       <Head
         page={page('labware_type')}
         lede="The kinds of plates, reservoirs, tubes, racks and tip racks the lab uses, with their geometry and volumes. Physical plates and what is in them come with inventory."
-        actions={<ImportOpentrons />}
+        actions={
+          <div className="head-actions">
+            <NewRecordButton kind="labware_type" />
+            <ImportOpentrons />
+          </div>
+        }
       />
       <RecordList
         title="Labware types"
@@ -124,6 +130,7 @@ export function VendorsPage() {
       <Head
         page={page('vendor')}
         lede="Manufacturers and suppliers. Labware, instruments and reagents point to them."
+        actions={<NewRecordButton kind="vendor" />}
       />
       <RecordList
         title="Vendors"

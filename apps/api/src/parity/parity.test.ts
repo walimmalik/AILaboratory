@@ -22,7 +22,6 @@ const noScreen: Record<string, string> = {
   'library.propose_mentions': notYet(
     'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
   ),
-  'records.create': draftedByAsking,
   'campaigns.draft': draftedByAsking,
   'experiments.draft': draftedByAsking,
   'sops.draft': draftedByAsking,

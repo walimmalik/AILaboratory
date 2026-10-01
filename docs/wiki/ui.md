@@ -57,6 +57,7 @@ Added 2026-10-01 after the second human interaction review (reviews/ux-2026-10-0
 21. **A batch action never errors on what it offered.** When some drafts in a list can't be confirmed together, the button confirms the ones that can and names how many are left; warnings are counted, not refused.
 22. **An agent never destroys a person's work directly.** Deleting a draft a person wrote or confirmed any of is a proposal.
 23. **Evidence that names a source is checked against it.**
+24. **A person starts a common record from its registry page.** Products, lots, places, labware types and vendors have a "New …" form drawn from the kind's schema (required fields first, the rest folded); it saves a draft through the same `records.create` an agent calls. Other kinds are drafted by asking the assistant.
 
 ## Language
 
