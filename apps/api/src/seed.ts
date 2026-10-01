@@ -20,6 +20,8 @@ import { loadSeedLabware, readDefinitions } from './labware/seed.ts';
 import { converterFromEnv } from './library/convert.ts';
 import { importIntoLibrary, readManifestFolder, readMarkdownFolder } from './library/import.ts';
 import { libraryKinds } from './library/kinds.ts';
+import { memoryKinds } from './memory/kinds.ts';
+import { loadSeedMemories, readSeedMemories } from './memory/seed.ts';
 import { ActivityBus, createRegistry } from './operations/index.ts';
 import { plateMapKinds } from './platemaps/kinds.ts';
 import { loadSeedLayouts, readSeedLayouts } from './platemaps/seed.ts';
@@ -32,6 +34,7 @@ import { type SettleReport, settleSeed } from './seed-settle.ts';
 import { sopKinds } from './sops/kinds.ts';
 import { loadSeedSops, readSeedSops } from './sops/seed.ts';
 import { transferKinds } from './transfers/kinds.ts';
+import { loadSeedWorklistFormats, readSeedWorklistFormats } from './transfers/seed.ts';
 
 /**
  * Loads the seed lab (seed/, plan 006) in one run, with no approvals (ADR 0044): labware types,
@@ -103,6 +106,7 @@ for (const kind of [
   ...campaignKinds,
   ...plateMapKinds,
   ...transferKinds,
+  ...memoryKinds,
 ])
   kinds.register(kind);
 const registry = createRegistry(connection.db, kinds, new ActivityBus(), undefined, {
@@ -344,6 +348,32 @@ async function loadOnce() {
     `Layout templates: ${layouts.created.length} drafted, ${layouts.existing.length} already there.`,
   );
   for (const line of layouts.created) console.log(`  + ${line}`);
+  const worklists = await loadSeedWorklistFormats(
+    registry,
+    ctx,
+    readSeedWorklistFormats(
+      await seedFile('worklist-formats.yaml'),
+      await seedFile('instrument-library.yaml'),
+    ),
+    (name) => seedFile(`worklists/${name}`),
+    'Seed lab (plan 006), loaded by plan 016c',
+  );
+  console.log(
+    `Worklist formats: ${worklists.created.length} drafted, ${worklists.existing.length} already there, ${worklists.waiting.length} waiting for their instrument kind.`,
+  );
+  for (const line of worklists.created) console.log(`  + ${line}`);
+  for (const line of worklists.waiting) console.log(`  … ${line}`);
+  const memories = await loadSeedMemories(
+    registry,
+    ctx,
+    readSeedMemories(await seedFile('memory.yaml')),
+    'Seed lab (plan 006), loaded by plan 005a',
+  );
+  console.log(
+    `Lab memory: ${memories.created.length} drafted, ${memories.existing.length} already there, ${memories.waiting.length} waiting for their records.`,
+  );
+  for (const line of memories.created) console.log(`  + ${line}`);
+  for (const line of memories.waiting) console.log(`  … ${line}`);
   await settle();
 }
 

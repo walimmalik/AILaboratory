@@ -13,6 +13,8 @@ import {
   recordIdPattern,
 } from '@ailab/schema';
 
+import { memoryLinks } from '../memory/links.ts';
+
 const PLAN = '(plan 010 V1, inventory)';
 
 const kindWords = (kind: string) => kind.replaceAll('_', ' ');
@@ -24,12 +26,14 @@ export const entityKind = defineKind({
   namePrefix: 'ENK',
   nameWidth: 4,
   attributes: EntityKindAttributes,
-  links: (a) =>
-    a.fields.flatMap((f) =>
+  links: (a) => [
+    ...a.fields.flatMap((f) =>
       f.type.type === 'link'
         ? (f.type.entityKinds ?? []).map((k) => ({ toId: k, relation: 'links_to_kind' }))
         : [],
     ),
+    ...memoryLinks(a.handlingRules),
+  ],
   sections: [
     {
       id: 'definition',
@@ -100,6 +104,7 @@ export const entity = defineKind({
   attributes: EntityAttributes,
   links: (a) => [
     { toId: a.entityKind, relation: 'is_a' },
+    ...memoryLinks(a.handlingRules),
     ...[
       ...new Set(
         Object.values(a.fields).filter(

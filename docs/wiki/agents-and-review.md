@@ -54,7 +54,7 @@ A draft is a record in `draft` status. Kinds that people review declare **sectio
 - **The assistant's suggestions stay unverified.** A step or value the assistant filled in from the SOP editor (`sops.suggest`, which gives up after 45 seconds, 90 for drafting every step, and can be cancelled) is saved as `assumed` with the assistant's reason when the person keeps it unchanged, so it is counted and marked like an agent's value until the one Confirm.
 - **The assistant reads short forms of long results.** `review.list` puts its counts first and takes a limit, `records.get {brief: true}` leaves out confirmations and per-item evidence, and `operations.describe {schema: false}` lists a namespace without schemas. It is told to group changes into one `changes.apply` set and which of its proposals people rejected and why.
 - **Batch confirm takes only what is checked.** A draft joins "Confirm the N ready ones" only when it holds no unverified value and no value an agent says came from a datasheet, import or measurement, which the server can't check (readiness lists them as `unchecked`; Review shows "N sources to check"). Values the person stated, and calculated or copied values the server checks, don't stop it.
-- **Copied values are checked.** `record` and `template` evidence must name a version that exists and was active, and with a `path` the value there must match; `memory` evidence is refused until lab memory (plan 005) is built.
+- **Copied values are checked.** `record` and `template` evidence must name a version that exists and was active, and with a `path` the value there must match; `memory` evidence must cite a lab memory confirmed at that version (005a).
 - **Approval confirms.** Confirming an agent's proposed change confirms the sections it touched, since the person reviewed exactly that change.
 - **Editing in place.** From the review, Edit opens a section as a form drawn from the kind's schema; the person says where the values came from (entered, measured, a datasheet with a link, calculated, with a note), and Save runs `records.update`, the same operation an agent uses. Each failing check has a "Fix in …" link to its section; passing checks fold away.
 - **People creating records.** A person may create a record active directly, which confirms every section as written; an agent may not.
@@ -71,6 +71,8 @@ The **Review** page lists everything waiting for a person, grouped by kind: draf
 - **Downstream changes (P6, plans 014 to 017).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
 
 ## Lab memory (plan 005, locked)
+
+Built so far: 005a, the memory record and its operations ([memory.md](../architecture/memory.md), ADR 0062).
 
 - **What it holds:** conventions, preferences, quirks, lessons and facts that no registry has a field for. A memory that implies a typed value (a handling rule, a timing window) proposes it on the record, which stays the one place code reads.
 - **Strength:** a rule is followed, or a design breaking it shows a readiness warning accepted with a reason; a default fills a choice no confirmed record decides, in normal ink with its source; a note only informs. A memory never silently overrides a confirmed SOP or template: the agent proposes changing it.

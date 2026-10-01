@@ -8,6 +8,7 @@ import { LiquidClassId } from './liquids.ts';
 import { PlateMapId } from './platemaps.ts';
 import { Quantity } from './quantity.ts';
 import { LiquidTypeId } from './reagents.ts';
+import { WorklistFormatId } from './worklists.ts';
 
 /**
  * Transfer plans (plan 016, T1): how the liquid gets from source containers to target plates, as
@@ -115,6 +116,9 @@ export const TransferGroup = z.strictObject({
   liquid: LiquidTypeId.optional(),
   liquidClass: LiquidClassId.optional(),
   tips: z.enum(['none', 'new_each', 'per_source', 'lab_default']).optional(),
+  worklist: pinOf(WorklistFormatId)
+    .optional()
+    .describe("The lab's worklist format its method reads (Hamilton, Mantis, PreciseDrop)"),
   transfers: z.array(PlannedTransfer).min(1).max(20000),
 });
 export type TransferGroup = z.infer<typeof TransferGroup>;

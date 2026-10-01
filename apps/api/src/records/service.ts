@@ -855,7 +855,7 @@ async function checkCalculatedEvidence(
 /**
  * Each value named as copied (`record`, `template`) must come from a record in this lab, at a
  * version that exists and was active; with a `path`, the value there must be the value set (ADR
- * 0049). Lab memory can't be cited until plan 005 builds it.
+ * 0049). Lab memory (`memory`) must cite a memory confirmed at that version (plan 005a).
  */
 async function checkCopiedEvidence(
   db: Db,
@@ -866,13 +866,7 @@ async function checkCopiedEvidence(
   items: Readonly<Record<string, string>> = {},
 ): Promise<void> {
   for (const [key, given] of Object.entries(named ?? {})) {
-    if (given.source === 'memory') {
-      throw new RecordError(
-        'invalid_input',
-        `${key} cites lab memory, which this lab doesn't keep yet; name the record or document it came from`,
-      );
-    }
-    if ((given.source !== 'record' && given.source !== 'template') || !given.from) continue;
+    if (!['record', 'template', 'memory'].includes(given.source) || !given.from) continue;
     const { from } = given;
     const [source] = await db
       .select({ id: records.id, name: records.name, kind: records.kind })
@@ -882,6 +876,14 @@ async function checkCopiedEvidence(
       throw new RecordError(
         'invalid_input',
         `${key} is marked copied from ${from.id}, which is not a record in this lab`,
+      );
+    }
+    if ((given.source === 'memory') !== (source.kind === 'memory')) {
+      throw new RecordError(
+        'invalid_input',
+        given.source === 'memory'
+          ? `${key} cites ${source.name} as lab memory, but it is not a lab memory`
+          : `${key} is copied from the lab memory ${source.name}; mark it as memory evidence`,
       );
     }
     const [version] = await db

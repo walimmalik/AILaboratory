@@ -90,6 +90,7 @@ export const transferPlanOperations = [
         reason: _r,
         liquidClass: _l,
         tips: _t,
+        worklist: _w,
         ...keep
       } = a.groups[at] as TransferGroup;
       const liquidClass = input.liquidClass;
@@ -99,6 +100,7 @@ export const transferPlanOperations = [
         ...(input.instrument ? { instrument: input.instrument } : {}),
         ...(liquidClass ? { liquidClass } : {}),
         ...(input.tips ? { tips: input.tips } : {}),
+        ...(input.worklist ? { worklist: input.worklist } : {}),
       });
       const groups = a.groups.map((g, i) => (i === at ? group : g));
       const { decks: _decks, ...rest } = a;
@@ -153,7 +155,7 @@ export const transferPlanOperations = [
           (await records.history(ctx, id).catch(() => [])).find((v) => v.version === version)
             ?.snapshot,
       };
-      const { invalid, rules, labware } = await planRules(a, context);
+      const { invalid, rules, labware, methods } = await planRules(a, context);
       const live: Rule[] = [];
 
       // Each instrument now: ready, and still with the limits the plan used.
@@ -279,7 +281,7 @@ export const transferPlanOperations = [
         })),
         totals: {
           transfers: a.groups.reduce((n, g) => n + g.transfers.length, 0),
-          tips: tipsOf(a),
+          tips: tipsOf(a, methods),
           sources: drawsOf(a).size,
         },
       };

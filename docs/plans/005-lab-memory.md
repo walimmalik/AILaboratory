@@ -4,6 +4,7 @@
 - Depends on: 002 (records, links, history), 003 (operations, proposals), 004c/004d (draft and confirm, one Review page), 004e (plan in PR #72: R1 tiers and addressees, R5 `memory` evidence source, R6/R7 skills and core toolset, page context with record and selection), 011 (search over text, 011b-2 embeddings)
 - Feeds: 009 and 010 (handling rules with source `lab_memory`), 012 (timing windows with source `lab_memory`), 013 (lessons proposed from concluded experiments), 016 (quirks beside a chosen liquid class or instrument), 017 (the designer fills open choices from conventions, D3), 018 (W7 durations, W8 handling rules researched by agents), 019 (S17 standing preferences, S13 drift notes), 020 (A16 drift turned into memory proposals), 021 (notebook)
 - Must land before 017 (Wali, 2026-09-30).
+- Built (005a, ADR 0062): the memory record, `memory.propose/remember/update/retire/replace/search`, `memory` evidence, rules and timing windows naming their memory, `seed/memory.yaml`, the memory skill. See [memory.md](../architecture/memory.md). Next: 005b.
 
 ## What this plan delivers
 

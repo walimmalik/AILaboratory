@@ -1,5 +1,6 @@
 import { evaluateVariables, getUnit, isUnit, type VariableDefinition } from '@ailab/domain';
 import { type CheckResult, defineKind, type Quantity, SopAttributes } from '@ailab/schema';
+import { memoryLinks } from '../memory/links.ts';
 import { citationsOf } from './citations.ts';
 import { bindRoles, readField } from './resolve.ts';
 
@@ -68,6 +69,7 @@ export const sop = defineKind({
   nameWidth: 4,
   attributes: SopAttributes,
   links: (a) => [
+    ...memoryLinks(a.timing),
     ...(a.source ? [{ toId: a.source.document, relation: 'digitized_from' }] : []),
     ...(a.derivedFrom ? [{ toId: a.derivedFrom, relation: 'derived_from' }] : []),
     ...[...new Set(a.materials.flatMap((m) => (m.default ? [m.default] : [])))].map((toId) => ({
