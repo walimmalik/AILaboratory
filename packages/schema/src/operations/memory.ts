@@ -4,18 +4,22 @@ import { EvidenceInput } from '../design.ts';
 import { RecordId } from '../ids.ts';
 import {
   MemoryAppliesTo,
+  MemoryBar,
+  MemoryCandidate,
   MemoryConditions,
+  MemoryDraft,
   MemoryEffect,
   MemoryFacts,
   MemoryFields,
   MemoryId,
   MemoryKind,
+  MemorySource,
   MemoryStrength,
 } from '../memory.ts';
 import { defineContract } from '../operation.ts';
 import { RecordEnvelope } from '../record.ts';
 
-/** Lab memory operations (plans 005a and 005b). */
+/** Lab memory operations (plans 005a, 005b and 005c-1). */
 
 const Reason = z.string().min(1).optional().describe('Why; kept in history');
 
@@ -189,4 +193,54 @@ export const memoryUsedIn = defineContract({
       }),
     ),
   }),
+});
+
+export const memoryObserve = defineContract({
+  id: 'memory.observe',
+  verbs: {
+    done: 'reported an observation for lab memory',
+    intent: 'report an observation for lab memory',
+  },
+  summary:
+    "Report one record that shows a pattern worth remembering (a run, an analysis, a plate): a detector's or an agent's observation under a key that names the pattern. Observations collect on a hidden candidate until they pass its bar (default: 3 different records on 2 different days); then code proposes one draft memory with the evidence for a person to confirm. A rejected candidate comes back only when the records seen since its proposal are twice those it was proposed with. Reporting the same record again replaces its observation",
+  effect: 'write',
+  input: z.strictObject({
+    detector: z
+      .string()
+      .regex(/^[a-z][a-z0-9_.]*$/, 'a detector name like runs.recurring_deviation')
+      .describe('Who noticed it: a detector, or "agent" for an agent reading results'),
+    key: z
+      .string()
+      .min(1)
+      .max(500)
+      .describe(
+        'What the pattern is, the same for every observation of it, e.g. sop|step|field|higher',
+      ),
+    draft: MemoryDraft.describe('The memory to propose once the bar is passed'),
+    source: MemorySource.shape.from.exclude(['stated', 'conversation']),
+    evidence: RecordId.describe('The record that shows it'),
+    day: z.iso.date().optional().describe('When it happened; left out, today'),
+    note: z.string().min(1).max(300).optional().describe('What this record showed'),
+    bar: MemoryBar.optional(),
+  }),
+  output: z.object({
+    candidate: MemoryCandidate,
+    proposed: RecordEnvelope.optional().describe(
+      'The draft memory, when this observation passed the bar',
+    ),
+  }),
+});
+
+export const memoryCandidates = defineContract({
+  id: 'memory.candidates',
+  verbs: { done: 'listed memory candidates', intent: 'list memory candidates' },
+  summary:
+    "The patterns detectors are collecting before they are proposed, with their counts against the bar, and the ones proposed, confirmed or rejected. Read-only; candidates aren't records",
+  effect: 'read',
+  input: z.strictObject({
+    detector: z.string().min(1).optional(),
+    status: MemoryCandidate.shape.status.optional(),
+    limit: z.number().int().min(1).max(200).optional().describe('Default 50'),
+  }),
+  output: z.object({ candidates: z.array(MemoryCandidate) }),
 });
