@@ -1,0 +1,61 @@
+# Assay templates for the demo lab (plan 017a): the templates sketched in assays.yaml as records the
+# experiment designer fills an experiment from. SOPs, the layout, instrument kinds and labware are
+# named by their seed keys. Lab conventions, drafted for a person to confirm.
+
+templates:
+  - key: assay-elisa-il6
+    label: IL-6 sandwich ELISA
+    purpose: IL-6 in cell culture supernatants by sandwich ELISA (DuoSet), read at 450 nm
+    assays: [ELISA]
+    parts:
+      - { id: assay, sop: sop-elisa-il6 }
+    layout: layout-elisa-il6
+    roles:
+      - part: assay
+        role: tecan_spark_cyto
+        capability: read_absorbance
+        preferred: [tecan-spark-cyto]
+        reason: Any absorbance reader with 450 and 570 nm filters reads the plate
+      - part: assay
+        role: bluecatbio_bluewasher
+        capability: wash
+        preferred: [bluecatbio-bluewasher]
+        reason: Any 96-well plate washer; washing by hand also works
+      - part: assay
+        role: thermo_442404
+        record: thermo-442404
+        reason: High protein binding, as the kit insert asks
+    essentials:
+      - { input: subjects, id: samples, label: Which samples, kinds: [sample, container], max: 40 }
+      - { input: variable, id: dilution, label: Sample dilution, part: assay, variable: sample_dilution }
+    factors:
+      - { id: sample, label: Sample, from: samples }
+    controls:
+      - id: standard
+        label: IL-6 standard
+        role: standard
+        wells: 14
+        per: plate
+        reason: 7-point 2-fold curve from 600 pg/mL in duplicate, on every plate so each plate has its own fit
+      - id: blank
+        label: Blank
+        role: blank
+        wells: 2
+        per: plate
+        reason: Reagent diluent only, subtracted from every well
+    replicates:
+      technical: 2
+      reason: Duplicates, as the kit insert recommends
+    readouts:
+      - id: od450
+        label: Absorbance 450 nm, 570 nm reference
+        capability: read_absorbance
+        part: assay
+        mode: endpoint
+        wavelengths:
+          - { use: measure, wavelength: { value: "450", unit: nm } }
+          - { use: reference, wavelength: { value: "570", unit: nm } }
+    quality:
+      - { measure: R² of the 4PL standard curve, comparison: ">=", threshold: "0.98", per: plate }
+      - { measure: CV of duplicate wells (%), comparison: "<=", threshold: "20", per: plate }
+    analysis: Subtract the 570 nm reading, then the blank; fit a four-parameter logistic curve to the standards and read samples off it, multiplied by the sample dilution

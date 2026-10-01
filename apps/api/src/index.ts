@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
+import { assayKinds } from './assays/kinds.ts';
 import { Assistant } from './assistant/assistant.ts';
 import { modelFromEnv } from './assistant/config.ts';
 import { markInterrupted } from './assistant/store.ts';
@@ -47,6 +48,7 @@ for (const kind of [
   ...plateMapKinds,
   ...transferKinds,
   ...memoryKinds,
+  ...assayKinds,
 ])
   kinds.register(kind);
 if (process.env.AILAB_TEST_KINDS === '1') kinds.register(widget);

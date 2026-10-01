@@ -4,7 +4,7 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 
 ## Assay template (017a-1)
 
-`packages/schema/src/assays.ts`, `AssayTemplateAttributes` (`asy_`, `ASY-0001` once the record kind lands in 017a-2):
+`packages/schema/src/assays.ts`, `AssayTemplateAttributes` (`asy_`, `ASY-0001`):
 
 | Field | Holds |
 | --- | --- |
@@ -36,6 +36,30 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
   - Runs are the biological replicates.
   - The result includes lines such as "40 conditions × 2 wells = 80 wells".
 
+## The record (017a-2)
+
+`apps/api/src/assays/kinds.ts`, kind `assay_template`:
+
+- **Links:** `follows` each part's SOP, `layout`, `prefers` each preferred instrument or instrument kind, `uses` a role's default record, `control` a fixed control subject, `next_assay` the follow-up template.
+- **Sections** a person confirms: what it measures; SOPs, layout and instruments; what the designer asks and what varies; controls and replicates; readouts and analysis.
+- **Refused on save:** names used twice; a pin to a version that doesn't exist; a role or readout naming a part the template doesn't have; a role that isn't a material role of its SOP; a preferred record that isn't an instrument or instrument kind; a variable input naming no input or default variable of its SOP; a factor `from` something that isn't a subjects input; a baseline that isn't a level; a `next` that isn't another template.
+- **Overview** (`apps/api/src/assays/overview.ts`, ADR 0063): "Assay template · for ELISA", then what it measures, the SOPs it follows, the layout, what it asks for, what varies, replicates, controls per plate or run, and what it reads.
+- **Readiness:** its SOPs and layout confirmed (blockers); newer confirmed SOP or layout versions (warnings, pinned versions never move silently); a subjects input and controls (warnings).
+
+## Operations (017a-2)
+
+`apps/api/src/assays/operations.ts`, skill `skills/assays/SKILL.md`:
+
+| Operation | Does |
+| --- | --- |
+| `assays.draft_template` | Drafts a template (agents directly); a person edits it with `records.update` and confirms it with `records.confirm` |
+| `assays.design` | Calculator: for a saved template (any version) or attributes to try, and the answers given so far, the essential inputs still missing, the conditions (the first 50 listed), and wells, plates and runs from `designTotals`. Subjects answers are a count or record ids (each record a level, by its label); plates take the layout's well count unless `wellsPerPlate` is given. While a factor waits for its input, conditions are 0 and totals are left out |
+| `assays.search` | The lab's templates, confirmed first, by words, assay name or readout capability |
+
+## Seed
+
+`seed/assay-templates.yaml` holds the IL-6 ELISA template. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
+
 ## Not yet
 
-The `assay_template` record kind and its operations (`assays.draft_template`, `assays.update_template`, `assays.save_from_experiment`, `assays.get`, `assays.search`) and the ELISA template from `seed/assays.yaml` (017a-2); the designer and feasibility (017b); the other seed templates (017c); fractional factorial and response-surface designs (017d).
+`assays.save_from_experiment`, the designer and feasibility (017b); the other seed templates (017c); fractional factorial and response-surface designs (017d). Template screens come with the designer.

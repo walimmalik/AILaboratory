@@ -1,3 +1,4 @@
+export * from './assays.ts';
 export * from './assistant.ts';
 export * from './campaigns.ts';
 export * from './catalog.ts';
