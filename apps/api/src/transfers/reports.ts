@@ -17,6 +17,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { run } from './calculators.ts';
+import { observeSurveyLow, observeTransferExceptions } from './detectors.ts';
 import { EchoReportError, type EchoReportPlate, readEchoReport } from './echo.ts';
 import { instrumentKindOf } from './export.ts';
 import { rerunOf, rerunPlan } from './reruns.ts';
@@ -117,6 +118,7 @@ export const reportOperations = [
 
       if (report.report === 'echo_survey') {
         const held = new Map<string, Map<string, Quantity | 'unknown'>>();
+        const compared: { lwt: string; low: boolean }[] = [];
         for (const row of report.rows) {
           const plate = plateOf(row.plate);
           const measured = uL(row.volume);
@@ -143,6 +145,9 @@ export const reportOperations = [
               ? Math.abs(Number(convert(subtract(measured, recorded), 'uL').value)) >
                 SURVEY_TOLERANCE * Number(convert(recorded, 'uL').value)
               : false;
+          const lwt = a.plates.find((p) => p.id === plate)?.labwareType.id;
+          if (lwt && recorded && recorded !== 'unknown')
+            compared.push({ lwt, low: off && compare(measured, recorded) < 0 });
           if (!row.status && !off) continue;
           counts.flagged++;
           const said = [
@@ -163,6 +168,7 @@ export const reportOperations = [
         notes.push(
           'A survey changes nothing in the inventory; correct volumes with inventory.correct if the survey is right',
         );
+        await observeSurveyLow(deps, ctx, file.id, compared);
         return out({ report: 'echo_survey', recorded: 0 });
       }
 
@@ -385,6 +391,10 @@ export const reportOperations = [
         const n = redo.groups.reduce((sum, g) => sum + g.transfers.length, 0);
         notes.push(`${rerun.name} redoes ${n} transfers; it is a draft for a person to confirm`);
       }
+      await observeTransferExceptions(deps, ctx, a, planned, {
+        id: execution.id,
+        attributes,
+      });
       const notRerun = exceptions.filter((e) => !e.rerun).length;
       if (notRerun) notes.push(`${notRerun} not rerun; ${execution.name} says why for each`);
       return out({

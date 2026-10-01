@@ -4,7 +4,7 @@ Every decision made so far, one line each. Links go to the full reasoning.
 
 Question codes repeat across plans (002 and 016 both have T1 to T6; round 7 of 004 and plan 009 both start at R1), so this page writes them with the plan number: `002-T1`, `009-R1`.
 
-Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6, 0058 for 016b-3, 0059 for 016b-4, 0060 for 016b-2b, 0061 for 016c-1, 0062 for 005a, 0063 for 004f, 0064 for review 2026-10-01 item 19). ADR 0024 applies to every plan.
+Plans 006 to 019 record their decisions in the plan files; their ADRs are written when each plan is built (0023 for 007a, 0025 and 0026 for 008a and 008b, 0027 for 009a, 0028 for 009b, 0029 for 010a, 0030 for 010b, 0031 for 010c, 0032 for 010d, 0033 for 011a, 0034 for 011b, 0035 for 011c, 0036 and 0037 for 012a, 0038 for 012c, 0039 for 013a, 0043 for 014a, 0045 for 016a, 0046 for the SOP editors and one Confirm, 0047 for 008d, 0048 for 004e-1, 0049 for 004e-2, 0050 to 0052 for 004e-3, 0053 for 004e-4, 0054 and 0055 for 004e-5, 0056 and 0057 for 004e-6, 0058 for 016b-3, 0059 for 016b-4, 0060 for 016b-2b, 0061 for 016c-1, 0062 for 005a, 0063 for 004f, 0064 for review 2026-10-01 item 19, 0065 for item 18). ADR 0024 applies to every plan.
 
 ## Architecture Decision Records
 
@@ -69,6 +69,7 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 | [0062](../decisions/0062-lab-memory-records.md) | Lab memories are records with typed conditions and effects; agents propose drafts, people remember directly; retire and replace keep history; rules, timing windows and evidence cite a memory by id |
 | [0063](../decisions/0063-areas-and-record-pages.md) | Eight menu areas with tabs, one inventory view, record pages that lead with an identity line and key facts, three state vocabularies (plan 004f) |
 | [0064](../decisions/0064-check-options.md) | A failing check offers ranked options, each a label, its consequence, an operation and its complete input (the record and version included); `quickFix` is gone |
+| [0065](../decisions/0065-composite-and-nested-item-keys.md) | Keyed lists take composite keys (`'plate+well'`) and nest (`'groups/transfers'`), each nested item with its own evidence and state; the parent is compared without its keyed lists |
 
 ## 000 Foundation (D1 to D7, all as recommended)
 

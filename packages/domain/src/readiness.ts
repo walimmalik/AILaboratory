@@ -9,6 +9,7 @@ import type {
   ReadinessSummary,
   RecordEnvelope,
 } from '@ailab/schema';
+import { keyedEntries } from './keyed.ts';
 
 /**
  * Draft and confirm (plan 004c). Whether a record's values are confirmed is derived, never stored: a
@@ -77,23 +78,9 @@ export interface KindRules {
   sections?: readonly KindSection[] | undefined;
   checks?: readonly KindCheck<never>[] | undefined;
   notApplicable?: ((attributes: never) => string[]) | undefined;
-  /** Keyed lists: attribute → the field that keys each item (ADR 0049). */
+  /** Keyed lists: list → the field or fields that key each item (ADR 0049, ADR 0065). */
   items?: Readonly<Record<string, string>> | undefined;
 }
-
-/** A keyed list's items by key, in order; items without a string key are left out. */
-export function keyedItems(list: unknown, keyField: string): Map<string, unknown> {
-  const items = new Map<string, unknown>();
-  if (!Array.isArray(list)) return items;
-  for (const item of list) {
-    const key = (item as Record<string, unknown> | null)?.[keyField];
-    if (typeof key === 'string' && !items.has(key)) items.set(key, item);
-  }
-  return items;
-}
-
-/** The evidence key of one item of a keyed list. */
-export const itemPath = (field: string, key: string) => `/${field}/${key}`;
 
 /**
  * `related` are checks that needed other records (an entity against its kind), worked out by the
@@ -117,34 +104,40 @@ export function readiness(
         : sameValue(review.values[field], value)
           ? ('confirmed' as const)
           : ('changed' as const);
-      const keyField = kind.items?.[field];
-      if (keyField) {
-        const now = keyedItems(value, keyField);
-        const was = keyedItems(review?.values[field], keyField);
-        const items: ReadinessItem[] = [...now].map(([key, item]) => {
-          const path = itemPath(field, key);
+      if (kind.items?.[field]) {
+        const keys = kind.items;
+        const now = keyedEntries(value, field, keys);
+        const was = new Map(
+          keyedEntries(review?.values[field], field, keys).map((e) => [e.path, e]),
+        );
+        const nowPaths = new Set(now.map((e) => e.path));
+        const items: ReadinessItem[] = now.map((entry) => {
+          const { path, key } = entry;
+          const before = was.get(path);
           const own = record.evidence[path] ?? evidence;
           const itemState = !review
             ? ('unconfirmed' as const)
-            : !was.has(key)
+            : !before
               ? ('added' as const)
-              : sameValue(was.get(key), item)
+              : sameValue(before.own, entry.own)
                 ? ('confirmed' as const)
                 : ('changed' as const);
           return {
             key,
             path,
-            value: item,
+            value: entry.value,
             state: itemState,
             assumed: itemState !== 'confirmed' && own?.source === 'assumed',
-            ...(itemState === 'changed' ? { confirmedValue: was.get(key) } : {}),
+            ...(itemState === 'changed' ? { confirmedValue: before?.value } : {}),
             ...(own ? { evidence: own } : {}),
           };
         });
-        const removed = [...was].filter(([key]) => !now.has(key));
-        const sameKeys = removed.length === 0 && now.size === was.size;
+        const removed = [...was.values()].filter((e) => !nowPaths.has(e.path));
+        const sameKeys = removed.length === 0 && now.length === was.size;
         const reordered =
-          !!review && sameKeys && [...now.keys()].join('\u0000') !== [...was.keys()].join('\u0000');
+          !!review &&
+          sameKeys &&
+          now.map((e) => e.path).join('\u0000') !== [...was.keys()].join('\u0000');
         return {
           field,
           value,
@@ -153,7 +146,9 @@ export function readiness(
           ...(state === 'changed' ? { confirmedValue: review?.values[field] } : {}),
           ...(evidence ? { evidence } : {}),
           items,
-          ...(removed.length ? { removed: removed.map(([key, v]) => ({ key, value: v })) } : {}),
+          ...(removed.length
+            ? { removed: removed.map((e) => ({ key: e.key, value: e.value })) }
+            : {}),
           ...(reordered ? { reordered } : {}),
         };
       }
