@@ -646,6 +646,59 @@ describe('sops.answer_question', () => {
     const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
     expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(true);
   });
+
+  it('keeps an agent from settling a question through any other write', async () => {
+    const answered = {
+      id: 'q2',
+      question: 'Which plate sealer?',
+      status: 'answered',
+      answer: 'Film',
+    };
+    await expect(
+      registry.execute(agent, 'sops.draft', { ...elisa, questions: [answered] }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes', message: expect.stringContaining('q2') });
+
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const questions = (sop.attributes as { questions: { id: string }[] }).questions;
+    const settle = (ctx: RecordContext, target: RecordEnvelope) =>
+      registry.execute(ctx, 'records.update', {
+        id: target.id,
+        expectedVersion: target.version,
+        attributes: {
+          ...target.attributes,
+          questions: questions.map((q) => ({ ...q, status: 'answered', answer: '37 C' })),
+        },
+      });
+    await expect(settle(agent, sop)).rejects.toMatchObject({
+      code: 'invalid_attributes',
+      message: expect.stringContaining('for a person to answer'),
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(false);
+
+    // A person's answer stands, and an agent's later edit leaves it alone.
+    const byPerson = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: sop.id,
+      expectedVersion: sop.version,
+      question: 'q1',
+      answer: 'Room temperature',
+    });
+    const edited = await run<RecordEnvelope>(agent, 'records.update', {
+      id: sop.id,
+      expectedVersion: byPerson.version,
+      attributes: { ...byPerson.attributes, purpose: 'Measure IL-6 in supernatants' },
+    });
+    expect((edited.attributes as { questions: unknown[] }).questions).toEqual([
+      expect.objectContaining({ id: 'q1', status: 'answered', answer: 'Room temperature' }),
+    ]);
+    await expect(
+      registry.execute(agent, 'records.restore', {
+        id: sop.id,
+        expectedVersion: edited.version,
+        version: sop.version,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+  });
 });
 
 describe('sops.check_citations', () => {

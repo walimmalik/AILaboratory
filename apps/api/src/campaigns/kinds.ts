@@ -12,7 +12,7 @@ import {
   SetAttributes as SetSchema,
   type SopAttributes,
 } from '@ailab/schema';
-import { checkPin } from '../records/pins.ts';
+import { checkPin, stable } from '../records/pins.ts';
 import { inputProblem } from '../sops/inputs.ts';
 
 /** Kinds that are definitions, so bindings pin their version (ADR 0039). */
@@ -346,7 +346,8 @@ export const run = defineKind({
     if (pin.invalid) return { invalid: [pin.invalid] };
     if (pin.unconfirmed)
       return { invalid: [`${pin.unconfirmed}; a run follows a confirmed experiment design`] };
-    const invalid: string[] = [];
+    const before = context.current?.attributes as RunAttributes | undefined;
+    const invalid = before ? runChanges(before, a) : [];
     for (const d of a.data ?? []) {
       if ((await context.get(d.file))?.kind !== 'file')
         invalid.push(`${d.file} is not a file in this lab`);
@@ -356,6 +357,50 @@ export const run = defineKind({
     return invalid.length ? { invalid } : {};
   },
 });
+
+const FINAL: readonly RunAttributes['status'][] = ['done', 'failed', 'aborted'];
+
+/**
+ * What no write may do to a run once started, whichever operation makes it (ADR 0041): change the
+ * design it follows or the checklist it started with, reopen a finished run, or change a finished
+ * run's steps or deviations without the correction that says why (runs.correct, 013c).
+ */
+function runChanges(before: RunAttributes, a: RunAttributes): string[] {
+  const invalid: string[] = [];
+  if (stable(a.experiment) !== stable(before.experiment))
+    invalid.push('A run keeps the experiment version it started on');
+  if (stable([a.startedAt, a.startedBy]) !== stable([before.startedAt, before.startedBy]))
+    invalid.push('A run keeps when and by whom it was started');
+  const shape = (steps: RunAttributes['steps']) =>
+    stable((steps ?? []).map(({ part, step, title, planned }) => ({ part, step, title, planned })));
+  if (shape(a.steps) !== shape(before.steps))
+    invalid.push(
+      'A run keeps the steps and planned values it started with; record what differed as actuals',
+    );
+  if (!FINAL.includes(before.status)) return invalid;
+  if (a.status !== before.status)
+    invalid.push(`The run is ${before.status}; correct it with runs.correct rather than reopen it`);
+  const kept = <T>(now: readonly T[] | undefined, was: readonly T[] | undefined) =>
+    stable((now ?? []).slice(0, (was ?? []).length)) === stable(was ?? []);
+  (a.steps ?? []).forEach((s, i) => {
+    const was = before.steps?.[i];
+    if (!was) return;
+    const { corrections, ...rest } = s;
+    const { corrections: wasCorrections, ...wasRest } = was;
+    if (!kept(corrections, wasCorrections))
+      invalid.push(`Step ${s.step} keeps its earlier corrections`);
+    else if (
+      stable(rest) !== stable(wasRest) &&
+      (corrections ?? []).length <= (wasCorrections ?? []).length
+    )
+      invalid.push(`Step ${s.step} changed after the run finished; correct it with runs.correct`);
+  });
+  if (!kept(a.deviations, before.deviations))
+    invalid.push('A finished run keeps its deviations; add a correction with runs.correct');
+  else if ((a.deviations ?? []).slice((before.deviations ?? []).length).some((d) => !d.corrected))
+    invalid.push('A deviation added after the run finished is a correction; use runs.correct');
+  return invalid;
+}
 
 /** Kinds a set's members may be (E10). */
 const MEMBER_KINDS = ['entity', 'sample', 'container'];
