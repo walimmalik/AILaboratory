@@ -1,4 +1,5 @@
 import {
+  type AssayTemplateAttributes,
   type CampaignAttributes,
   type CampaignStage,
   campaignsDraft,
@@ -9,6 +10,7 @@ import {
   experimentsBindProtocol,
   experimentsCalculate,
   experimentsDraft,
+  experimentsPlanCheck,
   experimentsSetStage,
   experimentsWhereUsed,
   type ProtocolStep,
@@ -23,6 +25,50 @@ import { implement, type OperationDeps } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+
+type PlanBlocker = z.infer<typeof experimentsPlanCheck.output>['blockers'][number];
+
+/**
+ * What planning needs beyond the experiment's readiness and amounts (UX review 2026-10-02, #1):
+ * something to test, and confirmed plate maps. A template with a layout needs at least one plate
+ * map; every plate map drafted for the experiment (linked `part_of` it) must be confirmed.
+ */
+async function planBlockers(
+  service: RecordService,
+  ctx: RecordContext,
+  record: RecordEnvelope,
+): Promise<PlanBlocker[]> {
+  const a = record.attributes as ExperimentAttributes;
+  const blockers: PlanBlocker[] = [];
+  if ((a.subjects ?? []).length === 0) {
+    blockers.push({
+      message: 'What is tested is not chosen yet: add the samples, compounds or constructs',
+    });
+  }
+  const maps: RecordEnvelope[] = [];
+  for (const link of await service.linksTo(ctx, record.id)) {
+    if (link.relation !== 'part_of') continue;
+    const from = await service.get(ctx, link.fromId);
+    if (from.kind === 'plate_map' && from.status !== 'archived') maps.push(from);
+  }
+  if (maps.length === 0 && a.template) {
+    const template = await service.getVersion(ctx, a.template.id, a.template.version);
+    if ((template.snapshot.attributes as AssayTemplateAttributes).layout) {
+      blockers.push({
+        message: `No plate map yet; ${template.snapshot.name} lays its plates out from a layout`,
+      });
+    }
+  }
+  for (const map of maps) {
+    if (map.status !== 'active') {
+      blockers.push({
+        message: `Plate map ${map.label} (${map.name}) is a draft; confirm it first`,
+        record: map.id,
+      });
+    }
+  }
+  return blockers;
+}
 
 /** Stages an experiment may move to from each stage (E4). */
 const NEXT: Record<ExperimentStage, ExperimentStage[]> = {
@@ -177,6 +223,13 @@ export const campaignOperations = [
             `${record.name} is not ready to plan: ${readiness.missing.join('; ')}`,
           );
         }
+        const blockers = await planBlockers(service, ctx, record);
+        if (blockers.length) {
+          throw new OperationError(
+            'not_ready',
+            `${record.name} is not ready to plan: ${blockers.map((b) => b.message).join('; ')}`,
+          );
+        }
         const calculated = await calculateExperiment(deps, ctx, record);
         if (!calculated.ready) {
           throw new OperationError(
@@ -241,6 +294,14 @@ export const campaignOperations = [
         throw new OperationError('invalid_input', `${record.name} has no version ${input.version}`);
       }
       return calculateExperiment(deps, ctx, at.snapshot);
+    },
+  }),
+  implement(experimentsPlanCheck, {
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await recordOf(service, ctx, input.id, 'experiment', 'experiment');
+      const blockers = await planBlockers(service, ctx, record);
+      return { ready: blockers.length === 0, blockers };
     },
   }),
   implement(experimentsAdoptVersions, {

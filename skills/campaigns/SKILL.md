@@ -18,6 +18,7 @@ A **campaign** is a lab project with a goal and aims. An **experiment** is one q
 
 - `experiments.bind_protocol` `{id, expectedVersion, part, bindings: [{role, record, version}], inputs: [{name, value}]}` fills what an SOP leaves open for this experiment. Pin labware types, products, lots, instrument kinds and entities by `version` (their current version when active). Bind containers, samples and instruments by id only. `unbind: [role]` and `clear: [name]` go back to the SOP's default.
 - `experiments.calculate` `{id}` works out every part as pinned: volumes, totals, a lot's certificate value. Use its numbers; don't do the arithmetic yourself. Its `problems` list what is missing, and planning needs it empty.
+- `experiments.plan_check` `{id}` lists what else planning needs: the subjects (what is tested), and confirmed plate maps (at least one when its template has a layout; every plate map drafted for it confirmed). Each blocker names the record to fix in `record` when it is another one. `experiments.set_stage` refuses `planned` until it is empty, so check it before proposing the move.
 
 ## Stages
 

@@ -98,6 +98,10 @@ The design page is the experiment's own record page, agreed with the redesign (0
 - **Design.** The experiment, its plate maps and its transfer plans, one line each, with how many are confirmed. Each line says confirmed, change waiting, ready to confirm or how many things are left to fix. It shows once a plate map or transfer plan names the experiment.
 - **Can the lab run it?** For an experiment designed from a template, it shows `designer.feasibility`. It leads with the plates and wells, then what is in the way ("Required before running": instruments, amounts that don't work out, short stock). Instruments and stock are folded, with counts.
 
+A confirmed assay template's page has **Design an experiment** (`apps/web/src/pages/AssayDesign.tsx`, 017b-4). It asks for the campaign (and aim) and each essential input: subjects picked as records of the kinds the input allows (samples, entities and containers by default) or given as a count, and variable values as typed (a number with a unit becomes a quantity). As you answer, `assays.design` shows what is still to answer and the conditions, plates and wells. **Draft the experiment** calls `designer.start` and opens the new experiment.
+
+Planning waits on the design (UX review 2026-10-02, #1). `experiments.plan_check` lists what stands in the way besides readiness and the amounts: no subjects, no plate map when the template has a layout, and plate maps still in draft (each linked). The experiment's Next step shows these under "Required before planning" and offers **Plan it** only when the list is empty and the protocol works out. `experiments.set_stage` refuses `planned` on the same grounds.
+
 The **Transfers** tab lists the experiment's transfer plans, each with its plates, transfers and groups. The Plates tab is the redesign's.
 
 ## Seed

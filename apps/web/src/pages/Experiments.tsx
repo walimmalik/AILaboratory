@@ -3,6 +3,7 @@ import {
   type ExperimentAttributes,
   experimentsCalculate,
   experimentsConclude,
+  experimentsPlanCheck,
   experimentsSetStage,
   type RecordEnvelope,
   type RunAttributes,
@@ -247,6 +248,15 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
     enabled: a.protocol.length > 0,
   });
   const problems = (calc.data?.parts ?? []).flatMap((p) => p.problems);
+  const actions = nextActions(a.stage, record.status);
+  // Plan it is offered only once there is something to test and the plate maps are confirmed.
+  const planCheck = useQuery({
+    queryKey: ['record', record.id, 'experiment', 'plan_check', record.version],
+    queryFn: () => api.run(experimentsPlanCheck, { id: record.id }),
+    enabled: actions.includes('plan'),
+  });
+  const planBlockers = planCheck.data?.blockers ?? [];
+  const canPlan = planCheck.data?.ready === true && problems.length === 0;
   const stage = useMutation({
     mutationFn: (to: 'planned' | 'analysing') =>
       api.run(experimentsSetStage, {
@@ -265,7 +275,6 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
     },
   });
   const [concluding, setConcluding] = useState(false);
-  const actions = nextActions(a.stage, record.status);
   const error = stage.error ?? start.error;
   const steps = stageSteps(a.stage);
   return (
@@ -290,7 +299,9 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
           </ol>
         )}
         {record.status === 'draft' && (
-          <p className="muted">Confirm the design below; then it can be planned.</p>
+          <p className="muted">
+            Confirm the experiment and its plate maps; then it can be planned.
+          </p>
         )}
         {a.protocol.length > 0 &&
           (problems.length > 0 ? (
@@ -310,8 +321,28 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
         {actions.length === 0 && record.status === 'active' && (
           <p className="muted">Nothing left to do here.</p>
         )}
+        {planBlockers.length > 0 && (
+          <>
+            <h3 className="group-title">Required before planning</h3>
+            <ul className="plain">
+              {planBlockers.map((b) => (
+                <li key={b.message} className="warn-ink">
+                  {b.message}
+                  {b.record && (
+                    <>
+                      {' · '}
+                      <Link to="/records/$id" params={{ id: b.record }}>
+                        Open it
+                      </Link>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <div className="actions">
-          {actions.includes('plan') && (
+          {actions.includes('plan') && canPlan && (
             <button
               type="button"
               className="btn primary"

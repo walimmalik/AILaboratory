@@ -940,16 +940,32 @@ test('a person plans an experiment, runs it as a checklist and finishes the run'
       aims: [{ id: 'aim_1', text: 'Rank the stimuli' }],
     }),
   );
-  const experiment = await confirmAll(
-    page,
-    await asPerson(page, 'experiments.draft', {
-      label: `Stimulus panel ${stamp}`,
-      campaign: campaign.id,
-      aim: 'aim_1',
-      question: 'Which stimuli raise IL-6?',
-      protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
-    }),
+  const lps = await asPerson(page, 'records.create', {
+    kind: 'product',
+    label: `LPS ${stamp}`,
+    status: 'active',
+    attributes: { category: 'compound', origin: 'bought' },
+  });
+  const draft = await asPerson(page, 'experiments.draft', {
+    label: `Stimulus panel ${stamp}`,
+    campaign: campaign.id,
+    aim: 'aim_1',
+    question: 'Which stimuli raise IL-6?',
+    protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
+  });
+  let experiment = await confirmAll(page, draft);
+
+  // Nothing to test yet: planning is not offered, and the page says why.
+  await page.goto(`/records/${experiment.id}`);
+  await expect(page.getByRole('region', { name: 'Next step' })).toContainText(
+    'What is tested is not chosen yet',
   );
+  await expect(page.getByRole('button', { name: 'Plan it' })).toHaveCount(0);
+  experiment = await asPerson(page, 'records.update', {
+    id: experiment.id,
+    expectedVersion: experiment.version,
+    attributes: { ...experiment.attributes, subjects: [{ record: lps.id }] },
+  });
 
   await page.goto(`/records/${campaign.id}`);
   await expect(page.getByRole('region', { name: 'Aims and experiments' })).toContainText(
@@ -1295,4 +1311,95 @@ test("an experiment's Overview rolls up its design, and its Transfers tab lists 
   await expect(page.getByRole('region', { name: 'Transfers' })).toContainText(
     'No transfer plans for this experiment yet',
   );
+});
+
+test('a person designs an experiment from an assay template, and planning waits on the plate map', async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  await signIn(page);
+  const sop = await confirmAll(
+    page,
+    await asPerson(page, 'sops.draft', {
+      label: `Template ELISA ${stamp}`,
+      materials: [{ role: 'plate', label: 'Coating plate', type: 'labware' }],
+      variables: [{ name: 'sample_dilution', label: 'Sample dilution', kind: 'input', value: '1' }],
+      steps: [{ id: 'read', action: 'read', text: 'Read absorbance at 450 nm.', uses: ['plate'] }],
+    }),
+  );
+  const layout = await confirmAll(
+    page,
+    (
+      await asAgent(request, 'layouts.draft', {
+        label: `Template layout ${stamp}`,
+        wells: 96,
+        subjectRole: 'sample',
+        replicates: 2,
+      })
+    ).output,
+  );
+  const template = await confirmAll(
+    page,
+    (
+      await asAgent(request, 'assays.draft_template', {
+        label: `IL-6 ELISA ${stamp}`,
+        purpose: 'IL-6 in supernatants',
+        parts: [{ id: 'assay', sop: { id: sop.id, version: sop.version } }],
+        layout: { id: layout.id, version: layout.version },
+        essentials: [
+          { input: 'subjects', id: 'samples', label: 'Which samples' },
+          {
+            input: 'variable',
+            id: 'dilution',
+            label: 'Sample dilution',
+            part: 'assay',
+            variable: 'sample_dilution',
+          },
+        ],
+        factors: [{ id: 'sample', label: 'Sample', from: 'samples' }],
+        replicates: { technical: 2, reason: 'Duplicates' },
+        readouts: [
+          { id: 'od', label: 'Absorbance 450 nm', capability: 'read_absorbance', part: 'assay' },
+        ],
+      })
+    ).output,
+  );
+  const campaign = await confirmAll(
+    page,
+    await asPerson(page, 'campaigns.draft', {
+      label: `Template panel ${stamp}`,
+      goal: 'Design from a template on screen',
+      aims: [{ id: 'aim_1', text: 'Measure IL-6' }],
+    }),
+  );
+  const kind = (
+    await asAgent(request, 'entities.draft_kind', {
+      label: `Supernatant ${stamp}`,
+      attributes: {
+        base: 'chemical',
+        prefix: `S${String(stamp)
+          .slice(-4)
+          .replace(/\d/g, (d) => 'ABCDEFGHIJ'[Number(d)] ?? 'A')}`,
+        fields: [],
+      },
+    })
+  ).output;
+  await asAgent(request, 'entities.draft', { label: `Donor ${stamp}`, entityKind: kind.id });
+
+  await page.goto(`/records/${template.id}`);
+  await page.getByRole('button', { name: 'Design an experiment' }).click();
+  const form = page.getByRole('region', { name: 'Design an experiment' });
+  await expect(form).toContainText('2 to answer');
+  await form.getByRole('combobox', { name: 'Campaign' }).fill(`Template panel ${stamp}`);
+  await form.getByRole('combobox', { name: 'Campaign' }).press('Enter');
+  await form.getByRole('combobox', { name: 'Add to Which samples' }).fill(`Donor ${stamp}`);
+  await form.getByRole('combobox', { name: 'Add to Which samples' }).press('Enter');
+  await form.getByRole('textbox', { name: 'Sample dilution' }).fill('10');
+  await expect(form).toContainText('everything answered');
+  await expect(form).toContainText('1 condition on 1 plate per run');
+  await form.getByRole('button', { name: 'Draft the experiment' }).click();
+
+  await expect(page.getByRole('region', { name: 'Design' })).toContainText('0 of 2 confirmed');
+  await expect(page.getByRole('button', { name: 'Plan it' })).toHaveCount(0);
 });

@@ -144,6 +144,24 @@ export const experimentsCalculate = defineContract({
   }),
 });
 
+export const experimentsPlanCheck = defineContract({
+  id: 'experiments.plan_check',
+  verbs: { done: 'checked what planning needs for', intent: 'check what planning needs for' },
+  summary:
+    "What stands between an experiment and planning, besides its own readiness and experiments.calculate: what is tested (its subjects), and its plate maps (a template with a layout needs at least one, and every plate map drafted for it must be confirmed). Each blocker names the record to fix when there is one. experiments.set_stage refuses 'planned' until it is empty",
+  effect: 'read',
+  input: z.strictObject({ id: ExperimentId }),
+  output: z.object({
+    ready: z.boolean(),
+    blockers: z.array(
+      z.object({
+        message: z.string(),
+        record: RecordId.optional().describe('The record where it is fixed, when not this one'),
+      }),
+    ),
+  }),
+});
+
 export const experimentsAdoptVersions = defineContract({
   id: 'experiments.adopt_versions',
   verbs: { done: 'moved to newer versions in', intent: 'move to newer versions in' },

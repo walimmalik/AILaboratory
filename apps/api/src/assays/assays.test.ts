@@ -522,6 +522,18 @@ describe('designer.start', () => {
     expect(links.links).toContainEqual(
       expect.objectContaining({ relation: 'from_template', toId: saved.id }),
     );
+
+    // Planning waits on the plate map, and says where to confirm it.
+    const check = await run(person, 'experiments.plan_check', { id: e.id });
+    expect(check).toEqual({
+      ready: false,
+      blockers: [
+        {
+          message: `Plate map ${result.plateMap?.label} (${result.plateMap?.name}) is a draft; confirm it first`,
+          record: result.plateMap?.id,
+        },
+      ],
+    });
   });
 
   it('asks for what is missing, and refuses a draft template and another lab', async () => {
