@@ -6,7 +6,7 @@ Plan [005](../plans/005-lab-memory.md): what a good lab manager knows but no reg
 
 - **`memory`** (`mem_`, `MEM-0001`, `packages/schema/src/memory.ts`): one plain sentence (`statement`, also the label, cut near 80 characters), `kind` (convention, preference, quirk, lesson, fact), `strength` (rule, default, note), `about` (the records it is about; none for lab-wide), `when` (words), `conditions` (a closed object of keys the consumers evaluate: capability, instrument kind, instrument, device, tip, labware, dispense mode, volume range, liquid type, temperature range, SOP, layout, sample count range, well roles, weekdays), an optional `effect` (`prefer` or `avoid` a record, `set` a slot to a value), `appliesTo` (the lab, or one person), `source` (stated, conversation, experiment, run, analysis, with evidence records), `checkAgain`, and `retired` (why, and the memory that replaced it).
 - The schema refuses a note with an effect and a rule that prefers. Sections: Statement; What and when. Every record a memory names is linked (`about`, `applies_with`, `prefer`, `avoid`, `sets`, `learned_from`, `replaced_by`), so it must exist in the lab and not be archived.
-- `packages/domain/src/memory.ts`: `checkAgainFor(kind, today)` (quirks and lessons 6 months, conventions and facts 12, preferences never), `addMonths`, `isDue`.
+- `packages/domain/src/memory.ts`: `checkAgainFor(kind, today)` (quirks and lessons 6 months, conventions and facts 12, preferences never), `addMonths`, `isDue`. When a new memory leaves `checkAgain` out, the operations keep the default date as a calculation (`memory.check_again`) and mark it `calculated`, with a note such as "A quirk is checked again 6 months after it is written", so it never reads as unverified.
 
 ## Operations (005a)
 
