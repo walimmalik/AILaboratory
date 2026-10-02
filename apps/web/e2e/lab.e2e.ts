@@ -548,7 +548,9 @@ test('the reagent library shows lots in date and the next expiry, and a product 
     expiry: '2099-01-31',
   });
 
-  await openTab(page, 'Inventory', /^Reagents/);
+  // Reagents is a list by kind under Inventory's Stock tab (plan 004f-4).
+  await openTab(page, 'Inventory', /^Stock/);
+  await page.getByRole('link', { name: 'reagents', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reagents');
   await page.getByRole('button', { name: 'Fridge' }).click();
   const row = page.getByRole('row', { name: new RegExp(product.name) });
@@ -649,6 +651,26 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await openTab(page, 'Inventory', /^Places/);
   await page.getByRole('button', { name: `Freezer ${stamp}` }).click();
   await expect(page.getByRole('row', { name: new RegExp(plate.name) })).toBeVisible();
+
+  // Stock lists the reagent once, with how much is left and where, and moves the plate.
+  await asPerson(page, 'locations.create', {
+    label: `Fridge ${stamp}`,
+    type: 'fridge',
+  });
+  await openTab(page, 'Inventory', /^Stock/);
+  await page.getByLabel('Find in inventory').fill(`Glo reagent ${stamp}`);
+  const reagent = page.getByRole('row', { name: new RegExp(`Glo reagent ${stamp}`) });
+  await expect(reagent).toContainText('1 lot · 1 container');
+  await expect(reagent).toContainText('225 µL');
+  await expect(reagent).toContainText(`Freezer ${stamp}`);
+  await page.getByRole('button', { name: `Open Glo reagent ${stamp}` }).click();
+  await expect(page.getByRole('row', { name: /Lot G-1/ })).toContainText('3 wells');
+  await page.getByLabel(`Pick ${plate.name}`).check();
+  const picked = page.getByRole('group', { name: 'Picked containers' });
+  await picked.getByLabel('Move to').selectOption({ label: `Fridge ${stamp}` });
+  await picked.getByRole('button', { name: 'Move' }).click();
+  await expect(page.getByRole('status')).toContainText(`Moved 1 container: ${plate.name}`);
+  await expect(reagent).toContainText(`Fridge ${stamp}`);
 });
 
 test('scanning a tube opens it and moves it into a box position', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { add, compare, convert, formatQuantity } from '@ailab/domain';
+import { add, compare, formatQuantity, readableVolume } from '@ailab/domain';
 import {
   type ContainerAttributes,
   type EntityAttributes,
@@ -777,15 +777,6 @@ export function WhereIsBlock({ record }: { record: RecordEnvelope }) {
       </div>
     </section>
   );
-}
-
-/** A volume in the largest unit that keeps it at 1 or more: 15350.4 µL reads as 15.3504 mL. */
-function readableVolume(q: Quantity): Quantity {
-  for (const unit of ['L', 'mL', 'uL', 'nL']) {
-    const v = convert(q, unit);
-    if (Number(v.value) >= 1) return v;
-  }
-  return q;
 }
 
 type WhereWell = {

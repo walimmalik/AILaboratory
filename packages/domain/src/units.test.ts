@@ -10,7 +10,9 @@ import {
   molarToMass,
   multiply,
   quantity,
+  readableVolume,
   subtract,
+  sum,
   UnitError,
 } from './units.ts';
 
@@ -121,5 +123,21 @@ describe('registry', () => {
     expect(new Set(codes).size).toBe(codes.length);
     expect(formatQuantity(q('5', 'uL'))).toBe('5 µL');
     expect(formatQuantity(q('37', 'degC'))).toBe('37 °C');
+  });
+});
+
+describe('sum and readable volumes', () => {
+  it("adds quantities in the first one's unit, and gives nothing for none", () => {
+    expect(sum([q('500', 'uL'), q('1', 'mL'), q('250', 'uL')])).toEqual(q('1750', 'uL'));
+    expect(sum([])).toBeUndefined();
+    expect(() => sum([q('1', 'mL'), q('1', 'g')])).toThrow(UnitError);
+  });
+
+  it('writes a volume in the largest unit that keeps it at 1 or more', () => {
+    expect(readableVolume(q('1500', 'uL'))).toEqual(q('1.5', 'mL'));
+    expect(readableVolume(q('2500', 'mL'))).toEqual(q('2.5', 'L'));
+    expect(readableVolume(q('40', 'uL'))).toEqual(q('40', 'uL'));
+    expect(readableVolume(q('0.5', 'nL'))).toEqual(q('500', 'pL'));
+    expect(() => readableVolume(q('1', 'g'))).toThrow(UnitError);
   });
 });

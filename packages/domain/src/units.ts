@@ -259,3 +259,21 @@ export function molarToMass(
 export function formatQuantity(q: Quantity): string {
   return `${q.value} ${getUnit(q.unit).symbol}`;
 }
+
+/** The quantities added up in the first one's unit; undefined for none. All must share a dimension. */
+export function sum(quantities: readonly Quantity[]): Quantity | undefined {
+  const [first, ...rest] = quantities;
+  return first ? rest.reduce(add, convert(first, first.unit)) : undefined;
+}
+
+const READABLE_VOLUMES = ['L', 'mL', 'uL', 'nL'] as const;
+
+/** A volume in the largest unit that keeps it at 1 or more ("1500 µL" → "1.5 mL"). */
+export function readableVolume(volume: Quantity): Quantity {
+  assertSameDimension(volume.unit, 'L');
+  for (const unit of READABLE_VOLUMES) {
+    const there = convert(volume, unit);
+    if (new LabDecimal(there.value).abs().gte(1)) return there;
+  }
+  return convert(volume, 'pL');
+}

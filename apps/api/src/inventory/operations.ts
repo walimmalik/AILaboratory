@@ -20,6 +20,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordError } from '../records/errors.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { inventoryOverviewOperation } from './stock.ts';
 
 async function find(service: RecordService, ctx: RecordContext, id: string) {
   try {
@@ -86,6 +87,7 @@ const volumeWords = (v: WellState['volume']) =>
   v === 'unknown' ? 'an unknown volume' : formatQuantity(v);
 
 export const inventoryOperations = [
+  inventoryOverviewOperation,
   implement(inventoryCalculateTransfer, {
     run: async (_ctx, input) => {
       const destination = input.destination ?? EMPTY_WELL_STATE;

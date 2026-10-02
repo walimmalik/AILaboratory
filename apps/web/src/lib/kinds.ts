@@ -12,6 +12,7 @@ export interface KindPage {
   /** One record in words, e.g. "labware type". */
   noun: string;
   path:
+    | '/inventory'
     | '/labware'
     | '/instruments'
     | '/instrument-models'
@@ -60,10 +61,40 @@ export const libraryPages: KindPage[] = [
   },
   { kind: 'run', title: 'Runs', noun: 'run', path: '/runs', area: 'Experiments' },
   { kind: 'set', title: 'Sets', noun: 'set', path: '/sets', area: 'Experiments' },
-  { kind: 'product', title: 'Reagents', noun: 'product', path: '/reagents', area: 'Inventory' },
-  { kind: 'lot', title: 'Lots', noun: 'lot', path: '/lots', area: 'Inventory' },
-  { kind: 'entity', title: 'Materials', noun: 'material', path: '/entities', area: 'Inventory' },
-  { kind: 'sample', title: 'Samples', noun: 'sample', path: '/samples', area: 'Inventory' },
+  // Stock is the area's own list, not a record kind (004f-4): reagents, lots, materials and
+  // samples together. Their lists by kind sit under it.
+  {
+    kind: 'inventory',
+    title: 'Stock',
+    noun: 'thing in stock',
+    path: '/inventory',
+    area: 'Inventory',
+  },
+  {
+    kind: 'product',
+    title: 'Reagents',
+    noun: 'product',
+    path: '/reagents',
+    area: 'Inventory',
+    under: 'inventory',
+  },
+  { kind: 'lot', title: 'Lots', noun: 'lot', path: '/lots', area: 'Inventory', under: 'inventory' },
+  {
+    kind: 'entity',
+    title: 'Materials',
+    noun: 'material',
+    path: '/entities',
+    area: 'Inventory',
+    under: 'inventory',
+  },
+  {
+    kind: 'sample',
+    title: 'Samples',
+    noun: 'sample',
+    path: '/samples',
+    area: 'Inventory',
+    under: 'inventory',
+  },
   {
     kind: 'container',
     title: 'Containers',

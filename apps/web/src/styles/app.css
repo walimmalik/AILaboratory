@@ -1807,6 +1807,105 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+/* Inventory's Stock list (plan 004f-4): one row per thing, its lots and containers open in place. */
+.stock .toolbar + * {
+  margin-top: 12px;
+}
+.stock-table .small,
+.stock .small {
+  font-size: 12px;
+}
+.stock-table td.num {
+  white-space: nowrap;
+}
+.stock-table tr.batch {
+  background: var(--grid);
+}
+.stock-table .batch-name {
+  padding-left: 28px;
+}
+.stock-table a:not(.agent-ink) {
+  color: var(--ink);
+  text-decoration: none;
+}
+.stock-table a:hover {
+  text-decoration: underline;
+}
+.stock-table .disclosure {
+  border: 0;
+  background: none;
+  padding: 0 6px 0 0;
+  color: var(--ink-3);
+  font: inherit;
+  cursor: pointer;
+}
+.stock-table .pick {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.stock .bulk {
+  margin: 0;
+  min-inline-size: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.stock .bulk-picked {
+  margin: 0;
+}
+.stock .not-in-stock {
+  margin-top: 16px;
+}
+.stock .not-in-stock-head {
+  cursor: pointer;
+  font-weight: 600;
+}
+.stock .not-in-stock-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  columns: 3 16em;
+  column-gap: 24px;
+}
+.stock .not-in-stock-item {
+  break-inside: avoid;
+  padding: 2px 0;
+}
+.stock .by-kind {
+  margin: 16px 0 0;
+}
+/* Narrow screens: each row stacks, its name across the top, then two facts a line. */
+@media (max-width: 720px) {
+  .stock-table thead {
+    display: none;
+  }
+  .stock-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .stock-table td {
+    border: 0;
+    padding: 2px 8px;
+  }
+  .stock-table td:first-child {
+    grid-column: 1 / -1;
+  }
+  .stock-table td:nth-child(3),
+  .stock-table td:nth-child(5) {
+    justify-self: end;
+    text-align: right;
+  }
+  .stock-table .batch-name {
+    padding-left: 24px;
+  }
+}
+
 .tree,
 ul.plain,
 ul.rules {

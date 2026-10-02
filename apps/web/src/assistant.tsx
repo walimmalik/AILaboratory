@@ -85,19 +85,27 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       return;
     }
     const key = conversationQuery(conversationId).queryKey;
-    const onMessage = (message: AssistantMessage) =>
+    // A refetch that drops any fetch still in flight: a first load has no data to add events to,
+    // and joining it would keep a conversation read before the turn's last messages.
+    const reload = () =>
+      void queryClient
+        .cancelQueries({ queryKey: key })
+        .then(() => queryClient.invalidateQueries({ queryKey: key }));
+    const onMessage = (message: AssistantMessage) => {
+      if (!queryClient.getQueryData<Conversation>(key)) return reload();
       queryClient.setQueryData(key, (old: Conversation | undefined) =>
         !old || old.messages.some((m) => m.id === message.id)
           ? old
           : { ...old, messages: [...old.messages, message] },
       );
+    };
     const onStatus = (summary: ConversationSummary) => {
       setRunning(summary.status === 'running');
       queryClient.setQueryData(key, (old: Conversation | undefined) =>
         old ? { ...old, ...summary, ...(summary.error ? {} : { error: undefined }) } : old,
       );
       // Catch up on anything sent before the stream connected, and refresh the list's order.
-      void queryClient.invalidateQueries({ queryKey: key });
+      reload();
       void queryClient.invalidateQueries({ queryKey: conversationsQuery.queryKey });
     };
     return api.subscribeConversation(conversationId, { onMessage, onStatus });
