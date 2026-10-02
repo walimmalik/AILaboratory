@@ -22,6 +22,8 @@ export interface Column {
   className?: string;
   /** Whether a record has a value here; a column no shown record fills is left out (review 17). */
   filled?: (record: RecordEnvelope) => boolean;
+  /** Left out on a phone, so the rows that stay keep one line each (review 2026-10-02, item 5). */
+  secondary?: boolean;
 }
 
 /** Every record in the lab, whatever its kind. Each registry also has its own page in the Library. */
@@ -147,15 +149,17 @@ export function RecordList({
           <p className="empty">{deferred || narrow ? noMatch : empty}</p>
         ) : (
           <div className="table-wrap">
-            <table>
+            <table className="record-list">
               <thead>
                 <tr>
                   <th>Name</th>
                   {shownColumns.map((c) => (
-                    <th key={c.header}>{c.header}</th>
+                    <th key={c.header} className={c.secondary ? 'secondary' : undefined}>
+                      {c.header}
+                    </th>
                   ))}
                   {showStatus && <th>Status</th>}
-                  <th>Changed</th>
+                  <th className="secondary">Changed</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,7 +179,12 @@ export function RecordList({
                       <span className="code">{r.name}</span>
                     </td>
                     {shownColumns.map((c) => (
-                      <td key={c.header} className={c.className}>
+                      <td
+                        key={c.header}
+                        className={[c.className, c.secondary && 'secondary']
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
                         {c.cell(r)}
                       </td>
                     ))}
@@ -185,7 +194,7 @@ export function RecordList({
                       </td>
                     )}
                     <td
-                      className={`when${isAgent(r.updatedBy) ? ' agent-ink' : ''}`}
+                      className={`when secondary${isAgent(r.updatedBy) ? ' agent-ink' : ''}`}
                       title={`by ${actorLabel(r.updatedBy, me)}`}
                     >
                       {formatWhen(r.updatedAt)}

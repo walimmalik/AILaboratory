@@ -2780,3 +2780,13 @@ td.record-name .one-line {
   display: inline-block;
   vertical-align: bottom;
 }
+
+/* On a phone a list keeps its main columns on one line each; the rest is on the record. */
+@media (max-width: 720px) {
+  .record-list .secondary {
+    display: none;
+  }
+  .record-list td {
+    white-space: nowrap;
+  }
+}
