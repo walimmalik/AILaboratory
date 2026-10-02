@@ -164,8 +164,8 @@ instrument_kinds:
     sites:
       - {id: plate, accepts: {sbs: true}}
     capabilities:
-      - {capability: read_absorbance, limits: {wavelengths: {min: {value: "200", unit: nm}, max: {value: "1000", unit: nm}}, note: "Range from a core-facility page, not the manufacturer; unverified."}}
-      - {capability: read_fluorescence, limits: {wavelengths: {min: {value: "230", unit: nm}, max: {value: "900", unit: nm}}, note: "Range from a core-facility page, not the manufacturer; unverified."}}
+      - {capability: read_absorbance, limits: {wavelengths: {min: {value: "200", unit: nm}, max: {value: "1000", unit: nm}}, note: "Range from a core-facility page, unverified."}}
+      - {capability: read_fluorescence, limits: {wavelengths: {min: {value: "230", unit: nm}, max: {value: "900", unit: nm}}, note: "Range from a core-facility page, unverified."}}
       - {capability: read_luminescence, limits: {note: "Glow, flash, multicolor and scan modes."}}
       - {capability: image, limits: {wellCounts: [96, 384], note: "Brightfield, digital phase contrast and 4 fluorescence channels; whole-well imaging in 96 and 384 wells."}}
       - {capability: incubate, limits: {temperature: {max: {value: "42", unit: degC}}, note: "CO2 and O2 control."}}
@@ -266,7 +266,7 @@ instrument_kinds:
           temperature: {min: {value: "4", unit: degC}, max: {value: "100", unit: degC}}
           volume: {min: {value: "1", unit: uL}, max: {value: "50", unit: uL}}
           wellCounts: [96, 384]
-          note: "96 block: 1 to 50 uL, 5 degC/s. 384 block: 1 to 30 uL, 2.5 degC/s. Gradient 30 to 100 degC. Motorized lid for automation."
+          note: "96 block: 1 to 50 uL, 5 °C/s. 384 block: 1 to 30 uL, 2.5 °C/s. Gradient 30 to 100 °C. Motorized lid for automation."
     controlInterfaces: [Touch screen, BR.io]
 
 - key: highres-flexpod
@@ -313,7 +313,7 @@ instrument_kinds:
     capabilities:
       - {capability: seal}
     twin: echo650-twin A4S
-    notes: "Automated plate heat sealer in the FlexPod workcell (plan 008 I10). Specs (seal temperature and time range, plate heights, seal types) are not researched yet."
+    notes: "Automated plate heat sealer in the FlexPod workcell. Specs (seal temperature and time range, plate heights, seal types) are not researched yet."
 
 - key: azenta-xpeel
   label: Azenta XPeel
@@ -326,7 +326,7 @@ instrument_kinds:
     capabilities:
       - {capability: peel}
     twin: echo650-twin XPeel
-    notes: "Automated plate seal remover in the FlexPod workcell (plan 008 I10). Specs (plate heights, cycle time) are not researched yet."
+    notes: "Automated plate seal remover in the FlexPod workcell. Specs (plate heights, cycle time) are not researched yet."
 
 - key: highres-lidvalet
   research: highres-lidvalet
@@ -367,7 +367,7 @@ instrument_kinds:
     performedBy: machine
     footprint: {width: {value: "800", unit: mm}, depth: {value: "822", unit: mm}, height: {value: "915", unit: mm}}
     capabilities:
-      - {capability: incubate, limits: {temperature: {minAboveAmbient: {value: "10", unit: degC}, max: {value: "50", unit: degC}}, note: "CO2 0 to 20 %; humidity below 98 % RH at 37 degC."}}
+      - {capability: incubate, limits: {temperature: {minAboveAmbient: {value: "10", unit: degC}, max: {value: "50", unit: degC}}, note: "CO2 0 to 20 %; humidity below 98 % RH at 37 °C."}}
       - {capability: store, limits: {capacity: 210, note: "210 96- or 384-well plates, 280 1536-well, 100 deep-well."}}
 
 # Manual stations (plan 008, I6): capabilities a person performs. Not from instruments.yaml, so every
@@ -532,7 +532,7 @@ equipment_kinds:
         limits:
           temperature: {min: {value: "4", unit: degC}, max: {value: "99", unit: degC}}
           wellCounts: [96]
-          note: "Lid 37 to 110 degC. Heats at up to 4.25 degC/s, cools at up to 2 degC/s."
+          note: "Lid 37 to 110 °C. Heats at up to 4.25 °C/s, cools at up to 2 °C/s."
     notes: "Takes slots A1 and B1 (commonly stated; not read on an Opentrons page)."
 - key: flex-magnetic-block
   research: opentrons-flex
@@ -822,7 +822,7 @@ workcells:
   - key: flexpod-workcell
     label: FlexPod workcell
     twin: echo650-twin flexpod
-    notes: "The FlexPod with the PlateOrient and two 12-position stackers on it, and the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin around it, scheduled by Cellario (plan 008 I10). The Spark Cyto and Cytomat stand alone."
+    notes: "The FlexPod with the PlateOrient and two 12-position stackers on it, and the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin around it, scheduled by Cellario. The Spark Cyto and Cytomat stand alone."
     members:
       - {instrument: flexpod-01, twinDevice: flexpod, byHand: false}
       - {instrument: plateorient-01, twinDevice: flexpod.orient, byHand: false}

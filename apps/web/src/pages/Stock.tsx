@@ -296,13 +296,10 @@ export function StockPage() {
                             </div>
                           </td>
                           <td className="have">{haveWords(row)}</td>
-                          <td className="num">{amountWords(row.amount) ?? '—'}</td>
+                          <td className="num">{amountWords(row.amount) ?? (where ? '—' : '')}</td>
                           <td title={where?.title}>
-                            {where?.text ?? (
-                              <span className="muted" title="No container of it is recorded">
-                                —
-                              </span>
-                            )}
+                            {/* Say why there is nothing to show (review 2026-10-02, item 12). */}
+                            {where?.text ?? <span className="muted">not in a container yet</span>}
                           </td>
                           <td className="num">
                             <Expiry date={row.earliestExpiry} today={today} />
@@ -342,10 +339,6 @@ export function StockPage() {
               </ul>
             </details>
           )}
-          <p className="muted small by-kind">
-            Lists by kind: <Link to="/reagents">reagents</Link> · <Link to="/lots">lots</Link> ·{' '}
-            <Link to="/entities">materials</Link> · <Link to="/samples">samples</Link>
-          </p>
         </div>
       </section>
     </>
@@ -387,9 +380,9 @@ function BatchRows({
     return (
       <tr className="batch">
         <td className="batch-name">{name}</td>
-        <td className="have muted">not in a recorded container</td>
-        <td className="num">{amountWords(batch.amount) ?? '—'}</td>
-        <td />
+        <td className="have muted" />
+        <td className="num">{amountWords(batch.amount) ?? ''}</td>
+        <td className="muted">not in a container yet</td>
         <td className="num">
           <Expiry date={batch.expiry} today={today} />
         </td>
@@ -406,7 +399,7 @@ function BatchRows({
             onChange={() => onPick(c.container)}
             aria-label={`Pick ${c.container.name}`}
           />
-          <RefLink item={c.container}>{c.container.name}</RefLink>
+          <RefLink item={c.container} /> <span className="code">{c.container.name}</span>
         </label>{' '}
         <span className="muted">{plural(c.wells, 'well')}</span>
       </td>

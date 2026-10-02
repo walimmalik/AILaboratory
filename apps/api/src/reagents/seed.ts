@@ -117,7 +117,7 @@ export async function loadSeedReagents(
   const list = (kind: string) =>
     run<{ records: RecordEnvelope[] }>('records.list', { kind, limit: 200 }).then((r) => r.records);
   const byLabel = async (kind: string) => new Map((await list(kind)).map((r) => [r.label, r]));
-  const reason = 'Seed lab (plan 006), loaded by plan 009';
+  const reason = 'Imported from the seed lab';
   const report: ReagentSeedReport = {
     liquidTypes: { created: [], existing: [] },
     products: { created: [], existing: [] },

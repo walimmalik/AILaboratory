@@ -129,7 +129,7 @@ export async function loadSeedContents(
     ).records.find((r) => r.label === label);
   const pending = (await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' }))
     .proposals;
-  const reason = 'Seed lab (plan 006), loaded by plan 010c';
+  const reason = 'Imported from the seed lab';
   const report: ContentsSeedReport = {
     samples: { created: [], proposed: [], existing: [], waiting: [] },
     contents: { created: [], proposed: [], existing: [], waiting: [] },

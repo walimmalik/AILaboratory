@@ -51,7 +51,7 @@ import { fieldLabel, ReadinessBlock } from './RecordReview.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
-import { renderValue } from './Value.tsx';
+import { LinkedName, renderValue } from './Value.tsx';
 
 const operationWords: Record<string, string> = {
   create: 'created',
@@ -156,7 +156,11 @@ export function RecordPage() {
             <PlateMapCrumbs record={r} />
           ) : (
             <div className="crumbs">
-              lab / {kindPage(r.kind) && <>{kindPage(r.kind)?.area.toLowerCase()} / </>}
+              lab /{' '}
+              {/* The area, unless its first tab has the same name ("experiments / experiments"). */}
+              {kindPage(r.kind) && kindPage(r.kind)?.area !== kindPage(r.kind)?.title && (
+                <>{kindPage(r.kind)?.area.toLowerCase()} / </>
+              )}
               {kindPage(r.kind) ? (
                 <Link to={kindPage(r.kind)?.path ?? '/records'}>
                   {kindPage(r.kind)?.title.toLowerCase()}
@@ -532,7 +536,25 @@ const fieldViews: Record<string, (value: unknown, record: RecordEnvelope) => Rea
     <InstalledEquipment configuration={value as Configuration | undefined} />
   ),
   'lot/values': (_, record) => <LotValues record={record} />,
+  'experiment/aim': (value, record) => <CampaignAim aim={value} record={record} />,
+  'experiment/followsUp': (value) => {
+    const f = value as { experiment: string; relation: 'follows_up' | 'repeats_with_changes' };
+    return (
+      <>
+        {f.relation === 'repeats_with_changes' ? 'repeats with changes' : 'follows up'}{' '}
+        <LinkedName id={f.experiment} />
+      </>
+    );
+  },
 };
+
+/** An experiment's aim in the campaign's words, as its Overview says it, not by the aim's key. */
+function CampaignAim({ aim, record }: { aim: unknown; record: RecordEnvelope }) {
+  const id = (record.attributes as { campaign?: string }).campaign;
+  const campaign = useQuery({ ...recordQuery(id ?? ''), enabled: !!id }).data;
+  const aims = (campaign?.attributes.aims ?? []) as { id: string; text: string }[];
+  return <>{aims.find((a) => a.id === aim)?.text ?? String(aim)}</>;
+}
 
 /** The sections a confirmation added or refreshed, by their ID. */
 function confirmedSections(

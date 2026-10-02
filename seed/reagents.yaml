@@ -58,7 +58,7 @@ products:
     storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
     handling_rules:
       - {rule: reconstitution_rest, text: "Let all components sit >= 15 min with gentle agitation after initial reconstitution", duration: {value: "15", unit: min}, source: vendor}
-      - {rule: detection_antibody_rest, text: "Store reconstituted Detection Antibody at least overnight at 2-8 degC before use the next day", source: vendor}
+      - {rule: detection_antibody_rest, text: "Store reconstituted Detection Antibody at least overnight at 2-8 °C before use the next day", source: vendor}
       - {rule: light, text: "Streptavidin-HRP and substrate steps: avoid direct light", source: vendor}
       - {rule: time_to_read, text: "Read immediately after Stop Solution at 450 nm; correction 540 or 570 nm", source: vendor}
       - {rule: expiry, text: "Do not use past expiration date", source: vendor}
@@ -118,7 +118,7 @@ products:
       - {name: Wash Buffer (25X), count: "6", volume_each: {value: "21", unit: mL}, working_dilution: "1:25"}
     storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
     handling_rules:
-      - {rule: storage, text: "Store unopened product at 2-8 degC; do not use past expiration date", source: vendor}
+      - {rule: storage, text: "Store unopened product at 2-8 °C; do not use past expiration date", source: vendor}
     hazards: unknown
     source_urls:
       - https://www.rndsystems.com/products/duoset-ancillary-reagent-kit-2_dy008b
@@ -160,7 +160,7 @@ products:
         - {name: Color Reagent B (stabilized tetramethylbenzidine), part_number: "895001", count: "8", volume_each: {value: "12", unit: mL}}
       handling_rules:
         - {rule: mix_window, text: "Mix A and B in equal volumes within 15 min of use", duration: {value: "15", unit: min}, source: vendor}
-        - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 degC", source: vendor}
+        - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 °C", source: vendor}
         - {rule: light, light_sensitive: true, source: vendor}
         - {rule: equilibrate, text: "Warm to room temperature before use", source: vendor}
     source_urls:
@@ -186,7 +186,7 @@ products:
       - {name: sulfuric acid, concentration: {value: "1", unit: M}, note: "2N H2SO4 = 1 M"}
     storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}}
     handling_rules:
-      - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 degC", source: vendor}
+      - {rule: stability_after_opening, duration: {value: "30", unit: d}, temperature: "2-8 °C", source: vendor}
       - {rule: use, text: "Add 50-100 uL/well", volume_per_well_range: [{value: "50", unit: uL}, {value: "100", unit: uL}], source: vendor}
       - {rule: time_to_read, text: "Read immediately after stopping (DY206 datasheet)", source: vendor}
     hazards:
@@ -202,7 +202,7 @@ products:
       hazards.summary: verified
       hazards.ghs: estimated
     notes: >
-      Current DuoSet datasheets name DY994B instead (methanesulfonic acid, 16 x 12 mL, store 2-25 degC, stable to
+      Current DuoSet datasheets name DY994B instead (methanesulfonic acid, 16 x 12 mL, store 2-25 °C, stable to
       expiry opened or unopened, 100 uL/well; https://www.rndsystems.com/products/stop-solution_dy994b).
       Seed either; DY994B is the one the current DY206 datasheet names.
 
@@ -228,7 +228,7 @@ products:
       pack_size: verified
       storage_temperature: estimated
       hazards: estimated
-    notes: Storage 2-8 degC is from memory of the Sigma listing; could not load the Sigma product page to confirm.
+    notes: Storage 2-8 °C is from memory of the Sigma listing; could not load the Sigma product page to confirm.
 
   - key: gibco-10010023
     vendor: Gibco (Thermo Fisher Scientific)
@@ -255,7 +255,7 @@ products:
     pack_size: {value: "500", unit: mL}
     cas: 9005-64-5
     specific_gravity: "1.1"
-    viscosity: "370-430 cps at 25 degC, neat (Brookfield)"
+    viscosity: "370-430 cps at 25 °C, neat (Brookfield)"
     storage_temperature: {text: room temperature}
     handling_rules:
       - {rule: light, text: "Aqueous polysorbate solutions autoxidize; light, heat and copper catalyse it", light_sensitive: true, source: vendor}
@@ -295,10 +295,10 @@ products:
     storage_long_term_preferred: {max: {value: "-65", unit: degC}, text: "for maximum light signal"}
     handling_rules:
       - {rule: light, text: "Light-sensitive; store in an opaque container", light_sensitive: true, source: vendor}
-      - {rule: stability_at_4C, text: ">85% light output after 2 months at 4 degC", duration: {value: "60", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
+      - {rule: stability_at_4C, text: ">85% light output after 2 months at 4 °C", duration: {value: "60", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
       - {rule: stability_at_room_temperature, text: ">85% light output after 7 days at room temperature", duration: {value: "7", unit: d}, source: vendor}
       - {rule: freeze_thaw, text: "Withstands 4 additional freeze-thaw cycles after the first thaw with no loss; do not refreeze after extended storage above recommended temperature", max_additional_cycles: "4", source: vendor}
-      - {rule: thaw, text: "Thaw overnight at 4 degC or in a 22 degC water bath; do not exceed 25 degC", max_temperature: {value: "25", unit: degC}, source: vendor}
+      - {rule: thaw, text: "Thaw overnight at 4 °C or in a 22 °C water bath; do not exceed 25 °C", max_temperature: {value: "25", unit: degC}, source: vendor}
       - {rule: equilibrate_reagent, text: "~30 min for 100 mL, ~100 min for 500 mL to reach room temperature", duration: {value: "30", unit: min}, source: vendor}
       - {rule: equilibrate_plate, text: "Equilibrate plate and contents to room temperature ~30 min before adding reagent", duration: {value: "30", unit: min}, source: vendor}
       - {rule: dispense_ratio, text: "Add volume equal to medium: 100 uL (96-well) or 25 uL (384-well)", ratio: "1:1", volume_384: {value: "25", unit: uL}, volume_96: {value: "100", unit: uL}, source: vendor}
@@ -330,8 +330,8 @@ products:
     handling_rules:
       - {rule: light, text: "Protect from light", light_sensitive: true, source: vendor}
       - {rule: environment, text: "Requires 5-10% CO2 to maintain physiological pH; typically supplemented with 10% FBS", source: vendor}
-      - {rule: warm_before_use, text: "Warm to 37 degC (or room temperature) before adding to cells", source: lab_convention, status: estimated}
-      - {rule: stability_after_supplement, text: "Complete medium used within ~2-4 weeks at 4 degC (glutamine degrades)", source: lab_convention, status: estimated}
+      - {rule: warm_before_use, text: "Warm to 37 °C (or room temperature) before adding to cells", source: lab_convention, status: estimated}
+      - {rule: stability_after_supplement, text: "Complete medium used within ~2-4 weeks at 4 °C (glutamine degrades)", source: lab_convention, status: estimated}
     hazards: {summary: not hazardous, status: estimated}
     liquid_behaviour: {class: aqueous, status: estimated}
     source_urls:
@@ -345,10 +345,10 @@ products:
     category: serum
     pack_size: {value: "500", unit: mL}
     origin: per Certificate of Analysis
-    storage_temperature: {max: {value: "-10", unit: degC}, text: "store below -10 degC"}
+    storage_temperature: {max: {value: "-10", unit: degC}, text: "store below -10 °C"}
     shelf_life: "5 years"
     handling_rules:
-      - {rule: thaw, text: "Thaw overnight at 4 degC or in a 37 degC water bath; remove as soon as thawed", source: vendor}
+      - {rule: thaw, text: "Thaw overnight at 4 °C or in a 37 °C water bath; remove as soon as thawed", source: vendor}
       - {rule: freeze_thaw, text: "Aliquot; each aliquot ideally thawed only one additional time", max_additional_cycles: "1", source: vendor}
       - {rule: use, text: "10% v/v in complete growth medium", concentration: {value: "10", unit: "%v/v"}, source: vendor}
     hazards: {summary: animal-derived, not hazardous, status: estimated}
@@ -385,7 +385,7 @@ products:
     category: dissociation_reagent
     pack_size: {value: "100", unit: mL}
     formulation: {concentration: 1X, contains: EDTA, phenol_red: false}
-    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "30", unit: degC}, alternates: "2-8 degC or -5 to -20 degC"}
+    storage_temperature: {min: {value: "15", unit: degC}, max: {value: "30", unit: degC}, alternates: "2-8 °C or -5 to -20 °C"}
     shelf_life: "24 months from date of manufacture"
     handling_rules:
       - {rule: light, text: "Protect from light", light_sensitive: true, source: vendor}
@@ -431,7 +431,7 @@ products:
       - {solvent: methanol, value: "2", unit: mg/mL}
     storage_temperature: {value: "-20", unit: degC}
     handling_rules:
-      - {rule: stock, text: "Stocks in DMSO stored at -20 degC, aliquoted, protected from light", source: lab_convention, status: estimated}
+      - {rule: stock, text: "Stocks in DMSO stored at -20 °C, aliquoted, protected from light", source: lab_convention, status: estimated}
       - {rule: light, light_sensitive: unknown, source: vendor}
     hazards: {summary: "Potent kinase inhibitor, toxic; vendor: not for human or veterinary use", status: estimated}
     source_urls:
@@ -449,16 +449,16 @@ products:
     pack_size: {value: "100", unit: mL, note: "amber bottle; 5 x 5 mL and 5 x 10 mL also listed by resellers"}
     cas: 67-68-5
     density: {value: "1100", unit: mg/mL, note: "1.10 g/mL"}
-    melting_point: {value: "18.45", unit: degC, note: "product page: 16-19 degC"}
+    melting_point: {value: "18.45", unit: degC, note: "product page: 16-19 °C"}
     boiling_point: {value: "189", unit: degC}
     storage_temperature: {text: room temperature (product information sheet)}
     handling_rules:
       - {rule: hygroscopic, text: "Very hygroscopic; protect from moisture; keep tightly closed", source: vendor}
-      - {rule: solidifies, text: "May arrive or become solid below ~18 degC; reliquefy by warming to room temperature without detriment", source: vendor}
+      - {rule: solidifies, text: "May arrive or become solid below ~18 °C; reliquefy by warming to room temperature without detriment", source: vendor}
       - {rule: echo_source_plates, text: "Water uptake changes acoustic dispensing calibration and compound solubility; keep source plates sealed and minimise time open", source: lab_convention, status: estimated}
-    hazards: {summary: "Combustible liquid (flash point 87 degC closed cup); penetrates skin and carries dissolved substances", status: estimated}
+    hazards: {summary: "Combustible liquid (flash point 87 °C closed cup); penetrates skin and carries dissolved substances", status: estimated}
     liquid_behaviour:
-      text: "Hygroscopic, low volatility, slightly viscous (~2 cP), density 1.1 g/mL, wets plastics; freezes near 18 degC so cold rooms are a problem"
+      text: "Hygroscopic, low volatility, slightly viscous (~2 cP), density 1.1 g/mL, wets plastics; freezes near 18 °C so cold rooms are a problem"
       density_status: verified
       viscosity_status: estimated
     source_urls:
@@ -467,7 +467,7 @@ products:
     status: {catalog_number: verified, pack_size: verified, properties: verified, storage_temperature: verified, hazards: verified}
     notes: >
       Conflict: product information sheet says "Store at Room Temperature"; the product page summary returned
-      "cool storage area, such as 4 degC" (probably from SDS text). Seed room temperature and flag it.
+      "cool storage area, such as 4 °C" (probably from SDS text). Seed room temperature and flag it.
       "Skin penetration" is general knowledge, not from a source; flash point is from the product page.
 
   - key: selleck-l1300
@@ -483,9 +483,9 @@ products:
       - {count: "19", concentration: {value: "2", unit: mM}, solvent: water}
       - {count: "2", concentration: {value: "2", unit: mg/mL}, solvent: DMSO}
     container: 96 deep-well plates sealed with aluminium foil (384-well format available on request)
-    storage_temperature: {value: "-20", unit: degC, alternate: "-80 degC"}
+    storage_temperature: {value: "-20", unit: degC, alternate: "-80 °C"}
     handling_rules:
-      - {rule: stability, text: "12 months at -20 degC in DMSO; 24 months at -80 degC in DMSO", source: vendor}
+      - {rule: stability, text: "12 months at -20 °C in DMSO; 24 months at -80 °C in DMSO", source: vendor}
       - {rule: freeze_thaw, text: "Limit freeze-thaw of master plates; make daughter/Echo source plates", source: lab_convention, status: estimated}
     source_urls:
       - https://www.selleckchem.com/screening/fda-approved-drug-library.html
@@ -519,9 +519,9 @@ products:
     reagent_preparation: "Dilute LgBiT 1:100 and substrate 1:50 into room-temperature buffer; prepare fresh for each use"
     storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}}
     handling_rules:
-      - {rule: thaw, text: "Do not thaw above 25 degC", max_temperature: {value: "25", unit: degC}, source: vendor}
-      - {rule: buffer_after_opening, text: "Buffer: 2-8 degC for 1 year or room temperature for 3 months; >= 10 freeze-thaw cycles OK", source: vendor}
-      - {rule: working_reagent_stability, text: "~10% activity loss over 8 h and ~30% over 24 h at room temperature; <10% over 24 h at 4 degC; can store at -80, -20 or 4 degC with some loss", duration: {value: "8", unit: h}, source: vendor}
+      - {rule: thaw, text: "Do not thaw above 25 °C", max_temperature: {value: "25", unit: degC}, source: vendor}
+      - {rule: buffer_after_opening, text: "Buffer: 2-8 °C for 1 year or room temperature for 3 months; >= 10 freeze-thaw cycles OK", source: vendor}
+      - {rule: working_reagent_stability, text: "~10% activity loss over 8 h and ~30% over 24 h at room temperature; <10% over 24 h at 4 °C; can store at -80, -20 or 4 °C with some loss", duration: {value: "8", unit: h}, source: vendor}
       - {rule: dispense_ratio, text: "Volume equal to culture medium", ratio: "1:1", source: vendor}
       - {rule: mix, text: "Orbital shaker 300-600 rpm for 3-10 min (minimum 15-30 s)", duration: {value: "3", unit: min}, source: vendor}
       - {rule: incubate_before_read, text: "Wait >= 10 min for LgBiT/HiBiT equilibration", duration: {value: "10", unit: min}, source: vendor}
@@ -544,15 +544,15 @@ products:
     category: luminescent_reporter_assay
     pack_size: {value: "10", unit: mL}
     components:
-      - {name: Dual-Glo Luciferase Buffer, volume: {value: "10", unit: mL}, storage: "below 25 degC"}
-      - {name: Dual-Glo Luciferase Substrate (lyophilized), count: "1", storage: "-30 to -10 degC"}
-      - {name: Dual-Glo Stop & Glo Buffer, volume: {value: "10", unit: mL}, storage: "below 25 degC"}
-      - {name: Dual-Glo Stop & Glo Substrate, volume: {value: "100", unit: uL}, working_dilution: "1:100", storage: "-30 to -10 degC"}
+      - {name: Dual-Glo Luciferase Buffer, volume: {value: "10", unit: mL}, storage: "below 25 °C"}
+      - {name: Dual-Glo Luciferase Substrate (lyophilized), count: "1", storage: "-30 to -10 °C"}
+      - {name: Dual-Glo Stop & Glo Buffer, volume: {value: "10", unit: mL}, storage: "below 25 °C"}
+      - {name: Dual-Glo Stop & Glo Substrate, volume: {value: "100", unit: uL}, working_dilution: "1:100", storage: "-30 to -10 °C"}
     components_E2940: "100 mL Luciferase Buffer, 1 vial substrate, 100 mL Stop & Glo Buffer, 1,000 uL Stop & Glo Substrate"
-    storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}, note: "substrates; buffers below 25 degC"}
+    storage_temperature: {min: {value: "-30", unit: degC}, max: {value: "-10", unit: degC}, note: "substrates; buffers below 25 °C"}
     handling_rules:
-      - {rule: substrate_at_4C, text: "Substrates may be stored at 4 degC up to 2 weeks", duration: {value: "14", unit: d}, source: vendor}
-      - {rule: working_reagent_stability, text: "Reconstituted Luciferase Reagent: ~10% loss after 8 h RT, 48 h 4 degC, 1 week -20 degC, 6 months -70 degC; do not keep at -20 degC > 1 week", duration: {value: "8", unit: h}, source: vendor}
+      - {rule: substrate_at_4C, text: "Substrates may be stored at 4 °C up to 2 weeks", duration: {value: "14", unit: d}, source: vendor}
+      - {rule: working_reagent_stability, text: "Reconstituted Luciferase Reagent: ~10% loss after 8 h RT, 48 h 4 °C, 1 week -20 °C, 6 months -70 °C; do not keep at -20 °C > 1 week", duration: {value: "8", unit: h}, source: vendor}
       - {rule: freeze_thaw, text: "Luciferase Reagent: 5 freeze-thaw cycles with ~15% loss", max_cycles: "5", source: vendor}
       - {rule: stop_glo_prepare_fresh, text: "Stop & Glo Reagent prepared on day of use, immediately before use (8.1% loss after 8 h RT)", source: vendor}
       - {rule: equilibrate, text: "Reagents at room temperature before measuring; can store buffers at room temperature to avoid equilibration", source: vendor}
@@ -578,11 +578,11 @@ products:
     readout: {mode: absorbance, wavelength_nm: "405", kinetic_or_endpoint: "either; endpoint stop with NaOH"}
     target_enzyme: alkaline phosphatase
     components:
-      - {name: PNPP Tablets, count: "105", mass_each: {value: "5", unit: mg}, storage: "-20 degC"}
-      - {name: Diethanolamine Substrate Buffer (5X), volume: {value: "225", unit: mL}, composition_note: "diethanolamine, pH 9.8; molarity unknown (see notes)", working_dilution: "1:5", storage: "4 degC"}
+      - {name: PNPP Tablets, count: "105", mass_each: {value: "5", unit: mg}, storage: "-20 °C"}
+      - {name: Diethanolamine Substrate Buffer (5X), volume: {value: "225", unit: mL}, composition_note: "diethanolamine, pH 9.8; molarity unknown (see notes)", working_dilution: "1:5", storage: "4 °C"}
     working_solution: "2 tablets (10 mg) in 10 mL 1X buffer = 1 mg/mL pNPP"
     working_concentration: {value: "1", unit: mg/mL}
-    storage_temperature: {text: "tablets -20 degC; buffer 4 degC"}
+    storage_temperature: {text: "tablets -20 °C; buffer 4 °C"}
     handling_rules:
       - {rule: equilibrate, text: "Equilibrate PNPP to room temperature before opening", source: vendor}
       - {rule: use, text: "100 uL/well; incubate 30 min or until colour develops", volume_per_well: {value: "100", unit: uL}, incubation: {value: "30", unit: min}, source: vendor}
@@ -590,7 +590,7 @@ products:
       - {rule: light, text: "Prepare working solution fresh and protect from light", light_sensitive: true, source: lab_convention, status: estimated}
     hazards: {summary: "Avoid PNPP contact with eyes, skin, clothing; diethanolamine is harmful/irritant", status: estimated}
     related:
-      - {catalog_number: "37621", name: 1-Step PNPP Substrate Solution, volume: {value: "100", unit: mL}, storage: "4 degC", stability: "12 months at 2-8 degC", readout_nm: "405"}
+      - {catalog_number: "37621", name: 1-Step PNPP Substrate Solution, volume: {value: "100", unit: mL}, storage: "4 °C", stability: "12 months at 2-8 °C", readout_nm: "405"}
       - {catalog_number: "34045", name: PNPP powder, mass: {value: "25", unit: g}}
       - {catalog_number: "34047", name: PNPP tablets, count: "105"}
       - {catalog_number: "34064", name: Diethanolamine Substrate Buffer 5X, volume: {value: "225", unit: mL}}
@@ -636,12 +636,12 @@ products:
     pack_size: {count: "100", count_of: assays}
     assay_range: {low: {value: "0.1", unit: ng}, high: {value: "120", unit: ng}, note: "ng in assay tube"}
     components:
-      - {name: Qubit dsDNA HS Reagent (A), volume: {value: "250", unit: uL}, concentration: "200X in DMSO", storage: "2-8 degC, desiccate, protect from light"}
-      - {name: Qubit dsDNA HS Buffer (B), volume: {value: "50", unit: mL}, storage: "<= 30 degC"}
-      - {name: "Qubit dsDNA HS Standard #1 (C)", volume: {value: "1", unit: mL}, concentration: {value: "0", unit: ng/mL}, storage: "2-8 degC"}
-      - {name: "Qubit dsDNA HS Standard #2 (D)", volume: {value: "1", unit: mL}, concentration: {value: "10000", unit: ng/mL, note: "10 ng/uL in TE"}, storage: "2-8 degC"}
+      - {name: Qubit dsDNA HS Reagent (A), volume: {value: "250", unit: uL}, concentration: "200X in DMSO", storage: "2-8 °C, desiccate, protect from light"}
+      - {name: Qubit dsDNA HS Buffer (B), volume: {value: "50", unit: mL}, storage: "<= 30 °C"}
+      - {name: "Qubit dsDNA HS Standard #1 (C)", volume: {value: "1", unit: mL}, concentration: {value: "0", unit: ng/mL}, storage: "2-8 °C"}
+      - {name: "Qubit dsDNA HS Standard #2 (D)", volume: {value: "1", unit: mL}, concentration: {value: "10000", unit: ng/mL, note: "10 ng/uL in TE"}, storage: "2-8 °C"}
     working_solution: "Reagent 1:200 in Buffer; 200 uL final per tube; 10 uL standard; 1-20 uL sample"
-    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}, note: "reagent and standards; buffer <= 30 degC"}
+    storage_temperature: {min: {value: "2", unit: degC}, max: {value: "8", unit: degC}, note: "reagent and standards; buffer <= 30 °C"}
     handling_rules:
       - {rule: light, text: "Protect reagent stock, standards and assay tubes from light", light_sensitive: true, source: vendor}
       - {rule: incubate_before_read, duration: {value: "2", unit: min}, source: vendor}
@@ -653,7 +653,7 @@ products:
       - https://www.thermofisher.com/order/catalog/product/Q32851
     status: {catalog_number: verified, components: verified, storage_temperature: verified, handling_rules: verified}
     notes: >
-      Conflict: user guide lists the reagent at 2-8 degC; the current product page says buffer and reagent should
+      Conflict: user guide lists the reagent at 2-8 °C; the current product page says buffer and reagent should
       be stored at room temperature. Kit revisions differ; take the value from the lot's insert.
 
   - key: biorad-1725271
@@ -667,9 +667,9 @@ products:
     reaction_volume: {value: "20", unit: uL}
     storage_temperature: {value: "-20", unit: degC}
     handling_rules:
-      - {rule: stability_after_thaw, text: "Up to 3 months at 4 degC after thawing", duration: {value: "90", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
+      - {rule: stability_after_thaw, text: "Up to 3 months at 4 °C after thawing", duration: {value: "90", unit: d}, temperature: {value: "4", unit: degC}, source: vendor}
       - {rule: light, text: "Contains SYBR Green I; protect from light", light_sensitive: true, source: lab_convention, status: estimated}
-    shelf_life: "12 months at -20 degC"
+    shelf_life: "12 months at -20 °C"
     hazards: unknown
     liquid_behaviour: {text: "Mildly viscous master mix; may foam; spin down", status: estimated}
     source_urls:
@@ -689,11 +689,11 @@ products:
     pack_size: {value: "0.5", unit: mL}
     components:
       - {name: NEBuilder HiFi DNA Assembly Master Mix, concentration: 2X}
-    reaction: "10 uL 2X master mix + DNA in 20 uL; 2-3 fragments 0.03-0.2 pmol, 50 degC 15 min; 4-6 fragments 0.2-0.5 pmol, 50 degC 60 min"
+    reaction: "10 uL 2X master mix + DNA in 20 uL; 2-3 fragments 0.03-0.2 pmol, 50 °C 15 min; 4-6 fragments 0.2-0.5 pmol, 50 °C 60 min"
     storage_temperature: {value: "-20", unit: degC}
     handling_rules:
       - {rule: thaw_mix, text: "Thaw and vortex thoroughly; keep on ice", source: vendor}
-      - {rule: product_storage, text: "Assembled product on ice or -20 degC; transform 2 uL of chilled product", source: vendor}
+      - {rule: product_storage, text: "Assembled product on ice or -20 °C; transform 2 uL of chilled product", source: vendor}
     hazards: unknown
     liquid_behaviour: {text: "Glycerol-containing; mildly viscous", status: estimated}
     source_urls:
@@ -715,7 +715,7 @@ products:
       - {name: NEBridge Golden Gate Enzyme Mix (BsaI-HFv2 + T4 DNA Ligase), volume: unknown, use_per_rxn: "1 uL (<=10 inserts) or 2 uL (>10 inserts)"}
       - {name: T4 DNA Ligase Reaction Buffer (10X), volume: unknown, use_per_rxn: {value: "2", unit: uL}}
       - {name: pGGAselect Destination Plasmid (2,220 bp), volume: unknown, use_per_rxn: "0.05 pmol (75 ng)"}
-    reaction: "20 uL; 1 insert: 37 degC 5 min -> 60 degC 5 min; 2-10 inserts: (37 degC 1 min, 16 degC 1 min) x30 -> 60 degC 5 min; 11-20+: (37 degC 5 min, 16 degC 5 min) x30 -> 60 degC 5 min"
+    reaction: "20 uL; 1 insert: 37 °C 5 min -> 60 °C 5 min; 2-10 inserts: (37 °C 1 min, 16 °C 1 min) x30 -> 60 °C 5 min; 11-20+: (37 °C 5 min, 16 °C 5 min) x30 -> 60 °C 5 min"
     storage_temperature: {value: "-20", unit: degC}
     handling_rules:
       - {rule: ligase_buffer_freeze_thaw, text: "T4 ligase buffer contains ATP; aliquot to limit freeze-thaw", source: lab_convention, status: estimated}
@@ -743,7 +743,7 @@ products:
     storage_buffer: "20 mM Tris-HCl, 300 mM NaCl, 0.1 mM TCEP, 200 ug/mL recombinant albumin, 50% glycerol, pH 9"
     storage_temperature: {value: "-20", unit: degC}
     handling_rules:
-      - {rule: keep_cold, text: "Keep on ice or in a -20 degC benchtop cooler; add enzyme last", source: lab_convention, status: estimated}
+      - {rule: keep_cold, text: "Keep on ice or in a -20 °C benchtop cooler; add enzyme last", source: lab_convention, status: estimated}
     hazards: unknown
     liquid_behaviour: {text: "50% glycerol: viscous; pipette slowly, wipe tip, use <=10% v/v in reaction", status: estimated, basis: "50% glycerol storage buffer is verified"}
     source_urls:
@@ -771,8 +771,8 @@ products:
     storage_temperature: {value: "-80", unit: degC}
     handling_rules:
       - {rule: thaw, text: "Thaw on ice 10 min (C2987H)", duration: {value: "10", unit: min}, source: vendor}
-      - {rule: no_refreeze, text: "Thaw only once; cells lose efficiency whenever warmed above -80 degC", max_cycles: "1", source: vendor}
-      - {rule: protocol, text: "1-5 uL (1 pg-100 ng) DNA; ice 30 min; heat shock exactly 42 degC 30 s; 950 uL RT SOC; 37 degC 60 min at 250 rpm", source: vendor}
+      - {rule: no_refreeze, text: "Thaw only once; cells lose efficiency whenever warmed above -80 °C", max_cycles: "1", source: vendor}
+      - {rule: protocol, text: "1-5 uL (1 pg-100 ng) DNA; ice 30 min; heat shock exactly 42 °C 30 s; 950 uL RT SOC; 37 °C 60 min at 250 rpm", source: vendor}
     biosafety_level: {value: "BSL-1", status: estimated}
     hazards: {summary: "Contains DMSO (vendor)", status: verified}
     source_urls:
@@ -803,9 +803,9 @@ products:
     elution_volume: {value: "50", unit: uL}
     storage_temperature: {min: {value: "15", unit: degC}, max: {value: "25", unit: degC}}
     handling_rules:
-      - {rule: p1_after_rnase, text: "Buffer P1 with RNase A: 2-8 degC, stable 6 months", duration: {value: "180", unit: d, note: "vendor says 6 months"}, source: vendor}
+      - {rule: p1_after_rnase, text: "Buffer P1 with RNase A: 2-8 °C, stable 6 months", duration: {value: "180", unit: d, note: "vendor says 6 months"}, source: vendor}
       - {rule: lysis_time_limit, text: "Do not let lysis proceed > 5 min", duration: {value: "5", unit: min}, source: vendor}
-      - {rule: p2_precipitate, text: "Check P2 for precipitate; redissolve at 37 degC", source: vendor}
+      - {rule: p2_precipitate, text: "Check P2 for precipitate; redissolve at 37 °C", source: vendor}
       - {rule: kit_shelf_life, text: "12 months dry at room temperature", source: vendor}
     hazards: {summary: "Buffers N3 and PB contain guanidine hydrochloride: never mix with bleach", status: verified}
     source_urls:
@@ -831,7 +831,7 @@ products:
       - {rule: use, text: "1:10,000 in gel buffer (3 uL per 30 mL 1X TBE); no post-stain needed", ratio: "1:10000", source: vendor}
     optics: {excitation_nm: "280, 502", emission_nm: "530"}
     hazards: {summary: "No or very low mutagenic activity; not US federal hazardous waste; solvent is DMSO", status: verified}
-    liquid_behaviour: {text: "DMSO stock; freezes below ~18 degC if refrigerated, warm and mix before use", status: estimated}
+    liquid_behaviour: {text: "DMSO stock; freezes below ~18 °C if refrigerated, warm and mix before use", status: estimated}
     source_urls:
       - https://documents.thermofisher.com/TFS-Assets/LSG/manuals/sybr_safe_dna_gel_stain_man.pdf
       - https://www.thermofisher.com/order/catalog/product/S33102
@@ -842,14 +842,14 @@ products:
 # GAPS AND CAVEATS
 # - DY206: capture/detection antibody amounts, stock and working concentrations, standard stock concentration
 #   and Streptavidin-HRP dilution are lot-specific ("per C of A"). None recorded; put them on the Lot record.
-#   Shelf life of reconstituted components not read (older datasheets gave ~1 month at 2-8 degC, unverified).
+#   Shelf life of reconstituted components not read (older datasheets gave ~1 month at 2-8 °C, unverified).
 # - DY206 datasheet now names DY994B (methanesulfonic acid stop) and DY999B (one-part TMB); DY994 (2N H2SO4)
 #   and DY999 (two-part) are included as the requested / alternative items.
 # - DY008 is discontinued; DY008B is recorded. DY008B stop-solution identity and DY999B vial volume are unknown.
-# - Sigma product pages (A7906, P1379) returned 404 to the fetcher. A7906 storage (2-8 degC) is estimated;
+# - Sigma product pages (A7906, P1379) returned 404 to the fetcher. A7906 storage (2-8 °C) is estimated;
 #   Tween 20 data comes from Sigma's P9416 information sheet, which names P1379 as the general-use grade.
-# - DMSO D2650 storage conflict: information sheet says room temperature, product page summary said ~4 degC.
-# - Qubit HS storage conflict: user guide says reagent at 2-8 degC, current product page says room temperature.
+# - DMSO D2650 storage conflict: information sheet says room temperature, product page summary said ~4 °C.
+# - Qubit HS storage conflict: user guide says reagent at 2-8 °C, current product page says room temperature.
 # - Staurosporine DMSO solubility read as 0.5 mg/mL (~1 mM) from Cayman; re-check before seeding 10 mM stocks.
 #   Light sensitivity unknown. Sigma S4400 not researched.
 # - Selleck library: page gives L1300 (FDA-approved Drug Library, 3,199 compounds); L1700 not checked.

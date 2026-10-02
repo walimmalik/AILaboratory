@@ -262,8 +262,12 @@ export function describeToolStep(step: {
       ...(record ? { record } : {}),
     };
   }
-  const record = recordsIn(result.output)[0]?.record;
+  const found = recordsIn(result.output);
   const verb = operationVerb(step.operationId);
+  // A read that found several records names how many, not the first (review 2026-10-02, item 14).
+  if (isRead(step.operationId) && found.length > 1)
+    return { text: `${verb}: ${found.length} found`, tone: 'muted' };
+  const record = found[0]?.record;
   return {
     text: step.outcome === 'preview' ? `previewed: ${verb}` : verb,
     tone: record && !isRead(step.operationId) ? 'ok-ink' : 'muted',
@@ -335,6 +339,36 @@ export function fieldLabel(field: string): string {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replaceAll('_', ' ')
     .toLowerCase();
+}
+
+/**
+ * Fields whose key does not read as lab words (UX review 2026-10-02, item 3). Everything else reads
+ * by its key ("successCriteria" → "success criteria").
+ */
+const FIELD_WORDS: Readonly<Record<string, string>> = {
+  'experiment/subjects': 'what is tested',
+  'experiment/template': 'assay template',
+  'plate_map/subjects': 'what is tested',
+  'plate_map/labware': 'plate type',
+  'plate_map/overrides': 'hand edits',
+  'plate_map/strategy': 'placement',
+  'plate_map/seed': 'random seed',
+  'memory/kind': 'type of note',
+  'memory/appliesTo': 'who it applies to',
+  'memory/source': 'where it came from',
+  'memory/checkAgain': 'check again on',
+  'memory/when': 'when it applies',
+  'memory/effect': 'what it changes',
+  'transfer_plan/rerunOf': 'reruns',
+  'assay_template/hitRule': 'hit rule',
+  'labware_type/opentronsLoadName': 'Opentrons load name',
+  'labware_type/hamiltonLabware': 'Hamilton labware',
+  'labware_type/echoPlateTypes': 'Echo plate types',
+};
+
+/** A record's field in lab words: "overrides" on a plate map is "hand edits". */
+export function kindFieldWords(kind: string, field: string): string {
+  return FIELD_WORDS[`${kind}/${field}`] ?? fieldLabel(field);
 }
 
 /** A readiness path in words: "volume" → "volume", "/steps/wash" → "step wash" (ADR 0049). */

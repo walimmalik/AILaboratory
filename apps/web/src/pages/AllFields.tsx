@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, type ReactNode } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
-import { fieldLabel, formatShortDay } from '../lib/format.ts';
+import { formatShortDay, isSeed, kindFieldWords } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import type { JsonSchema } from './FieldEditor.tsx';
@@ -177,12 +177,18 @@ function Part({
         />
       ) : (
         <>
-          <Sources section={section} fields={filled} sectioned={sectioned} me={me} />
+          <Sources
+            kind={record.kind}
+            section={section}
+            fields={filled}
+            sectioned={sectioned}
+            me={me}
+          />
           {filled.length > 0 && (
             <dl className="values">
               {filled.map((f) => (
                 <Fragment key={f.field}>
-                  <dt>{fieldLabel(f.field)}</dt>
+                  <dt>{kindFieldWords(record.kind, f.field)}</dt>
                   <dd className={f.state === 'changed' ? 'changed' : undefined}>
                     {f.state === 'changed' && (
                       <>
@@ -211,7 +217,7 @@ function Part({
           ) : (
             empty.length > 0 && (
               <p className="empty">
-                Not filled: {empty.map((f) => fieldLabel(f.field)).join(', ')}
+                Not filled: {empty.map((f) => kindFieldWords(record.kind, f.field)).join(', ')}
               </p>
             )
           )}
@@ -239,7 +245,14 @@ function Part({
 
 /** An agent's value with no source, confirmed or not: marked where it shows (N7). */
 const unsourced = (f: Field) =>
-  f.assumed || (f.evidence?.source === 'assumed' && f.evidence.by.type === 'agent');
+  !fromSeed(f) &&
+  (f.assumed || (f.evidence?.source === 'assumed' && f.evidence.by.type === 'agent'));
+
+/**
+ * The seed lab's files are the source of what the seed loader entered and a person confirmed (ADR
+ * 0044); a seed value still waiting on a person stays marked.
+ */
+const fromSeed = (f: Field) => !f.assumed && !!f.evidence && isSeed(f.evidence.by);
 
 const isEmpty = (value: unknown) =>
   value === undefined ||
@@ -253,11 +266,13 @@ const isEmpty = (value: unknown) =>
  * Values with the same source are named together, or counted past three.
  */
 function Sources({
+  kind,
   section,
   fields,
   sectioned,
   me,
 }: {
+  kind: string;
   section: ReadinessSection;
   fields: Field[];
   sectioned: boolean;
@@ -283,7 +298,8 @@ function Sources({
   const pieces = [...groups.values()]
     .filter((g) => g.evidence || g.fields.some(unsourced))
     .map((g) => {
-      const names = g.fields.length <= 3 ? g.fields.map((f) => fieldLabel(f.field)) : undefined;
+      const names =
+        g.fields.length <= 3 ? g.fields.map((f) => kindFieldWords(kind, f.field)) : undefined;
       const subject = names ? capital(list(names)) : `${g.fields.length} values`;
       const e = g.evidence;
       if (g.fields.some(unsourced)) {
@@ -296,21 +312,22 @@ function Sources({
         );
       }
       if (!e) return null;
+      if (g.fields.every(fromSeed) && e.source === 'assumed')
+        return <span key="seed">{subject} imported from the seed lab</span>;
       const conversation =
         e.source === 'stated' && e.by.type === 'agent' && e.by.sessionRef?.startsWith('cnv_')
           ? e.by.sessionRef
           : undefined;
+      // A value copied from another record names that record, which anyone can open and check.
+      const copied = e.source === 'record' || e.source === 'template';
       return (
         <span key={[e.source, e.from?.id, e.reference, e.note, subject].join('|')}>
           {subject} {sourcePhrase(e, me)}
-          {/* A source an agent named is its claim until a person checks it. */}
-          {e.by.type === 'agent' && e.source !== 'stated' && e.source !== 'person' && (
-            <span className="agent-ink"> per {e.by.agentName}</span>
-          )}
           {e.from && (
             <>
               {' '}
               <LinkedName id={e.from.id} /> v{e.from.version}
+              {e.source === 'template' && ' (protocol default)'}
             </>
           )}
           {e.note && ` (${e.note})`}
@@ -336,6 +353,10 @@ function Sources({
                 conversation
               </button>
             </>
+          )}
+          {/* A source an agent named is its claim until a person checks it. */}
+          {e.by.type === 'agent' && e.source !== 'stated' && e.source !== 'person' && !copied && (
+            <span className="agent-ink">, according to {e.by.agentName}</span>
           )}
         </span>
       );
@@ -378,9 +399,8 @@ function sourcePhrase(e: FieldEvidence, me: Me | undefined): string {
     case 'calculated':
       return 'calculated';
     case 'record':
-      return 'from';
     case 'template':
-      return 'protocol default from';
+      return 'copied from';
     case 'memory':
       return 'from lab memory';
     default:

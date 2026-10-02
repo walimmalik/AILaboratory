@@ -2,9 +2,9 @@ import type { RecordEnvelope } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useDeferredValue, useState } from 'react';
-import { actorLabel, formatWhen, isAgent } from '../lib/format.ts';
+import { actorLabel, formatWhen, isAgent, proposalTouches } from '../lib/format.ts';
 import { kindNoun } from '../lib/kinds.ts';
-import { recordsQuery } from '../queries.ts';
+import { recordsQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { StatusChip } from './StatusChip.tsx';
 
@@ -12,7 +12,7 @@ type StatusFilter = 'current' | 'draft' | 'active' | 'archived';
 const filters: [StatusFilter, string][] = [
   ['current', 'Current'],
   ['draft', 'Drafts'],
-  ['active', 'Active'],
+  ['active', 'Confirmed'],
   ['archived', 'Archived'],
 ];
 
@@ -20,6 +20,10 @@ export interface Column {
   header: string;
   cell: (record: RecordEnvelope) => ReactNode;
   className?: string;
+  /** Whether a record has a value here; a column no shown record fills is left out (review 17). */
+  filled?: (record: RecordEnvelope) => boolean;
+  /** Left out on a phone, so the rows that stay keep one line each (review 2026-10-02, item 5). */
+  secondary?: boolean;
 }
 
 /** Every record in the lab, whatever its kind. Each registry also has its own page in the Library. */
@@ -91,6 +95,14 @@ export function RecordList({
     }),
   );
   const records = narrow ? data.filter(narrow) : data;
+  const shownColumns = columns.filter((c) => !c.filled || records.some(c.filled));
+  // Status says only what is unusual (a draft, an archived record, a change waiting).
+  const review = useQuery(reviewQuery).data?.items ?? [];
+  const showStatus = records.some(
+    (r) =>
+      r.status !== 'active' ||
+      review.some((i) => i.type === 'change' && proposalTouches(i.proposal, r.id)),
+  );
   const me = useMe();
   const navigate = useNavigate();
   const open = (id: string) => navigate({ to: '/records/$id', params: { id } });
@@ -137,16 +149,17 @@ export function RecordList({
           <p className="empty">{deferred || narrow ? noMatch : empty}</p>
         ) : (
           <div className="table-wrap">
-            <table>
+            <table className="record-list">
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Label</th>
-                  {columns.map((c) => (
-                    <th key={c.header}>{c.header}</th>
+                  {shownColumns.map((c) => (
+                    <th key={c.header} className={c.secondary ? 'secondary' : undefined}>
+                      {c.header}
+                    </th>
                   ))}
-                  <th>Status</th>
-                  <th>Changed</th>
+                  {showStatus && <th>Status</th>}
+                  <th className="secondary">Changed</th>
                 </tr>
               </thead>
               <tbody>
@@ -158,22 +171,30 @@ export function RecordList({
                     onClick={() => open(r.id)}
                     onKeyDown={(e) => e.key === 'Enter' && open(r.id)}
                   >
-                    <td className="q">{r.name}</td>
-                    <td>
+                    {/* The name first, its code as a tag after it (plan 004f: codes are never prefixes). */}
+                    <td className="record-name">
                       <span className="one-line" title={r.label}>
                         {r.label}
-                      </span>
+                      </span>{' '}
+                      <span className="code">{r.name}</span>
                     </td>
-                    {columns.map((c) => (
-                      <td key={c.header} className={c.className}>
+                    {shownColumns.map((c) => (
+                      <td
+                        key={c.header}
+                        className={[c.className, c.secondary && 'secondary']
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
                         {c.cell(r)}
                       </td>
                     ))}
-                    <td>
-                      <StatusChip record={r} quiet />
-                    </td>
+                    {showStatus && (
+                      <td>
+                        <StatusChip record={r} quiet />
+                      </td>
+                    )}
                     <td
-                      className={`when${isAgent(r.updatedBy) ? ' agent-ink' : ''}`}
+                      className={`when secondary${isAgent(r.updatedBy) ? ' agent-ink' : ''}`}
                       title={`by ${actorLabel(r.updatedBy, me)}`}
                     >
                       {formatWhen(r.updatedAt)}

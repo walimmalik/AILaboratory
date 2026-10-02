@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
-import { partLabel, problemWords } from '../lib/format.ts';
+import { kindFieldWords, partLabel, problemWords } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
 import { FromLabMemory } from './LabNotes.tsx';
 
@@ -198,7 +198,7 @@ export function Estimates({
         <span key={path}>
           {i > 0 && ', '}
           <button type="button" className="link-btn agent-ink" onClick={() => onOpen(path)}>
-            {partLabel(path, record.attributes, items)}
+            {estimateWords(record, path, items)}
           </button>
         </span>
       ))}
@@ -213,6 +213,18 @@ export function Estimates({
       . Verify {paths.length === 1 ? 'it' : 'them'} before you confirm.
     </p>
   );
+}
+
+/** A top-level field by its lab words; an item inside a list by the name the record gives it. */
+function estimateWords(
+  record: RecordEnvelope,
+  path: string,
+  items: Readonly<Record<string, string>> | undefined,
+): string {
+  const top = path.replace(/^\//, '');
+  return top.includes('/')
+    ? partLabel(path, record.attributes, items)
+    : kindFieldWords(record.kind, top);
 }
 
 const capital = (text: string) => `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
@@ -297,7 +309,9 @@ function CheckRow({
 }) {
   const mark = check.passed ? '✓' : check.severity === 'blocker' ? '✗' : '!';
   const tone = check.passed ? 'ok-ink' : check.severity === 'blocker' ? 'crit-ink' : 'warn-ink';
-  const section = check.section && titles[check.section] ? check.section : undefined;
+  // A check that says there is nothing to do yet offers nowhere to fix it (review 2026-10-02, 18).
+  const waiting = !!check.fix?.startsWith('Nothing to do');
+  const section = check.section && titles[check.section] && !waiting ? check.section : undefined;
   return (
     <tr>
       <td

@@ -99,7 +99,7 @@ export async function loadSeedEntities(
         ...(search ? { search } : {}),
       })
     ).records;
-  const reason = 'Seed lab (plan 006), loaded by plan 010a';
+  const reason = 'Imported from the seed lab';
   const report: EntitySeedReport = {
     kinds: { created: [], existing: [] },
     entities: { created: [], existing: [] },
