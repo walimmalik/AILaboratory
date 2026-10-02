@@ -1121,3 +1121,32 @@ test('a person adds a lab note on the Lab memory page and finds it under its gro
   await page.getByRole('searchbox', { name: 'Find lab memory' }).fill(statement);
   await expect(page.getByText('1 shown')).toBeVisible();
 });
+
+test('the assistant asks to remember something for the lab, and says which lab notes it used', async ({
+  page,
+}) => {
+  await signIn(page);
+  const statement = `Thaw detection antibody on ice ${Date.now()}`;
+  const ask = page.getByLabel('Ask the assistant');
+  await ask.fill(
+    `/op memory.propose ${JSON.stringify({ statement, kind: 'convention', strength: 'rule', source: { from: 'conversation', note: 'in chat' } })}`,
+  );
+  await ask.press('Enter');
+
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  const card = panel.locator('.remember-card');
+  await expect(card.getByText('Remember this for the lab?')).toBeVisible();
+  await expect(card.getByText(statement)).toBeVisible();
+  await card.getByRole('button', { name: 'Confirm' }).click();
+  await expect(card.getByText('Remembered for the lab')).toBeVisible();
+
+  // The next turn has it (lab-wide rules always go with the assistant), and says so in one line
+  // that opens to the list.
+  const reply = panel.getByLabel('Message the assistant');
+  await reply.fill('thanks');
+  await reply.press('Enter');
+  await expect(panel.getByText('You said: thanks')).toBeVisible();
+  const used = panel.locator('.used-memory').last();
+  await used.getByText(/^Using \d+ lab notes?/).click();
+  await expect(used.getByText(statement)).toBeVisible();
+});

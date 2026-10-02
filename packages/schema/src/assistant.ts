@@ -46,6 +46,15 @@ export type ToolCall = z.infer<typeof ToolCall>;
 
 const base = { id: z.string(), at: z.iso.datetime() };
 
+/** A lab memory the assistant had in front of it when it answered. */
+export const UsedMemory = z.object({
+  id: z.string(),
+  name: z.string(),
+  statement: z.string(),
+  strength: z.string(),
+});
+export type UsedMemory = z.infer<typeof UsedMemory>;
+
 /** Largest file a person may attach to a message, in characters of text. */
 export const MAX_ATTACHMENT_CHARS = 2_000_000;
 
@@ -84,6 +93,8 @@ export const AssistantMessage = z.discriminatedUnion('role', [
     text: z.string(),
     toolCalls: z.array(ToolCall),
     model: z.string(),
+    /** The confirmed lab memories the assistant was given for this turn (plan 005d), on its final reply. */
+    memory: z.array(UsedMemory).optional(),
   }),
   z.object({
     ...base,

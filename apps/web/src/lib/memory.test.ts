@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupMemories, memoryLine, placeOf, type ShownMemory } from './memory.ts';
+import { groupMemories, memoryLine, placeOf, type ShownMemory, usingLine } from './memory.ts';
 
 const memory = (
   id: string,
@@ -56,5 +56,14 @@ describe('lab memory groups', () => {
         }),
       ),
     ).toBe('Rule · quirk · seen in 7 runs, 1 against · when below 5 uL · due for a check');
+  });
+});
+
+describe('usingLine', () => {
+  it('counts the lab notes and names the rules', () => {
+    expect(usingLine([{ strength: 'note' }])).toBe('Using 1 lab note');
+    expect(usingLine([{ strength: 'rule' }, { strength: 'default' }, { strength: 'note' }])).toBe(
+      'Using 3 lab notes, 1 rule',
+    );
   });
 });

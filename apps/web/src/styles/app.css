@@ -866,6 +866,27 @@ details.others {
 .transcript .stopped {
   font: 12px var(--font-mono);
 }
+.transcript .used-memory {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.transcript .used-list {
+  margin: 4px 0 0;
+  padding-left: 14px;
+  display: grid;
+  gap: 2px;
+}
+.transcript .remember-card {
+  margin: 6px 0 0 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  display: grid;
+  gap: 4px;
+  font: 13px / 1.45 var(--font-ui);
+}
+.transcript .remember-statement {
+  margin: 0;
+}
 .transcript .waiting {
   padding-top: 8px;
   border-top: 1px solid var(--rule);
