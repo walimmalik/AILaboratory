@@ -119,7 +119,19 @@ export const memorySearch = defineContract({
   output: z.object({
     memories: z.array(
       RecordEnvelope.extend({
-        due: z.boolean().describe('Past its check-again date: still used, due for a check'),
+        due: z
+          .boolean()
+          .describe(
+            'Due for a check: past its check-again date, more evidence against than for, or quiet for too many matching runs; still used',
+          ),
+        seen: MemoryEvidence.optional().describe(
+          'What detectors and agents reported about it; left out when nothing was reported',
+        ),
+        aboutRecords: z
+          .array(
+            z.object({ id: z.string(), name: z.string(), label: z.string(), kind: z.string() }),
+          )
+          .describe('The records it is about, named; ones no longer in the lab are left out'),
       }),
     ),
     total: z.number().int(),

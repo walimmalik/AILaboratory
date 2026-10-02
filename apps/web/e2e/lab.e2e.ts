@@ -1103,3 +1103,21 @@ test('the calculators page lists every lab calculator with a form drawn from its
   expect(await page.getByLabel('Calculator').locator('option').count()).toBeGreaterThan(5);
   await expect(page.getByRole('button', { name: 'Calculate' })).toBeVisible();
 });
+
+test('a person adds a lab note on the Lab memory page and finds it under its group', async ({
+  page,
+}) => {
+  await signIn(page);
+  await openTab(page, 'Library', 'Lab memory');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lab memory');
+  const statement = `Seal plates before the plate washer ${Date.now()}`;
+  await page.getByRole('button', { name: 'Add a lab note' }).click();
+  await page.getByLabel('What the lab should know').fill(statement);
+  await page.getByRole('button', { name: 'Rule: designs follow it' }).click();
+  await page.getByRole('button', { name: 'Remember' }).click();
+  const labWide = page.getByRole('region', { name: 'Lab-wide' });
+  await expect(labWide.getByRole('link', { name: new RegExp(statement) })).toBeVisible();
+  await expect(labWide.getByText(/^Rule · convention/).first()).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Find lab memory' }).fill(statement);
+  await expect(page.getByText('1 shown')).toBeVisible();
+});

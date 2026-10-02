@@ -2537,3 +2537,15 @@ span.row-actions {
     padding-bottom: 0;
   }
 }
+
+/* Lab memory (plan 005d, M19): one memory per line, its strength, kind and evidence in grey. */
+.memory-groups {
+  display: grid;
+  gap: 10px;
+}
+.body .memory-rows li {
+  padding: 4px 0;
+}
+.memory-line {
+  font-size: 12px;
+}

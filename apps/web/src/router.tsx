@@ -24,6 +24,7 @@ import {
   SamplesPage,
 } from './pages/Inventory.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
+import { MemoryPage } from './pages/Memory.tsx';
 import { NewRecordPage } from './pages/NewRecord.tsx';
 import { LayoutsPage, PlateMapsPage } from './pages/PlateMaps.tsx';
 import { LiquidClassesPage, LiquidTypesPage, LotsPage, ReagentsPage } from './pages/Reagents.tsx';
@@ -158,6 +159,11 @@ const entityKinds = createRoute({
   path: '/entity-kinds',
   component: EntityKindsPage,
 });
+const memory = createRoute({
+  getParentRoute: () => app,
+  path: '/memory',
+  component: MemoryPage,
+});
 const documents = createRoute({
   getParentRoute: () => app,
   path: '/documents',
@@ -252,6 +258,7 @@ const routeTree = root.addChildren([
     entities,
     entityKinds,
     documents,
+    memory,
     sops,
     campaigns,
     experiments,
