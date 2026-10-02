@@ -468,7 +468,7 @@ products:
     notes: >
       Conflict: product information sheet says "Store at Room Temperature"; the product page summary returned
       "cool storage area, such as 4 degC" (probably from SDS text). Seed room temperature and flag it.
-      "Skin penetration" is general knowledge (estimated); flash point is from the product page.
+      "Skin penetration" is general knowledge, not from a source; flash point is from the product page.
 
   - key: selleck-l1300
     vendor: Selleck Chemicals

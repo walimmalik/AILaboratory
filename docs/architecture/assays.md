@@ -79,7 +79,7 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 
 It is feasible when every need is ready, every amount works out and no material is short.
 
-Values copied from the template carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way.
+Values copied from the template, and the `template` pin itself, carry `template` evidence from the confirmed version; a question defaulted from the purpose is marked assumed. The plate map's `layout` carries `template` evidence (`/layout`), and its `experiment` carries `record` evidence citing the experiment it was drafted with, so nothing the designer set reads as an agent's guess. `assays.design` and `designer.start` share `workOut` (in `operations.ts`), so both count the same way. `workOut` refuses an answer that is not a number or a quantity by the input's label; a ratio such as "1:4" is answered with "give the fold". The ledger names the template first, so it reads "designed an experiment from IL-6 ELISA".
 
 ## Saving an experiment as a template (017b-3)
 
@@ -110,4 +110,4 @@ The **Transfers** tab lists the experiment's transfer plans, each with its plate
 
 ## Not yet
 
-Saving an experiment as a template from its page; starting a design from a template on screen (`designer.start`); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+Saving an experiment as a template from its page; fractional factorial and response-surface designs (017d). Template screens come with the designer.

@@ -283,7 +283,10 @@ function convert(entry: Entry, definitions: Definitions): SeedLabware | SeedSkip
     } else if (field === 'family' || field === 'notes' || !backing) {
       evidence[field] = { source: 'imported', reference: 'seed/labware.yaml', note: seedNote };
     } else if (status(backing) === 'estimated') {
-      evidence[field] = { source: 'assumed', note: `${seedNote}: estimated, see the notes` };
+      evidence[field] = {
+        source: 'assumed',
+        note: `${seedNote}: not from the datasheet; the notes say where it came from`,
+      };
     } else {
       evidence[field] = {
         source: 'datasheet',

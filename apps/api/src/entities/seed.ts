@@ -179,7 +179,7 @@ export async function loadSeedEntities(
         ? {
             source: 'assumed',
             reference,
-            note: `Estimated in the research: ${entry.estimated.join(', ')}; the rest from the source`,
+            note: `Not from the source: ${entry.estimated.join(', ')}; the rest is`,
           }
         : cited;
     }

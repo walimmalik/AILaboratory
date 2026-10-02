@@ -15,6 +15,7 @@ import {
   assaysDraftTemplate,
   assaysSaveFromExperiment,
   assaysSearch,
+  DecimalString,
   type EvidenceInput,
   type ExperimentAttributes,
   type LayoutAttributes,
@@ -105,6 +106,16 @@ export async function workOut(
       }
     } else if (Array.isArray(answer))
       throw new OperationError('invalid_input', `${e.label}: give a value, not records`);
+    else if (typeof answer === 'string' && !DecimalString.safeParse(answer).success) {
+      // Said by the input's own label, so a person sees which answer to change (review #19).
+      const ratio = /^\s*\d+(\.\d+)?\s*:\s*(\d+(\.\d+)?)\s*$/.exec(answer);
+      throw new OperationError(
+        'invalid_input',
+        ratio
+          ? `${e.label}: give one number, not "${answer.trim()}"; for a dilution, give the fold (${ratio[2]} for ${ratio[2]}-fold)`
+          : `${e.label}: give a number, or a number with its unit, not "${answer}"`,
+      );
+    }
   }
   const missing = a.essentials
     .filter((e) => answers[e.id] === undefined)

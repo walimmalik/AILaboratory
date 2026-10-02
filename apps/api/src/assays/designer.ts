@@ -54,6 +54,11 @@ async function run<T>(deps: OperationDeps, ctx: RecordContext, id: string, input
 export const designerOperations: ReturnType<typeof implement>[] = [
   implement(designerStart, {
     agentPolicy: 'direct',
+    // The template first, so the ledger reads "designed an experiment from <template>" (review #19).
+    touches: (input, output) => [
+      input.template,
+      ...(output ? [output.experiment.id, ...(output.plateMap ? [output.plateMap.id] : [])] : []),
+    ],
     run: async (ctx, input, deps) => {
       const records = new RecordService(deps.db, deps.kinds);
       const current = await records.get(ctx, input.template).catch(() => undefined);
@@ -187,6 +192,7 @@ export const designerOperations: ReturnType<typeof implement>[] = [
           ? {}
           : { question: { source: 'assumed' as const, note: "The template's purpose" } }),
         protocol: copied,
+        template: copied,
         ...(conditions.length ? { conditions: copied } : {}),
         ...(controls.length ? { controls: copied } : {}),
         readouts: copied,
@@ -220,6 +226,15 @@ export const designerOperations: ReturnType<typeof implement>[] = [
           subjects: placed.map((s) => ({ record: s.id })),
           ...(plate ? { labware: { id: plate.id, version: plate.version } } : {}),
           ...(regionControls.length ? { controls: regionControls } : {}),
+          // Set by the designer, not guessed: the template's layout, and the experiment it drafted.
+          evidence: {
+            layout: { source: 'template', from: { ...from, path: '/layout' } },
+            experiment: {
+              source: 'record',
+              from: { id: experiment.id, version: experiment.version },
+              note: 'Drafted together by the designer',
+            },
+          },
           reason: `Designed from ${current.name} v${version}`,
         });
         lines.push(`Drafted ${plateMap.name}, its plate map`);

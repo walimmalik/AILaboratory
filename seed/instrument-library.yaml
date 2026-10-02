@@ -164,8 +164,8 @@ instrument_kinds:
     sites:
       - {id: plate, accepts: {sbs: true}}
     capabilities:
-      - {capability: read_absorbance, limits: {wavelengths: {min: {value: "200", unit: nm}, max: {value: "1000", unit: nm}}, note: "Range from a core-facility page (estimated)."}}
-      - {capability: read_fluorescence, limits: {wavelengths: {min: {value: "230", unit: nm}, max: {value: "900", unit: nm}}, note: "Range from a core-facility page (estimated)."}}
+      - {capability: read_absorbance, limits: {wavelengths: {min: {value: "200", unit: nm}, max: {value: "1000", unit: nm}}, note: "Range from a core-facility page, not the manufacturer; unverified."}}
+      - {capability: read_fluorescence, limits: {wavelengths: {min: {value: "230", unit: nm}, max: {value: "900", unit: nm}}, note: "Range from a core-facility page, not the manufacturer; unverified."}}
       - {capability: read_luminescence, limits: {note: "Glow, flash, multicolor and scan modes."}}
       - {capability: image, limits: {wellCounts: [96, 384], note: "Brightfield, digital phase contrast and 4 fluorescence channels; whole-well imaging in 96 and 384 wells."}}
       - {capability: incubate, limits: {temperature: {max: {value: "42", unit: degC}}, note: "CO2 and O2 control."}}
