@@ -58,11 +58,12 @@ export const memoryUpdate = defineContract({
   id: 'memory.update',
   verbs: { done: 'updated the lab memory', intent: 'update the lab memory' },
   summary:
-    'Change a memory: its statement, strength, what it is about, when it applies, its effect or check-again date. Give only what changes. Direct on drafts; proposed on an active memory, which a person approves',
+    'Change a memory: its statement, strength, what it is about, when it applies (null clears it), its effect or check-again date. Give only what changes. Direct on drafts; proposed on an active memory, which a person approves',
   effect: 'write',
   input: MemoryInput.partial().extend({
     id: MemoryId,
     expectedVersion: z.number().int().positive(),
+    when: z.string().min(1).max(300).nullable().optional().describe('null clears it'),
     evidence: z.record(z.string(), EvidenceInput).optional(),
     reason: Reason,
   }),

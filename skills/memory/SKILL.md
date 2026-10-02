@@ -32,7 +32,7 @@ The calculators already apply memory: `liquids.resolve_class` takes a class lab 
   - `source`: `{from: "stated" | "conversation" | "experiment" | "run" | "analysis", evidence?: [record ids], note?}`.
   - `checkAgain` is set from the kind when left out: quirks and lessons in 6 months, conventions and facts in 12, preferences never.
 - `memory.remember` is a person's own "remember that…", active at once. People only; when a person asks you to remember something, call `memory.propose` and they confirm it.
-- `memory.update {id, expectedVersion, …changes}` changes a memory: direct on drafts, proposed on an active one.
+- `memory.update {id, expectedVersion, …changes}` changes a memory: direct on drafts, proposed on an active one. Give only what changes; `when: null` clears the "when" line.
 - `memory.retire {id, expectedVersion, why}` retires a memory that no longer holds (proposed when you ask). `memory.replace {id, expectedVersion, with, why}` retires an active memory in favour of a new one and links them (proposed when you ask).
 
 `memory.used_in {id}` lists the records with a value copied from the memory (its `memory` evidence) and the fields it filled.
