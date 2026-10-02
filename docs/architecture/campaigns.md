@@ -75,7 +75,7 @@ A set (E10) is a named list of entities, samples or containers with the criterio
 The menu has an Experiments group: Campaigns, Experiments, Runs and Sets, each a list with its key facts (stage, aims, runs done of total, members). `apps/web/src/pages/Experiments.tsx` adds blocks to the record page, summaries first:
 
 - **Campaign:** each aim with the experiments serving it, their stage and their conclusion.
-- **Experiment:** a Next step block with where it stands, whether the protocol works out (problems folded away), and the one or two actions its stage allows (plan it, start a run, analyse, conclude with a verdict per hypothesis); then its runs and its conclusion. The design stays in the section blocks.
+- **Experiment:** a Next step block with its stages in order (done ones ticked, the current one in full ink; none for on hold or cancelled, which the block's header names), whether the protocol works out (problems folded away), and the one or two actions its stage allows (plan it, start a run, analyse, conclude with a verdict per hypothesis); then its runs and its conclusion. The design stays in the section blocks.
 - **Run:** a checklist of the pinned steps with their planned values. Each step is ticked "Done as planned", or "Something differed" (type only the values that differed, and why) or "Skipped" (why). "The rest went as planned" ticks what's left, and the run is finished as done, failed or aborted. Other deviations are recorded below.
 - **Set:** its members with their notes, why they made it, and the experiments that test it.
 

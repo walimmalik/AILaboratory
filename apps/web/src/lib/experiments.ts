@@ -12,6 +12,21 @@ export const stageWords: Record<ExperimentStage, string> = {
   cancelled: 'Cancelled',
 };
 
+/** The stages an experiment moves through, in order; on hold and cancelled sit outside them. */
+const STEPS = ['designing', 'planned', 'running', 'analysing', 'concluded'] as const;
+
+/** Each stage as done, current or still to come; none for an experiment on hold or cancelled. */
+export function stageSteps(
+  stage: ExperimentStage,
+): { stage: ExperimentStage; at: 'done' | 'current' | 'next' }[] {
+  const here = STEPS.indexOf(stage as (typeof STEPS)[number]);
+  if (here < 0) return [];
+  return STEPS.map((s, i) => ({
+    stage: s,
+    at: i < here ? 'done' : i === here ? 'current' : 'next',
+  }));
+}
+
 export const runStatusWords: Record<RunAttributes['status'], string> = {
   scheduled: 'Scheduled',
   in_progress: 'In progress',

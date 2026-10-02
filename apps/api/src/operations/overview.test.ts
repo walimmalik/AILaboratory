@@ -121,13 +121,16 @@ describe('records.overview', () => {
     expect(fact(seen, 'expires')).toMatchObject({ value: '31 Jan 2020', tone: 'crit' });
     expect(fact(seen, 'where')?.value).toBe('not in any registered container');
     expect(fact(seen, 'lot number')?.value).toBe('0612345');
+    // Its state is said once, in the identity line (N8).
+    expect(text(seen)).toContain('unopened');
+    expect(fact(seen, 'status')).toBeUndefined();
 
     const sold = await overview(product.id);
     expect(sold.identity).toContainEqual({ text: 'Cayman Chemical 81590', record: vendor.id });
     expect(fact(sold, 'in stock')).toMatchObject({ value: 'no lot in date', tone: 'warn' });
 
     const maker = await overview(vendor.id);
-    expect(fact(maker, 'reagents')?.value).toBe('1 product');
+    expect(fact(maker, 'reagents')).toMatchObject({ value: '1 product', detail: 'Staurosporine' });
   });
 
   it('says what a labware type is in lab words', async () => {

@@ -127,7 +127,13 @@ const container: OverviewBuilder = async (record, read) => {
             : { detail: `in ${count(first.wells.length, 'well')}` }),
       }
     : a.description
-      ? { label: 'holds', value: a.description, field: 'description' }
+      ? // A description is what someone wrote, not contents the lab recorded; say which.
+        {
+          label: 'holds',
+          value: a.description,
+          detail: 'as described; no contents recorded',
+          field: 'description',
+        }
       : { label: 'holds', value: 'nothing recorded' };
 
   let storage: OverviewFact | undefined;

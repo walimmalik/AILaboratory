@@ -76,13 +76,11 @@ const lot: OverviewBuilder = async (record, read) => {
     read.run(inventoryWhereIs, { of: record.id }),
   ]);
   const p = made?.attributes as ProductAttributes | undefined;
-  const status: OverviewFact = {
-    label: 'status',
-    value: words(a.status),
-    field: 'status',
-    ...(a.status === 'quarantined' || a.status === 'expired' ? { tone: 'crit' as const } : {}),
-    ...(a.opened ? { detail: `opened ${day(a.opened)}` } : {}),
-  };
+  // The lot's state is said once, in the identity line (N8); a fact repeats it only as a warning.
+  const status: OverviewFact | undefined =
+    a.status === 'quarantined' || a.status === 'expired'
+      ? { label: 'status', value: words(a.status), field: 'status', tone: 'crit' }
+      : undefined;
   const values = (a.values ?? []).slice(0, 3).map(
     (v): OverviewFact => ({
       label: p?.lotFields?.find((f) => f.key === v.field)?.label.toLowerCase() ?? words(v.field),
@@ -95,7 +93,7 @@ const lot: OverviewBuilder = async (record, read) => {
       made ? { text: `Lot of ${made.label}`, record: made.id } : 'Lot',
       a.received && `received ${day(a.received)}`,
       a.made && `made ${day(a.made)}`,
-      words(a.status),
+      a.status === 'opened' && a.opened ? `opened ${day(a.opened)}` : words(a.status),
     ),
     facts: facts(
       a.expiry

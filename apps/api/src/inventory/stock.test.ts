@@ -1,4 +1,4 @@
-import type { Actor, inventoryOverview, RecordEnvelope } from '@ailab/schema';
+import type { Actor, inventoryOverview, RecordEnvelope, RecordOverview } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { createTenant } from '../auth.ts';
@@ -201,6 +201,9 @@ describe('inventory.overview', () => {
     expect((await overview({ text: 'HEK293 vial' })).rows.map((r) => r.thing.id)).toEqual([
       cells.id,
     ]);
+    // The entity's own page says the same as its Stock row (plan 004f-5).
+    const page = await run<RecordOverview>(person, 'records.overview', { id: cells.id });
+    expect(page.facts.find((f) => f.label === 'in stock')?.value).toBe('1 lot');
   });
 
   it('is open to agents, refuses a bad place and reads only its own lab', async () => {

@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { nextActions, plannedText, runProgress } from './experiments.ts';
+import { nextActions, plannedText, runProgress, stageSteps } from './experiments.ts';
 
 describe('experiments', () => {
+  it('marks the stages before, at and after the current one', () => {
+    expect(stageSteps('running').map((s) => s.at)).toEqual([
+      'done',
+      'done',
+      'current',
+      'next',
+      'next',
+    ]);
+    expect(stageSteps('concluded').at(-1)).toEqual({ stage: 'concluded', at: 'current' });
+    expect(stageSteps('on_hold')).toEqual([]);
+  });
+
   it('counts ticked steps and deviations', () => {
     expect(
       runProgress({
