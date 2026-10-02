@@ -166,9 +166,9 @@ kinds:
   modules:
     - name: Heater-Shaker Module GEN1
       capabilities: [heat, shake]
-      temp_range: {min: "ambient + 1.5 degC", max: {value: "95", unit: "degC"}}
+      temp_range: {min: "ambient + 1.5 °C", max: {value: "95", unit: "degC"}}
       temp_step: {value: "1", unit: "degC"}
-      temp_accuracy: {value: "0.5", unit: "degC", note: "+/- at 55 degC"}
+      temp_accuracy: {value: "0.5", unit: "degC", note: "+/- at 55 °C"}
       shake_speed: {min: {value: "200", unit: "rpm"}, max: {value: "3000", unit: "rpm"}}
       orbit_diameter: {value: "2", unit: "mm"}
       dimensions: {length: {value: "152", unit: "mm"}, width: {value: "90", unit: "mm"}, height: {value: "82", unit: "mm"}}
@@ -181,8 +181,8 @@ kinds:
       capabilities: [thermocycle, heat, cool]
       block_temp_range: {min: {value: "4", unit: "degC"}, max: {value: "99", unit: "degC"}}
       lid_temp_range: {min: {value: "37", unit: "degC"}, max: {value: "110", unit: "degC"}}
-      max_heating_rate: {value: "4.25", unit: "degC/s", note: "ambient to 95 degC"}
-      max_cooling_rate: {value: "2.0", unit: "degC/s", note: "95 degC to ambient"}
+      max_heating_rate: {value: "4.25", unit: "degC/s", note: "ambient to 95 °C"}
+      max_cooling_rate: {value: "2.0", unit: "degC/s", note: "95 °C to ambient"}
       plate_format: "96-well"
     - name: Magnetic Block GEN1
       capabilities: [hold]   # unpowered magnet for bead separation; no plain-verb match in the list
@@ -233,7 +233,7 @@ kinds:
   notes:
     - "Flex product page lists the 96-channel low-volume pipette as '1-200 uL'."
     - "Absorbance Plate Reader is not sold in European Patent Convention states (per Opentrons page)."
-    - "Heater-Shaker minimum is relative to room temperature (ambient + 1.5 degC); store it as a relative constraint, not a fixed number."
+    - "Heater-Shaker minimum is relative to room temperature (ambient + 1.5 °C); store it as a relative constraint, not a fixed number."
     - "Gripper-optimized labware (Opentrons page): NEST 2 mL 96 deep well V-bottom, Opentrons Tough 0.2 mL 96 PCR full skirt, NEST 96 flat, all Flex tip racks."
     - "Thermocycler occupies several slots on Flex (commonly A1+B1); not confirmed from a fetched page."
 
@@ -410,7 +410,7 @@ kinds:
       far_red: {min: {value: "626", unit: "nm"}, max: {value: "800", unit: "nm"}}
     imaging: "brightfield, digital phase contrast, 5 LED excitation channels, 12-bit CMOS, LED autofocus"
     objectives: ["2x NA 0.08", "4x NA 0.13", "10x NA 0.30"]
-    temperature_max: {value: "42", unit: "degC"}    # "up to 42 degC"; min is ambient-relative
+    temperature_max: {value: "42", unit: "degC"}    # "up to 42 °C"; min is ambient-relative
     gas_control: [CO2, O2]
     humidity: "Lid Lifter + Humidity Cassette"
     plate_formats: "6- to 1536-well (whole-well imaging in 96/384; composite imaging 6-48)"
@@ -558,12 +558,12 @@ kinds:
     - https://remma.fr/en/model/qtower3-pcr-thermocycler
   status:
     auto_series_specs: verified
-    standard_qtower3_specs: estimated    # reseller page (heating 8 degC/s, cooling 6 degC/s, 30 kg, 275x585x275 mm)
+    standard_qtower3_specs: estimated    # reseller page (heating 8 °C/s, cooling 6 °C/s, 30 kg, 275x585x275 mm)
     gradient_range_G: unknown
     optics_ex_em_range: unknown
     variant_list: verified               # names from Analytik Jena pages/manual titles ("qTOWER3 84 / qTOWER3 84 G")
   notes:
-    - "Standard (non-auto) qTOWER3 cooling rate per reseller is 6 degC/s vs 5.5 degC/s for auto; keep per variant."
+    - "Standard (non-auto) qTOWER3 cooling rate per reseller is 6 °C/s vs 5.5 °C/s for auto; keep per variant."
     - "Which variant the lab owns is an instance fact; the owner's list names 'G, 84, auto'."
 
 # ---------------------------------------------------------------------------------------------
@@ -575,9 +575,9 @@ kinds:
   capabilities: [thermocycle, heat, cool]
   specs:
     temp_range: {min: {value: "4", unit: "degC"}, max: {value: "100", unit: "degC"}}
-    thermal_accuracy: {value: "0.2", unit: "degC", note: "+/- of target at 90 degC"}
-    thermal_uniformity: {value: "0.4", unit: "degC", note: "+/- well to well within 10 s of reaching 90 degC"}
-    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}, span: "1-24 degC"}
+    thermal_accuracy: {value: "0.2", unit: "degC", note: "+/- of target at 90 °C"}
+    thermal_uniformity: {value: "0.4", unit: "degC", note: "+/- well to well within 10 s of reaching 90 °C"}
+    gradient_range: {min: {value: "30", unit: "degC"}, max: {value: "100", unit: "degC"}, span: "1-24 °C"}
     lid_temp_range: {min: {value: "30", unit: "degC"}, max: {value: "110", unit: "degC"}}
     lid: motorized (automation-ready)
     per_variant:
@@ -727,9 +727,9 @@ kinds:
       "96/384-well": 210
       "transwell/insert": 150
       "deep-well": 100
-    temp_range: {min: "ambient + 10 degC", max: {value: "50", unit: "degC"}}
+    temp_range: {min: "ambient + 10 °C", max: {value: "50", unit: "degC"}}
     co2_range: {min: {value: "0", unit: "%v/v"}, max: {value: "20", unit: "%v/v"}}
-    humidity: "<98% RH at 37 degC"
+    humidity: "<98% RH at 37 °C"
     access_time: {value: "10", unit: "s", note: "below"}
     footprint: {width: {value: "800", unit: "mm"}, depth: {value: "822", unit: "mm"}, height: {value: "915", unit: "mm"}}
   configurability:
@@ -905,7 +905,7 @@ instances:
     configuration:
       stackers: [12-position stack (left), 12-position stack (right)]
       mounted: [PlateOrient 1]
-    notes: A work cell holding the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin, with the PlateOrient and two 12-position stackers mounted on the pod, scheduled by Cellario (plan 008 I10, Wali 2026-09-30). The Spark Cyto and Cytomat stand alone.
+    notes: A work cell holding the Echo, PreciseDrop, LidValet, Mantis, A4S, XPeel and MicroSpin, with the PlateOrient and two 12-position stackers mounted on the pod, scheduled by Cellario. The Spark Cyto and Cytomat stand alone.
   - key: microspin-01
     kind: highres-microspin
     name: MicroSpin 1
@@ -939,7 +939,7 @@ instances:
     room: rm-automation
     workcell: flexpod-01
     assumed: true
-    notes: Added 2026-09-30 (plan 008 I10). No research entry yet; the kind's specs are not researched.
+    notes: Added 2026-09-30. No research entry yet; the kind's specs are not researched.
   - key: xpeel-01
     kind: azenta-xpeel
     name: XPeel 1
@@ -947,4 +947,4 @@ instances:
     room: rm-automation
     workcell: flexpod-01
     assumed: true
-    notes: Added 2026-09-30 (plan 008 I10). No research entry yet; the kind's specs are not researched.
+    notes: Added 2026-09-30. No research entry yet; the kind's specs are not researched.

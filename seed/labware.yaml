@@ -528,7 +528,7 @@ kinds:
   dead_volume: {value: "10", unit: uL}
   material: polypropylene
   color: natural
-  surface_treatment: none; temperature range -196 to +121 degC
+  surface_treatment: none; temperature range -196 to +121 °C
   sterile: false
   lid: none (CapMats 381080/381081 compatible)
   pack: see vendor
@@ -541,7 +541,7 @@ kinds:
   status: {catalog_number: verified, name: verified, footprint: verified, well_geometry: estimated, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
   notes: >-
     Square wells are typical of MASTERBLOCK but not stated in the extracted text; well depth and
-    well size not extracted. Working volume 0.1-2.1 mL at RT (0.1-2.0 mL at -20 degC). Dead volume is
+    well size not extracted. Working volume 0.1-2.1 mL at RT (0.1-2.0 mL at -20 °C). Dead volume is
     an estimate for a pyramidal V bottom. Opentrons has no definition for this part (nest_96_wellplate_2ml_deep
     is a different product).
 
@@ -587,7 +587,7 @@ kinds:
   notes: >-
     Height 16.06 mm from Bio-Rad; well geometry from the Opentrons definition (brandId hsp9601).
     Bio-Rad says "virgin polypropylene" wells in a "two-component design"; shell material not
-    named in what was read. Application temperature -80 to 121 degC. Sterility not stated.
+    named in what was read. Application temperature -80 to 121 °C. Sterility not stated.
 
 - key: biorad-hsp9655
   manufacturer: Bio-Rad
@@ -883,7 +883,7 @@ kinds:
   dead_volume: {value: "300", unit: uL}
   material: polypropylene
   color: natural
-  surface_treatment: none; DMSO compatible; storable at -80 degC
+  surface_treatment: none; DMSO compatible; storable at -80 °C
   sterile: false
   pack: 5 per pack, 50 per case
   typical_instruments: [Opentrons Flex (8-channel), Hamilton STAR]

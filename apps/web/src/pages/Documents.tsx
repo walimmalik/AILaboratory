@@ -119,8 +119,16 @@ export function DocumentsPage() {
             header: 'Type',
             cell: (r) => (of(r).type ? typeWords[of(r).type as DocumentType] : '—'),
           },
-          { header: 'Assay', cell: (r) => of(r).assays?.join(', ') || '—' },
-          { header: 'Version', cell: (r) => of(r).version ?? '—' },
+          {
+            header: 'Assay',
+            cell: (r) => of(r).assays?.join(', ') || '—',
+            filled: (r) => !!of(r).assays?.length,
+          },
+          {
+            header: 'Version',
+            cell: (r) => of(r).version ?? '—',
+            filled: (r) => !!of(r).version,
+          },
           {
             header: 'License',
             cell: (r) => {
@@ -134,6 +142,7 @@ export function DocumentsPage() {
           {
             header: 'Confirmed mentions',
             cell: (r) => counts.get(r.id) ?? 0,
+            filled: (r) => !!counts.get(r.id),
             className: 'num',
           },
         ]}

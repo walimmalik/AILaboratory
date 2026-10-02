@@ -283,7 +283,7 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
     appearance.getByText(/Color entered by E2E agent with no source given, unverified/),
   ).toBeVisible();
   await expect(
-    volume.getByText(/Volume from the datasheet per E2E agent \(Vendor sheet, p\. 2\)/),
+    volume.getByText(/Volume from the datasheet \(Vendor sheet, p\. 2\), according to E2E agent/),
   ).toBeVisible();
 
   // One part can still be confirmed on its own.
@@ -552,9 +552,8 @@ test('the reagent library shows lots in date and the next expiry, and a product 
     expiry: '2099-01-31',
   });
 
-  // Reagents is a list by kind under Inventory's Stock tab (plan 004f-4).
-  await openTab(page, 'Inventory', /^Stock/);
-  await page.getByRole('link', { name: 'reagents', exact: true }).click();
+  // Reagents is a list by kind under Inventory's Stock tab (plan 004f-4); a reagent's crumb opens it.
+  await page.goto('/reagents');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reagents');
   await page.getByRole('button', { name: 'Fridge' }).click();
   const row = page.getByRole('row', { name: new RegExp(product.name) });

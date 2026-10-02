@@ -2,6 +2,7 @@ import { type EvidenceInput, type RecordEnvelope, recordsUpdate } from '@ailab/s
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
+import { kindFieldWords } from '../lib/format.ts';
 import { untouchedSuggestions } from '../lib/suggestions.ts';
 import { kindsQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
@@ -315,19 +316,23 @@ export function SectionEditor({
             if (!schema) return null;
             if (notApplicable.includes(field) && edits.values[field] === undefined) return null;
             return (
-              <FormRow key={field} label={fieldLabel(field)} hint={schema.description}>
+              <FormRow
+                key={field}
+                label={kindFieldWords(record.kind, field)}
+                hint={schema.description}
+              >
                 <ValueEditor
                   schema={schema}
                   value={edits.values[field]}
                   onChange={(next) => edits.set(field, next)}
-                  label={fieldLabel(field)}
+                  label={kindFieldWords(record.kind, field)}
                   path={field}
                 />
               </FormRow>
             );
           })}
         </div>
-        <SaveBar edits={edits} />
+        <SaveBar edits={edits} words={(field) => kindFieldWords(record.kind, field)} />
       </EditForm>
     </EditorScope>
   );

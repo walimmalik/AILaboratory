@@ -62,6 +62,7 @@ export function InstrumentsPage() {
           },
           {
             header: 'Availability',
+            filled: (r) => !!of(r).status,
             cell: (r) => {
               const status = of(r).status;
               return status ? (
@@ -79,6 +80,7 @@ export function InstrumentsPage() {
           {
             header: 'Calibration due',
             cell: (r) => of(r).calibrationDue ?? '—',
+            filled: (r) => !!of(r).calibrationDue,
             className: 'num',
           },
         ]}
@@ -310,6 +312,9 @@ export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
     );
   }
   const result = resolved.data;
+  const byPart =
+    new Set(result?.capabilities.map((c) => (c.performedBy === 'person' ? 'person' : c.node)))
+      .size > 1;
   if (!result || !model) return null;
   const nodes = new Map((attributes.configuration?.equipment ?? []).map((n) => [n.id, n]));
   const nodeLabel = (id: string) => {
@@ -361,9 +366,12 @@ export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
                     <tr key={`${c.node}-${c.capability}`}>
                       <td>{capabilityLabel(c.capability)}</td>
                       <td className="muted">{limitWords(c.limits) || '—'}</td>
-                      <td className="muted">
-                        {c.performedBy === 'person' ? 'by a person' : nodeLabel(c.node)}
-                      </td>
+                      {/* Which part does it, only when more than one part does something. */}
+                      {byPart && (
+                        <td className="muted">
+                          {c.performedBy === 'person' ? 'by a person' : nodeLabel(c.node)}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

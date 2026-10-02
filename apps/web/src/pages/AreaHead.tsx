@@ -22,7 +22,8 @@ export function Head({
       <div className="page-head">
         <div>
           <div className="crumbs">
-            lab / {page.area.toLowerCase()} / <b>{page.title.toLowerCase()}</b>
+            lab / {page.area !== page.title && <>{page.area.toLowerCase()} / </>}
+            <b>{page.title.toLowerCase()}</b>
           </div>
           <h1>{page.title}</h1>
           <p className="lede">{lede}</p>

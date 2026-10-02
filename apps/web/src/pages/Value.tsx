@@ -21,6 +21,9 @@ export function renderValue(value: unknown, field?: string): ReactNode {
   if (typeof value === 'string' && isRecordId(value)) return <LinkedName id={value} />;
   if (typeof value === 'string' && isChoice(value) && !(field && namedKeys.test(field)))
     return value.replaceAll('_', ' ');
+  // A name someone gave ("sample_dilution") is one word: it never breaks across lines.
+  if (typeof value === 'string' && field && namedKeys.test(field) && !/\s/.test(value))
+    return <span className="given-name">{value}</span>;
   if (Array.isArray(value) && value.length > 0) {
     if (value.every(isPlainObject))
       return <ItemsTable items={value as Record<string, unknown>[]} />;
@@ -34,6 +37,16 @@ export function renderValue(value: unknown, field?: string): ReactNode {
       ));
     if (value.every((item) => typeof item === 'string'))
       return value.map((item) => renderValue(item, field)).join(', ');
+  }
+  if (isPlainObject(value) && isPin(value)) {
+    // A pinned version of a record reads "Human IL-6 sandwich ELISA SOP-0005 v9".
+    const pin = value as { id: string; version?: number };
+    return (
+      <>
+        <LinkedName id={pin.id} />
+        {pin.version !== undefined && <span className="muted"> v{pin.version}</span>}
+      </>
+    );
   }
   if (isPlainObject(value)) {
     const entries = Object.entries(value as Record<string, unknown>).filter(
@@ -82,30 +95,47 @@ function holdsRecordId(v: unknown): boolean {
   return false;
 }
 
+/** `{ id, version }` naming a record: a pinned version. */
+function isPin(v: unknown): boolean {
+  const o = v as Record<string, unknown>;
+  const keys = Object.keys(o);
+  return (
+    typeof o.id === 'string' &&
+    isRecordId(o.id) &&
+    keys.every((k) => k === 'id' || k === 'version') &&
+    (o.version === undefined || typeof o.version === 'number')
+  );
+}
+
 function ItemsTable({ items }: { items: Record<string, unknown>[] }) {
-  // Columns in the order the items use them; source quotes stay on the record's history.
+  // Columns in the order the items use them; source quotes stay on the record's history. An item's
+  // id is its key in the list: when every item has a label, the label names it and the key stays in
+  // technical details (UX review 2026-10-02, item 3).
+  const labelled = items.every((item) => typeof item.label === 'string' && item.label !== '');
   const columns = [...new Set(items.flatMap((item) => Object.keys(item)))].filter(
-    (key) => key !== 'cite',
+    (key) => key !== 'cite' && !(labelled && key === 'id'),
   );
   return (
-    <table className="items-table">
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th key={c}>{fieldLabel(c)}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={JSON.stringify(item)}>
+    <div className="items-wrap">
+      <table className="items-table">
+        <thead>
+          <tr>
             {columns.map((c) => (
-              <td key={c}>{isEmpty(item[c]) ? '' : renderValue(item[c], c)}</td>
+              <th key={c}>{fieldLabel(c)}</th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={JSON.stringify(item)}>
+              {columns.map((c) => (
+                <td key={c}>{isEmpty(item[c]) ? '' : renderValue(item[c], c)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

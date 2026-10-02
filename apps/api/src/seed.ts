@@ -277,12 +277,7 @@ async function loadOnce() {
     }),
     await readManifestFolder(fileURLToPath(new URL('../../../docs/sop-library/', import.meta.url))),
   ]) {
-    const part = await importIntoLibrary(
-      registry,
-      ctx,
-      plan,
-      'Seed lab (plan 006), loaded by plan 011a',
-    );
+    const part = await importIntoLibrary(registry, ctx, plan, 'Imported from the seed lab');
     library.added.push(...part.added);
     library.existing.push(...part.existing);
     library.missing.push(...part.missing);
@@ -313,12 +308,7 @@ async function loadOnce() {
     entityLibrary: await seedFile('entity-library.yaml'),
     instrumentLibrary: await seedFile('instrument-library.yaml'),
   });
-  const sops = await loadSeedSops(
-    registry,
-    ctx,
-    seedSops,
-    'Seed lab (plan 006), loaded by plan 012a',
-  );
+  const sops = await loadSeedSops(registry, ctx, seedSops, 'Imported from the seed lab');
   console.log(
     `Digital SOPs: ${sops.created.length} drafted, ${sops.existing.length} already there, ${sops.unbound.length} materials without their record in the lab yet (bind them when the record is there).`,
   );
@@ -335,7 +325,7 @@ async function loadOnce() {
       },
       new Map(seedSops.map((s) => [s.key, s.label])),
     ),
-    'Seed lab (plan 006), loaded by plan 013a',
+    'Imported from the seed lab',
   );
   console.log(
     `Campaigns and experiments: ${campaigns.created.length} drafted, ${campaigns.existing.length} campaigns already there, ${campaigns.missing.length} SOPs or entities left out because the lab doesn't have them yet.`,
@@ -346,7 +336,7 @@ async function loadOnce() {
     registry,
     ctx,
     readSeedLayouts(await seedFile('layouts.yaml')),
-    'Seed lab (plan 006), loaded by plan 014a',
+    'Imported from the seed lab',
   );
   console.log(
     `Layout templates: ${layouts.created.length} drafted, ${layouts.existing.length} already there.`,
@@ -360,7 +350,7 @@ async function loadOnce() {
       await seedFile('instrument-library.yaml'),
     ),
     (name) => seedFile(`worklists/${name}`),
-    'Seed lab (plan 006), loaded by plan 016c',
+    'Imported from the seed lab',
   );
   console.log(
     `Worklist formats: ${worklists.created.length} drafted, ${worklists.existing.length} already there, ${worklists.waiting.length} waiting for their instrument kind.`,
@@ -371,7 +361,7 @@ async function loadOnce() {
     registry,
     ctx,
     readSeedMemories(await seedFile('memory.yaml')),
-    'Seed lab (plan 006), loaded by plan 005a',
+    'Imported from the seed lab',
   );
   console.log(
     `Lab memory: ${memories.created.length} drafted, ${memories.existing.length} already there, ${memories.waiting.length} waiting for their records.`,
@@ -389,7 +379,7 @@ async function loadOnce() {
       labware: await seedFile('labware.yaml'),
       instrumentLibrary: await seedFile('instrument-library.yaml'),
     }),
-    'Seed lab (plan 006), loaded by plan 017a',
+    'Imported from the seed lab',
   );
   console.log(
     `Assay templates: ${templates.created.length} drafted, ${templates.existing.length} already there, ${templates.waiting.length} waiting for their records.`,

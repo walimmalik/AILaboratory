@@ -88,6 +88,24 @@ async function mixture(read: OverviewReader, state: WellState, names: Map<string
   return solvents.length ? `${pieces.join(' + ')} in ${solvents.join(' + ')}` : pieces.join(' + ');
 }
 
+/** The nearest place above the container that holds a temperature, and that temperature. */
+async function keptAt(read: OverviewReader, path: PlacePath, self: string) {
+  for (const entry of path.filter((p) => p.id !== self).reverse()) {
+    const place = await read.get(entry.id);
+    const setpoint = (place?.attributes as { setpoint?: Quantity } | undefined)?.setpoint;
+    if (place?.kind === 'location' && setpoint) return { label: place.label, setpoint };
+  }
+  return undefined;
+}
+
+/** Whether a temperature falls outside a storage range given in the same unit. */
+function outsideRange(t: Quantity, range: EffectiveStorage['range']): boolean {
+  const value = Number(t.value);
+  const below = range.min?.unit === t.unit && value < Number(range.min.value);
+  const above = range.max?.unit === t.unit && value > Number(range.max.value);
+  return below || above;
+}
+
 const container: OverviewBuilder = async (record, read) => {
   const a = record.attributes as ContainerAttributes;
   const [type, wells, path] = await Promise.all([
@@ -140,11 +158,18 @@ const container: OverviewBuilder = async (record, read) => {
   if (wells.wells.length > 0) {
     const rules = await read.run(inventoryEffectiveRules, { container: record.id });
     if (rules.storage) {
+      const kept = await keptAt(read, path, record.id);
+      const outside = kept && outsideRange(kept.setpoint, rules.storage.range);
       storage = {
         label: 'store',
         value: storageWords(rules.storage.range),
-        detail: rules.storage.conflict ?? 'the narrowest of what it holds',
-        ...(rules.storage.conflict ? { tone: 'warn' as const } : {}),
+        detail:
+          rules.storage.conflict ??
+          // Where it sits now, when that is not what its contents ask for (review 2026-10-02, 8).
+          (outside
+            ? `${kept.label} is at ${amount(kept.setpoint)}`
+            : 'the narrowest of what it holds'),
+        ...(rules.storage.conflict || outside ? { tone: 'warn' as const } : {}),
       };
     }
   }
@@ -268,7 +293,8 @@ export function whereFact(
     const volumes = only.wells.flatMap((w) => (w.volume === 'unknown' ? [] : [w.volume]));
     return {
       label: 'where',
-      value: `${only.container.name}, ${placeOf(only.path, only.container.id)}`,
+      // Its label, linked; the code is a tag on the record it opens (codes after names).
+      value: `${only.container.label}, ${placeOf(only.path, only.container.id)}`,
       record: only.container.id,
       detail:
         only.wells.length === 1 && volumes[0]

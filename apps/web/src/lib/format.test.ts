@@ -9,6 +9,7 @@ import {
   formatDay,
   formatShortDay,
   formatValue,
+  kindFieldWords,
   partLabel,
   plainError,
   problemWords,
@@ -137,6 +138,21 @@ describe('describeToolStep', () => {
         result: { output: { records: [] } },
       }),
     ).toEqual({ text: 'looked up records', tone: 'muted' });
+    // A read that found several says how many, not the first one's name.
+    expect(
+      describeToolStep({
+        operationId: 'records.list',
+        outcome: 'done',
+        result: {
+          output: {
+            records: [
+              { id: 'wdg_1', name: 'WDG-0001' },
+              { id: 'wdg_2', name: 'WDG-0002' },
+            ],
+          },
+        },
+      }),
+    ).toEqual({ text: 'looked up records: 2 found', tone: 'muted' });
   });
 });
 
@@ -253,6 +269,14 @@ describe('partLabel', () => {
       partLabel('/steps/s3', attributes, items, { steps: [{ id: 's3', title: 'Block' }] }),
     ).toBe('step 1 Block');
     expect(partLabel('/steps/s9', attributes, items)).toBe('step s9');
+  });
+});
+
+describe('kindFieldWords', () => {
+  it('names a field in lab words, else by its key', () => {
+    expect(kindFieldWords('plate_map', 'overrides')).toBe('hand edits');
+    expect(kindFieldWords('memory', 'appliesTo')).toBe('who it applies to');
+    expect(kindFieldWords('experiment', 'successCriteria')).toBe('success criteria');
   });
 });
 
