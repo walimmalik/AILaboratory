@@ -242,7 +242,7 @@ describe('plate maps', () => {
     expect(plate.find((w) => w.well === 'A3')).toMatchObject({
       role: 'sample',
       subject: a?.id,
-      label: `${a?.name} Donor 1`,
+      label: `Donor 1 (${a?.name})`,
     });
     expect(plate.filter((w) => w.subject === c?.id)).toHaveLength(2);
 

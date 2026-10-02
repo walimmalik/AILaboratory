@@ -155,79 +155,85 @@ export function PlateView({
           </li>
         ))}
       </ul>
-      <fieldset
-        className={`plate${grid.columns > 12 ? ' dense' : ''}`}
-        aria-label={`${title}, plate ${plate.plate}`}
-        style={{ '--cols': grid.columns } as CSSProperties}
-      >
-        <span className="axis" />
-        {Array.from({ length: grid.columns }, (_, c) =>
-          onToggle ? (
-            <button
-              // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
-              key={c}
-              type="button"
-              className="axis"
-              aria-label={`Select column ${c + 1}`}
-              onClick={() =>
-                onToggle(grid.rowLabels.map((r) => wellKey(plate.plate, `${r}${c + 1}`)))
-              }
-            >
-              {c + 1}
-            </button>
-          ) : (
-            // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
-            <span key={c} className="axis">
-              {c + 1}
-            </span>
-          ),
-        )}
-        {grid.rowLabels.map((row) => (
-          <Fragment key={row}>
-            {onToggle ? (
+      {/* On a phone a 96-well grid fits; a denser one scrolls on its own and says so (UX review 2026-10-02, #5). */}
+      {grid.columns > 12 && (
+        <p className="scroll-cue muted">Scroll sideways for all {grid.columns} columns.</p>
+      )}
+      <div className="plate-scroll">
+        <fieldset
+          className={`plate${grid.columns > 12 ? ' dense' : ''}`}
+          aria-label={`${title}, plate ${plate.plate}`}
+          style={{ '--cols': grid.columns } as CSSProperties}
+        >
+          <span className="axis" />
+          {Array.from({ length: grid.columns }, (_, c) =>
+            onToggle ? (
               <button
+                // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+                key={c}
                 type="button"
                 className="axis"
-                aria-label={`Select row ${row}`}
+                aria-label={`Select column ${c + 1}`}
                 onClick={() =>
-                  onToggle(
-                    Array.from({ length: grid.columns }, (_, c) =>
-                      wellKey(plate.plate, `${row}${c + 1}`),
-                    ),
-                  )
+                  onToggle(grid.rowLabels.map((r) => wellKey(plate.plate, `${r}${c + 1}`)))
                 }
               >
-                {row}
+                {c + 1}
               </button>
             ) : (
-              <span className="axis">{row}</span>
-            )}
-            {Array.from({ length: grid.columns }, (_, c) => {
-              const name = `${row}${c + 1}`;
-              const w = byWell.get(name) ?? { well: name, role: 'empty' };
-              const level = shade(w, w.subject ? (points.get(w.subject) ?? 0) : 0);
-              const chosen = selected?.has(wellKey(plate.plate, name));
-              return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: columns are positional
+              <span key={c} className="axis">
+                {c + 1}
+              </span>
+            ),
+          )}
+          {grid.rowLabels.map((row) => (
+            <Fragment key={row}>
+              {onToggle ? (
                 <button
-                  key={name}
                   type="button"
-                  className={`well ${roleClass(w.role)} shade-${level}${w.override ? ' override' : ''}${chosen ? ' chosen' : ''}`}
-                  aria-pressed={onToggle ? chosen : picked?.well === name}
-                  aria-label={text(w)}
-                  onClick={() => {
-                    setPicked(w);
-                    onToggle?.([wellKey(plate.plate, name)]);
-                  }}
-                  onMouseEnter={() => setPointed(name)}
-                  onFocus={() => setPointed(name)}
-                  onMouseLeave={() => setPointed(undefined)}
-                  onBlur={() => setPointed(undefined)}
-                />
-              );
-            })}
-          </Fragment>
-        ))}
-      </fieldset>
+                  className="axis"
+                  aria-label={`Select row ${row}`}
+                  onClick={() =>
+                    onToggle(
+                      Array.from({ length: grid.columns }, (_, c) =>
+                        wellKey(plate.plate, `${row}${c + 1}`),
+                      ),
+                    )
+                  }
+                >
+                  {row}
+                </button>
+              ) : (
+                <span className="axis">{row}</span>
+              )}
+              {Array.from({ length: grid.columns }, (_, c) => {
+                const name = `${row}${c + 1}`;
+                const w = byWell.get(name) ?? { well: name, role: 'empty' };
+                const level = shade(w, w.subject ? (points.get(w.subject) ?? 0) : 0);
+                const chosen = selected?.has(wellKey(plate.plate, name));
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    className={`well ${roleClass(w.role)} shade-${level}${w.override ? ' override' : ''}${chosen ? ' chosen' : ''}`}
+                    aria-pressed={onToggle ? chosen : picked?.well === name}
+                    aria-label={text(w)}
+                    onClick={() => {
+                      setPicked(w);
+                      onToggle?.([wellKey(plate.plate, name)]);
+                    }}
+                    onMouseEnter={() => setPointed(name)}
+                    onFocus={() => setPointed(name)}
+                    onMouseLeave={() => setPointed(undefined)}
+                    onBlur={() => setPointed(undefined)}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
+        </fieldset>
+      </div>
       <p className="hover-info" aria-live="polite">
         {pointed
           ? text(byWell.get(pointed) ?? { well: pointed, role: 'empty' })
