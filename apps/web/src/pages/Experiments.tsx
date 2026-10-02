@@ -24,6 +24,7 @@ import {
   plannedText,
   runProgress,
   runStatusWords,
+  stageSteps,
   stageWords,
 } from '../lib/experiments.ts';
 import { formatValue, formatWhen } from '../lib/format.ts';
@@ -263,13 +264,28 @@ function NextStepBlock({ record }: { record: RecordEnvelope }) {
   const [concluding, setConcluding] = useState(false);
   const actions = nextActions(a.stage, record.status);
   const error = stage.error ?? start.error;
+  const steps = stageSteps(a.stage);
   return (
     <section className="block" aria-label="Next step">
       <header>
         <h2>Next step</h2>
-        <span className="state muted">{stageWords[a.stage]}</span>
+        {steps.length === 0 && <span className="state muted">{stageWords[a.stage]}</span>}
       </header>
       <div className="body">
+        {steps.length > 0 && (
+          <ol className="stages" aria-label="Stages">
+            {steps.map((s) => (
+              <li
+                key={s.stage}
+                className={`stage-${s.at}`}
+                aria-current={s.at === 'current' ? 'step' : undefined}
+              >
+                {s.at === 'done' && <span aria-hidden="true">✓ </span>}
+                {stageWords[s.stage]}
+              </li>
+            ))}
+          </ol>
+        )}
         {record.status === 'draft' && (
           <p className="muted">Confirm the design below; then it can be planned.</p>
         )}

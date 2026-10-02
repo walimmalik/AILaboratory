@@ -322,30 +322,29 @@ export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
   const errors = result.issues.filter((i) => i.severity === 'error');
   return (
     <>
-      <section className="block" aria-label="Deck">
-        <header>
-          <h2>Deck</h2>
-          <span className="state muted">{model.label} · from above, not to scale</span>
-        </header>
-        <div className="body">
-          {errors.length > 0 && (
-            <ul className="error-text">
-              {errors.map((e) => (
-                <li key={`${e.rule}-${e.node}`}>{e.message}</li>
-              ))}
-            </ul>
-          )}
-          {views.length === 0 ? (
-            <p className="muted">{model.label} has no mounts for equipment.</p>
-          ) : (
+      {/* An instrument with no mounts (a sealer, a peeler) has no deck to draw. */}
+      {(views.length > 0 || errors.length > 0) && (
+        <section className="block" aria-label="Deck">
+          <header>
+            <h2>Deck</h2>
+            <span className="state muted">{model.label} · from above, not to scale</span>
+          </header>
+          <div className="body">
+            {errors.length > 0 && (
+              <ul className="error-text">
+                {errors.map((e) => (
+                  <li key={`${e.rule}-${e.node}`}>{e.message}</li>
+                ))}
+              </ul>
+            )}
             <div className="decks">
               {views.map((view) => (
                 <MountDrawing key={view.mount} view={view} label={nodeLabel} />
               ))}
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
       <section className="block" aria-label="What it can do">
         <header>
           <h2>What it can do</h2>
@@ -371,10 +370,14 @@ export function InstrumentBlocks({ record }: { record: RecordEnvelope }) {
               </table>
             </div>
           )}
-          <p className="muted">
-            {result.sites.length} places for labware.{' '}
-            <Link to="/instrument-models">Instrument models</Link> say what each one offers.
-          </p>
+          {result.sites.length > 0 && (
+            <p className="muted">
+              {result.sites.length === 1
+                ? '1 place for labware.'
+                : `${result.sites.length} places for labware.`}{' '}
+              <Link to="/instrument-models">Instrument models</Link> say what each one offers.
+            </p>
+          )}
           <WorkcellLine instrument={record.id} />
         </div>
       </section>

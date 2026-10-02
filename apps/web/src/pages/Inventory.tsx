@@ -432,6 +432,8 @@ function WellsBlock({
     a.click();
     URL.revokeObjectURL(url);
   };
+  // A tube with nothing recorded in it: the Overview's "holds" fact already says so.
+  if (!grid && wells.length === 0) return null;
   return (
     <section className="block" aria-label="Wells">
       <header>
@@ -616,7 +618,9 @@ function WellsBlock({
                 </ul>
               </div>
             ) : (
-              <p className="empty well-detail">{grid ? `${picked} is empty.` : 'Empty.'}</p>
+              <p className="empty well-detail">
+                {grid ? `${picked} is empty.` : 'No contents recorded.'}
+              </p>
             ))}
         </div>
       </div>
@@ -732,8 +736,8 @@ export function WhereIsBlock({ record }: { record: RecordEnvelope }) {
     retry: false,
   });
   const containers = where.data?.containers ?? [];
-  // A product that nothing holds yet says nothing; a lot or sample says so.
-  if (record.kind === 'product' && containers.length === 0) return null;
+  // None or one container is already said by the Overview's "where" fact; the table is for more.
+  if (!where.error && containers.length <= 1) return null;
   return (
     <section className="block" aria-label="Where it is">
       <header>
@@ -744,10 +748,7 @@ export function WhereIsBlock({ record }: { record: RecordEnvelope }) {
       </header>
       <div className="body">
         {where.error && <p className="error-text">{where.error.message}</p>}
-        {where.data && containers.length === 0 && (
-          <p className="empty">Not in any container the lab has registered.</p>
-        )}
-        {containers.length > 0 && (
+        {
           <div className="table-wrap">
             <table>
               <thead>
@@ -773,7 +774,7 @@ export function WhereIsBlock({ record }: { record: RecordEnvelope }) {
               </tbody>
             </table>
           </div>
-        )}
+        }
       </div>
     </section>
   );

@@ -2672,3 +2672,28 @@ span.row-actions {
 .memory-change {
   margin-top: 8px;
 }
+
+/* An experiment's stages, in order (plan 004f-5): done ones ticked, the current one in full ink. */
+.stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.stages li + li::before {
+  content: "›";
+  margin: 0 10px;
+  color: var(--ink-3);
+}
+.stage-done,
+.stage-next {
+  color: var(--ink-3);
+}
+.stage-current {
+  color: var(--ink);
+  font-weight: 600;
+}
