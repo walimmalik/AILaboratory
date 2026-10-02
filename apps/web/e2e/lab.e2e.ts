@@ -1059,8 +1059,10 @@ test('a layout previews its plate, and a plate map shows real samples well by we
 
   await page.goto(`/records/${map.id}`);
   const plates = page.getByRole('region', { name: 'Plates', exact: true });
-  await expect(plates).toContainText('3 placed on 1 plate');
+  await expect(plates).toContainText('3 samples on 1 plate');
   await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Standard');
+  await expect(plates.getByText('Where each sample is (3)')).toBeVisible();
+  await expect(plates.locator('.subject-wells')).toContainText('Donor 1');
   await plates.getByRole('button', { name: /^A3: .*Donor 1/ }).click();
   await expect(plates.getByRole('link', { name: /Donor 1/ })).toBeVisible();
   await expect(
@@ -1076,7 +1078,7 @@ test('a layout previews its plate, and a plate map shows real samples well by we
   const made = page.getByRole('region', { name: 'Plates made from it' });
   await expect(made.getByRole('row', { name: new RegExp(map.name) })).toContainText('3');
   await made.getByRole('link', { name: `IL-6, three donors ${stamp}` }).click();
-  await expect(plates).toContainText('3 placed on 1 plate');
+  await expect(plates).toContainText('3 samples on 1 plate');
 
   // Two spare blanks by hand, then the pattern saved as a layout of its own.
   await plates.getByRole('button', { name: 'Change wells' }).click();
@@ -1086,8 +1088,13 @@ test('a layout previews its plate, and a plate map shows real samples well by we
   await expect(edit).toContainText('2 wells selected');
   await edit.getByLabel('Why').fill('Spare blanks');
   await edit.getByRole('button', { name: 'Change 2 wells' }).click();
-  await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Blank 4');
+  await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Blank 4 wells');
+  await expect(plates.getByRole('list', { name: 'Key' })).toContainText('Changed by hand 2 wells');
   await expect(plates.getByRole('button', { name: 'H12: Blank, changed by hand' })).toBeVisible();
+  await edit.getByRole('button', { name: 'Done' }).click();
+  await plates.getByRole('button', { name: 'H12: Blank, changed by hand' }).click();
+  await expect(plates.getByText('Changed by hand: Spare blanks.')).toBeVisible();
+  await plates.getByRole('button', { name: 'Change wells' }).click();
   await edit.getByRole('button', { name: 'Done' }).click();
   await plates.getByRole('button', { name: 'Save as layout' }).click();
   await plates.getByLabel('Layout name').fill(`ELISA 96 spare blanks ${stamp}`);
@@ -1165,7 +1172,8 @@ test('a person adds a lab note on the Lab memory page and finds it under its gro
   const statement = `Seal plates before the plate washer ${Date.now()}`;
   await page.getByRole('button', { name: 'Add a lab note' }).click();
   await page.getByLabel('What the lab should know').fill(statement);
-  await page.getByRole('button', { name: 'Rule: designs follow it' }).click();
+  await page.getByRole('button', { name: 'Rule', exact: true }).click();
+  await expect(page.getByText('Designs follow it.')).toBeVisible();
   await page.getByRole('button', { name: 'Remember' }).click();
   const labWide = page.getByRole('region', { name: 'Lab-wide' });
   await expect(labWide.getByRole('link', { name: new RegExp(statement) })).toBeVisible();
@@ -1174,14 +1182,14 @@ test('a person adds a lab note on the Lab memory page and finds it under its gro
   await expect(page.getByText('1 shown')).toBeVisible();
 
   // Correct its wording in place, then retire it with why.
-  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  await page.getByRole('button', { name: /^Change MEM-/ }).click();
   const change = page.getByRole('form', { name: /^Change MEM-/ });
   await change.getByLabel('What the lab should know').fill(`${statement}, both sides`);
   await change.getByRole('button', { name: 'Save' }).click();
   await expect(
     page.getByRole('link', { name: new RegExp(`${statement}, both sides`) }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  await page.getByRole('button', { name: /^Change MEM-/ }).click();
   await change.getByRole('button', { name: 'Retire it' }).click();
   await change.getByLabel('Why it no longer holds').fill('The washer now seals its own plates');
   await change.getByRole('button', { name: 'Retire', exact: true }).click();
@@ -1242,6 +1250,11 @@ test('a record carries its lab notes, and a memory shows where it came from', as
   // One folded line on the Overview, opening to the note.
   await page.getByText(/^Lab notes \(1\)/).click();
   await page.getByRole('link', { name: new RegExp(statement) }).click();
+
+  // The memory's own page says what it applies to, and is retired rather than archived.
+  await expect(page.getByText('the whole lab')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Archive', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Change or retire' })).toBeVisible();
 
   // The memory's Evidence tab says where it came from.
   await page.getByRole('link', { name: /^Evidence/ }).click();

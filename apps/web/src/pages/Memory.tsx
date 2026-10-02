@@ -6,6 +6,7 @@ import {
   memoryRetire,
   memorySearch,
   memoryUpdate,
+  type RecordEnvelope,
   recordsConfirm,
 } from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -77,6 +78,16 @@ export function MemoryPage() {
       ...(strength === 'all' ? {} : { strength }),
     }),
   );
+  // Drafts wait under their own tab; say when some match, so a new proposal is never out of sight.
+  const drafts = useQuery({
+    ...memoryQuery({
+      status: 'draft',
+      ...(words ? { text: words } : {}),
+      ...(kind ? { kind } : {}),
+      ...(strength === 'all' ? {} : { strength }),
+    }),
+    enabled: status === 'active',
+  }).data?.total;
   const memories = data?.memories ?? [];
   const due = memories.filter((m) => m.due);
   const groups = groupMemories(memories);
@@ -169,6 +180,16 @@ export function MemoryPage() {
                 : `${memories.length} of ${data?.total} shown; narrow the search for the rest`}
             </p>
           )}
+          {status === 'active' && drafts ? (
+            <p>
+              {drafts === 1
+                ? `1 agent draft ${narrowed ? 'matches too' : 'waits for a person'}.`
+                : `${drafts} agent drafts ${narrowed ? 'match too' : 'wait for a person'}.`}{' '}
+              <button type="button" className="link-btn" onClick={() => setStatus('draft')}>
+                Show drafts
+              </button>
+            </p>
+          ) : null}
           {due.length > 0 && (
             <details className="others">
               <summary className="others-summary">Due for a check ({due.length})</summary>
@@ -223,7 +244,7 @@ export function MemoryRows({
         const others = m.aboutRecords.filter((r) => r.id !== under?.id);
         return (
           <li key={m.id}>
-            <Link to="/records/$id" params={{ id: m.id }} className="linked-name">
+            <Link to="/records/$id" params={{ id: m.id }} className="linked-name statement">
               {a.statement} <span className="code">{m.name}</span>
             </Link>
             <div className="muted memory-line">
@@ -241,8 +262,13 @@ export function MemoryRows({
               {m.status !== 'archived' && changing !== m.id && (
                 <>
                   {' · '}
-                  <button type="button" className="btn small" onClick={() => setChanging(m.id)}>
-                    Change
+                  <button
+                    type="button"
+                    className="link-btn"
+                    aria-label={`Change ${m.name}`}
+                    onClick={() => setChanging(m.id)}
+                  >
+                    change
                   </button>
                 </>
               )}
@@ -405,9 +431,9 @@ function MemoryFieldRows({
             <legend className="sr-only">How strongly</legend>
             {(
               [
-                ['note', 'Note: only informs'],
-                ['default', 'Default: fills a value'],
-                ['rule', 'Rule: designs follow it'],
+                ['note', 'Note'],
+                ['default', 'Default'],
+                ['rule', 'Rule'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -420,11 +446,19 @@ function MemoryFieldRows({
               </button>
             ))}
           </fieldset>
+          <span className="muted">{strengthHints[strength]}</span>
         </span>
       </div>
     </>
   );
 }
+
+/** What each strength does, under the choice: the same words as the page's lede. */
+const strengthHints = {
+  note: 'Only informs.',
+  default: 'Fills a value no record decides.',
+  rule: 'Designs follow it.',
+} as const;
 
 function WhenRow({ when, setWhen }: { when: string; setWhen: (v: string) => void }) {
   return (
@@ -485,7 +519,7 @@ const changes: [Change, string, string][] = [
  * Change a memory in place (005d-3): correct it (memory.update), replace it with a new one
  * (memory.replace, active memories only) or retire it with why (memory.retire).
  */
-function ChangeMemory({ memory, onClose }: { memory: ShownMemory; onClose: () => void }) {
+export function ChangeMemory({ memory, onClose }: { memory: RecordEnvelope; onClose: () => void }) {
   const queryClient = useQueryClient();
   const a = memoryOf(memory);
   const [change, setChange] = useState<Change>('correct');
@@ -520,6 +554,7 @@ function ChangeMemory({ memory, onClose }: { memory: ShownMemory; onClose: () =>
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['memory'] });
+      void queryClient.invalidateQueries({ queryKey: ['record', memory.id] });
       onClose();
     },
   });

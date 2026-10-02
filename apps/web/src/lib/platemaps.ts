@@ -99,3 +99,40 @@ export function subjectCount(plate: PlatePlan): number {
       .map((w) => w.subject),
   ).size;
 }
+
+/** "1 well" or "6 wells". */
+export const wellsText = (n: number) => `${n} well${n === 1 ? '' : 's'}`;
+
+/** "3 samples" or "1 compound": what a plate or map places, in the subjects' own word. */
+export function subjectsText(n: number, role = 'sample'): string {
+  const noun = roleText(role).toLowerCase();
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** The subject role of a plate ("sample" or "compound"), from its wells. */
+export function subjectRoleOf(plates: readonly PlatePlan[]): string {
+  for (const p of plates)
+    for (const w of p.wells) if (w.role === 'sample' || w.role === 'compound') return w.role;
+  return 'sample';
+}
+
+/**
+ * Where each subject sits on a plate, in placement order: "Donor 1" in A3 and B3. The legend lists
+ * these, so which sample is where shows without pointing at every well (UX review 2026-10-02, #11).
+ */
+export function subjectWells(
+  plate: PlatePlan,
+): { subject: string; label: string; wells: string[] }[] {
+  const out = new Map<string, { subject: string; label: string; wells: string[] }>();
+  for (const w of plate.wells) {
+    if (!w.subject || !['sample', 'compound'].includes(w.role)) continue;
+    const entry = out.get(w.subject) ?? {
+      subject: w.subject,
+      label: w.label ?? w.subject,
+      wells: [],
+    };
+    entry.wells.push(w.well);
+    out.set(w.subject, entry);
+  }
+  return [...out.values()];
+}
