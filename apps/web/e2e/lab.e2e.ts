@@ -1200,3 +1200,33 @@ test('the assistant asks to remember something for the lab, and says which lab n
   await used.getByText(/^Using \d+ lab notes?/).click();
   await expect(used.getByText(statement)).toBeVisible();
 });
+
+test('a record carries its lab notes, and a memory shows where it came from', async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const record = (
+    await asAgent(request, 'records.create', {
+      kind: 'widget',
+      label: `Tip rack ${Date.now()}`,
+      attributes,
+    })
+  ).output;
+  await page.goto(`/records/${record.id}`);
+  await page.getByRole('button', { name: 'Add a lab note about this' }).click();
+  const statement = `Rack tips wobble in the third column ${Date.now()}`;
+  await page.getByLabel('What the lab should know').fill(statement);
+  await page.getByRole('button', { name: 'Remember' }).click();
+
+  // One folded line on the Overview, opening to the note.
+  await page.getByText(/^Lab notes \(1\)/).click();
+  await page.getByRole('link', { name: new RegExp(statement) }).click();
+
+  // The memory's Evidence tab says where it came from.
+  await page.getByRole('link', { name: /^Evidence/ }).click();
+  await expect(page.getByText('Stated by a person.')).toBeVisible();
+  await expect(page.getByText('Nothing reported yet.', { exact: false })).toBeVisible();
+  await page.getByRole('link', { name: /^Applied in/ }).click();
+  await expect(page.getByText('No record has a value filled from this memory yet.')).toBeVisible();
+});
