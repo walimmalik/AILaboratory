@@ -19,8 +19,10 @@ import {
   formatValue,
   formatWhen,
   isAgent,
+  kindFieldWords,
   operationVerb,
   proposalTouches,
+  verbAlone,
 } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
@@ -470,7 +472,7 @@ function History({
                     <td className="when">{formatWhen(row.at)}</td>
                     <td>
                       {row.version ? (
-                        <VersionWords versions={versions} v={row.version} />
+                        <VersionWords kind={r.kind} versions={versions} v={row.version} />
                       ) : row.event ? (
                         <EventWords event={row.event} container={r.id} />
                       ) : null}
@@ -494,13 +496,22 @@ function History({
 }
 
 /** A version's change in words: the operation, the sections confirmed, the fields changed, why. */
-function VersionWords({ versions, v }: { versions: RecordVersion[]; v: RecordVersion }) {
+function VersionWords({
+  kind,
+  versions,
+  v,
+}: {
+  kind: string;
+  versions: RecordVersion[];
+  v: RecordVersion;
+}) {
   const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
-  const changed = diffRecords(previous, v.snapshot).map((c) => c.field);
+  // Fields in lab words: a plate map's "overrides" are its hand edits (review 2026-10-02).
+  const changed = diffRecords(previous, v.snapshot).map((c) => kindFieldWords(kind, c.field));
   return (
     <>
       {v.via && !v.via.startsWith('records.')
-        ? operationVerb(v.via)
+        ? verbAlone(operationVerb(v.via))
         : (operationWords[v.operation] ?? v.operation)}
       {v.operation === 'confirm_section' && (
         <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>

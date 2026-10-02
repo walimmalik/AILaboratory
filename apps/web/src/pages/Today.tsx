@@ -2,7 +2,14 @@ import { type ActivityEntry, type RecordEnvelope, recordsList } from '@ailab/sch
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { api } from '../api.ts';
-import { actorLabel, formatWhen, isAgent, isSeed, operationVerb } from '../lib/format.ts';
+import {
+  actorLabel,
+  formatWhen,
+  isAgent,
+  isSeed,
+  operationVerb,
+  verbAlone,
+} from '../lib/format.ts';
 import { filteredActivityQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
@@ -192,14 +199,6 @@ function RecordName({ touched, record }: { touched: Touched; record: RecordEnvel
       <span className="mono muted">{record.name}</span>
     </>
   );
-}
-
-/**
- * A verb read on its own, in a column beside the record: "changed wells on" → "changed wells"
- * (review 2026-10-02 item 13). The ledger's verbs end with the word that leads into the record.
- */
-function verbAlone(verb: string): string {
-  return verb.replace(/ (on|to|in|of|from|for|into)$/, '');
 }
 
 interface Touched {
