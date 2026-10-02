@@ -124,3 +124,10 @@ export function memoryLine(m: ShownMemory): string {
     .filter(Boolean)
     .join(' · ');
 }
+
+/** The assistant's line for the memories it had (M21): "Using 4 lab notes, 1 rule". */
+export function usingLine(memories: readonly { strength: string }[]): string {
+  const rules = memories.filter((m) => m.strength === 'rule').length;
+  const notes = memories.length === 1 ? '1 lab note' : `${memories.length} lab notes`;
+  return `Using ${notes}${rules ? `, ${rules === 1 ? '1 rule' : `${rules} rules`}` : ''}`;
+}

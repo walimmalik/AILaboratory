@@ -3,6 +3,7 @@ import {
   type AttachmentInput,
   type Conversation,
   MAX_ATTACHMENT_CHARS,
+  type RecordEnvelope,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -23,6 +24,7 @@ import {
   conversationsQuery,
   reviewQuery,
 } from '../queries.ts';
+import { RememberCard, UsedMemories } from './AssistantMemory.tsx';
 import { FileCard } from './FileCard.tsx';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
@@ -241,6 +243,7 @@ function Message({
           })}
         </ul>
       )}
+      {message.memory && message.memory.length > 0 && <UsedMemories memories={message.memory} />}
     </li>
   );
 }
@@ -260,6 +263,10 @@ function Step({
     result?.outcome === 'done'
       ? fileOf(call.operationId, (result.result as { output?: unknown } | undefined)?.output)
       : undefined;
+  const proposedMemory =
+    call.operationId === 'memory.propose' && result?.outcome === 'done'
+      ? (result.result as { output?: RecordEnvelope } | undefined)?.output
+      : undefined;
   return (
     <li className={`step ${line.tone}`}>
       <span aria-hidden="true">{result ? '›' : '·'}</span> <span>{line.text}</span>
@@ -278,6 +285,7 @@ function Step({
         </>
       )}
       {file && <FileCard file={file} />}
+      {proposedMemory && <RememberCard proposed={proposedMemory} />}
       <details className="tech">
         <summary>technical details</summary>
         <pre className="json">

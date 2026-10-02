@@ -9,7 +9,7 @@
 - Built (005c-1a): `memory.observe` and `memory.candidates` with the bar and rejections (the `memory_candidates` table), and the recurring run deviation detector.
 - Built (005c-1b): the repeated-override detector (registry write listeners), the "possible lab memory" hint in the assistant, and proposed memories grouped in `review.list` (rules never batch-confirmed).
 - Built (005c-2): observations carry a finding (for, against, quiet); evidence counts, weight ordering and "due for a check" from evidence against or quiet runs (M9, M17); `memory.observe {memory}` reports on existing memories; the 016 detectors on Echo transfer and survey reports, which report quiet records. Next: 005d screens.
-- Built (005d-1): the Lab memory tab in Library, with groups worked out from links, filters, due memories folded and "Add a lab note". Next: the memory page's Evidence tab and editing, the "Lab notes" line on record pages, the "from lab memory" tag in readiness, and the assistant's line and Remember card.
+- Built (005d-1): the Lab memory tab in Library, with groups worked out from links, filters, due memories folded and "Add a lab note". 005d-2: the assistant's "Using N lab notes" line and Remember card. Next: the memory page's Evidence tab and editing, the "Lab notes" line on record pages and the "from lab memory" tag in readiness.
 
 ## What this plan delivers
 

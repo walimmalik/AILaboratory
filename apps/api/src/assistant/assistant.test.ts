@@ -11,6 +11,7 @@ import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -59,7 +60,7 @@ function setup(model: ChatModel | null = new ScriptedModel()) {
   );
   const registry = createRegistry(
     db,
-    new KindRegistry().register(widget),
+    memoryKinds.reduce((kinds, kind) => kinds.register(kind), new KindRegistry().register(widget)),
     new ActivityBus(),
     assistant,
   );
@@ -250,6 +251,34 @@ describe('assistant.ask', () => {
       'Values you filled in this conversation that a person has since changed',
     );
     expect(system).toContain('color: you filled "teal"; a person changed it to "amber"');
+  });
+
+  it('gives the model the lab-wide memories and keeps them on its final reply', async () => {
+    const model = new FakeModel([
+      { text: '', toolCalls: [{ id: 'a', name: 'records_list', input: {} }], stop: 'tool_use' },
+      { text: 'Done.', toolCalls: [], stop: 'end' },
+    ]);
+    const { assistant, registry } = setup(model);
+    const memory = (await output(
+      registry.execute(person, 'memory.remember', {
+        statement: 'Seal plates before they leave the bench',
+        kind: 'convention',
+        strength: 'rule',
+        source: { from: 'stated' },
+      }),
+    )) as RecordEnvelope;
+    const conversation = await ask(registry, assistant, 'List my records');
+    expect(model.requests[0]?.system).toContain('Seal plates before they leave the bench');
+    const replies = conversation.messages.filter((m) => m.role === 'assistant');
+    expect(replies[0]?.memory).toBeUndefined();
+    expect(replies[1]?.memory).toEqual([
+      {
+        id: memory.id,
+        name: memory.name,
+        statement: 'Seal plates before they leave the bench',
+        strength: 'rule',
+      },
+    ]);
   });
 
   it('continues a conversation with the history so far', async () => {

@@ -68,6 +68,7 @@ Consumers:
 - **Due memories** are folded at the top.
 - **"Add a lab note"** calls `memory.remember`. A note is the default, and "Rule: designs follow it" is a visible choice. An optional record it is about, a "when" line, and "only me" make it personal.
 - **`memory.search`** returns each memory's records as `aboutRecords` (named) and its evidence as `seen`. `due` now also counts evidence against and quiet runs, as `memory.for` does.
+- **The assistant** (`apps/web/src/pages/AssistantMemory.tsx`, M21). The confirmed memories it was given for a turn (the bundle `memoryNote` builds in `apps/api/src/assistant/assistant.ts`) are saved on its final reply as `memory` (id, name, statement, strength). The reply ends with one grey line, "Using 4 lab notes, 1 rule", which opens to the statements, each linked. A memory the assistant proposed (`memory.propose`) shows as a "Remember this for the lab?" card with the statement, strength and kind, Confirm (`records.confirm`) and Edit (its page). The card reads the record, so after a reload it says "Remembered for the lab" or "Retired" instead.
 
 ## Not yet
 

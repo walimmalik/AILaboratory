@@ -7,6 +7,7 @@ import type {
   ConversationSummary,
   OperationErrorBody,
   PageContext,
+  UsedMemory,
 } from '@ailab/schema';
 import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
@@ -120,15 +121,16 @@ export class Assistant {
       sessionRef: conversationId,
     };
     const agentCtx: RecordContext = { ...ctx, actor: agent };
+    const memory = await memoryNote(
+      deps,
+      ctx,
+      (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
+    );
     const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(
       deps,
       ctx,
       conversationId,
-    )}${await memoryNote(
-      deps,
-      ctx,
-      (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
-    )}`;
+    )}${memory.text}`;
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
       this.publish(conversationId, { type: 'status', conversation: toSummary(row) });
@@ -163,6 +165,7 @@ export class Assistant {
               return { id: call.id, operationId, input: input ?? call.rawInput ?? '' };
             }),
             model: model.model,
+            ...(!turn.toolCalls.length && memory.used.length ? { memory: memory.used } : {}),
           },
           { provider: model.provider, model: model.model, raw: turn.raw },
         );
@@ -488,13 +491,20 @@ async function memoryNote(
   deps: OperationDeps,
   ctx: RecordContext,
   ask: MessageRow['body'] | undefined,
-): Promise<string> {
+): Promise<{ text: string; used: UsedMemory[] }> {
   const page = ask?.role === 'user' ? ask.page?.record?.id : undefined;
   const records = page ? [page, ...(await nearby(deps, ctx, [page]))] : [];
   const { matches } = lookup(await activeMemories(deps, ctx), ctx, { records });
-  const { lines } = bundle(matches, MEMORY_LINES);
-  if (lines.length === 0) return '';
-  return `\n\nLab memory${page ? ' for this page' : ''}, confirmed by people. Follow a rule, or say why you didn't; use a default unless the person or a confirmed record says otherwise; a note only informs. Name the memory (e.g. MEM-0004) when it shaped what you did. memory.for gives the memories for a particular piece of work.\n${lines.map((l) => `- ${l}`).join('\n')}`;
+  const { lines, memories } = bundle(matches, MEMORY_LINES);
+  if (lines.length === 0) return { text: '', used: [] };
+  const used = memories.map(({ id, name, statement, strength }) => ({
+    id,
+    name,
+    statement,
+    strength,
+  }));
+  const text = `\n\nLab memory${page ? ' for this page' : ''}, confirmed by people. Follow a rule, or say why you didn't; use a default unless the person or a confirmed record says otherwise; a note only informs. Name the memory (e.g. MEM-0004) when it shaped what you did. memory.for gives the memories for a particular piece of work.\n${lines.map((l) => `- ${l}`).join('\n')}`;
+  return { text, used };
 }
 
 async function systemPrompt(db: Db, ctx: RecordContext, conversationId: string): Promise<string> {
