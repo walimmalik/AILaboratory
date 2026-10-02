@@ -1129,7 +1129,7 @@ test('the assistant asks to remember something for the lab, and says which lab n
   const statement = `Thaw detection antibody on ice ${Date.now()}`;
   const ask = page.getByLabel('Ask the assistant');
   await ask.fill(
-    `/op memory.propose ${JSON.stringify({ statement, kind: 'convention', source: { from: 'conversation', note: 'in chat' } })}`,
+    `/op memory.propose ${JSON.stringify({ statement, kind: 'convention', strength: 'rule', source: { from: 'conversation', note: 'in chat' } })}`,
   );
   await ask.press('Enter');
 
@@ -1140,7 +1140,8 @@ test('the assistant asks to remember something for the lab, and says which lab n
   await card.getByRole('button', { name: 'Confirm' }).click();
   await expect(card.getByText('Remembered for the lab')).toBeVisible();
 
-  // The next turn has it, lab-wide, and says so in one line that opens to the list.
+  // The next turn has it (lab-wide rules always go with the assistant), and says so in one line
+  // that opens to the list.
   const reply = panel.getByLabel('Message the assistant');
   await reply.fill('thanks');
   await reply.press('Enter');
