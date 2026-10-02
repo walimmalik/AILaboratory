@@ -1,6 +1,6 @@
 # 0004: Port echo650-twin's twins and scheduler into this repo
 
-- Status: accepted
+- Status: accepted; the twin half superseded by plan 015 T1 and T7 (2026-10-01): twins are uploaded into the app as data packages to one standard, not ported as code. The scheduler half (plan 019) stands.
 - Date: 2026-09-29
 - Plan: 000 (decision D4)
 
