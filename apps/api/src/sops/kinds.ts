@@ -148,6 +148,9 @@ export const sop = defineKind({
       if (v.readFrom && !known.has(v.readFrom.role)) {
         invalid.push(`${v.name} is read from ${v.readFrom.role}, which is not a material`);
       }
+      if (v.drawsFrom && !known.has(v.drawsFrom)) {
+        invalid.push(`${v.name} is drawn from ${v.drawsFrom}, which is not a material`);
+      }
     }
     for (const l of a.layout ?? []) {
       for (const n of [l.count, l.replicates]) {

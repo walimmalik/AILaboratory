@@ -35,7 +35,8 @@ export interface KindPage {
     | '/runs'
     | '/sets'
     | '/plate-maps'
-    | '/layouts';
+    | '/layouts'
+    | '/memory';
   /** The menu entry whose tabs it sits in. */
   area: Area;
   /** A page without a tab of its own names the tab it belongs under (plate maps under layouts, N5). */
@@ -132,6 +133,7 @@ export const libraryPages: KindPage[] = [
   },
   { kind: 'sop', title: 'SOPs', noun: 'SOP', path: '/sops', area: 'Library' },
   { kind: 'document', title: 'Documents', noun: 'document', path: '/documents', area: 'Library' },
+  { kind: 'memory', title: 'Lab memory', noun: 'lab memory', path: '/memory', area: 'Library' },
   {
     kind: 'labware_type',
     title: 'Labware',

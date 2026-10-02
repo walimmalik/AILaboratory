@@ -50,6 +50,8 @@ An SOP links the records it names: its source document (`digitized_from`), role 
 
 A material role is filled by a record of a kind that fits its type: labware by a labware type or a container (read through to its labware type), a reagent or solution by a product or lot, an entity by an entity or sample, an instrument by an instrument kind, an instrument or an equipment kind, a consumable by a labware type, product or lot.
 
+A variable with `drawsFrom` is an amount the run takes from that material role, e.g. the total detection antibody volume. `designer.feasibility` checks it against stock (plan 017). The role must be a material.
+
 A record variable reads its `readFrom` field from the role's record: a lot's certificate value for that field (falling back to its product's typical value), a product's typical lot value (shown as typical), or any attribute by dotted path (`deadVolume`, `workingVolume.max`). A ratio or missing field is a problem in words, and the variable falls back to the SOP's typical value when it has one.
 
 `sops.calculate` takes `bindings` (a record per role for this run; otherwise each role's default) as well as `inputs`, and returns each role's record with any misfit, and each variable with where it came from (`input`, `record`, `typical`, `default`, `computed`, `missing`), the record and field it was read from, and any problem. Readiness blocks on defaults that don't fit their role and warns about record variables their default can't provide.

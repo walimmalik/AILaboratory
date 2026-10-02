@@ -15,6 +15,7 @@ import { entityKinds } from '../entities/kinds.ts';
 import { fileKinds } from '../files/kinds.ts';
 import { MemoryFileStore } from '../files/store.ts';
 import { instrumentKinds } from '../instruments/kinds.ts';
+import { inventoryKinds } from '../inventory/kinds.ts';
 import { labwareKinds } from '../labware/kinds.ts';
 import { libraryKinds } from '../library/kinds.ts';
 import {
@@ -29,6 +30,7 @@ import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from '../sops/kinds.ts';
 import { readSeedSops } from '../sops/seed.ts';
+import { transferKinds } from '../transfers/kinds.ts';
 import { assayKinds } from './kinds.ts';
 import { readSeedAssayTemplates } from './seed.ts';
 
@@ -64,6 +66,8 @@ beforeEach(async () => {
     ...plateMapKinds,
     ...assayKinds,
     ...campaignKinds,
+    ...inventoryKinds,
+    ...transferKinds,
   ])
     kinds.register(kind);
   registry = createRegistry(db, kinds, new ActivityBus(), undefined, {
@@ -725,5 +729,127 @@ describe('designer.feasibility', () => {
         )
       ).code,
     ).toBe('not_found');
+  });
+  it('checks the amounts an SOP draws from a material against stock on hand', async () => {
+    const { template, layout } = await setup();
+    const { product } = await run<{ product: RecordEnvelope }>(person, 'reagents.draft_product', {
+      label: 'Detection antibody',
+      attributes: { category: 'antibody', origin: 'bought' },
+    });
+    const lot = await run(person, 'reagents.receive_lot', { product: product.id, lotNumber: 'L1' });
+    const sop = await confirm(
+      await run(agent, 'sops.draft', {
+        ...elisaSop,
+        label: 'IL-6 ELISA with detection',
+        materials: [
+          ...elisaSop.materials,
+          { role: 'detection', label: 'Detection antibody', type: 'reagent' },
+        ],
+        variables: [
+          ...elisaSop.variables,
+          {
+            name: 'detection_volume',
+            label: 'Detection antibody for the run',
+            kind: 'default',
+            value: { value: '1.5', unit: 'mL' },
+            drawsFrom: 'detection',
+          },
+        ],
+      }),
+    );
+    expect(
+      (
+        await refused(
+          run(agent, 'sops.draft', {
+            ...elisaSop,
+            label: 'Wrong',
+            variables: [
+              {
+                name: 'v',
+                label: 'V',
+                kind: 'default',
+                value: { value: '1', unit: 'mL' },
+                drawsFrom: 'nope',
+              },
+            ],
+          }),
+        )
+      ).message,
+    ).toContain('v is drawn from nope, which is not a material');
+    const saved = await confirm(
+      await run(agent, 'assays.draft_template', {
+        ...template,
+        parts: [{ id: 'assay', sop: { id: sop.id, version: sop.version } }],
+        layout: { id: layout.id, version: layout.version },
+        roles: [{ part: 'assay', role: 'detection', record: lot.id }],
+      }),
+    );
+    const campaign = await confirm(
+      await run(agent, 'campaigns.draft', {
+        label: 'IL-6',
+        goal: 'Measure IL-6',
+        aims: [{ id: 'aim_1', text: 'Measure IL-6', success: 'Every sample read' }],
+      }),
+    );
+    const { experiment } = await run<{ experiment: RecordEnvelope }>(agent, 'designer.start', {
+      template: saved.id,
+      campaign: campaign.id,
+      answers: { samples: 8, dilution: '2' },
+    });
+    type Feasibility = {
+      stock: { verdict: string; needed?: unknown; available?: unknown; short?: unknown }[];
+      feasible: boolean;
+      lines: string[];
+    };
+    const check = () =>
+      run<Feasibility>(agent, 'designer.feasibility', { experiment: experiment.id });
+
+    const none = await check();
+    expect(none.stock).toEqual([
+      expect.objectContaining({
+        part: 'assay',
+        variable: 'detection_volume',
+        role: 'detection',
+        record: expect.objectContaining({ id: lot.id }),
+        verdict: 'short',
+        needed: { value: '1.5', unit: 'mL' },
+        short: { value: '1.5', unit: 'mL' },
+      }),
+    ]);
+    expect(none.feasible).toBe(false);
+    expect(none.lines).toContain(
+      `Stock of Detection antibody, lot L1 ${lot.name}: needs 1.5 mL, none available; 1.5 mL short`,
+    );
+
+    const tubeType = await run(person, 'records.create', {
+      kind: 'labware_type',
+      label: 'Tube 1.5 mL',
+      attributes: { family: 'tube', maxVolume: { value: '1.5', unit: 'mL' } },
+    });
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: tubeType.id, containers: [{}, {}] },
+    );
+    for (const tube of containers)
+      await run(person, 'inventory.fill', {
+        container: tube.id,
+        fills: [
+          {
+            wells: ['A1'],
+            volume: { value: '1000', unit: 'uL' },
+            components: [{ source: lot.id }],
+          },
+        ],
+      });
+    const enough = await check();
+    expect(enough.stock[0]).toMatchObject({
+      verdict: 'enough',
+      holds: { value: '2', unit: 'mL' },
+      available: { value: '2', unit: 'mL' },
+    });
+    expect(enough.lines).toContain(
+      `Stock of Detection antibody, lot L1 ${lot.name}: needs 1.5 mL, 2 mL available`,
+    );
   });
 });

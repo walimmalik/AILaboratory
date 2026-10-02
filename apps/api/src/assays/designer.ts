@@ -1,4 +1,4 @@
-import { formatQuantity } from '@ailab/domain';
+import { checkStock, formatQuantity, StockError } from '@ailab/domain';
 import {
   type AssayTemplateAttributes,
   type CapabilityId,
@@ -7,9 +7,12 @@ import {
   type ExperimentAttributes,
   type InstrumentAttributes,
   type LayoutAttributes,
+  type Quantity,
   type RecordEnvelope,
   type ResolvedConfiguration,
+  type SopAttributes,
 } from '@ailab/schema';
+import type { z } from 'zod';
 import { OperationError } from '../operations/errors.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
@@ -338,10 +341,16 @@ designerOperations.push(
 
       const worked = await workOut(deps, ctx, a, answersOf(a, e), wells).catch(() => undefined);
       const calculated = await run<{
-        parts: { part: string; problems: string[] }[];
+        parts: {
+          part: string;
+          problems: string[];
+          bindings: { role: string; record?: string }[];
+          variables: { name: string; quantity?: Quantity }[];
+        }[];
         ready: boolean;
       }>(deps, ctx, 'experiments.calculate', { id: experiment.id, version: experiment.version });
       const problems = calculated.parts.flatMap((p) => p.problems.map((x) => `${p.part}: ${x}`));
+      const stock = await stockFor(deps, ctx, e, calculated.parts);
 
       const lines = needs.map((n) => {
         const words = n.capability.replaceAll('_', ' ');
@@ -360,7 +369,9 @@ designerOperations.push(
       else lines.push('Plates and wells wait for the subjects, given as records');
       if (problems.length) lines.push(...problems.map((p) => `Amounts: ${p}`));
       lines.push(
-        'Stock on hand is not checked yet; reagent volumes against stock come with reservations',
+        ...(stock.length
+          ? stock.map(stockLine)
+          : ['Stock: no SOP amount names the material it is drawn from, so stock is not checked']),
       );
       return {
         template: { id: template.id, name: template.name, version: e.template.version },
@@ -376,7 +387,11 @@ designerOperations.push(
             }
           : {}),
         amounts: { ready: calculated.ready, problems },
-        feasible: calculated.ready && needs.every((n) => n.verdict === 'ready'),
+        stock,
+        feasible:
+          calculated.ready &&
+          needs.every((n) => n.verdict === 'ready') &&
+          stock.every((x) => x.verdict !== 'short'),
         lines,
       };
     },
@@ -384,3 +399,117 @@ designerOperations.push(
 );
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+type Stock = z.infer<typeof designerFeasibility.output>['stock'][number];
+
+/** Stock on hand for every SOP amount that names the material it is drawn from (D6). */
+async function stockFor(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  e: ExperimentAttributes,
+  parts: {
+    part: string;
+    bindings: { role: string; record?: string }[];
+    variables: { name: string; quantity?: Quantity }[];
+  }[],
+): Promise<Stock[]> {
+  const records = new RecordService(deps.db, deps.kinds);
+  const reservedIn = new Map<string, Map<string, Quantity>>();
+  const reservations = async (container: string) => {
+    let wells = reservedIn.get(container);
+    if (!wells) {
+      const reserved = await run<{ wells: { well: string; reserved: Quantity }[] }>(
+        deps,
+        ctx,
+        'transfers.reserved',
+        { container },
+      );
+      wells = new Map(reserved.wells.map((w) => [w.well, w.reserved]));
+      reservedIn.set(container, wells);
+    }
+    return wells;
+  };
+  const stock: Stock[] = [];
+  for (const step of e.protocol) {
+    const sop = await recordAt(deps, ctx, step.sop.id, step.sop.version);
+    const worked = parts.find((p) => p.part === step.id);
+    for (const v of (sop?.attributes as SopAttributes | undefined)?.variables ?? []) {
+      if (!v.drawsFrom) continue;
+      const base = { part: step.id, variable: v.name, role: v.drawsFrom };
+      const needed = worked?.variables.find((x) => x.name === v.name)?.quantity;
+      const bound = worked?.bindings.find((b) => b.role === v.drawsFrom)?.record;
+      const record = bound ? await records.get(ctx, bound).catch(() => undefined) : undefined;
+      const named = record ? { id: record.id, name: record.name, label: record.label } : undefined;
+      const unknown = (note: string): Stock => ({
+        ...base,
+        ...(named ? { record: named } : {}),
+        ...(needed ? { needed } : {}),
+        verdict: 'unknown',
+        note,
+      });
+      if (!needed) {
+        stock.push(unknown(`${v.label} is not worked out yet`));
+        continue;
+      }
+      if (!record) {
+        stock.push(unknown(`No record is bound to ${v.drawsFrom}`));
+        continue;
+      }
+      if (!['product', 'lot', 'sample'].includes(record.kind)) {
+        stock.push(
+          unknown(`${record.name} is a ${record.kind.replaceAll('_', ' ')}, not kept in inventory`),
+        );
+        continue;
+      }
+      const where = await run<{
+        containers: {
+          container: RecordEnvelope;
+          wells: { well: string; volume: Quantity | 'unknown' }[];
+        }[];
+      }>(deps, ctx, 'inventory.where_is', { of: record.id });
+      const wells = [];
+      for (const c of where.containers) {
+        const reserved = await reservations(c.container.id);
+        for (const w of c.wells) wells.push({ volume: w.volume, reserved: reserved.get(w.well) });
+      }
+      try {
+        const checked = checkStock(needed, wells);
+        stock.push({
+          ...base,
+          record: named as NonNullable<Stock['record']>,
+          needed,
+          holds: checked.holds,
+          reserved: checked.reserved,
+          available: checked.available,
+          ...(checked.short ? { short: checked.short } : {}),
+          verdict: checked.verdict,
+          ...(checked.unknownWells
+            ? { note: `${checked.unknownWells} wells hold it with no volume recorded` }
+            : {}),
+        });
+      } catch (error) {
+        if (!(error instanceof StockError)) throw error;
+        stock.push(unknown(error.message));
+      }
+    }
+  }
+  return stock;
+}
+
+const stockLine = (s: Stock) => {
+  const what = s.record ? `${s.record.label} ${s.record.name}` : s.role.replaceAll('_', ' ');
+  const need = s.needed ? `needs ${formatQuantity(s.needed)}` : 'amount not worked out';
+  if (s.verdict === 'unknown') return `Stock of ${what}: ${need}; not checked: ${s.note}`;
+  const reserved =
+    s.reserved && Number(s.reserved.value) > 0
+      ? ` after ${formatQuantity(s.reserved)} reserved`
+      : '';
+  const available = s.available as Quantity;
+  const on =
+    Number(available.value) > 0
+      ? `${formatQuantity(available)} available${reserved}`
+      : `none available${reserved}`;
+  return s.verdict === 'enough'
+    ? `Stock of ${what}: ${need}, ${on}`
+    : `Stock of ${what}: ${need}, ${Number(available.value) > 0 ? 'only ' : ''}${on}; ${formatQuantity(s.short as Quantity)} short`;
+};

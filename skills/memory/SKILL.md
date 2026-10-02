@@ -22,7 +22,7 @@ The in-app assistant gets the memories for the page it is on without asking: mem
 
 The calculators already apply memory: `liquids.resolve_class` takes a class lab memory prefers (`how: "lab_memory"`) and passes over one it avoids, and `transfers.options` puts an instrument memory prefers first and one it avoids last among those that fit (give `samples` when you know it). Each names the memories in `memory`; say which memory shaped your choice.
 
-`memory.search {text?, about?, kind?, strength?, person?, status?}` finds memories, rules first. Check it before designing (an ELISA, a transfer plan) and before proposing a new memory, so the lab doesn't keep the same thing twice. `due: true` means it is due for a check: past its check-again date, more evidence against than for, or quiet for too many matching runs. It is still used, but say so and give the reason. When you fill a value from a memory, mark it with `memory` evidence: `{source: "memory", from: {id, version}}` of the confirmed memory.
+`memory.search {text?, about?, kind?, strength?, person?, status?}` finds memories, rules first. Check it before designing (an ELISA, a transfer plan) and before proposing a new memory, so the lab doesn't keep the same thing twice. `due: true` means it is due for a check: past its check-again date, more evidence against than for, or quiet for too many matching runs. It is still used, but say so and give the reason. Each result also names the records it is about (`aboutRecords`) and what detectors reported (`seen`, e.g. "seen in 7 runs, 1 against"). When you fill a value from a memory, mark it with `memory` evidence: `{source: "memory", from: {id, version}}` of the confirmed memory.
 
 ## Writing
 
