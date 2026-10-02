@@ -19,7 +19,7 @@ A modular monolith: one TypeScript API with clear module boundaries, a Python se
 | `packages/schema` | The single source: record envelope, quantities, actors, kinds, operation contracts, all in Zod 4; JSON Schema generated into `generated/` |
 | `packages/domain` | Pure logic with unit tests and no I/O: units and exact decimal math, IDs and names, readiness, labware geometry (well names, computed wells, SBS rules, liquid height for flat wells), Opentrons import and export; later liquid-class resolution, mixing math, plate-map placement, transfer solving, the SOP expression language |
 | `packages/client` | The typed API client used by the web app and tests |
-| `packages/twin` | Ported from echo650-twin in plan 015 |
+| `packages/twin` | Twin behaviour templates, timing evaluator, upload checker and 3D viewer wrapper (plan 015); twins themselves are uploaded data |
 | `packages/scheduler` | Plan 019: echo650-twin's dispatch and exposure kernel, adapted, plus people, calendars, carries and stress cases |
 
 ## The operation registry
