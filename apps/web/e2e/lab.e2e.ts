@@ -1230,3 +1230,69 @@ test('a record carries its lab notes, and a memory shows where it came from', as
   await page.getByRole('link', { name: /^Applied in/ }).click();
   await expect(page.getByText('No record has a value filled from this memory yet.')).toBeVisible();
 });
+
+test("an experiment's Overview rolls up its design, and its Transfers tab lists its plans", async ({
+  page,
+  request,
+}) => {
+  const stamp = Date.now();
+  await signIn(page);
+  const layout = await confirmAll(
+    page,
+    (
+      await asAgent(request, 'layouts.draft', {
+        label: `Design layout ${stamp}`,
+        wells: 96,
+        subjectRole: 'sample',
+        subjectRegion: ['columns 3-12'],
+        replicates: 2,
+      })
+    ).output,
+  );
+  const campaign = await confirmAll(
+    page,
+    await asPerson(page, 'campaigns.draft', {
+      label: `Design panel ${stamp}`,
+      goal: 'See the design on one page',
+      aims: [{ id: 'aim_1', text: 'Lay out the plates' }],
+    }),
+  );
+  const experiment = await asPerson(page, 'experiments.draft', {
+    label: `Designed experiment ${stamp}`,
+    campaign: campaign.id,
+    aim: 'aim_1',
+    question: 'Does the design read on its own page?',
+  });
+  const kind = (
+    await asAgent(request, 'entities.draft_kind', {
+      label: `Lysate ${stamp}`,
+      attributes: {
+        base: 'chemical',
+        prefix: `L${String(stamp)
+          .slice(-4)
+          .replace(/\d/g, (d) => 'ABCDEFGHIJ'[Number(d)] ?? 'A')}`,
+        fields: [],
+      },
+    })
+  ).output;
+  const donor = (
+    await asAgent(request, 'entities.draft', { label: 'Donor A', entityKind: kind.id })
+  ).output;
+  const map = (
+    await asAgent(request, 'platemaps.draft', {
+      label: `Design plates ${stamp}`,
+      layout: layout.id,
+      experiment: experiment.id,
+      subjects: [{ record: donor.id }],
+    })
+  ).output;
+
+  await page.goto(`/records/${experiment.id}`);
+  const design = page.getByRole('region', { name: 'Design' });
+  await expect(design).toContainText('0 of 2 confirmed');
+  await expect(design.getByRole('link', { name: map.label })).toBeVisible();
+  await page.getByRole('link', { name: /^Transfers/ }).click();
+  await expect(page.getByRole('region', { name: 'Transfers' })).toContainText(
+    'No transfer plans for this experiment yet',
+  );
+});

@@ -30,6 +30,7 @@ import {
 import { formatValue, formatWhen } from '../lib/format.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
 import { Head, page } from './AreaHead.tsx';
+import { DesignBlock, FeasibilityBlock } from './DesignBlocks.tsx';
 import { useLabels } from './Instruments.tsx';
 import { RecordList } from './Records.tsx';
 
@@ -228,6 +229,8 @@ export function ExperimentBlocks({ record }: { record: RecordEnvelope }) {
   return (
     <>
       <NextStepBlock record={record} />
+      <DesignBlock record={record} />
+      <FeasibilityBlock record={record} />
       <RunsBlock record={record} />
       <ConclusionBlock record={record} />
     </>

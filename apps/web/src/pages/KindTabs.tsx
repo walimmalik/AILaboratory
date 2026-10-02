@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { api } from '../api.ts';
 import { formatShortDay, isAgent } from '../lib/format.ts';
 import { recordQuery, recordsQuery } from '../queries.ts';
+import { ExperimentTransfers } from './DesignBlocks.tsx';
 import { MemoryAppliedTab, MemoryEvidenceTab } from './LabNotes.tsx';
 import { PlateView } from './PlateMaps.tsx';
 
@@ -36,6 +37,13 @@ export const kindTabs: Partial<Record<string, KindTab[]>> = {
       label: 'Plates',
       count: mapsVia('part_of'),
       render: (r) => <ExperimentPlates record={r} />,
+    },
+    {
+      id: 'transfers',
+      label: 'Transfers',
+      count: (_, usedIn) =>
+        usedIn.filter((c) => c.other.kind === 'transfer_plan' && c.relation === 'part_of').length,
+      render: (r) => <ExperimentTransfers record={r} />,
     },
   ],
   // A memory's evidence and where it filled values (plan 005, M11, M17).
