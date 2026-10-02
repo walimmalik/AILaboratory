@@ -88,14 +88,26 @@ async function retire(
 export const memoryOperations = [
   implement(memoryPropose, {
     agentPolicy: 'direct',
-    run: async (ctx, { evidence, reason, ...input }, deps) =>
-      service(deps).create(ctx, {
+    run: async (ctx, { evidence, reason, ...input }, deps) => {
+      // A memory a person said is theirs as stated, not the agent's guess (UX review 2026-10-02, #3).
+      const said =
+        ctx.actor.type === 'agent' &&
+        !evidence?.source &&
+        (input.source.from === 'stated' || input.source.from === 'conversation');
+      const named = {
+        ...(said
+          ? { source: { source: 'stated' as const, note: 'Where the person said it' } }
+          : {}),
+        ...evidence,
+      };
+      return service(deps).create(ctx, {
         kind: 'memory',
         label: labelOf(input.statement),
         attributes: attributesOf(input),
-        ...(evidence ? { evidence } : {}),
+        ...(Object.keys(named).length ? { evidence: named } : {}),
         reason: reason ?? 'Proposed for the lab memory',
-      }),
+      });
+    },
   }),
   implement(memoryRemember, {
     actors: 'people',

@@ -5,6 +5,7 @@ import { entityOverviews } from '../entities/overview.ts';
 import { instrumentOverviews } from '../instruments/overview.ts';
 import { inventoryOverviews } from '../inventory/overview.ts';
 import { labwareOverviews } from '../labware/overview.ts';
+import { memoryOverviews } from '../memory/overview.ts';
 import { platemapOverviews } from '../platemaps/overview.ts';
 import { reagentOverviews } from '../reagents/overview.ts';
 import {
@@ -27,6 +28,7 @@ const builders: Record<string, OverviewBuilder> = {
   ...instrumentOverviews,
   ...inventoryOverviews,
   ...labwareOverviews,
+  ...memoryOverviews,
   ...platemapOverviews,
   ...reagentOverviews,
 };
@@ -45,7 +47,6 @@ export const FALLBACK_KINDS = new Set([
   'liquid_class',
   'liquid_class_verification',
   'liquid_type',
-  'memory',
   'run',
   'set',
   'sop',

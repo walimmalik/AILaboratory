@@ -27,7 +27,7 @@ templates:
         reason: High protein binding, as the kit insert asks
     essentials:
       - { input: subjects, id: samples, label: Which samples, kinds: [sample, container], max: 40 }
-      - { input: variable, id: dilution, label: Sample dilution, part: assay, variable: sample_dilution }
+      - { input: variable, id: dilution, label: Sample dilution (fold), part: assay, variable: sample_dilution }
     factors:
       - { id: sample, label: Sample, from: samples }
     controls:

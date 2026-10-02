@@ -1,5 +1,11 @@
 import { checkAgainFor } from '@ailab/domain';
-import type { Actor, MemoryAttributes, RecordEnvelope, ReviewItem } from '@ailab/schema';
+import type {
+  Actor,
+  MemoryAttributes,
+  RecordEnvelope,
+  RecordOverview,
+  ReviewItem,
+} from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { createTestDb } from '../db/testing.ts';
@@ -99,6 +105,8 @@ describe('memory.propose and memory.remember', () => {
       source: { from: 'conversation', note: 'Wali, in chat' },
     });
     expect(quirk).toMatchObject({ kind: 'memory', name: 'MEM-0001', status: 'draft' });
+    // What a person said in chat is stated, not the agent's guess.
+    expect(quirk.evidence.source).toMatchObject({ source: 'stated' });
     expect(attributes(quirk)).toMatchObject({
       strength: 'note',
       appliesTo: { to: 'lab' },
@@ -141,6 +149,15 @@ describe('memory.propose and memory.remember', () => {
     });
     expect(preference.status).toBe('active');
     expect(attributes(preference).checkAgain).toBeUndefined();
+
+    // The record page leads with what it is and what it covers, not the statement again (#9).
+    const page = await run<RecordOverview>(person, 'records.overview', { id: quirk.id });
+    expect(page.identity.map((p) => p.text)).toEqual(['Lab memory', 'Note', 'quirk']);
+    expect(page.facts.map((f) => [f.label, f.value])).toEqual([
+      ['applies to', 'the whole lab'],
+      ['about', kind.label],
+      ['check again', expect.any(String)],
+    ]);
   });
 
   it("lists a memory past its check-again date in Review's notices (M6)", async () => {

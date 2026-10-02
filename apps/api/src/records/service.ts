@@ -880,7 +880,7 @@ async function checkCalculatedEvidence(
 /**
  * Each value named as copied (`record`, `template`) must come from a record in this lab, at a
  * version that exists and was active; with a `path`, the value there must be the value set (ADR
- * 0049). Lab memory (`memory`) must cite a memory confirmed at that version (plan 005a).
+ * 0049). A field holding the cited record's id is a link, not a copy, and may cite a draft. Lab memory (`memory`) must cite a memory confirmed at that version (plan 005a).
  */
 async function checkCopiedEvidence(
   db: Db,
@@ -921,7 +921,10 @@ async function checkCopiedEvidence(
         `${key} is marked copied from ${source.name} version ${from.version}, which it doesn't have`,
       );
     }
-    if (version.snapshot.status !== 'active') {
+    // A field that holds the cited record's own id links to it and copies nothing, so a draft may
+    // be cited: a plate map drafted for an experiment still in draft (UX review 2026-10-02, #3).
+    const links = given.source === 'record' && !from.path && attributes[key] === from.id;
+    if (version.snapshot.status !== 'active' && !links) {
       throw new RecordError(
         'invalid_input',
         `${key} is marked copied from ${source.name} version ${from.version}, which was ${version.snapshot.status}, not confirmed; copy from a confirmed version`,

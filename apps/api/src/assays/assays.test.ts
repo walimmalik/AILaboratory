@@ -506,6 +506,17 @@ describe('designer.start', () => {
     expect(e.evidence?.question).toMatchObject({ source: 'assumed' });
     expect(e.evidence?.protocol).toMatchObject({ source: 'template', from: { id: saved.id } });
     expect(result.plateMap).toMatchObject({ kind: 'plate_map', status: 'draft' });
+    // Values the designer set are sourced, not marked as an agent's guesses.
+    expect(e.evidence?.template).toMatchObject({ source: 'template', from: { id: saved.id } });
+    expect(result.plateMap?.evidence).toMatchObject({
+      layout: { source: 'template', from: { id: saved.id, path: '/layout' } },
+      experiment: { source: 'record', from: { id: e.id, version: e.version } },
+    });
+    const mapReadiness = await run<Readiness>(person, 'records.readiness', {
+      id: result.plateMap?.id,
+    });
+    expect(mapReadiness.assumed).not.toContain('layout');
+    expect(mapReadiness.assumed).not.toContain('experiment');
     expect(result.plateMap?.attributes).toMatchObject({
       experiment: e.id,
       subjects: samples.map((s) => ({ record: s.id })),
@@ -549,6 +560,18 @@ describe('designer.start', () => {
         )
       ).message,
     ).toBe('Still needed: Sample dilution');
+    // A ratio is refused by the input's own label, asking for the fold (UX review 2026-10-02, #19).
+    const ratio = await refused(
+      run(agent, 'designer.start', {
+        template: saved.id,
+        campaign: campaign.id,
+        answers: { samples: samples.map((s) => s.id), dilution: '1:4' },
+      }),
+    );
+    expect(ratio).toMatchObject({ code: 'invalid_input' });
+    expect(ratio.message).toBe(
+      'Sample dilution: give one number, not "1:4"; for a dilution, give the fold (4 for 4-fold)',
+    );
     const { template } = await setup();
     const draft = await run(agent, 'assays.draft_template', { ...template, label: 'Draft ELISA' });
     expect(
