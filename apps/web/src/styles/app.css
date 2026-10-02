@@ -1925,7 +1925,19 @@ ul.rules {
 .plate-wrap {
   overflow-x: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+/* The grid scrolls inside its block, so the legend and tools stay in view. */
+.plate-scroll {
+  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.scroll-cue {
+  display: none;
+  margin: 0;
+  font-size: 12px;
 }
 .plate {
   --well-min: 28px;
@@ -1946,6 +1958,15 @@ ul.rules {
   --well-max: 30px;
   gap: 3px;
   font-size: 10px;
+}
+@media (max-width: 640px) {
+  .scroll-cue {
+    display: block;
+  }
+  .plate:not(.dense) {
+    --well-min: 20px;
+    gap: 3px;
+  }
 }
 .plate .axis {
   color: var(--ink-3);

@@ -4,8 +4,8 @@ import { layoutSpec, subjectOf } from './spec.ts';
 
 /**
  * Works a plate map out from its pinned layout version, subjects, seed and overrides (014 P4, M3).
- * `name` gives a record's readable name for the wells' labels. Throws PlateMapError when the
- * layout can't place them.
+ * `name` gives the wells' labels: a record's label with its code after it ("Donor 1 (SUA-0001)").
+ * Throws PlateMapError when the layout can't place them.
  */
 export async function planPlateMap(
   a: PlateMapAttributes,
@@ -16,7 +16,7 @@ export async function planPlateMap(
   const name = async (id: string) => {
     if (!names.has(id)) {
       const record = await get(id);
-      names.set(id, record ? `${record.name} ${record.label}` : id);
+      names.set(id, record ? `${record.label} (${record.name})` : id);
     }
     return names.get(id) as string;
   };
