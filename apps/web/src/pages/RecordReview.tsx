@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { api } from '../api.ts';
 import { partLabel, problemWords } from '../lib/format.ts';
 import { kindsQuery } from '../queries.ts';
+import { FromLabMemory } from './LabNotes.tsx';
 
 export { fieldLabel } from '../lib/format.ts';
 
@@ -116,6 +117,7 @@ export function ReadinessBlock({
             if (section) onFix(section.id);
           }}
         />
+        <FromLabMemory record={record} />
         {readiness.checks.some((c) => !c.passed) && (
           <Checks
             checks={readiness.checks}

@@ -214,6 +214,7 @@ export const candidateOperations = [
           and(
             eq(memoryCandidates.labId, ctx.labId),
             input.detector ? eq(memoryCandidates.detector, input.detector) : undefined,
+            input.memory ? eq(memoryCandidates.memory, input.memory) : undefined,
           ),
         )
         .orderBy(desc(memoryCandidates.updatedAt));

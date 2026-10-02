@@ -277,6 +277,7 @@ export const memoryCandidates = defineContract({
   effect: 'read',
   input: z.strictObject({
     detector: z.string().min(1).optional(),
+    memory: MemoryId.optional().describe('Only what was reported about this memory: its evidence'),
     status: MemoryCandidate.shape.status.optional(),
     limit: z.number().int().min(1).max(200).optional().describe('Default 50'),
   }),

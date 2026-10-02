@@ -39,6 +39,7 @@ import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experi
 import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { kindTabs } from './KindTabs.tsx';
+import { LabNotes } from './LabNotes.tsx';
 import { LabwareDrawing } from './LabwareDrawing.tsx';
 import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
@@ -220,6 +221,7 @@ export function RecordPage() {
           {overview && overview.facts.length > 0 && (
             <KeyFacts facts={overview.facts} marked={unsourcedFields(r, readiness)} />
           )}
+          <LabNotes record={r} />
           {isSop && readiness ? (
             <SopPage record={r} readiness={readiness} editing={editing} onEdit={setEditing} />
           ) : (

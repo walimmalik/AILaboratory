@@ -130,6 +130,23 @@ describe('memory.observe', () => {
       status: 'proposed',
     });
     expect(listed.candidates).toHaveLength(1);
+    // A memory's own evidence, by the memory it proposed.
+    const evidence = await run<{ candidates: { observations: unknown[] }[] }>(
+      person,
+      'memory.candidates',
+      { memory: passed.proposed?.id },
+    );
+    expect(evidence.candidates[0]?.observations).toHaveLength(4);
+    const none = await run<{ candidates: unknown[] }>(person, 'memory.candidates', {
+      memory: (
+        await run<RecordEnvelope>(person, 'memory.remember', {
+          statement: 'Unrelated',
+          kind: 'fact',
+          source: stated,
+        })
+      ).id,
+    });
+    expect(none.candidates).toHaveLength(0);
   });
 
   it('refuses a bad detector, a rule, and evidence from another lab', async () => {

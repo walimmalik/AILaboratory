@@ -2697,3 +2697,9 @@ span.row-actions {
   color: var(--ink);
   font-weight: 600;
 }
+.lab-notes .btn {
+  margin-top: 6px;
+}
+.from-memory {
+  margin: 0;
+}
