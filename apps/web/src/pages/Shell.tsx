@@ -38,11 +38,12 @@ function ShellLayout() {
   const navigate = useNavigate();
   const assistant = useAssistant();
   // At laptop width, or with the assistant open below a wide screen, the module list folds behind
-  // a Menu button so tables keep their columns. Phones get the row of links instead (CSS).
+  // a Menu button so tables keep their columns. On a phone it does too, with the theme and sign
+  // out inside it, so the header is one line and every entry is in the menu (review 2026-10-02).
   const wide = useMedia('(min-width: 1600px)');
   const roomy = useMedia('(min-width: 1200px)');
   const phone = !useMedia('(min-width: 721px)');
-  const compact = !phone && (!roomy || (assistant.open && !wide));
+  const compact = phone || !roomy || (assistant.open && !wide);
   const [menu, setMenu] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
   // The area the page belongs to: a tab's own path, or a record's (or new record's) kind.
@@ -65,6 +66,27 @@ function ShellLayout() {
     queryClient.clear();
     await navigate({ to: '/sign-in' });
   };
+
+  const settings = (
+    <>
+      <fieldset className="segmented">
+        <legend className="sr-only">Theme</legend>
+        {themes.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={theme === value}
+            onClick={() => setTheme(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </fieldset>
+      <button type="button" className="btn small" onClick={signOut}>
+        Sign out
+      </button>
+    </>
+  );
 
   return (
     <div
@@ -95,22 +117,7 @@ function ShellLayout() {
         >
           Assistant
         </button>
-        <fieldset className="segmented">
-          <legend className="sr-only">Theme</legend>
-          {themes.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={theme === value}
-              onClick={() => setTheme(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </fieldset>
-        <button type="button" className="btn small" onClick={signOut}>
-          Sign out
-        </button>
+        {!phone && settings}
       </header>
 
       <nav className="nav" id="modules" aria-label="Modules">
@@ -184,6 +191,7 @@ function ShellLayout() {
             </li>
           </ul>
         </section>
+        {phone && <section className="nav-settings">{settings}</section>}
       </nav>
 
       <main className="page">

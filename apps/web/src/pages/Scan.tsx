@@ -5,6 +5,7 @@ import {
   inventoryMove,
   inventoryScan,
   type LiquidVolume,
+  type PlacePath,
   type RecordEnvelope,
 } from '@ailab/schema';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -82,7 +83,15 @@ export function ScanPage() {
           Find
         </button>
       </form>
-      {lookup.error && <p className="error-text">{lookup.error.message}</p>}
+      {lookup.error && (
+        <p className="error-text">
+          {lookup.error.message}.{' '}
+          {/* A name rather than a code: Stock finds things by what they are called. */}
+          <Link to="/inventory" search={{ find: lookup.variables?.trim() ?? '' }}>
+            Find “{lookup.variables?.trim()}” in Stock
+          </Link>
+        </p>
+      )}
       {done && <p className="muted">{done}</p>}
       {found && <FoundBlock found={found} onChanged={refresh} />}
     </>
@@ -113,7 +122,8 @@ function FoundBlock({
           <b>{record.label}</b>
           {discarded && <span className="chip archived"> discarded</span>}
         </p>
-        {path && <p className="muted">{pathWords(path) || 'Place not known'}</p>}
+        {/* Where it is, from the room down to what holds it; the record is not part of its own place. */}
+        {path && <p className="muted">{whereWords(path, record.id)}</p>}
         <p>
           <Link to="/records/$id" params={{ id: record.id }}>
             Open {record.name}
@@ -125,6 +135,14 @@ function FoundBlock({
       </div>
     </section>
   );
+}
+
+/** "Cold room › Box 7, position B3": the record's own entry gives only its position. */
+function whereWords(path: PlacePath, self: string): string {
+  const above = pathWords(path.filter((p) => p.id !== self));
+  const position = path.find((p) => p.id === self)?.position;
+  if (!above) return 'Place not known';
+  return position ? `${above}, position ${position}` : above;
 }
 
 const units: LiquidVolume['unit'][] = ['uL', 'mL', 'nL', 'L'];

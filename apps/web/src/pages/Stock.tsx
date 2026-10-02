@@ -10,7 +10,7 @@ import {
   type RecordEnvelope,
 } from '@ailab/schema';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useDeferredValue, useState } from 'react';
 import { api } from '../api.ts';
 import { formatDay } from '../lib/format.ts';
@@ -154,7 +154,8 @@ function PlaceSelect({
  * same list an agent reads with `inventory.overview`.
  */
 export function StockPage() {
-  const [text, setText] = useState('');
+  const sent = useSearch({ strict: false }) as { find?: string };
+  const [text, setText] = useState(sent.find ?? '');
   const [type, setType] = useState<TypeFilter>('all');
   const [place, setPlace] = useState('');
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());

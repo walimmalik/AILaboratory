@@ -114,6 +114,9 @@ const inventory = createRoute({
   getParentRoute: () => app,
   path: '/inventory',
   component: StockPage,
+  // What to find, when another page sends a name here (Scan's "Find it in Stock").
+  validateSearch: (search: Record<string, unknown>): { find?: string } =>
+    typeof search.find === 'string' ? { find: search.find } : {},
 });
 const reagents = createRoute({
   getParentRoute: () => app,
