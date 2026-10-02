@@ -91,6 +91,7 @@ export function LabwarePage() {
           },
           {
             header: 'Catalog no.',
+            secondary: true,
             cell: (r) => labwareOf(r).catalogNumber ?? '—',
             className: 'mono',
           },

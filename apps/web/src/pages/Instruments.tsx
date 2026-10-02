@@ -57,6 +57,7 @@ export function InstrumentsPage() {
         columns={[
           {
             header: 'Short name',
+            secondary: true,
             cell: (r) => of(r).shortName ?? '—',
             className: 'mono',
           },
@@ -76,7 +77,7 @@ export function InstrumentsPage() {
             },
           },
           { header: 'Model', cell: (r) => models.get(of(r).kind ?? '') ?? '…' },
-          { header: 'Room', cell: (r) => of(r).room ?? '—', className: 'muted' },
+          { header: 'Room', cell: (r) => of(r).room ?? '—', className: 'muted', secondary: true },
           {
             header: 'Calibration due',
             cell: (r) => of(r).calibrationDue ?? '—',
