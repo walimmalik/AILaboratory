@@ -114,9 +114,15 @@ export const memoryOperations = [
   }),
   implement(memoryUpdate, {
     agentPolicy: proposeIfActive,
-    run: async (ctx, { id, expectedVersion, evidence, reason, ...changes }, deps) => {
+    run: async (ctx, { id, expectedVersion, evidence, reason, when, ...changes }, deps) => {
       const { record, a } = await memoryOf(deps, ctx, id);
-      const attributes = { ...a, ...changes } as MemoryAttributes;
+      const { when: before, ...kept } = a;
+      const after = when === null ? undefined : (when ?? before);
+      const attributes = {
+        ...kept,
+        ...(after ? { when: after } : {}),
+        ...changes,
+      } as MemoryAttributes;
       if (record.status === 'active') ownedBy(ctx, attributes);
       return service(deps).update(ctx, id, {
         expectedVersion,

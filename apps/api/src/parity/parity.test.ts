@@ -48,10 +48,8 @@ const noScreen: Record<string, string> = {
   'transfers.set_instrument': transferScreens,
   'transfers.set_deck': transferScreens,
   'worklists.draft_format': transferScreens,
-  'memory.propose': notYet('the Lab memory page and Remember card come with 005d'),
-  'memory.update': notYet('the Lab memory page comes with 005d'),
-  'memory.retire': notYet('the Lab memory page comes with 005d'),
-  'memory.replace': notYet('the Lab memory page comes with 005d'),
+  'memory.propose':
+    'Agents propose lab memory; a person states it with memory.remember and confirms a proposal on its Remember card, the Lab memory page or Review',
   'memory.observe':
     'Detectors and agents reading results report observations; a person states a memory with memory.remember instead',
   'campaigns.set_stage': notYet('the campaign and experiment pages show the stage only'),

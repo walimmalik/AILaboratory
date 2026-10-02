@@ -1120,6 +1120,24 @@ test('a person adds a lab note on the Lab memory page and finds it under its gro
   await expect(labWide.getByText(/^Rule · convention/).first()).toBeVisible();
   await page.getByRole('searchbox', { name: 'Find lab memory' }).fill(statement);
   await expect(page.getByText('1 shown')).toBeVisible();
+
+  // Correct its wording in place, then retire it with why.
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  const change = page.getByRole('form', { name: /^Change MEM-/ });
+  await change.getByLabel('What the lab should know').fill(`${statement}, both sides`);
+  await change.getByRole('button', { name: 'Save' }).click();
+  await expect(
+    page.getByRole('link', { name: new RegExp(`${statement}, both sides`) }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Change', exact: true }).click();
+  await change.getByRole('button', { name: 'Retire it' }).click();
+  await change.getByLabel('Why it no longer holds').fill('The washer now seals its own plates');
+  await change.getByRole('button', { name: 'Retire', exact: true }).click();
+  await expect(page.getByRole('link', { name: new RegExp(statement) })).toBeHidden();
+  await page.getByRole('button', { name: 'Retired', exact: true }).click();
+  await expect(
+    page.getByRole('link', { name: new RegExp(`${statement}, both sides`) }),
+  ).toBeVisible();
 });
 
 test('the assistant asks to remember something for the lab, and says which lab notes it used', async ({

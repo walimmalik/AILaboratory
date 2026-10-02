@@ -1,7 +1,16 @@
-import { type MemoryKind, type MemoryStrength, memoryRemember, memorySearch } from '@ailab/schema';
+import {
+  type MemoryKind,
+  type MemoryStrength,
+  memoryRemember,
+  memoryReplace,
+  memoryRetire,
+  memorySearch,
+  memoryUpdate,
+  recordsConfirm,
+} from '@ailab/schema';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useDeferredValue, useState } from 'react';
+import { type ReactNode, useDeferredValue, useState } from 'react';
 import { api } from '../api.ts';
 import {
   type AboutRecord,
@@ -206,6 +215,7 @@ export function MemoryRows({
   under?: AboutRecord | undefined;
 }) {
   const me = useMe();
+  const [changing, setChanging] = useState<string>();
   return (
     <ul className="plain memory-rows">
       {memories.map((m) => {
@@ -228,7 +238,19 @@ export function MemoryRows({
                   </Link>
                 </span>
               ))}
+              {m.status !== 'archived' && changing !== m.id && (
+                <>
+                  {' · '}
+                  <button type="button" className="btn small" onClick={() => setChanging(m.id)}>
+                    Change
+                  </button>
+                </>
+              )}
             </div>
+            {m.status === 'draft' && <ConfirmDraft memory={m} />}
+            {changing === m.id && (
+              <ChangeMemory memory={m} onClose={() => setChanging(undefined)} />
+            )}
           </li>
         );
       })}
@@ -279,61 +301,14 @@ export function AddNote({ onClose, about }: { onClose: () => void; about?: About
             remember.mutate();
           }}
         >
-          <label className="form-row">
-            <span className="name">What the lab should know</span>
-            <span className="control">
-              <textarea
-                className="field grow"
-                rows={2}
-                maxLength={500}
-                required
-                placeholder="e.g. Block ELISA plates with 2% BSA in PBS, never milk"
-                value={statement}
-                onChange={(e) => setStatement(e.target.value)}
-              />
-            </span>
-          </label>
-          <div className="form-row">
-            <span className="name">Kind</span>
-            <span className="control">
-              <select
-                className="field"
-                aria-label="Kind"
-                value={kind}
-                onChange={(e) => setKind(e.target.value as MemoryKind)}
-              >
-                {kinds.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label.replace(/s$/, '').toLowerCase()}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </div>
-          <div className="form-row">
-            <span className="name">How strongly</span>
-            <span className="control">
-              <fieldset className="segmented">
-                <legend className="sr-only">How strongly</legend>
-                {(
-                  [
-                    ['note', 'Note: only informs'],
-                    ['default', 'Default: fills a value'],
-                    ['rule', 'Rule: designs follow it'],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={strength === value}
-                    onClick={() => setStrength(value)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </fieldset>
-            </span>
-          </div>
+          <MemoryFieldRows
+            statement={statement}
+            setStatement={setStatement}
+            kind={kind}
+            setKind={setKind}
+            strength={strength}
+            setStrength={setStrength}
+          />
           {!about && (
             <div className="form-row">
               <span className="name">About</span>
@@ -348,18 +323,7 @@ export function AddNote({ onClose, about }: { onClose: () => void; about?: About
               </span>
             </div>
           )}
-          <label className="form-row">
-            <span className="name">When it applies</span>
-            <span className="control">
-              <input
-                className="field grow"
-                placeholder="optional, e.g. volumes below 5 µL"
-                value={when}
-                maxLength={300}
-                onChange={(e) => setWhen(e.target.value)}
-              />
-            </span>
-          </label>
+          <WhenRow when={when} setWhen={setWhen} />
           <label className="form-row">
             <span className="name">Who it is for</span>
             <span className="control">
@@ -383,5 +347,254 @@ export function AddNote({ onClose, about }: { onClose: () => void; about?: About
         </form>
       </div>
     </section>
+  );
+}
+
+function MemoryFieldRows({
+  statement,
+  setStatement,
+  kind,
+  setKind,
+  strength,
+  setStrength,
+}: {
+  statement: string;
+  setStatement: (v: string) => void;
+  kind: MemoryKind;
+  setKind: (v: MemoryKind) => void;
+  strength: MemoryStrength;
+  setStrength: (v: MemoryStrength) => void;
+}) {
+  return (
+    <>
+      <label className="form-row">
+        <span className="name">What the lab should know</span>
+        <span className="control">
+          <textarea
+            className="field grow"
+            rows={2}
+            maxLength={500}
+            required
+            placeholder="e.g. Block ELISA plates with 2% BSA in PBS, never milk"
+            value={statement}
+            onChange={(e) => setStatement(e.target.value)}
+          />
+        </span>
+      </label>
+      <div className="form-row">
+        <span className="name">Kind</span>
+        <span className="control">
+          <select
+            className="field"
+            aria-label="Kind"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as MemoryKind)}
+          >
+            {kinds.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label.replace(/s$/, '').toLowerCase()}
+              </option>
+            ))}
+          </select>
+        </span>
+      </div>
+      <div className="form-row">
+        <span className="name">How strongly</span>
+        <span className="control">
+          <fieldset className="segmented">
+            <legend className="sr-only">How strongly</legend>
+            {(
+              [
+                ['note', 'Note: only informs'],
+                ['default', 'Default: fills a value'],
+                ['rule', 'Rule: designs follow it'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={strength === value}
+                onClick={() => setStrength(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+        </span>
+      </div>
+    </>
+  );
+}
+
+function WhenRow({ when, setWhen }: { when: string; setWhen: (v: string) => void }) {
+  return (
+    <label className="form-row">
+      <span className="name">When it applies</span>
+      <span className="control">
+        <input
+          className="field grow"
+          placeholder="optional, e.g. volumes below 5 µL"
+          value={when}
+          maxLength={300}
+          onChange={(e) => setWhen(e.target.value)}
+        />
+      </span>
+    </label>
+  );
+}
+
+/** An agent's draft memory: one Confirm makes it lab memory (rule 8). */
+function ConfirmDraft({ memory }: { memory: ShownMemory }) {
+  const queryClient = useQueryClient();
+  const confirm = useMutation({
+    mutationFn: () => api.run(recordsConfirm, { id: memory.id, expectedVersion: memory.version }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['memory'] }),
+  });
+  return (
+    <div className="toolbar">
+      <button
+        type="button"
+        className="btn small primary"
+        disabled={confirm.isPending}
+        onClick={() => confirm.mutate()}
+      >
+        Confirm
+      </button>
+      {confirm.error && <span className="error-text">{confirm.error.message}</span>}
+    </div>
+  );
+}
+
+type Change = 'correct' | 'replace' | 'retire';
+
+const changes: [Change, string, string][] = [
+  [
+    'correct',
+    'Correct it',
+    'Fix how it is worded or how strongly it holds; it stays the same memory.',
+  ],
+  [
+    'replace',
+    'Replace it',
+    'The lab changed: a new memory takes over, and this one is kept as retired, linked to it.',
+  ],
+  ['retire', 'Retire it', 'It no longer holds: it stays in history and stops applying.'],
+];
+
+/**
+ * Change a memory in place (005d-3): correct it (memory.update), replace it with a new one
+ * (memory.replace, active memories only) or retire it with why (memory.retire).
+ */
+function ChangeMemory({ memory, onClose }: { memory: ShownMemory; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const a = memoryOf(memory);
+  const [change, setChange] = useState<Change>('correct');
+  const [statement, setStatement] = useState(a.statement);
+  const [kind, setKind] = useState<MemoryKind>(a.kind);
+  const [strength, setStrength] = useState<MemoryStrength>(a.strength);
+  const [when, setWhen] = useState(a.when ?? '');
+  const [why, setWhy] = useState('');
+  const offered = changes.filter(([c]) => c !== 'replace' || memory.status === 'active');
+  const save = useMutation({
+    mutationFn: async () => {
+      const target = { id: memory.id, expectedVersion: memory.version };
+      if (change === 'retire') return api.run(memoryRetire, { ...target, why: why.trim() });
+      const fields = {
+        statement: statement.trim(),
+        kind,
+        strength,
+      };
+      if (change === 'correct')
+        return api.run(memoryUpdate, { ...target, ...fields, when: when.trim() || null });
+      const { retired: _, checkAgain: __, when: ___, ...kept } = a;
+      return api.run(memoryReplace, {
+        ...target,
+        why: why.trim(),
+        with: {
+          ...kept,
+          ...fields,
+          ...(when.trim() ? { when: when.trim() } : {}),
+          source: { from: 'stated' as const },
+        },
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['memory'] });
+      onClose();
+    },
+  });
+  const ready =
+    change === 'retire'
+      ? why.trim() !== ''
+      : statement.trim() !== '' && (change === 'correct' || why.trim() !== '');
+  const hint: ReactNode = changes.find(([c]) => c === change)?.[2];
+  return (
+    <form
+      className="form-rows memory-change"
+      aria-label={`Change ${memory.name}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <div className="form-row">
+        <span className="name">Change</span>
+        <span className="control">
+          <fieldset className="segmented">
+            <legend className="sr-only">Change</legend>
+            {offered.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={change === value}
+                onClick={() => setChange(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+          <span className="muted">{hint}</span>
+        </span>
+      </div>
+      {change !== 'retire' && (
+        <>
+          <MemoryFieldRows
+            statement={statement}
+            setStatement={setStatement}
+            kind={kind}
+            setKind={setKind}
+            strength={strength}
+            setStrength={setStrength}
+          />
+          <WhenRow when={when} setWhen={setWhen} />
+        </>
+      )}
+      {change !== 'correct' && (
+        <label className="form-row">
+          <span className="name">
+            {change === 'retire' ? 'Why it no longer holds' : 'What changed'}
+          </span>
+          <span className="control">
+            <input
+              className="field grow"
+              required
+              maxLength={300}
+              placeholder="e.g. the STAR was serviced on 2026-10-01"
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+            />
+          </span>
+        </label>
+      )}
+      {save.error && <p className="error-text">{save.error.message}</p>}
+      <div className="toolbar">
+        <button type="submit" className="btn primary" disabled={!ready || save.isPending}>
+          {change === 'retire' ? 'Retire' : change === 'replace' ? 'Replace' : 'Save'}
+        </button>
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

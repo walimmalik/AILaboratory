@@ -234,10 +234,28 @@ describe('memory.update, memory.retire and memory.replace', () => {
     });
     expect(edited).toMatchObject({ label: 'Block ELISA plates with 2% BSA in PBS, not milk' });
     expect(attributes(edited)).toMatchObject({ strength: 'default', kind: 'convention' });
+    const narrowed = await run<RecordEnvelope>(agent, 'memory.update', {
+      id: edited.id,
+      expectedVersion: edited.version,
+      when: 'for ELISA plates',
+    });
+    expect(attributes(narrowed).when).toBe('for ELISA plates');
+    const kept = await run<RecordEnvelope>(agent, 'memory.update', {
+      id: edited.id,
+      expectedVersion: narrowed.version,
+      kind: 'convention',
+    });
+    expect(attributes(kept).when).toBe('for ELISA plates');
+    const cleared = await run<RecordEnvelope>(agent, 'memory.update', {
+      id: edited.id,
+      expectedVersion: kept.version,
+      when: null,
+    });
+    expect(attributes(cleared).when).toBeUndefined();
 
     const active = await run<RecordEnvelope>(person, 'records.confirm', {
       id: edited.id,
-      expectedVersion: edited.version,
+      expectedVersion: cleared.version,
     });
     expect(active.status).toBe('active');
     const proposed = await registry.execute(agent, 'memory.update', {
