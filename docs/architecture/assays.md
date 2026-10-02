@@ -91,10 +91,19 @@ Values copied from the template carry `template` evidence from the confirmed ver
 
 The parts (and roles, when bound) carry `record` evidence from the experiment version. A draft experiment is refused, because copied evidence must come from a confirmed version. `designer.start` puts a part's inputs into the experiment's protocol before the answers to the essential inputs.
 
+## The design page (017b-3)
+
+The design page is the experiment's own record page, agreed with the redesign (004f-5). Its Overview, after the stage steps, adds two blocks (`apps/web/src/pages/DesignBlocks.tsx`):
+
+- **Design.** The experiment, its plate maps and its transfer plans, one line each, with how many are confirmed. Each line says confirmed, change waiting, ready to confirm or how many things are left to fix. It shows once a plate map or transfer plan names the experiment.
+- **Can the lab run it?** For an experiment designed from a template, it shows `designer.feasibility`. It leads with the plates and wells, then what is in the way ("Required before running": instruments, amounts that don't work out, short stock). Instruments and stock are folded, with counts.
+
+The **Transfers** tab lists the experiment's transfer plans, each with its plates, transfers and groups. The Plates tab is the redesign's.
+
 ## Seed
 
 `seed/assay-templates.yaml` holds the IL-6 ELISA, compound single-point and dose-response, pNPP kinetic and Dual-Glo templates. A test checks that every role is a material of its part's SOP and every variable asked for is one of the SOP's inputs or defaults. The follow-up link (`next`) is not seeded, since it names a template the seed has not drafted yet. SOPs, the layout, instrument kinds and labware are named by seed keys and found by label (`apps/api/src/assays/seed.ts`); the seed drafts it after everything it names exists, then settles it like every other seed record (ADR 0044). The IL-6 ELISA SOP gained the input `sample_dilution` (default 1) that the template asks for.
 
 ## Not yet
 
-The design page (017b-3); fractional factorial and response-surface designs (017d). Template screens come with the designer.
+Saving an experiment as a template from its page; starting a design from a template on screen (`designer.start`); fractional factorial and response-surface designs (017d). Template screens come with the designer.
