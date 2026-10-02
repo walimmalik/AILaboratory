@@ -383,7 +383,9 @@ describe('plate maps', () => {
     expect(checks.find((x) => x.id === 'labware_confirmed')).toMatchObject({
       passed: false,
       severity: 'blocker',
-      message: expect.stringContaining('was not confirmed'),
+      message: expect.stringContaining(`(${plate.name}) v${plate.version} was not confirmed`),
+      // The fix is made on the plate type, so the check links there.
+      record: plate.id,
     });
 
     const confirmed = await confirm(plate);
