@@ -112,6 +112,16 @@ async function confirmedSop() {
   return confirm(await run(agent, 'sops.draft', coating));
 }
 
+/** Something an experiment tests. */
+function subject() {
+  return run(person, 'records.create', {
+    kind: 'product',
+    label: 'LPS',
+    status: 'active',
+    attributes: { category: 'compound', origin: 'bought' },
+  });
+}
+
 async function activeCampaign() {
   return confirm(
     await run(agent, 'campaigns.draft', {
@@ -327,8 +337,35 @@ describe('experiment stages and runs', () => {
       message: expect.stringContaining('it can move to planned, on hold, cancelled'),
     });
 
-    const confirmed = await confirm(experiment);
+    let confirmed = await confirm(experiment);
     expect(confirmed.status).toBe('active');
+    // Planning needs something to test (UX review 2026-10-02, #1).
+    expect(await run(person, 'experiments.plan_check', { id: confirmed.id })).toEqual({
+      ready: false,
+      blockers: [{ message: expect.stringContaining('What is tested is not chosen yet') }],
+    });
+    await expect(
+      registry.execute(person, 'experiments.set_stage', {
+        id: confirmed.id,
+        expectedVersion: confirmed.version,
+        stage: 'planned',
+      }),
+    ).rejects.toMatchObject({ code: 'not_ready', message: expect.stringContaining('is tested') });
+    await expect(
+      registry.execute(otherLab, 'experiments.plan_check', { id: confirmed.id }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      registry.execute(person, 'experiments.plan_check', { id: campaign.id }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    confirmed = await run(person, 'records.update', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      attributes: { ...confirmed.attributes, subjects: [{ record: (await subject()).id }] },
+    });
+    expect(await run(person, 'experiments.plan_check', { id: confirmed.id })).toEqual({
+      ready: true,
+      blockers: [],
+    });
     const proposal = await registry.execute(agent, 'experiments.set_stage', {
       id: confirmed.id,
       expectedVersion: confirmed.version,
@@ -466,6 +503,7 @@ describe('binding the protocol (013b)', () => {
       label: 'Coating check',
       campaign: campaign.id,
       question: 'Does the new lot coat as well?',
+      subjects: [{ record: lot.id }],
       protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
       readouts: [{ id: 'od', label: 'Absorbance at 450 nm' }],
     });
@@ -657,6 +695,7 @@ async function plannedExperiment() {
       campaign: campaign.id,
       question: 'Which stimuli raise IL-6?',
       hypotheses: [{ id: 'lps', statement: 'LPS raises IL-6' }],
+      subjects: [{ record: (await subject()).id }],
       protocol: [{ id: 'coating', sop: { id: sop.id, version: sop.version } }],
     }),
   );

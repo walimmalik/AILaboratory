@@ -34,6 +34,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { AllFields } from './AllFields.tsx';
+import { AssayTemplateBlocks } from './AssayDesign.tsx';
 import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
 import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
@@ -305,6 +306,7 @@ function KindBlocks({ record: r }: { record: RecordEnvelope }) {
       {r.kind === 'liquid_class' && <LiquidClassBlocks record={r} />}
       {r.kind === 'campaign' && <CampaignBlocks record={r} />}
       {r.kind === 'experiment' && <ExperimentBlocks record={r} />}
+      {r.kind === 'assay_template' && <AssayTemplateBlocks record={r} />}
       {r.kind === 'layout' && <LayoutBlocks record={r} />}
       {r.kind === 'plate_map' && <PlateMapBlocks record={r} />}
       {r.kind === 'run' && <RunBlocks record={r} />}
