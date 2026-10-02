@@ -16,6 +16,7 @@ import {
   actorLabel,
   formatDay,
   formatWhen,
+  isSeed,
   operationIntent,
   operationVerb,
 } from '../lib/format.ts';
@@ -71,6 +72,10 @@ export function ReviewPage() {
   const leftOut = waiting.data && !(needsOwnPage && ofKind.isPending) ? expected - items.length : 0;
   const myDrafts = items.filter(yours);
   const theirDrafts = items.filter((i) => !yours(i));
+  // The seed lab's unfinished drafts fold below, so an agent's work for you leads (review
+  // 2026-10-02, item 4).
+  const freshDrafts = myDrafts.filter((i) => !isSeed(i.record.updatedBy));
+  const seedDrafts = myDrafts.filter((i) => isSeed(i.record.updatedBy));
 
   return (
     <>
@@ -148,7 +153,24 @@ export function ReviewPage() {
               </fieldset>
             )}
             <BatchConfirm items={myDrafts} />
-            <DraftTable items={myDrafts} me={me} />
+            <DraftTable items={freshDrafts} me={me} />
+            {seedDrafts.length > 0 &&
+              (freshDrafts.length === 0 ? (
+                <>
+                  <p className="muted">
+                    Imported from the seed lab. Each waits for values the seed did not have.
+                  </p>
+                  <DraftTable items={seedDrafts} me={me} />
+                </>
+              ) : (
+                <details className="others">
+                  <summary className="others-summary">
+                    {seedDrafts.length} {seedDrafts.length === 1 ? 'draft' : 'drafts'} imported from
+                    the seed lab, each waiting for values the seed did not have
+                  </summary>
+                  <DraftTable items={seedDrafts} me={me} />
+                </details>
+              ))}
             {theirDrafts.length > 0 && (
               <details className="others">
                 <summary className="others-summary">
@@ -251,55 +273,136 @@ export function ReviewPage() {
         </section>
       )}
 
-      <section className="block">
-        <header>
-          <h2>Decided changes</h2>
-        </header>
-        <div className="body">
-          {decided.data?.length === 0 ? (
-            <p className="empty">No decisions yet.</p>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Proposed</th>
-                    <th>By</th>
-                    <th>Change</th>
-                    <th>Decision</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {decided.data?.map((p) => (
-                    <tr key={p.id}>
-                      <td className="when">{formatWhen(p.proposedAt)}</td>
-                      <td className="agent-ink">{actorLabel(p.proposedBy, me)}</td>
-                      <td>
-                        {operationVerb(p.operationId)}{' '}
-                        {p.operationId === 'changes.apply' ? (
-                          `(${stepsOf(p).length} changes)`
-                        ) : (
-                          <TargetName
-                            step={stepsOf(p)[0] as Step}
-                            created={createdIn(stepsOf(p))}
-                          />
-                        )}
-                      </td>
-                      <td>
-                        <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
-                        {p.error && <span className="crit-ink"> {p.error.message}</span>}
-                        {p.decisionReason && <span className="muted"> · {p.decisionReason}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
+      <DecidedChanges proposals={decided.data} me={me} />
     </>
   );
+}
+
+const RECENT = 10;
+
+/**
+ * Decisions, newest first: the last few, then the rest on request. What the seed lab imported is
+ * one folded line, not sixty rows (review 2026-10-02, item 4).
+ */
+function DecidedChanges({
+  proposals,
+  me,
+}: {
+  proposals: Proposal[] | undefined;
+  me: ReturnType<typeof useMe>;
+}) {
+  const [all, setAll] = useState(false);
+  if (!proposals) return null;
+  const seed = proposals.filter((p) => isSeed(p.proposedBy));
+  const rest = proposals.filter((p) => !isSeed(p.proposedBy));
+  const shown = all ? rest : rest.slice(0, RECENT);
+  const first = seed.map((p) => p.proposedAt).sort()[0];
+  return (
+    <section className="block" aria-label="Decided changes">
+      <header>
+        <h2>Decided changes</h2>
+      </header>
+      <div className="body">
+        {proposals.length === 0 && <p className="empty">No decisions yet.</p>}
+        {shown.length > 0 && <DecidedTable proposals={shown} me={me} />}
+        {rest.length > shown.length && (
+          <button type="button" className="link-btn" onClick={() => setAll(true)}>
+            Show {rest.length - shown.length} earlier
+          </button>
+        )}
+        {seed.length > 0 && (
+          <details className="others">
+            <summary className="others-summary">
+              Seed lab imported{first ? ` ${formatDay(first.slice(0, 10))}` : ''} · {seed.length}{' '}
+              {seed.length === 1 ? 'change' : 'changes'} confirmed as you
+            </summary>
+            <DecidedTable proposals={seed} me={me} />
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DecidedTable({ proposals, me }: { proposals: Proposal[]; me: ReturnType<typeof useMe> }) {
+  return (
+    <div className="table-wrap">
+      <table className="decided-table">
+        <thead>
+          <tr>
+            <th>Proposed</th>
+            <th>By</th>
+            <th>Change</th>
+            <th>Decision</th>
+          </tr>
+        </thead>
+        <tbody>
+          {proposals.map((p) => (
+            <tr key={p.id}>
+              <td className="when">{formatWhen(p.proposedAt)}</td>
+              <td className="agent-ink">{actorLabel(p.proposedBy, me)}</td>
+              <td>
+                {operationVerb(p.operationId)}{' '}
+                {p.operationId === 'changes.apply' ? (
+                  `(${stepsOf(p).length} changes)`
+                ) : (
+                  <ChangeObject step={stepsOf(p)[0] as Step} applied={p.status === 'approved'} />
+                )}
+              </td>
+              <td>
+                <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
+                {p.error && <span className="crit-ink"> {p.error.message}</span>}
+                {p.decisionReason && <span className="muted"> · {p.decisionReason}</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Ids a step names in its input: the container it fills, the plate it stamps into, the record. */
+const OBJECT_KEYS = ['id', 'container', 'to', 'record', 'place'] as const;
+
+/**
+ * What a decided step changed, named: the record it made or changed (linked once it exists), the
+ * containers it registered, or the container its input names.
+ */
+function ChangeObject({ step, applied }: { step: Step; applied: boolean }) {
+  const made = asRecord(step.output);
+  if (made && applied) return <RecordName id={made.id} label={made.label} name={made.name} />;
+  if (made) return <TargetName step={step} created={createdIn([step])} />;
+  const many = (step.output as { containers?: unknown } | undefined)?.containers;
+  if (Array.isArray(many) && many.length > 0) {
+    const [one] = many as RecordEnvelope[];
+    if (!one) return null;
+    return (
+      <>
+        <RecordName id={one.id} label={one.label} name={one.name} />
+        {many.length > 1 && ` and ${many.length - 1} more`}
+      </>
+    );
+  }
+  const input = (step.input ?? {}) as Record<string, unknown>;
+  const id = OBJECT_KEYS.map((k) => input[k]).find((v): v is string => typeof v === 'string');
+  return id ? <RecordById id={id} /> : null;
+}
+
+function RecordName({ id, label, name }: { id: string; label: string; name: string }) {
+  return (
+    <>
+      <Link to="/records/$id" params={{ id }}>
+        {label}
+      </Link>{' '}
+      <span className="mono muted">{name}</span>
+    </>
+  );
+}
+
+function RecordById({ id }: { id: string }) {
+  const record = useQuery(recordQuery(id)).data;
+  return record ? <RecordName id={id} label={record.label} name={record.name} /> : null;
 }
 
 /** A kind with no library page, in words: "entity_kind" → "Entity kind". */
@@ -420,7 +523,7 @@ function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof u
   if (items.length === 0) return null;
   return (
     <div className="table-wrap">
-      <table className="dense">
+      <table className="dense drafts-table">
         <thead>
           <tr>
             <th>Draft</th>
@@ -445,7 +548,9 @@ function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof u
                   </tr>,
                 ]
               : []),
-            ...run.items.map((item) => <DraftRow key={item.record.id} item={item} me={me} />),
+            ...withParts(run.items).map(({ item, part }) => (
+              <DraftRow key={item.record.id} item={item} me={me} part={part} />
+            )),
           ])}
         </tbody>
       </table>
@@ -453,7 +558,41 @@ function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof u
   );
 }
 
-function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> }) {
+/**
+ * Drafts in their order, each followed by the drafts that belong to it (they wait on it, as a
+ * plate map waits on its experiment), so what one design made reads together.
+ */
+function withParts(items: DraftItem[]): { item: DraftItem; part: boolean }[] {
+  const here = new Set(items.map((i) => i.record.id));
+  const partIds = new Set(
+    items.flatMap((i) => (i.blocking ?? []).filter((b) => here.has(b.id)).map((b) => b.id)),
+  );
+  const byId = new Map(items.map((i) => [i.record.id, i] as const));
+  const out: { item: DraftItem; part: boolean }[] = [];
+  const placed = new Set<string>();
+  const place = (item: DraftItem, part: boolean) => {
+    if (placed.has(item.record.id)) return;
+    placed.add(item.record.id);
+    out.push({ item, part });
+    for (const b of item.blocking ?? []) {
+      const child = byId.get(b.id);
+      if (child) place(child, true);
+    }
+  };
+  for (const item of items) if (!partIds.has(item.record.id)) place(item, false);
+  for (const item of items) place(item, false);
+  return out;
+}
+
+function DraftRow({
+  item,
+  me,
+  part = false,
+}: {
+  item: DraftItem;
+  me: ReturnType<typeof useMe>;
+  part?: boolean;
+}) {
   const queryClient = useQueryClient();
   const { record } = item;
   const discard = useMutation({
@@ -474,7 +613,7 @@ function DraftRow({ item, me }: { item: DraftItem; me: ReturnType<typeof useMe> 
         ? `${parts[0]} to confirm`
         : `${parts.length} parts to confirm`;
   return (
-    <tr aria-label={`Draft ${record.name}`}>
+    <tr aria-label={`Draft ${record.name}`} className={part ? 'part-row' : undefined}>
       <td>
         <Link to="/records/$id" params={{ id: record.id }}>
           {record.label}

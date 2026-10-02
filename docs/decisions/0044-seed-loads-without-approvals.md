@@ -16,7 +16,7 @@ The seed loaded everything as the agent "Seed loader", so product rule 3 applied
 
 ## Decision
 
-Option 3. The seed still writes through the operations as "Seed loader" on behalf of a user, so every value keeps its evidence (datasheet, imported, the seed file it came from). After each loader, the run settles what it wrote as that user (`settleSeed`, `apps/api/src/seed-settle.ts`): the loader's proposals are approved oldest first, and its drafts have every section confirmed and are activated, with the reason "Imported from seed (pnpm seed)" in history. It repeats the loading and settling passes until a pass changes nothing, so rooms, freezers, containers and contents all land in one command.
+Option 3. The seed still writes through the operations as "Seed loader" on behalf of a user, so every value keeps its evidence (datasheet, imported, the seed file it came from). After each loader, the run settles what it wrote as that user (`settleSeed`, `apps/api/src/seed-settle.ts`): the loader's proposals are approved oldest first, and its drafts have every section confirmed and are activated, with the reason "Imported from the seed lab" in history. It repeats the loading and settling passes until a pass changes nothing, so rooms, freezers, containers and contents all land in one command.
 
 A draft with a failing blocker is left untouched for Review. Only those, for example the labware types the seed has no outer size for, reach a person. Other agents' drafts and proposals are never settled by the seed.
 

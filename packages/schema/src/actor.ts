@@ -17,6 +17,12 @@ export const AgentActor = z.object({
   sessionRef: z.string().min(1).optional(),
 });
 
+/**
+ * The agent that loads the seed lab (`pnpm seed`, ADR 0044). Screens fold its bulk work into one
+ * line so an agent's work for a person stands out (UX review 2026-10-02, item 4).
+ */
+export const SEED_AGENT = 'Seed loader';
+
 /** Who made a change. Every write records one. */
 export const Actor = z.discriminatedUnion('type', [UserActor, AgentActor]);
 export type Actor = z.infer<typeof Actor>;

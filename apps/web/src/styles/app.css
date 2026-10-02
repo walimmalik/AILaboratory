@@ -992,21 +992,18 @@ table.checks td.mark {
     height: auto;
     min-height: 100%;
   }
-  .nav {
-    flex-direction: row;
-    overflow-x: auto;
+  /* The menu opens over the page, full width, with the theme and sign out at its foot. */
+  .shell.compact.nav-open .nav {
+    width: auto;
+    justify-self: stretch;
     border-right: 0;
     border-bottom: 1px solid var(--rule);
-    padding: 10px 16px;
   }
-  .nav section {
-    flex: none;
-  }
-  .nav ul {
-    grid-auto-flow: column;
-  }
-  .nav h2 {
-    display: none;
+  .nav-settings {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
   .page {
     padding: 16px;
@@ -2702,4 +2699,48 @@ span.row-actions {
 }
 .from-memory {
   margin: 0;
+}
+
+/* Review (UX review 2026-10-02): a draft that belongs to the one above sits under it. */
+.part-row td:first-child {
+  padding-left: 28px;
+}
+/* Narrow screens: each draft or decision stacks, with its actions beside what it is. */
+@media (max-width: 720px) {
+  .drafts-table thead,
+  .decided-table thead {
+    display: none;
+  }
+  .drafts-table tr,
+  .decided-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .drafts-table td,
+  .decided-table td {
+    border: 0;
+    padding: 2px 8px;
+    overflow-wrap: anywhere;
+  }
+  .drafts-table td:nth-child(2),
+  .decided-table td:nth-child(3),
+  .decided-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+  .drafts-table td:nth-child(3) {
+    grid-row: 1;
+    grid-column: 2;
+    text-align: right;
+  }
+  .drafts-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+}
+/* Today: the drafts made today, one line each under their count. */
+.today-drafts {
+  margin-top: 4px;
+  padding-left: 16px;
 }

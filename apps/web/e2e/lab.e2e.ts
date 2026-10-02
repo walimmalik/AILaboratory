@@ -185,11 +185,15 @@ test('a record says what changed since you last looked, and Today lists what age
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: 'Today' })
     .click();
+  // A draft still waits on you, so it is listed under Waiting for you, not as done.
   await expect(
     page
-      .getByRole('region', { name: 'Done today' })
-      .getByRole('row', { name: new RegExp(record.name) }),
+      .getByRole('region', { name: 'Waiting for you' })
+      .getByRole('listitem')
+      .filter({ hasText: record.name })
+      .last(),
   ).toContainText('E2E agent for you');
+  await expect(page.getByRole('region', { name: 'Done today' })).not.toContainText(record.name);
 });
 
 test('agents edit drafts directly, with no review', async ({ page, request }) => {
@@ -719,7 +723,8 @@ test('scanning a tube opens it and moves it into a box position', async ({ page 
   await move.getByLabel('Position').fill('b3');
   await move.getByRole('button', { name: 'Move' }).click();
   await expect(page.getByText(`Moved ${tube.name} to`)).toBeVisible();
-  await expect(found).toContainText(`Box ${stamp} › ${tube.name} B3`);
+  // Where it is ends with its position, not with the tube's own name (review 2026-10-02).
+  await expect(found).toContainText(`Box ${stamp}, position B3`);
 });
 
 test('a file added on the documents page becomes a draft document with its file', async ({

@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { SEED_AGENT } from '@ailab/schema';
 import { assayKinds } from './assays/kinds.ts';
 import { loadSeedAssayTemplates, readSeedAssayTemplates } from './assays/seed.ts';
 import { contextFor } from './auth.ts';
@@ -84,7 +85,7 @@ if (!user) {
 
 const ctx = await contextFor(
   connection.db,
-  { type: 'agent', agentName: 'Seed loader', onBehalfOf: user.id },
+  { type: 'agent', agentName: SEED_AGENT, onBehalfOf: user.id },
   user.orgId,
 );
 if (!ctx) {
@@ -404,7 +405,7 @@ if (!person) {
   await connection.close();
   process.exit(1);
 }
-const reason = 'Imported from seed (pnpm seed)';
+const reason = 'Imported from the seed lab';
 // Each pass loads what the seed has, then settles it: the loader's proposals are approved and its
 // drafts confirmed as the person running the seed (ADR 0044). Rooms settle in one pass, the
 // freezers in them the next, then containers, then contents, until a pass changes nothing.

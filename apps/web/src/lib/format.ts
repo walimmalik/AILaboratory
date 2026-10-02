@@ -6,6 +6,7 @@ import {
   operationContracts,
   type Proposal,
   type Quantity,
+  SEED_AGENT,
 } from '@ailab/schema';
 
 /** Reads, which the assistant's steps show in muted ink. */
@@ -31,6 +32,11 @@ export function actorLabel(actor: Actor, me: Me | undefined): string {
 
 export function isAgent(actor: Actor): boolean {
   return actor.type === 'agent';
+}
+
+/** The seed lab's loader: its bulk work folds into one line on Review and Today. */
+export function isSeed(actor: Actor): boolean {
+  return actor.type === 'agent' && actor.agentName === SEED_AGENT;
 }
 
 /** A ledger entry as one sentence fragment: what happened to which records. */
