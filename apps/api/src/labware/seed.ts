@@ -283,7 +283,7 @@ function convert(entry: Entry, definitions: Definitions): SeedLabware | SeedSkip
     } else if (field === 'family' || field === 'notes' || !backing) {
       evidence[field] = { source: 'imported', reference: 'seed/labware.yaml', note: seedNote };
     } else if (status(backing) === 'estimated') {
-      evidence[field] = { source: 'assumed', note: `${seedNote}: estimated, see the notes` };
+      evidence[field] = { source: 'assumed', note: `${seedNote}: unverified, see the notes` };
     } else {
       evidence[field] = {
         source: 'datasheet',
@@ -355,7 +355,7 @@ export async function loadSeedLabware(
     run<{ records: RecordEnvelope[] }>('records.list', { kind, limit: 200 }).then((r) => r.records);
   const existing = new Map((await list('labware_type')).map((r) => [r.label, r]));
   const vendors = new Map((await list('vendor')).map((v) => [v.label.toLowerCase(), v.id]));
-  const reason = 'Seed lab (plan 006), loaded by plan 007';
+  const reason = 'Imported from the seed lab';
   const report: SeedReport = { created: [], existing: [], updated: [], proposed: [], skipped };
   // Records that already wait on a person for a seed change, so a rerun doesn't ask twice.
   const pending = new Set(

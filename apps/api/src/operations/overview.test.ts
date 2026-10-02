@@ -133,6 +133,58 @@ describe('records.overview', () => {
     expect(fact(maker, 'reagents')).toMatchObject({ value: '1 product', detail: 'Staurosporine' });
   });
 
+  it('says a lot dispensed into a plate is in use, and where the plate sits against its rule', async () => {
+    const plateType = await create('labware_type', 'Echo 384PP', {
+      family: 'plate',
+      wells: { layout: 'grid', rows: 16, columns: 24 },
+    });
+    const freezer = await run<RecordEnvelope>(person, 'locations.create', {
+      label: 'Freezer -80 1',
+      type: 'freezer',
+      setpoint: { value: '-80', unit: 'degC' },
+    });
+    const product = await create('product', 'DMSO', {
+      category: 'solvent',
+      origin: 'bought',
+      storage: { min: { value: '-20', unit: 'degC' }, max: { value: '-20', unit: 'degC' } },
+    });
+    const lot = await create('lot', 'DMSO lot', {
+      product: product.id,
+      lotNumber: 'D1',
+      status: 'unopened',
+    });
+    const { containers } = await run<{ containers: RecordEnvelope[] }>(
+      person,
+      'inventory.register_containers',
+      { labwareType: plateType.id, containers: [{ place: { location: freezer.id } }] },
+    );
+    const plate = containers[0] as RecordEnvelope;
+    await run(person, 'inventory.fill', {
+      container: plate.id,
+      fills: [
+        {
+          wells: ['A1', 'A2'],
+          volume: { value: '50', unit: 'uL' },
+          components: [{ source: lot.id }],
+        },
+      ],
+    });
+
+    const seenLot = await overview(lot.id);
+    expect(text(seenLot)).toContain('in use, opening not recorded');
+    // The plate by its label; its code is on the page the link opens (codes after names).
+    expect(fact(seenLot, 'where')).toMatchObject({ record: plate.id });
+    expect(fact(seenLot, 'where')?.value).toContain(plate.label);
+    expect(fact(seenLot, 'where')?.value).not.toContain(plate.name);
+
+    const seenPlate = await overview(plate.id);
+    expect(fact(seenPlate, 'store')).toMatchObject({
+      value: 'at -20 °C',
+      detail: 'Freezer -80 1 is at -80 °C',
+      tone: 'warn',
+    });
+  });
+
   it('says what a labware type is in lab words', async () => {
     const plate = await create('labware_type', 'Corning 3570', {
       family: 'plate',

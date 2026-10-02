@@ -106,11 +106,9 @@ async function workcellRules(
         'The twin mapping is checked against the twin',
         'warning',
         a.twin
-          ? [
-              'Recorded as given: the twin devices are checked once the twin connection (plan 015) can list them',
-            ]
+          ? ['Recorded as given: the twin devices are checked once the digital twins are connected']
           : [],
-        'Nothing to do until the twin connection lands',
+        'Nothing to do until the digital twins are connected',
       ),
     ],
   };

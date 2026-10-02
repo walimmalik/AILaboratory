@@ -204,7 +204,8 @@ def convert(media_type: str, name: str, data: bytes) -> Converted:
     """Sections and passages of a file, or UnsupportedMediaType for types without a reader yet."""
     if media_type in ("application/pdf",) or "wordprocessingml" in media_type:
         raise UnsupportedMediaType(
-            f"{name} ({media_type}) needs the Docling conversion, which comes with plan 011b-2"
+            f"{name} ({media_type}) needs the Docling conversion,"
+            " which is not set up on this computer yet"
         )
     if not (
         media_type.startswith("text/") or media_type in CODE_TYPES or media_type.endswith("json")

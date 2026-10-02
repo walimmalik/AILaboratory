@@ -26,7 +26,7 @@ liquid_types:
     viscosity: {value: '2', unit: mPa.s}
     volatility: low
     hygroscopic: true
-    notes: Freezes near 18 degC; wets plastics.
+    notes: Freezes near 18 °C; wets plastics.
 - key: glycerol
   label: Glycerol 50%
   attributes:
@@ -123,7 +123,7 @@ products:
       enforced: true
       period: {value: '15', unit: min}
     - rule: advice
-      text: Store reconstituted Detection Antibody at least overnight at 2-8 degC before use the next day
+      text: Store reconstituted Detection Antibody at least overnight at 2-8 °C before use the next day
       source: {from: vendor, reference: 'https://www.rndsystems.com/products/human-il-6-duoset-elisa_dy206'}
       enforced: false
     - rule: protect_from_light
@@ -211,7 +211,7 @@ products:
     storage: {min: {value: '2', unit: degC}, max: {value: '8', unit: degC}}
     handlingRules:
     - rule: advice
-      text: Store unopened product at 2-8 degC; do not use past expiration date
+      text: Store unopened product at 2-8 °C; do not use past expiration date
       source: {from: vendor, reference: 'https://www.rndsystems.com/products/duoset-ancillary-reagent-kit-2_dy008b'}
       enforced: false
     datasheets:
@@ -287,7 +287,7 @@ products:
     storage: {min: {value: '2', unit: degC}, max: {value: '8', unit: degC}}
     handlingRules:
     - rule: stable_after_opening
-      text: Stable 30 d after opening at 2-8 degC
+      text: Stable 30 d after opening at 2-8 °C
       source: {from: vendor, reference: 'https://www.rndsystems.com/products/stop-solution_dy994'}
       enforced: true
       period: {value: '30', unit: d}
@@ -405,7 +405,7 @@ products:
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/101/celltiterglo-2-0-assay-protocol.pdf?la=en'}
       enforced: true
     - rule: stable_after_preparation
-      text: '>85% light output after 2 months at 4 degC'
+      text: '>85% light output after 2 months at 4 °C'
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/101/celltiterglo-2-0-assay-protocol.pdf?la=en'}
       enforced: true
       period: {value: '60', unit: d}
@@ -422,7 +422,7 @@ products:
       enforced: true
       cycles: 4
     - rule: thaw
-      text: Thaw overnight at 4 degC or in a 22 degC water bath; do not exceed 25 degC
+      text: Thaw overnight at 4 °C or in a 22 °C water bath; do not exceed 25 °C
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/101/celltiterglo-2-0-assay-protocol.pdf?la=en'}
       enforced: true
       at: {max: {value: '25', unit: degC}}
@@ -483,11 +483,11 @@ products:
       source: {from: vendor, reference: 'https://www.thermofisher.com/order/catalog/product/11965092'}
       enforced: false
     - rule: equilibrate
-      text: Warm to 37 degC (or room temperature) before adding to cells
+      text: Warm to 37 °C (or room temperature) before adding to cells
       source: {from: lab_convention}
       enforced: true
     - rule: advice
-      text: Complete medium used within ~2-4 weeks at 4 degC (glutamine degrades)
+      text: Complete medium used within ~2-4 weeks at 4 °C (glutamine degrades)
       source: {from: lab_convention}
       enforced: false
     hazards:
@@ -512,7 +512,7 @@ products:
     storage: {max: {value: '-10', unit: degC}}
     handlingRules:
     - rule: thaw
-      text: Thaw overnight at 4 degC or in a 37 degC water bath; remove as soon as thawed
+      text: Thaw overnight at 4 °C or in a 37 °C water bath; remove as soon as thawed
       source: {from: vendor, reference: 'https://www.thermofisher.com/order/catalog/product/A5256701'}
       enforced: true
     - rule: freeze_thaw_limit
@@ -625,7 +625,7 @@ products:
     storage: {min: {value: '-20', unit: degC}, max: {value: '-20', unit: degC}}
     handlingRules:
     - rule: advice
-      text: Stocks in DMSO stored at -20 degC, aliquoted, protected from light
+      text: Stocks in DMSO stored at -20 °C, aliquoted, protected from light
       source: {from: lab_convention}
       enforced: false
     hazards:
@@ -652,7 +652,7 @@ products:
       source: {from: vendor, reference: 'https://www.sigmaaldrich.com/US/en/product/sigma/d2650'}
       enforced: true
     - rule: advice
-      text: May arrive or become solid below ~18 degC; reliquefy by warming to room temperature without detriment
+      text: May arrive or become solid below ~18 °C; reliquefy by warming to room temperature without detriment
       source: {from: vendor, reference: 'https://www.sigmaaldrich.com/US/en/product/sigma/d2650'}
       enforced: false
     - rule: advice
@@ -661,13 +661,13 @@ products:
       source: {from: lab_convention}
       enforced: false
     hazards:
-      summary: Combustible liquid (flash point 87 degC closed cup); penetrates skin and carries dissolved substances
+      summary: Combustible liquid (flash point 87 °C closed cup); penetrates skin and carries dissolved substances
     liquidType: dmso
     datasheets:
     - https://www.sigmaaldrich.com/US/en/product/sigma/d2650
     - https://www.sigmaaldrich.com/deepweb/assets/sigmaaldrich/product/documents/944/265/d2650pis.pdf
     notes: 'Pipetting: Hygroscopic, low volatility, slightly viscous (~2 cP), density 1.1 g/mL, wets plastics; freezes
-      near 18 degC so cold rooms are a problem'
+      near 18 °C so cold rooms are a problem'
 - key: selleck-l1300
   label: FDA-approved Drug Library
   vendor: Selleck Chemicals
@@ -682,7 +682,7 @@ products:
     storage: {min: {value: '-20', unit: degC}, max: {value: '-20', unit: degC}}
     handlingRules:
     - rule: advice
-      text: 12 months at -20 degC in DMSO; 24 months at -80 degC in DMSO
+      text: 12 months at -20 °C in DMSO; 24 months at -80 °C in DMSO
       source: {from: vendor, reference: 'https://www.selleckchem.com/screening/fda-approved-drug-library.html'}
       enforced: false
     - rule: advice
@@ -729,17 +729,17 @@ products:
     storage: {min: {value: '-30', unit: degC}, max: {value: '-10', unit: degC}}
     handlingRules:
     - rule: thaw
-      text: Do not thaw above 25 degC
+      text: Do not thaw above 25 °C
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/500/nano-glo-hibit-lytic-detection-system-technical-manual.pdf'}
       enforced: true
       at: {max: {value: '25', unit: degC}}
     - rule: advice
-      text: 'Buffer: 2-8 degC for 1 year or room temperature for 3 months; >= 10 freeze-thaw cycles OK'
+      text: 'Buffer: 2-8 °C for 1 year or room temperature for 3 months; >= 10 freeze-thaw cycles OK'
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/500/nano-glo-hibit-lytic-detection-system-technical-manual.pdf'}
       enforced: false
     - rule: stable_after_preparation
-      text: ~10% activity loss over 8 h and ~30% over 24 h at room temperature; <10% over 24 h at 4 degC; can store
-        at -80, -20 or 4 degC with some loss
+      text: ~10% activity loss over 8 h and ~30% over 24 h at room temperature; <10% over 24 h at 4 °C; can store
+        at -80, -20 or 4 °C with some loss
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/500/nano-glo-hibit-lytic-detection-system-technical-manual.pdf'}
       enforced: true
       period: {value: '8', unit: h}
@@ -821,13 +821,13 @@ products:
     storage: {min: {value: '-30', unit: degC}, max: {value: '-10', unit: degC}}
     handlingRules:
     - rule: stable_after_preparation
-      text: Substrates may be stored at 4 degC up to 2 weeks
+      text: Substrates may be stored at 4 °C up to 2 weeks
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/0/dual-glo-luciferase-assay-system-protocol.pdf'}
       enforced: true
       period: {value: '14', unit: d}
     - rule: stable_after_preparation
-      text: 'Reconstituted Luciferase Reagent: ~10% loss after 8 h RT, 48 h 4 degC, 1 week -20 degC, 6 months -70
-        degC; do not keep at -20 degC > 1 week'
+      text: 'Reconstituted Luciferase Reagent: ~10% loss after 8 h RT, 48 h 4 °C, 1 week -20 °C, 6 months -70
+        °C; do not keep at -20 °C > 1 week'
       source: {from: vendor, reference: 'https://www.promega.com/-/media/files/resources/protocols/technical-manuals/0/dual-glo-luciferase-assay-system-protocol.pdf'}
       enforced: true
       period: {value: '8', unit: h}
@@ -1063,7 +1063,7 @@ products:
     storage: {min: {value: '-20', unit: degC}, max: {value: '-20', unit: degC}}
     handlingRules:
     - rule: stable_after_preparation
-      text: Up to 3 months at 4 degC after thawing
+      text: Up to 3 months at 4 °C after thawing
       source: {from: vendor, reference: 'https://www.bio-rad.com/en-us/sku/1725271-ssoadvanced-universal-sybr-green-supermix-500-x-20-ul-rxns-5-ml-5-x-1-ml?ID=1725271'}
       enforced: true
       period: {value: '90', unit: d}
@@ -1075,7 +1075,7 @@ products:
     liquidType: glycerol
     datasheets:
     - https://www.bio-rad.com/en-us/sku/1725271-ssoadvanced-universal-sybr-green-supermix-500-x-20-ul-rxns-5-ml-5-x-1-ml?ID=1725271
-    notes: 'Shelf life: 12 months at -20 degC. Pipetting: Mildly viscous master mix; may foam; spin down'
+    notes: 'Shelf life: 12 months at -20 °C. Pipetting: Mildly viscous master mix; may foam; spin down'
 - key: neb-e2621
   label: NEBuilder HiFi DNA Assembly Master Mix
   vendor: New England Biolabs
@@ -1097,7 +1097,7 @@ products:
       source: {from: vendor, reference: 'https://www.neb.com/en-us/products/e2621-nebuilder-hifi-dna-assembly-master-mix'}
       enforced: false
     - rule: advice
-      text: Assembled product on ice or -20 degC; transform 2 uL of chilled product
+      text: Assembled product on ice or -20 °C; transform 2 uL of chilled product
       source: {from: vendor, reference: 'https://www.neb.com/en-us/products/e2621-nebuilder-hifi-dna-assembly-master-mix'}
       enforced: false
     liquidType: glycerol
@@ -1169,7 +1169,7 @@ products:
     storage: {min: {value: '-20', unit: degC}, max: {value: '-20', unit: degC}}
     handlingRules:
     - rule: keep_cold
-      text: Keep on ice or in a -20 degC benchtop cooler; add enzyme last
+      text: Keep on ice or in a -20 °C benchtop cooler; add enzyme last
       source: {from: lab_convention}
       enforced: true
     liquidType: glycerol
@@ -1222,12 +1222,12 @@ products:
       source: {from: vendor, reference: 'https://www.neb.com/en/products/c2987-neb-5-alpha-competent-e-coli-high-efficiency'}
       enforced: true
     - rule: freeze_thaw_limit
-      text: Thaw only once; cells lose efficiency whenever warmed above -80 degC
+      text: Thaw only once; cells lose efficiency whenever warmed above -80 °C
       source: {from: vendor, reference: 'https://www.neb.com/en/products/c2987-neb-5-alpha-competent-e-coli-high-efficiency'}
       enforced: true
       cycles: 0
     - rule: advice
-      text: 1-5 uL (1 pg-100 ng) DNA; ice 30 min; heat shock exactly 42 degC 30 s; 950 uL RT SOC; 37 degC 60 min
+      text: 1-5 uL (1 pg-100 ng) DNA; ice 30 min; heat shock exactly 42 °C 30 s; 950 uL RT SOC; 37 °C 60 min
         at 250 rpm
       source: {from: vendor, reference: 'https://www.neb.com/en/products/c2987-neb-5-alpha-competent-e-coli-high-efficiency'}
       enforced: false
@@ -1327,7 +1327,7 @@ products:
     storage: {min: {value: '15', unit: degC}, max: {value: '25', unit: degC}}
     handlingRules:
     - rule: stable_after_preparation
-      text: 'Buffer P1 with RNase A: 2-8 degC, stable 6 months'
+      text: 'Buffer P1 with RNase A: 2-8 °C, stable 6 months'
       source: {from: vendor, reference: 'https://www.qiagen.com/us/products/discovery-and-translational-research/dna-rna-purification/dna-purification/plasmid-dna/qiaprep-spin-miniprep-kit'}
       enforced: true
       period: {value: '180', unit: d}
@@ -1336,7 +1336,7 @@ products:
       source: {from: vendor, reference: 'https://www.qiagen.com/us/products/discovery-and-translational-research/dna-rna-purification/dna-purification/plasmid-dna/qiaprep-spin-miniprep-kit'}
       enforced: false
     - rule: advice
-      text: Check P2 for precipitate; redissolve at 37 degC
+      text: Check P2 for precipitate; redissolve at 37 °C
       source: {from: vendor, reference: 'https://www.qiagen.com/us/products/discovery-and-translational-research/dna-rna-purification/dna-purification/plasmid-dna/qiaprep-spin-miniprep-kit'}
       enforced: false
     - rule: advice
@@ -1399,7 +1399,7 @@ products:
     datasheets:
     - https://documents.thermofisher.com/TFS-Assets/LSG/manuals/sybr_safe_dna_gel_stain_man.pdf
     - https://www.thermofisher.com/order/catalog/product/S33102
-    notes: 'Pipetting: DMSO stock; freezes below ~18 degC if refrigerated, warm and mix before use'
+    notes: 'Pipetting: DMSO stock; freezes below ~18 °C if refrigerated, warm and mix before use'
 - key: lab-reagent-diluent
   label: Reagent Diluent (1% BSA in PBS)
   assumed:

@@ -413,7 +413,7 @@ function WellsBlock({
   };
   const lit = query && !wellQuery ? wells.filter((w) => matches(w.well)).length : undefined;
   const exportCsv = () => {
-    const rows = [['well', 'volume', 'unit', 'contents', 'estimated']];
+    const rows = [['well', 'volume', 'unit', 'contents', 'unverified']];
     for (const w of wells) {
       const v = w.state.volume;
       rows.push([
@@ -540,7 +540,7 @@ function WellsBlock({
                   </li>
                   <li>
                     <i className="assumed" />
-                    Estimated
+                    Unverified, not recorded or measured
                   </li>
                 </ul>
               )}
@@ -600,7 +600,7 @@ function WellsBlock({
                 <h3>
                   {grid ? `${picked}: ` : ''}
                   {volumeText(state)}
-                  {state.assumed && <span className="agent-ink"> (estimated)</span>}
+                  {state.assumed && <span className="agent-ink"> (unverified)</span>}
                 </h3>
                 <ul className="plain">
                   {state.components.map((c) => (
@@ -662,9 +662,12 @@ function RulesBlock({ record, filled }: { record: RecordEnvelope; filled: number
                   {ruleTitle[r.rule.rule]}
                   {limit ? `: ${limit}` : ''}
                 </b>{' '}
-                <span className={r.rule.enforced ? 'chip' : 'chip muted'}>
-                  {r.rule.enforced ? 'scheduler keeps to it' : 'advice'}
-                </span>
+                {/* Advice is its own title; the chip would only say it again. */}
+                {(r.rule.enforced || r.rule.rule !== 'advice') && (
+                  <span className={r.rule.enforced ? 'chip' : 'chip muted'}>
+                    {r.rule.enforced ? 'scheduler keeps to it' : 'advice'}
+                  </span>
+                )}
                 <div>{r.rule.text}</div>
                 {r.conflict && <div className="warn-ink">{r.conflict}</div>}
                 <div className="muted">

@@ -76,6 +76,9 @@ const lot: OverviewBuilder = async (record, read) => {
     read.run(inventoryWhereIs, { of: record.id }),
   ]);
   const p = made?.attributes as ProductAttributes | undefined;
+  // Wells beyond a tube's one: the lot was dispensed into plates, so it was opened even when
+  // nobody recorded it (UX review 2026-10-02, item 8).
+  const dispensed = where.containers.some((c) => c.wells.some((w) => w.well !== 'A1'));
   // The lot's state is said once, in the identity line (N8); a fact repeats it only as a warning.
   const status: OverviewFact | undefined =
     a.status === 'quarantined' || a.status === 'expired'
@@ -93,7 +96,11 @@ const lot: OverviewBuilder = async (record, read) => {
       made ? { text: `Lot of ${made.label}`, record: made.id } : 'Lot',
       a.received && `received ${day(a.received)}`,
       a.made && `made ${day(a.made)}`,
-      a.status === 'opened' && a.opened ? `opened ${day(a.opened)}` : words(a.status),
+      a.status === 'opened' && a.opened
+        ? `opened ${day(a.opened)}`
+        : a.status === 'unopened' && dispensed
+          ? 'in use, opening not recorded'
+          : words(a.status),
     ),
     facts: facts(
       a.expiry

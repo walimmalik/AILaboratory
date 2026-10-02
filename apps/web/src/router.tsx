@@ -8,6 +8,11 @@ import {
 } from '@tanstack/react-router';
 import { ActivityPage } from './pages/Activity.tsx';
 import { CalculatorsPage } from './pages/Calculators.tsx';
+import {
+  AssayTemplatesPage,
+  TransferPlansPage,
+  WorklistFormatsPage,
+} from './pages/DesignLists.tsx';
 import { DocumentsPage } from './pages/Documents.tsx';
 import { CampaignsPage, ExperimentsPage, RunsPage, SetsPage } from './pages/Experiments.tsx';
 import {
@@ -208,6 +213,21 @@ const plateMaps = createRoute({
   path: '/plate-maps',
   component: PlateMapsPage,
 });
+const assayTemplates = createRoute({
+  getParentRoute: () => app,
+  path: '/assay-templates',
+  component: AssayTemplatesPage,
+});
+const transferPlans = createRoute({
+  getParentRoute: () => app,
+  path: '/transfer-plans',
+  component: TransferPlansPage,
+});
+const worklistFormats = createRoute({
+  getParentRoute: () => app,
+  path: '/worklist-formats',
+  component: WorklistFormatsPage,
+});
 const layouts = createRoute({
   getParentRoute: () => app,
   path: '/layouts',
@@ -276,6 +296,9 @@ const routeTree = root.addChildren([
     sets,
     plateMaps,
     layouts,
+    assayTemplates,
+    transferPlans,
+    worklistFormats,
     records,
     record,
     newRecord,

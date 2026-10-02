@@ -228,7 +228,7 @@ export function readSeedSops(
         variables: {
           source: estimated.length ? 'assumed' : 'imported',
           reference,
-          ...(estimated.length ? { note: `Estimated in the seed: ${estimated.join(', ')}` } : {}),
+          ...(estimated.length ? { note: `Unverified in the seed: ${estimated.join(', ')}` } : {}),
         },
         steps: {
           source: 'imported',

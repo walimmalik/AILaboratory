@@ -169,7 +169,7 @@ export async function loadSeedInstruments(
   );
   const idOf = new Map<string, string>(); // seed key -> record ID
   const vendors = new Map((await list('vendor')).map((v) => [v.label.toLowerCase(), v.id]));
-  const reason = 'Seed lab (plan 006), loaded by plan 008';
+  const reason = 'Imported from the seed lab';
   const report: InstrumentSeedReport = {
     created: [],
     existing: [],
@@ -225,7 +225,7 @@ export async function loadSeedInstruments(
       configuration: {
         equipment: (configuration ?? []).map((node) => ({ ...node, kind: idOf.get(node.kind) })),
       },
-      reason: `Seed lab (plan 006), instance ${research} in seed/instruments.yaml, loaded by plan 008`,
+      reason: `Imported from the seed lab, instance ${research} in seed/instruments.yaml`,
     });
     report.registered.push(`${record.name} ${seed.key}`);
   }
@@ -270,14 +270,14 @@ export async function loadSeedWorkcells(
       evidence: {
         twin: {
           source: 'assumed',
-          note: 'Device IDs from the echo650-twin catalog; not checked until the twin connection (plan 015)',
+          note: 'Device IDs from the echo650-twin catalog; not checked until the digital twins are connected',
         },
         members: {
           source: 'assumed',
-          note: 'Members as Wali listed them (plan 008 I10); twin devices and hand use are assumed',
+          note: 'Members as Wali listed them; twin devices and hand use are assumed',
         },
       },
-      reason: `Seed lab (plan 006), workcell ${key}, loaded by plan 008d`,
+      reason: `Imported from the seed lab, workcell ${key}`,
     });
     report.created.push(`${record.name} ${key}`);
   }

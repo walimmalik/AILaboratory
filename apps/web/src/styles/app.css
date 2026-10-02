@@ -1871,9 +1871,6 @@ kbd {
   break-inside: avoid;
   padding: 2px 0;
 }
-.stock .by-kind {
-  margin: 16px 0 0;
-}
 /* Narrow screens: each row stacks, its name across the top, then two facts a line. */
 @media (max-width: 720px) {
   .stock-table thead {
@@ -2618,7 +2615,8 @@ span.row-actions {
   padding-right: 12px;
 }
 .record-page .part .values dd {
-  overflow-wrap: anywhere;
+  /* Long words break only when they would overflow, so a table inside keeps its columns. */
+  overflow-wrap: break-word;
 }
 .record-page .part .values dd.changed {
   background: var(--warn-soft);
@@ -2764,4 +2762,21 @@ span.row-actions {
 .today-drafts {
   margin-top: 4px;
   padding-left: 16px;
+}
+
+/* A list of items inside a value scrolls sideways on its own rather than squeezing its columns. */
+.items-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.given-name {
+  white-space: nowrap;
+}
+/* A list row's name: the label, then its code as a tag on the same line. */
+td.record-name {
+  white-space: nowrap;
+}
+td.record-name .one-line {
+  display: inline-block;
+  vertical-align: bottom;
 }

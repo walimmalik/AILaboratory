@@ -292,7 +292,9 @@ export const sop = defineKind({
           'Steps cite the source',
           'warning',
           uncited.length
-            ? `${uncited.length} step${uncited.length === 1 ? '' : 's'} without a passage: ${uncited.map((s) => s.id).join(', ')}`
+            ? uncited.length === a.steps.length
+              ? `None of the ${a.steps.length} steps names its passage`
+              : `${uncited.length === 1 ? 'Step' : 'Steps'} ${uncited.map((s) => a.steps.indexOf(s) + 1).join(', ')} without a passage`
             : undefined,
           'Cite the passage each step comes from, so a reviewer can check it',
           'procedure',

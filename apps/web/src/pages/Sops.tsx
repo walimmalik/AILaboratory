@@ -71,11 +71,16 @@ export function SopsPage() {
         placeholder="Find by title or name, e.g. ELISA or SOP-0001"
         empty="No SOPs yet. Ask the assistant to digitize a library document, or load the seed lab."
         columns={[
-          { header: 'Assay', cell: (r) => of(r).assays?.join(', ') || '—' },
+          {
+            header: 'Assay',
+            cell: (r) => of(r).assays?.join(', ') || '—',
+            filled: (r) => !!of(r).assays?.length,
+          },
           { header: 'Steps', cell: (r) => of(r).steps?.length ?? 0, className: 'num' },
           {
             header: 'Open questions',
             cell: (r) => (of(r).questions ?? []).filter((q) => q.status === 'open').length,
+            filled: (r) => (of(r).questions ?? []).some((q) => q.status === 'open'),
             className: 'num',
           },
         ]}

@@ -306,7 +306,7 @@ export async function loadSeedLiquidClasses(
       label: c.label,
       attributes,
       evidence,
-      reason: 'Seed lab (plan 006), vendor default liquid classes loaded by plan 009b',
+      reason: 'Imported from the seed lab: vendor default liquid classes',
     });
     report.created.push(`${record.name} ${c.label}`);
   }

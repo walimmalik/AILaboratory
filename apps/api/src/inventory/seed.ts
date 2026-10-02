@@ -190,7 +190,7 @@ export async function loadSeedInventory(
       label: l.label,
       ...l.attributes,
       ...(parent ? { parent } : {}),
-      reason: 'Seed lab (plan 006), loaded by plan 010b',
+      reason: 'Imported from the seed lab',
     });
     if (result.status === 'proposed') {
       report.locations.proposed.push(l.key);
@@ -239,7 +239,7 @@ export async function loadSeedInventory(
     const result = await registry.execute(ctx, 'inventory.register_containers', {
       labwareType: type.id,
       containers: [item],
-      reason: 'Seed lab (plan 006), loaded by plan 010b',
+      reason: 'Imported from the seed lab',
     });
     if (result.status === 'proposed') {
       report.containers.proposed.push(c.key);

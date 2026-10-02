@@ -36,6 +36,9 @@ export interface KindPage {
     | '/sets'
     | '/plate-maps'
     | '/layouts'
+    | '/assay-templates'
+    | '/transfer-plans'
+    | '/worklist-formats'
     | '/memory';
   /** The menu entry whose tabs it sits in. */
   area: Area;
@@ -57,6 +60,20 @@ export const libraryPages: KindPage[] = [
     title: 'Campaigns',
     noun: 'campaign',
     path: '/campaigns',
+    area: 'Experiments',
+  },
+  {
+    kind: 'assay_template',
+    title: 'Assay templates',
+    noun: 'assay template',
+    path: '/assay-templates',
+    area: 'Experiments',
+  },
+  {
+    kind: 'transfer_plan',
+    title: 'Transfer plans',
+    noun: 'transfer plan',
+    path: '/transfer-plans',
     area: 'Experiments',
   },
   { kind: 'run', title: 'Runs', noun: 'run', path: '/runs', area: 'Experiments' },
@@ -129,6 +146,13 @@ export const libraryPages: KindPage[] = [
     title: 'Equipment',
     noun: 'equipment kind',
     path: '/equipment',
+    area: 'Instruments',
+  },
+  {
+    kind: 'worklist_format',
+    title: 'Worklist formats',
+    noun: 'worklist format',
+    path: '/worklist-formats',
     area: 'Instruments',
   },
   { kind: 'sop', title: 'SOPs', noun: 'SOP', path: '/sops', area: 'Library' },
