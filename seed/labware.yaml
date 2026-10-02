@@ -73,9 +73,9 @@ kinds:
   well_addressing: A1..H12
   footprint:
     sbs: true
-    length: null
-    width: null
-    height: null
+    length: {value: "127.76", unit: mm}
+    width: {value: "85.48", unit: mm}
+    height: {value: "14.4", unit: mm}
   well_geometry:
     shape: round
     bottom_shape: flat
@@ -98,11 +98,13 @@ kinds:
   source_urls:
     - https://www.thermofisher.com/order/catalog/product/442404
     - https://assets.fishersci.com/TFS-Assets/LSG/manuals/44-2404.pdf
-  status: {catalog_number: verified, name: verified, footprint: unknown, well_geometry: unknown, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
+  status: {catalog_number: verified, name: verified, footprint: estimated, well_geometry: unknown, max_volume: verified, working_volume: verified, dead_volume: estimated, material: verified, color: verified, surface_treatment: verified, sterile: verified, opentrons_load_name: unknown, hamilton_labware_file: unknown}
   notes: >-
     Thermo lists 8x12 array, 400 uL well, 350 uL working. Plate and well dimensions were not on the
     product page or the 44-2404 sheet (a customer drawing exists but was not found). SBS footprint and
-    9 mm pitch are the norm for this plate but not read from a Thermo drawing. No official Opentrons
+    9 mm pitch are the norm for this plate but not read from a Thermo drawing: length and width are the
+    ANSI/SLAS 1-2004 footprint, and the 14.4 mm height is the usual Nunc F96 plate height; check them
+    against the customer drawing. No official Opentrons
     definition; a custom one is needed. Dead volume estimated as for Corning 3590.
 
 # ---------------------------------------------------------------- PLATES: cell assay (384)

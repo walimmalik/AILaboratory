@@ -8,7 +8,7 @@ import {
   type PlateMapAttributes,
   PlateMapAttributes as PlateMapSchema,
 } from '@ailab/schema';
-import { checkPin, type PinReport } from '../records/pins.ts';
+import { checkPin, type PinReport, waitingOn } from '../records/pins.ts';
 import { planPlateMap } from './generate.ts';
 import { layoutSpec, subjectOf } from './spec.ts';
 
@@ -211,14 +211,17 @@ export const plateMap = defineKind({
           'Add the samples, compounds or lots to place',
           'subjects',
         ),
-        check(
-          'layout_confirmed',
-          'The layout is confirmed',
-          'blocker',
-          pin.unconfirmed ? `${pin.unconfirmed}; confirm the layout first` : undefined,
-          'Confirm the layout, then pin the version a person confirmed',
-          'subjects',
-        ),
+        {
+          ...check(
+            'layout_confirmed',
+            'The layout is confirmed',
+            'blocker',
+            pin.unconfirmed ? `${pin.unconfirmed}; confirm the layout first` : undefined,
+            'Confirm the layout, then pin the version a person confirmed',
+            'subjects',
+          ),
+          ...waitingOn(pin),
+        },
         check(
           'layout_current',
           'It uses the latest confirmed layout',
@@ -231,16 +234,19 @@ export const plateMap = defineKind({
         ),
         ...(a.labware && plate
           ? [
-              check(
-                'labware_confirmed',
-                'The plate type is confirmed',
-                'blocker',
-                plate.unconfirmed
-                  ? `${plate.unconfirmed}; confirm the plate type first`
-                  : undefined,
-                'Confirm the labware type, then pin the version a person confirmed',
-                'subjects',
-              ),
+              {
+                ...check(
+                  'labware_confirmed',
+                  'The plate type is confirmed',
+                  'blocker',
+                  plate.unconfirmed
+                    ? `${plate.unconfirmed}; confirm the plate type first`
+                    : undefined,
+                  'Confirm the labware type, then pin the version a person confirmed',
+                  'subjects',
+                ),
+                ...waitingOn(plate),
+              },
               check(
                 'labware_current',
                 'It uses the latest confirmed plate type',

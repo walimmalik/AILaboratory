@@ -5,7 +5,7 @@ import {
   defineKind,
   type SopAttributes,
 } from '@ailab/schema';
-import { checkPin, type PinReport } from '../records/pins.ts';
+import { checkPin, type PinReport, waitingOn } from '../records/pins.ts';
 
 const PLAN = '(plan 017, assay templates)';
 
@@ -182,14 +182,17 @@ export const assayTemplate = defineKind({
       p.newer ? [`${p.record?.name} v${p.newer}`] : [],
     );
     const checks: CheckResult[] = [
-      check(
-        'sops_confirmed',
-        'Its SOPs are confirmed',
-        'blocker',
-        unconfirmed.length ? `${unconfirmed.join('; ')}; confirm them first` : undefined,
-        'Confirm the SOPs, then pin the versions a person confirmed',
-        'protocol',
-      ),
+      {
+        ...check(
+          'sops_confirmed',
+          'Its SOPs are confirmed',
+          'blocker',
+          unconfirmed.length ? `${unconfirmed.join('; ')}; confirm them first` : undefined,
+          'Confirm the SOPs, then pin the versions a person confirmed',
+          'protocol',
+        ),
+        ...waitingOn(...pins.values()),
+      },
       check(
         'sops_current',
         'It uses the latest confirmed SOPs',
@@ -200,14 +203,17 @@ export const assayTemplate = defineKind({
       ),
       ...(layout
         ? [
-            check(
-              'layout_confirmed',
-              'The layout is confirmed',
-              'blocker',
-              layout.unconfirmed ? `${layout.unconfirmed}; confirm the layout first` : undefined,
-              'Confirm the layout, then pin the version a person confirmed',
-              'protocol',
-            ),
+            {
+              ...check(
+                'layout_confirmed',
+                'The layout is confirmed',
+                'blocker',
+                layout.unconfirmed ? `${layout.unconfirmed}; confirm the layout first` : undefined,
+                'Confirm the layout, then pin the version a person confirmed',
+                'protocol',
+              ),
+              ...waitingOn(layout),
+            },
             check(
               'layout_current',
               'It uses the latest confirmed layout',

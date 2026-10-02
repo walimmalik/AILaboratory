@@ -562,7 +562,7 @@ describe('worklists.draft_format', () => {
     });
     const blocked = await run<Readiness>(person, 'records.readiness', { id: pinned.id });
     expect(blocked.checks.find((c) => c.id === 'inputs_confirmed')?.message).toBe(
-      'Samples in duplicate: WLF-0001 v1 was not confirmed',
+      `Samples in duplicate: ${format.label} (WLF-0001) v1 was not confirmed`,
     );
 
     // A format for another instrument kind is a blocker too.

@@ -12,7 +12,7 @@ import {
   SetAttributes as SetSchema,
   type SopAttributes,
 } from '@ailab/schema';
-import { checkPin, stable } from '../records/pins.ts';
+import { checkPin, type PinReport, stable, waitingOn } from '../records/pins.ts';
 import { inputProblem } from '../sops/inputs.ts';
 
 /** Kinds that are definitions, so bindings pin their version (ADR 0039). */
@@ -207,12 +207,14 @@ export const experiment = defineKind({
       }
     }
     const unconfirmed: string[] = [];
+    const drafts: PinReport[] = [];
     const newer: string[] = [];
     const misfits: string[] = [];
     for (const p of a.protocol) {
       const pin = await checkPin(context, p.sop, 'sop', 'an SOP');
       if (pin.invalid) invalid.push(pin.invalid);
       if (pin.unconfirmed) unconfirmed.push(pin.unconfirmed);
+      drafts.push(pin);
       if (pin.newer && pin.record)
         newer.push(`${pin.record.name} v${pin.newer} (this uses v${p.sop.version})`);
       if (!pin.pinned) continue;
@@ -259,6 +261,7 @@ export const experiment = defineKind({
         );
         if (bound.invalid) invalid.push(`${where}: ${bound.invalid}`);
         if (bound.unconfirmed) unconfirmed.push(bound.unconfirmed);
+        drafts.push(bound);
         if (bound.newer) newer.push(`${record.name} v${bound.newer} (this uses v${b.version})`);
       }
       for (const i of p.inputs ?? []) {
@@ -275,6 +278,7 @@ export const experiment = defineKind({
     if (invalid.length) return { invalid };
 
     const followed = (a.documents ?? []).filter((d) => d.use === 'follows');
+    const waiting = waitingOn(...drafts);
     return {
       checks: [
         check(
@@ -287,14 +291,19 @@ export const experiment = defineKind({
           'Pin a confirmed digital SOP, or attach the document you will follow',
           'protocol',
         ),
-        check(
-          'protocol_confirmed',
-          'The SOP and record versions it follows are confirmed',
-          'blocker',
-          unconfirmed.length ? `${unconfirmed.join('; ')}; pin a confirmed version` : undefined,
-          'Confirm the SOP, then pin the version a person confirmed',
-          'protocol',
-        ),
+        {
+          ...check(
+            'protocol_confirmed',
+            'The SOP and record versions it follows are confirmed',
+            'blocker',
+            unconfirmed.length ? `${unconfirmed.join('; ')}; pin a confirmed version` : undefined,
+            waiting.record
+              ? 'Confirm the draft it follows, then pin the version a person confirmed'
+              : 'Pin the version a person confirmed',
+            'protocol',
+          ),
+          ...waiting,
+        },
         check(
           'bindings_fit',
           'Bound records fit their roles',

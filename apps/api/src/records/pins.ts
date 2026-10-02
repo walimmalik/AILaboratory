@@ -14,6 +14,8 @@ export interface PinReport {
   invalid?: string;
   /** The pinned version was never confirmed. */
   unconfirmed?: string;
+  /** The pinned record when it is still a draft: the fix is to confirm it, on its own page. */
+  draft?: string;
   /** The version a design should move to, when a newer confirmed one differs. */
   newer?: number;
 }
@@ -31,7 +33,8 @@ export async function checkPin(
   if (!pinned) return { record, invalid: `${record.name} has no version ${pin.version}` };
   const report: PinReport = { record, pinned };
   if (pinned.status !== 'active') {
-    report.unconfirmed = `${record.name} v${pin.version} was not confirmed`;
+    report.unconfirmed = `${record.label} (${record.name}) v${pin.version} was not confirmed`;
+    if (record.status === 'draft') report.draft = record.id;
   }
   if (
     record.status === 'active' &&
@@ -41,6 +44,15 @@ export async function checkPin(
     report.newer = record.version;
   }
   return report;
+}
+
+/**
+ * Points a failing check at the first pinned record still in draft (`CheckResult.record`), so the
+ * page links to where the fix is made instead of a section of the design.
+ */
+export function waitingOn(...reports: (PinReport | undefined)[]): { record?: string } {
+  const draft = reports.find((r) => r?.draft)?.draft;
+  return draft ? { record: draft } : {};
 }
 
 /** JSON with object keys sorted, so equal values compare equal whatever order they were stored in. */

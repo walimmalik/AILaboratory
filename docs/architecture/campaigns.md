@@ -21,7 +21,7 @@ Stage is an attribute, separate from the record status, and outside every sectio
 
 ## Pinned inputs (ADR 0039)
 
-Each protocol part pins a confirmed SOP version. `related` checks every pin with `checkPin` (`apps/api/src/records/pins.ts`). A pin to a missing version, to another kind or to another lab refuses the write. Readiness has three checks: `protocol_confirmed` is a blocker when a pinned version was never confirmed, `protocol_current` warns when a newer confirmed version changed something, and `documents_compute` warns when a followed document isn't digitized. The `protocol_current` warning offers `experiments.adopt_versions` as its one-click fix. A run pins the experiment version it follows, and that version must be confirmed.
+Each protocol part pins a confirmed SOP version. `related` checks every pin with `checkPin` (`apps/api/src/records/pins.ts`). A pin to a missing version, to another kind or to another lab refuses the write. Readiness has three checks: `protocol_confirmed` is a blocker when a pinned version was never confirmed (it names the record by label and code, and when that record is still a draft the check's `record` links to it, since the fix is to confirm it there; plate maps and assay templates do the same with `waitingOn`), `protocol_current` warns when a newer confirmed version changed something, and `documents_compute` warns when a followed document isn't digitized. The `protocol_current` warning offers `experiments.adopt_versions` as its one-click fix. A run pins the experiment version it follows, and that version must be confirmed.
 
 ## Binding the protocol (013b)
 

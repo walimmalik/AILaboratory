@@ -410,6 +410,15 @@ describe('seed labware', () => {
       search: 'EIA/RIA',
     });
     expect(types[0]).toMatchObject({ status: 'draft', createdBy: { agentName: 'Seed loader' } });
+
+    // The ELISA plate settles: its outer size is the SBS footprint, marked as assumed.
+    const { records: maxisorp } = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+      kind: 'labware_type',
+      search: 'MaxiSorp',
+    });
+    expect(maxisorp[0]?.evidence?.footprint).toMatchObject({ source: 'assumed' });
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: maxisorp[0]?.id });
+    expect(readiness.checks.filter((c) => !c.passed && c.severity === 'blocker')).toEqual([]);
   });
 
   it('proposes new seed wells for a type a person already confirmed, once', async () => {
