@@ -455,3 +455,11 @@ export function problemWords(check: { label: string; message?: string | undefine
     : check.message;
   return `${subject}: ${message}`;
 }
+
+/**
+ * A verb read on its own, in a column beside the record: "changed wells on" → "changed wells"
+ * (review 2026-10-02 item 13). The ledger's verbs end with the word that leads into the record.
+ */
+export function verbAlone(verb: string): string {
+  return verb.replace(/ (on|to|in|of|from|for|into)$/, '');
+}
