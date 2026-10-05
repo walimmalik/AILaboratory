@@ -87,13 +87,14 @@ function record(version = 7, response?: string): RecordEnvelope {
     },
   } as unknown as RecordEnvelope;
 }
-function tree(busy = false) {
+function tree(busy = false, historical = false) {
   fixture.cursor = 0;
   fixture.refCursor = 0;
   return ChatQuestionResponse({
     selection,
     text: "I don't know",
     busy,
+    historical,
     onContinue: fixture.onContinue,
   });
 }
@@ -128,6 +129,39 @@ beforeEach(() => {
   vi.mocked(api.run).mockReset().mockResolvedValue(record(8, "I don't know"));
 });
 describe('explicit human chat responses', () => {
+  it('collapses only historical recorded answers and keeps stale review enforced inside Revisit', async () => {
+    fixture.record = record(9, "I don't know");
+    const historical = tree(false, true);
+    const revisit = nodes(historical).find(
+      (node) =>
+        node.type === 'details' &&
+        nodes(node).some(
+          (child) => child.type === 'summary' && child.props.children === 'Revisit response',
+        ),
+    );
+    expect(revisit).toBeDefined();
+    expect(revisit?.props.open).toBeUndefined();
+    expect(nodes(revisit).some((node) => node.props.children === 'Review current question')).toBe(
+      true,
+    );
+    expect(
+      nodes(revisit).find((node) => node.props.children === 'Continue with assistant')?.props
+        .disabled,
+    ).toBe(true);
+    expect(renderToStaticMarkup(historical)).toContain('This answer is already recorded');
+    expect(renderToStaticMarkup(historical)).not.toContain('Response recorded.</p>');
+    expect(renderToStaticMarkup(historical)).toContain('Plate wash');
+    expect(renderToStaticMarkup(historical)).toContain('The scientific issue remains open');
+    expect(renderToStaticMarkup(tree())).not.toContain('Revisit response');
+    await click('Continue with assistant');
+    expect(fixture.onContinue).not.toHaveBeenCalled();
+    await click('Review current question');
+    await click('Continue with assistant');
+    expect(fixture.onContinue).toHaveBeenCalledOnce();
+    fixture.record = record(10);
+    expect(renderToStaticMarkup(tree(false, true))).not.toContain('Revisit response');
+    expect(renderToStaticMarkup(tree(false, true))).toContain('Review current question');
+  });
   it('shows the exact SOP target and keeps question-changing controls collapsed', () => {
     expect(renderToStaticMarkup(tree())).toContain('href="/record">Plate wash</a>');
     const context = SelectedQuestionContext({ selection, record: record(), onSelect: vi.fn() });

@@ -305,6 +305,7 @@ type ConversationMessagesProps = {
   onContinue?: (selection: QuestionSelection) => Promise<boolean>;
   onRecorded?: (previous: QuestionSelection, updated: RecordEnvelope) => void;
   conversationBusy?: boolean;
+  latestTurn?: boolean;
 };
 
 export function ConversationMessages(props: ConversationMessagesProps) {
@@ -322,6 +323,7 @@ export function ConversationMessages(props: ConversationMessagesProps) {
           messages={messages}
           running={props.running && index === turns.length - 1}
           conversationBusy={props.running}
+          latestTurn={index === turns.length - 1}
         />
       ))}
     </>
@@ -337,6 +339,7 @@ function ConversationTurn({
   onContinue,
   onRecorded,
   conversationBusy = running,
+  latestTurn = true,
 }: ConversationMessagesProps) {
   const entries = transcriptEntries(messages);
   const finalReply = messages.findLast((m) => m.role === 'assistant');
@@ -357,6 +360,7 @@ function ConversationTurn({
               message={entry.message}
               agentName={agentName}
               running={conversationBusy}
+              latestTurn={latestTurn}
               conversationId={conversationId}
               onContinue={onContinue}
               onRecorded={onRecorded}
@@ -462,6 +466,7 @@ function Message({
   conversationId,
   onContinue,
   onRecorded,
+  latestTurn,
 }: {
   message: Exclude<AssistantMessage, ToolMessage>;
   agentName: string;
@@ -469,6 +474,7 @@ function Message({
   conversationId: string | undefined;
   onContinue: ((selection: QuestionSelection) => Promise<boolean>) | undefined;
   onRecorded: ((previous: QuestionSelection, updated: RecordEnvelope) => void) | undefined;
+  latestTurn: boolean;
 }) {
   if (message.role === 'user') {
     const selection =
@@ -489,6 +495,7 @@ function Message({
             selection={selection}
             text={message.text}
             busy={running}
+            historical={!latestTurn}
             onContinue={onContinue}
             onRecorded={onRecorded}
           />

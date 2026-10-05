@@ -37,6 +37,8 @@ Each fresh ask has a distinct originating user-message identity. A reply retains
 
 For saved SOP responses, the assistant is guided to continue from what the person already supplied, including “I don't know”, without repeating the identical question. The issue stays open and disputed settings stay unchanged while it investigates evidence or suggests a specific next action. Chat prose and notes do not record a response; the people-only `sops.answer_question` action does. Selected-question chat offers **Record response** beneath the person's reply, then **Continue with assistant**. The question stays selected across navigation and reload; changed versions require a fresh review. The SOP question form remains an alternative. Response recording does not accept a scientific decision or confirm the SOP.
 
+Earlier recorded chat answers keep their SOP, question and current issue status visible, with old controls under **Revisit response**. Unsaved answers stay actionable; revisiting a changed SOP still requires reviewing the current question before continuing.
+
 **Earned autonomy (010-V7).** Wali wants agents to earn autonomy. The ledger will keep, per scenario ("move requested in the same conversation", "consume recorded by a run log"), how often proposals were confirmed unchanged, edited or rejected. When the record is good enough, a person can switch that scenario to auto-confirm; the switch is itself a recorded, reversible setting. Nothing auto-confirms at launch.
 
 ## Calculators: agents compute, they don't guess

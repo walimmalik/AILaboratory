@@ -113,6 +113,30 @@ test('chat records an unknown answer once, preserves its question across navigat
   expect(after.version).toBe(saved.version);
   expect(after.attributes).toEqual(saved.attributes);
   expect(responseWrites).toBe(1);
+  // A completed answer remains factual history, not another pending task.
+  const originalCard = chat
+    .locator('.msg')
+    .filter({ has: page.getByText(answer, { exact: true }) });
+  await expect(originalCard.getByText('Revisit response', { exact: true })).toBeVisible();
+  await expect(
+    originalCard.getByRole('button', { name: 'Continue with assistant', exact: true }),
+  ).toBeHidden();
+  await page.reload();
+  await expect(
+    originalCard.getByText('This answer is already recorded.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    originalCard.getByRole('button', { name: 'Review current question', exact: true }),
+  ).toBeHidden();
+  await originalCard.getByText('Revisit response', { exact: true }).click();
+  await expect(
+    originalCard.getByRole('button', { name: 'Continue with assistant', exact: true }),
+  ).toBeDisabled();
+  await originalCard.getByRole('button', { name: 'Review current question', exact: true }).click();
+  await expect(
+    originalCard.getByRole('button', { name: 'Continue with assistant', exact: true }),
+  ).toBeEnabled();
+  await originalCard.getByText('Revisit response', { exact: true }).click();
   const ready = await operation<{ checks: { id: string; passed: boolean }[] }>(
     page,
     'records.readiness',
