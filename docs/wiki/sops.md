@@ -22,7 +22,12 @@ Documents search now links each hit to a read-only exact source reader: copied l
 navigation preserve its version, file and text snapshot, including historical warnings. Unavailable
 attachments remain explicitly unchecked. The SOP source/citation consumer and scientist
 selection/adoption UI remain pending; current SOP citations still use their existing contracts.
-The reader does not provide pinned source context to the assistant.
+Asking from the reader carries the open source's exact reference and selected passage or section.
+The server verifies that selection before accepting the ask, and chat retains a historical reference
+on each message even after navigating elsewhere. Missing or inaccessible source text is not replaced
+with current instructions. This identifies the saved source being discussed; it does not validate
+its science, adopt it into an SOP, or grant approval or confirmation authority. Older SOP source
+associations are not inferred or rewritten.
 See [library architecture](../architecture/library.md#exact-instruction-references-library-producer-004g--sg-18).
 
 - **Documents** (built, `DOC-0001`): SOPs, vendor manuals, papers, robot protocol code and web pages, one record per source with its files (original, alternates, supplements); a new revision is a new version and keeps the old file. Folders import from a `manifest.json` or Markdown with front matter (`library:import`); the seed loads `seed/sops/own` and `docs/sop-library`. Each carries its license and a share policy. All Rights Reserved and non-commercial items are lab-private and never go into `seed/` or exports.
