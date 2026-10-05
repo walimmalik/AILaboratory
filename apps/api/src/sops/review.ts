@@ -315,6 +315,7 @@ export async function reviewSop(
       working = parsed.data;
     };
 
+    let continuing = false;
     try {
       for (let step = 0; step < MAX_STEPS && summary === undefined; step++) {
         const turn = await model.complete({
@@ -329,6 +330,15 @@ export async function reviewSop(
           toolCalls: turn.toolCalls,
           ...(turn.raw === undefined ? {} : { raw: turn.raw }),
         });
+        if (turn.stop === 'refusal' || turn.stop === 'max_tokens') {
+          throw new Error(
+            turn.stop === 'refusal'
+              ? 'The model declined the review; its suggestions were not applied.'
+              : 'The review reply was cut off; its suggestions were not applied.',
+          );
+        }
+        continuing = turn.stop === 'continue';
+        if (continuing && turn.toolCalls.length === 0) continue;
         if (turn.toolCalls.length === 0) break;
         for (const call of turn.toolCalls) {
           try {
@@ -352,6 +362,8 @@ export async function reviewSop(
           }
         }
       }
+      if (continuing && summary === undefined)
+        throw new Error(`The reviewer did not finish within ${MAX_STEPS} turns.`);
     } catch (error) {
       return {
         sop: record,

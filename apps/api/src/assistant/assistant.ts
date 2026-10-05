@@ -161,9 +161,9 @@ export class Assistant {
           turn.text ||
           (turn.stop === 'refusal'
             ? 'The model declined to answer this.'
-            : turn.stop === 'max_tokens' && !turn.toolCalls.length
+            : turn.stop === 'max_tokens'
               ? 'The reply was cut off because it ran too long.'
-              : !turn.toolCalls.length
+              : !turn.toolCalls.length && turn.stop !== 'continue'
                 ? 'The assistant returned no usable reply. Send a new request with the next step you need.'
                 : '');
         const message = await appendMessage(
@@ -182,26 +182,41 @@ export class Assistant {
           { provider: model.provider, model: model.model, raw: turn.raw },
         );
         this.publish(conversationId, { type: 'message', message });
-        if (!turn.toolCalls.length) return await finish('idle');
+        if (turn.stop === 'refusal' || turn.stop === 'max_tokens') {
+          const problem =
+            turn.stop === 'refusal'
+              ? 'The model declined to answer this. Its tool calls were not executed.'
+              : 'The reply was cut off because it ran too long. Its tool calls were not executed; send a new request to continue.';
+          for (const call of turn.toolCalls) {
+            const { operationId } = resolveCall(tools.operationOf, call);
+            const result = await appendMessage(db, conversationId, {
+              role: 'tool',
+              toolCallId: call.id,
+              operationId,
+              ...notExecuted(problem),
+            });
+            this.publish(conversationId, { type: 'message', message: result });
+          }
+          // Preserve the provider's text, but never let it obscure an interruption or refusal.
+          if (turn.text || turn.toolCalls.length) await terminal(problem);
+          return await finish(
+            turn.stop === 'max_tokens' ? 'failed' : 'idle',
+            turn.stop === 'max_tokens' ? problem : undefined,
+          );
+        }
+        if (!turn.toolCalls.length) {
+          if (turn.stop === 'continue') continue;
+          return await finish('idle');
+        }
 
         const files = attachmentsOf(await messageRows(db, conversationId));
         let pending = false;
         for (const call of turn.toolCalls) {
           const { operationId, input, known } = resolveCall(tools.operationOf, call);
           const outcome: ToolOutcome = pending
-            ? {
-                outcome: 'failed',
-                result: {
-                  code: 'invalid_state',
-                  message:
-                    'This call was not executed because a proposed change is waiting for your decision.',
-                },
-                error: {
-                  code: 'invalid_state',
-                  message:
-                    'This call was not executed because a proposed change is waiting for your decision.',
-                },
-              }
+            ? notExecuted(
+                'This call was not executed because a proposed change is waiting for your decision.',
+              )
             : await runTool(registry, agentCtx, operationId, input, files, {
                 known: known && callable(registry, operationId),
               });
@@ -246,6 +261,11 @@ type ToolOutcome = Pick<
   Extract<AssistantMessage, { role: 'tool' }>,
   'outcome' | 'result' | 'error'
 >;
+
+function notExecuted(message: string): ToolOutcome {
+  const error: OperationErrorBody = { code: 'invalid_state', message };
+  return { outcome: 'failed', result: error, error };
+}
 
 async function runTool(
   registry: OperationRegistry,

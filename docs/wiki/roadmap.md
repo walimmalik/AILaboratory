@@ -59,3 +59,5 @@ Planning update, 2026-10-05: [004g AI-first scientific reconciliation](../plans/
 007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. 004e (review v2 and agent context) goes before 013c, 014a, 016a and 017, and 005 lab memory before 017 (Wali, 2026-09-30). The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
 
 Implementation tracking: [004g epic #162](https://github.com/walimmalik/AILaboratory/issues/162) links the reviewed specification and 25 child tickets. No implementation acceptance is implied by ticket publication.
+
+The 004g Responses/continuation follow-up is scoped in [ADR 0070](../decisions/0070-responses-agent-continuation.md): explicit transport selection and bounded model continuation using the existing agent loop. Tool-menu and schema-size optimization remains separate, measured SG-16d work.

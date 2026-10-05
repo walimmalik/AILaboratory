@@ -24,6 +24,12 @@ Evidence baseline: `9624e5324655472bf1b864c4a6830d448b0e7169`. The completed 5 O
 
 ## 1. Outcome and boundaries
 
+### Next small runtime batch: Responses and continuation
+
+Authorized by Wali on 2026-10-05 after merging PRs #193–195. [ADR 0070](../decisions/0070-responses-agent-continuation.md) records the implementation choice: explicitly select Responses for a configured compatible endpoint, preserve provider output and continue nonterminal commentary within the existing loop limit. Refused/truncated output cannot execute tools or become accepted SOP review/suggestion content. Existing proposal pause and human confirmation remain intact.
+
+This SG-16a follow-up has three bounded owners: adapter/model contract, loop and SOP consumers, and configuration/documentation/integration. A focused producer checkpoint precedes integrated runtime validation. Acceptance covers exact replay and model/protocol changes; commentary → tool → final; bounded commentary; terminal tool refusal; pending/deferred call resume; and one disposable live/browser scientific draft journey. It introduces no operation or table. Tool-menu/schema-size changes remain SG-16d so they can be measured separately. Review evidence and live outcomes belong in the PR.
+
 A scientist asks for a reusable SOP or an experiment in lab language. The agent checks sources, methods, registries and calculators, creates necessary drafts, and asks the next coherent question that needs scientific judgment. The scientist sees a concise issue, supported choices and their consequences. After a selection, the assistant presents the precise proposed change. **Apply decision** applies it through a people-authorized operation and reruns checks. The page shows what changed, whether the issue is resolved, and what remains. Confirming the SOP is a later, separate action.
 
 Implementation scope clarification, Wali 2026-10-05: this greenfield app is a technology demonstration of AI-first lab operations. Prefer the smallest coherent implementation that proves the scientific journey. Reuse existing records, proposals, operations and identifiers; do not build generic workflow, compatibility, replay or migration frameworks for speculative use. Keep scientific correctness, explicit authority and existing-data preservation, but implement broader capabilities only when a demonstrated path requires them.

@@ -1164,6 +1164,70 @@ function withReviewer(model: ChatModel | undefined) {
 }
 
 describe('sops.review', () => {
+  it('continues commentary without claiming a clean review and bounds repeated commentary', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const raw = { output: [{ type: 'message', phase: 'commentary' }] };
+    const model = new PlaybackModel([
+      { text: 'Checking the source.', toolCalls: [], stop: 'continue', raw },
+      call('sop_finish', { summary: 'Checked the source.' }),
+    ]);
+    const result = await withReviewer(model).execute(person, 'sops.review', {
+      sop: sop.id,
+      expectedVersion: 1,
+    });
+    expect((result as { output: unknown }).output).toMatchObject({
+      stopped: 'clean',
+      rounds: [{ summary: 'Checked the source.' }],
+    });
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]?.messages.at(-1)).toMatchObject({ role: 'assistant', raw });
+
+    const looping = new PlaybackModel(
+      Array.from({ length: 9 }, () => ({ text: 'Checking.', toolCalls: [], stop: 'continue' })),
+    );
+    const exhausted = await withReviewer(looping).execute(person, 'sops.review', {
+      sop: sop.id,
+      expectedVersion: 1,
+    });
+    expect(looping.requests).toHaveLength(8);
+    expect((exhausted as { output: unknown }).output).toMatchObject({
+      stopped: 'failed',
+      rounds: [],
+      problem: expect.stringContaining('did not finish'),
+    });
+  });
+
+  it.each(['refusal', 'max_tokens'] as const)(
+    'rejects scientific changes from a %s review turn',
+    async (stop) => {
+      const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+      const model = new PlaybackModel([
+        {
+          ...call('sop_fix', {
+            path: '/steps/0/title',
+            value: 'Must not change',
+            reason: 'Seems right',
+          }),
+          text: 'Checked.',
+          stop,
+        },
+      ]);
+      const result = await withReviewer(model).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: 1,
+      });
+      expect((result as { output: unknown }).output).toMatchObject({
+        stopped: 'failed',
+        rounds: [],
+      });
+      expect(model.requests).toHaveLength(1);
+      expect(await run<RecordEnvelope>(person, 'records.get', { id: sop.id })).toMatchObject({
+        version: 1,
+        attributes: sop.attributes,
+      });
+    },
+  );
+
   it('fixes what the source settles, asks where it is unclear, keeps each round, and stops when clean', async () => {
     const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
       name: 'elisa.md',
@@ -1308,6 +1372,52 @@ describe('sops.suggest', () => {
     withReviewer(model)
       .execute(ctx, 'sops.suggest', input)
       .then((r) => (r as { output: Record<string, unknown> }).output);
+
+  it('continues commentary before a suggestion, and bounds commentary without parsing it', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const raw = { output: [{ type: 'message', phase: 'commentary' }] };
+    const model = new PlaybackModel([
+      {
+        text: '{"kind":"default","value":"999","reason":"unfinished"}',
+        toolCalls: [],
+        stop: 'continue',
+        raw,
+      },
+      call('sop_value', { kind: 'default', value: '50', reason: 'Source value' }),
+    ]);
+    expect(await suggest(model, person, { sop: sop.id, value: 'diluent' })).toMatchObject({
+      variable: { value: '50' },
+    });
+    expect(model.requests[1]?.messages.at(-1)).toMatchObject({ role: 'assistant', raw });
+    const looping = new PlaybackModel(
+      Array.from({ length: 3 }, () => ({ text: 'Checking.', toolCalls: [], stop: 'continue' })),
+    );
+    await expect(suggest(looping, person, { sop: sop.id, value: 'diluent' })).rejects.toMatchObject(
+      { code: 'invalid_state', message: expect.stringContaining('did not finish') },
+    );
+    expect(looping.requests).toHaveLength(2);
+  });
+
+  it.each(['refusal', 'max_tokens'] as const)(
+    'rejects a valid scientific suggestion from a %s turn',
+    async (stop) => {
+      const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+      const model = new PlaybackModel([
+        {
+          ...call('sop_value', { kind: 'default', value: '50', reason: 'Source value' }),
+          text: 'Complete.',
+          stop,
+        },
+      ]);
+      await expect(suggest(model, person, { sop: sop.id, value: 'diluent' })).rejects.toMatchObject(
+        {
+          code: 'invalid_state',
+          message: expect.stringContaining(stop === 'refusal' ? 'declined' : 'cut off'),
+        },
+      );
+      expect(model.requests).toHaveLength(1);
+    },
+  );
 
   it('fills in a value, checked with the calculator, and sends a broken formula back', async () => {
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);

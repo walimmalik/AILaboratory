@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { records, users } from '../db/schema.ts';
+import { conversationMessages, records, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { memoryKinds } from '../memory/kinds.ts';
 import {
@@ -443,18 +443,40 @@ describe('assistant.ask', () => {
         status: 'active',
       }),
     )) as RecordEnvelope;
+    const proposalInput = {
+      operation: 'records.update',
+      input: { id: record.id, expectedVersion: 1, label: 'Updated' },
+    };
+    const laterInput = { kind: 'widget', label: 'Must not create', attributes };
+    const raw = {
+      output: [
+        {
+          type: 'function_call',
+          call_id: 'proposal',
+          name: 'run_operation',
+          arguments: JSON.stringify(proposalInput),
+        },
+        {
+          type: 'function_call',
+          call_id: 'later',
+          name: 'records_create',
+          arguments: JSON.stringify(laterInput),
+        },
+      ],
+    };
     model.turns.push({
       text: 'I prepared a change.',
+      raw,
       toolCalls: [
         {
           id: 'proposal',
-          name: 'records_update',
-          input: { id: record.id, expectedVersion: 1, label: 'Updated' },
+          name: 'run_operation',
+          input: proposalInput,
         },
         {
           id: 'later',
           name: 'records_create',
-          input: { kind: 'widget', label: 'Must not create', attributes },
+          input: laterInput,
         },
       ],
       stop: 'tool_use',
@@ -485,6 +507,41 @@ describe('assistant.ask', () => {
     expect(model.requests.at(-1)?.system).toContain(
       'Current proposal states from this conversation',
     );
+    const history = model.requests.at(-1)?.messages ?? [];
+    expect(
+      history.find((message) => message.role === 'assistant' && message.toolCalls.length),
+    ).toMatchObject({ raw });
+    expect(
+      history.find((message) => message.role === 'assistant' && message.toolCalls.length),
+    ).toMatchObject({
+      toolCalls: [
+        expect.objectContaining({ id: 'proposal', name: 'records_update' }),
+        expect.objectContaining({ id: 'later', name: 'records_create' }),
+      ],
+    });
+    for (const id of ['proposal', 'later'])
+      expect(
+        history.filter((message) => message.role === 'tool' && message.toolCallId === id),
+      ).toHaveLength(1);
+
+    // A restart after storing the calls but before storing a deferred result must still pair both.
+    const missing = conversation.messages.find(
+      (message) => message.role === 'tool' && message.toolCallId === 'later',
+    );
+    if (!missing) throw new Error('Expected deferred result');
+    await db.delete(conversationMessages).where(eq(conversationMessages.id, missing.id));
+    const restarted = setup(model);
+    await ask(restarted.registry, restarted.assistant, 'Explain after restart', {
+      conversationId: conversation.id,
+    });
+    const restartedHistory = model.requests.at(-1)?.messages ?? [];
+    for (const id of ['proposal', 'later'])
+      expect(
+        restartedHistory.filter((message) => message.role === 'tool' && message.toolCallId === id),
+      ).toHaveLength(1);
+    expect(
+      restartedHistory.find((message) => message.role === 'tool' && message.toolCallId === 'later'),
+    ).toMatchObject({ isError: true, content: expect.stringContaining('not run') });
   });
 
   it('rejects stale or cross-lab page context and contextual replies without active work', async () => {
@@ -872,6 +929,120 @@ describe('assistant.ask', () => {
     expect(model.requests[1]?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
     expect(model.requests[1]?.system).toContain('Wali in Bench 3');
   });
+
+  it('persists commentary and raw history, stays running, then runs a tool and finishes', async () => {
+    let release: (turn: ModelTurn) => void = () => undefined;
+    const raw = { output: [{ type: 'message', phase: 'commentary', text: 'Checking.' }] };
+    const model = new FakeModel([
+      { text: 'Checking.', toolCalls: [], stop: 'continue', raw },
+      {
+        text: '',
+        toolCalls: [
+          {
+            id: 'create',
+            name: 'records_create',
+            input: { kind: 'widget', label: 'Made', attributes },
+          },
+        ],
+        stop: 'tool_use',
+      },
+      () => new Promise<ModelTurn>((resolve) => (release = resolve)),
+    ]);
+    const { assistant, registry } = setup(model);
+    const result = await registry.execute(person, 'assistant.ask', { message: 'Make a widget' });
+    const { id } = (result as { output: ConversationSummary }).output;
+    await expect.poll(() => model.requests.length).toBe(3);
+    expect((await getConversation(db, person, id)).status).toBe('running');
+    expect(model.requests[1]?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      text: 'Checking.',
+      raw,
+    });
+    expect(model.requests[2]?.messages.at(-1)).toMatchObject({
+      role: 'tool',
+      toolCallId: 'create',
+      isError: false,
+    });
+    expect((await messageRows(db, id))[1]?.providerRaw).toEqual(raw);
+    release({ text: 'Made it.', toolCalls: [], stop: 'end' });
+    await assistant.wait(id);
+    const conversation = await getConversation(db, person, id);
+    expect(conversation.status).toBe('idle');
+    expect(conversation.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'assistant',
+      'tool',
+      'assistant',
+    ]);
+    expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+      records: [expect.objectContaining({ label: 'Made' })],
+    });
+  });
+
+  it('bounds repeated commentary by the existing step limit', async () => {
+    const model = new FakeModel(
+      Array.from({ length: MAX_STEPS + 1 }, () => ({
+        text: 'Still checking.',
+        toolCalls: [],
+        stop: 'continue',
+      })),
+    );
+    const { assistant, registry } = setup(model);
+    const conversation = await ask(registry, assistant, 'Check forever');
+    expect(model.requests).toHaveLength(MAX_STEPS);
+    expect(conversation.status).toBe('failed');
+    expect(conversation.messages.at(-1)).toMatchObject({
+      text: expect.stringContaining(`limit of ${MAX_STEPS}`),
+    });
+  });
+
+  it.each(['refusal', 'max_tokens'] as const)(
+    'does not execute valid tool calls from a %s turn with text',
+    async (stop) => {
+      const model = new FakeModel([
+        {
+          text: 'This looks complete.',
+          toolCalls: [
+            {
+              id: 'unsafe',
+              name: 'records_create',
+              input: { kind: 'widget', label: 'Must not create', attributes },
+            },
+          ],
+          stop,
+          raw: { stop },
+        },
+      ]);
+      const { assistant, registry } = setup(model);
+      const conversation = await ask(registry, assistant, 'Make a widget');
+      expect(model.requests).toHaveLength(1);
+      expect(conversation.status).toBe(stop === 'refusal' ? 'idle' : 'failed');
+      expect(conversation.messages[1]).toMatchObject({
+        role: 'assistant',
+        text: 'This looks complete.',
+      });
+      expect(conversation.messages[2]).toMatchObject({
+        role: 'tool',
+        toolCallId: 'unsafe',
+        outcome: 'failed',
+        error: { code: 'invalid_state', message: expect.stringContaining('not executed') },
+      });
+      expect(conversation.messages.at(-1)).toMatchObject({
+        role: 'assistant',
+        text: expect.stringContaining(stop === 'refusal' ? 'declined' : 'cut off'),
+      });
+      expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+        records: [],
+      });
+      await ask(registry, assistant, 'Try again', { conversationId: conversation.id });
+      expect(
+        model.requests[1]?.messages.filter(
+          (message) => message.role === 'tool' && message.toolCallId === 'unsafe',
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   it('reports refused tool calls back to the model and keeps going', async () => {
     const model = new FakeModel([
