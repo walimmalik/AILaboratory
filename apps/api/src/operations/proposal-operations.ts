@@ -1,4 +1,6 @@
 import { activityList, proposalsApprove, proposalsList, proposalsReject } from '@ailab/schema';
+import { and, eq } from 'drizzle-orm';
+import { conversations } from '../db/schema.ts';
 import { listActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
 import { decideProposal, findProposal, listProposals, toProposal } from './proposal-store.ts';
@@ -32,6 +34,21 @@ export const proposalOperations = [
       }
       if (row.status !== 'pending') {
         throw new OperationError('invalid_state', `Proposal ${row.id} is already ${row.status}`);
+      }
+      if (row.proposedBy.type === 'agent' && row.proposedBy.sessionRef?.startsWith('cnv_')) {
+        const id = row.proposedBy.sessionRef;
+        // Private conversation ownership doesn't restrict another lab member's approval.
+        // This lock is only taken after the proposal lock; context reads never lock proposals.
+        const [conversation] = await deps.db
+          .select({ status: conversations.status })
+          .from(conversations)
+          .where(and(eq(conversations.id, id), eq(conversations.labId, ctx.labId)))
+          .for('update');
+        if (conversation && (conversation.status === 'running' || deps.assistant.isRunning(id)))
+          throw new OperationError(
+            'invalid_state',
+            'The assistant is still working on this change. Wait for its turn to finish before applying it.',
+          );
       }
       if (row.decision) {
         throw new OperationError(

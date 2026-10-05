@@ -29,6 +29,15 @@ export const assistantAsk = defineContract({
       conversationId: ConversationId.optional(),
       message: z.string().trim().max(8000),
       page: PageContext.optional(),
+      replyTo: z
+        .strictObject({
+          conversation: ConversationId,
+          message: z.string().min(1),
+        })
+        .optional()
+        .describe(
+          'Continue a validated pending question or proposal from this original user message. Omit for a new request.',
+        ),
       attachments: z
         .array(AttachmentInput)
         .max(5, 'Attach at most 5 files to one message')

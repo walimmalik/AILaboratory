@@ -5,6 +5,7 @@ import {
   assistantAsk,
   type Conversation,
   type ConversationSummary,
+  type PageContext,
 } from '@ailab/schema';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouterState } from '@tanstack/react-router';
@@ -20,6 +21,13 @@ import {
 import { api } from './api.ts';
 import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts';
 
+interface SendOptions {
+  fresh?: boolean;
+  attachments?: AttachmentInput[];
+  context?: Pick<PageContext, 'activeQuestion' | 'proposal'>;
+  replyTo?: { conversation: string; message: string };
+}
+
 interface AssistantUi {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -28,10 +36,7 @@ interface AssistantUi {
   /** Opens the panel on a conversation, or on a fresh one. */
   show: (conversationId?: string) => void;
   /** Sends a message: to the shown conversation, or to a new one with `fresh`. */
-  send: (
-    message: string,
-    options?: { fresh?: boolean; attachments?: AttachmentInput[] },
-  ) => Promise<boolean>;
+  send: (message: string, options?: SendOptions) => Promise<boolean>;
   sending: boolean;
   sendError: string | undefined;
   /** The shown conversation's latest state, live. */
@@ -118,7 +123,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const send = useCallback(
-    async (message: string, options: { fresh?: boolean; attachments?: AttachmentInput[] } = {}) => {
+    async (message: string, options: SendOptions = {}) => {
       const target = options.fresh ? undefined : conversationId;
       const heading = document.querySelector('.page h1')?.textContent?.trim();
       // On a record's page, say which record and version the person is looking at.
@@ -132,12 +137,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           message,
           ...(target ? { conversationId: target } : {}),
           ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+          ...(options.replyTo ? { replyTo: options.replyTo } : {}),
           page: {
             path,
             ...(heading ? { title: heading.slice(0, 200) } : {}),
             ...(shown
               ? { record: { id: shown.id, name: shown.name, version: shown.version } }
               : {}),
+            ...options.context,
           },
         });
         setRunning(true);

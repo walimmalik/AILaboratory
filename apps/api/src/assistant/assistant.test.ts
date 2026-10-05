@@ -4,12 +4,16 @@ import type {
   Conversation,
   ConversationSummary,
   OperationResult,
+  Proposal,
   RecordEnvelope,
 } from '@ailab/schema';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { defineKind, ScientificQuestion } from '@ailab/schema';
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { users } from '../db/schema.ts';
+import { records, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { memoryKinds } from '../memory/kinds.ts';
 import {
@@ -29,8 +33,9 @@ import {
   toolsFor,
 } from './assistant.ts';
 import { type ChatModel, ModelError, type ModelRequest, type ModelTurn } from './model.ts';
+import { SCIENTIFIC_INTAKE_PROMPT } from './scientific-intake.ts';
 import { ScriptedModel } from './scripted.ts';
-import { messageRows } from './store.ts';
+import { createConversation, getConversation, messageRows, updateConversation } from './store.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -116,6 +121,407 @@ class FakeModel implements ChatModel {
 }
 
 describe('assistant.ask', () => {
+  it('cleans up running status after a preflight read fails', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    const conversation = await createConversation(db, person, {
+      title: 'Preflight fault',
+      agentName: assistant.agentName,
+      provider: model.provider,
+      model: model.model,
+    });
+    await updateConversation(db, conversation.id, { status: 'running' });
+    const fault = vi.spyOn(db, 'select').mockImplementationOnce(() => {
+      throw new Error('Injected preflight failure');
+    });
+    assistant.start(registry.deps, person, conversation.id);
+    await assistant.wait(conversation.id);
+    fault.mockRestore();
+    expect(assistant.isRunning(conversation.id)).toBe(false);
+    expect(model.requests).toHaveLength(0);
+    expect(await getConversation(db, person, conversation.id)).toMatchObject({
+      status: 'failed',
+      error: 'The assistant stopped because of a server error.',
+    });
+  });
+  it('stamps distinct requests and retains only a validated pending reply origin after reload or new chat', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    const first = await ask(registry, assistant, 'First request');
+    const second = await ask(registry, assistant, 'Second request', { conversationId: first.id });
+    const [a, b] = second.messages.filter((message) => message.role === 'user');
+    expect(a?.origin).toEqual({ type: 'user_message', conversation: first.id, message: a?.id });
+    expect(b?.origin).toEqual({ type: 'user_message', conversation: first.id, message: b?.id });
+    expect(a?.origin).not.toEqual(b?.origin);
+    expect(model.requests[0]?.system).toContain(SCIENTIFIC_INTAKE_PROMPT);
+
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'widget',
+        label: 'Stock',
+        attributes,
+        status: 'active',
+      }),
+    )) as RecordEnvelope;
+    model.turns.push({
+      text: '',
+      toolCalls: [
+        {
+          id: 'proposal',
+          name: 'records_update',
+          input: { id: record.id, expectedVersion: 1, label: 'Updated' },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    const proposed = await ask(registry, assistant, 'Update the stock');
+    const root = proposed.messages.findLast((message) => message.role === 'user');
+    const tool = proposed.messages.find(
+      (message) => message.role === 'tool' && message.outcome === 'proposed',
+    );
+    if (root?.role !== 'user' || tool?.role !== 'tool')
+      throw new Error('Expected pending proposal');
+    const proposal = (tool.result as { proposal: Proposal }).proposal;
+    const continuation = {
+      page: { path: '/review', proposal: { id: proposal.id } },
+      replyTo: { conversation: proposed.id, message: root.id },
+    };
+    const reply = await ask(registry, assistant, 'Explain the pending change', continuation);
+    expect(reply.messages[0]).toMatchObject({ role: 'user', origin: root.origin });
+    expect(model.requests.at(-1)?.system).toContain(`"id":"${proposal.id}"`);
+    expect(model.requests.at(-1)?.system).toContain('"status":"pending"');
+    const reload = await registry.execute(person, 'assistant.get_conversation', { id: reply.id });
+    expect((reload as { output: Conversation }).output.messages[0]).toMatchObject({
+      origin: root.origin,
+    });
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', {
+            message: 'Unrelated reply',
+            ...continuation,
+            replyTo: { conversation: first.id, message: a?.id },
+          }),
+        )
+      ).code,
+    ).toBe('invalid_input');
+    expect(
+      (
+        await refused(
+          registry.execute(other, 'assistant.ask', {
+            message: 'Wrong person',
+            ...continuation,
+          }),
+        )
+      ).code,
+    ).toBe('not_found');
+    const tenant = await createTenant(db, {
+      orgName: 'Other org',
+      labName: 'Other lab',
+      userName: 'Other scientist',
+    });
+    const outsider: RecordContext = {
+      actor: { type: 'user', userId: tenant.userId },
+      orgId: tenant.orgId,
+      labId: tenant.labId,
+    };
+    expect(
+      (
+        await refused(
+          registry.execute(outsider, 'assistant.ask', {
+            message: 'Wrong lab',
+            ...continuation,
+          }),
+        )
+      ).code,
+    ).toBe('not_found');
+    await registry.execute(person, 'records.update', {
+      id: record.id,
+      expectedVersion: 1,
+      label: 'Concurrent edit',
+    });
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', {
+            message: 'Stale pending change',
+            ...continuation,
+          }),
+        )
+      ).code,
+    ).toBe('version_conflict');
+    await registry.execute(person, 'proposals.reject', { id: proposal.id });
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', { message: 'Continue', ...continuation }),
+        )
+      ).code,
+    ).toBe('invalid_state');
+  });
+
+  it('passes trusted origins to tools and pauses remaining tool calls when a proposal is pending', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'widget',
+        label: 'Stock',
+        attributes,
+        status: 'active',
+      }),
+    )) as RecordEnvelope;
+    model.turns.push({
+      text: 'I prepared a change.',
+      toolCalls: [
+        {
+          id: 'proposal',
+          name: 'records_update',
+          input: { id: record.id, expectedVersion: 1, label: 'Updated' },
+        },
+        {
+          id: 'later',
+          name: 'records_create',
+          input: { kind: 'widget', label: 'Must not create', attributes },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    const execute = vi.spyOn(registry, 'execute');
+    const conversation = await ask(registry, assistant, 'Change the stock');
+    const user = conversation.messages[0];
+    expect(execute.mock.calls.find(([, id]) => id === 'records.update')?.[0].origin).toEqual(
+      user?.role === 'user' ? user.origin : undefined,
+    );
+    execute.mockRestore();
+    expect(model.requests).toHaveLength(1);
+    expect(conversation.status).toBe('idle');
+    expect(conversation.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      text: expect.stringContaining('ready for your review'),
+      toolCalls: [],
+    });
+    expect(
+      conversation.messages.find(
+        (message) => message.role === 'tool' && message.toolCallId === 'later',
+      ),
+    ).toMatchObject({ outcome: 'failed', error: { code: 'invalid_state' } });
+    expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+      records: [expect.objectContaining({ id: record.id })],
+    });
+    await ask(registry, assistant, 'What is pending?', { conversationId: conversation.id });
+    expect(model.requests.at(-1)?.system).toContain(
+      'Current proposal states from this conversation',
+    );
+  });
+
+  it('rejects stale or cross-lab page context and contextual replies without active work', async () => {
+    const { assistant, registry } = setup();
+    const record = (await output(
+      registry.execute(person, 'records.create', { kind: 'widget', label: 'Stock', attributes }),
+    )) as RecordEnvelope;
+    const page = {
+      path: `/records/${record.id}`,
+      record: { id: record.id, name: record.name, version: record.version },
+    };
+    await registry.execute(person, 'records.update', {
+      id: record.id,
+      expectedVersion: 1,
+      label: 'Changed',
+    });
+    expect(
+      (await refused(registry.execute(person, 'assistant.ask', { message: 'This record', page })))
+        .code,
+    ).toBe('version_conflict');
+    const tenant = await createTenant(db, {
+      orgName: 'Other org',
+      labName: 'Other lab',
+      userName: 'Other scientist',
+    });
+    const outsider: RecordContext = {
+      actor: { type: 'user', userId: tenant.userId },
+      orgId: tenant.orgId,
+      labId: tenant.labId,
+    };
+    expect(
+      (await refused(registry.execute(outsider, 'assistant.ask', { message: 'This record', page })))
+        .code,
+    ).toBe('not_found');
+    const original = await ask(registry, assistant, 'A new request');
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', {
+            message: 'Continuation',
+            replyTo: { conversation: original.id, message: original.messages[0]?.id },
+          }),
+        )
+      ).code,
+    ).toBe('invalid_input');
+  });
+
+  it('recovers current scientific questions and unknown responses in new chat, and refuses missing, changed or historical questions', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    // Consumer fixture uses the SG-01 schema without depending on the SG-02 operation rollout.
+    registry.deps.kinds.register(
+      defineKind({
+        kind: 'sop',
+        idPrefix: 'sop',
+        namePrefix: 'SOP',
+        nameWidth: 4,
+        attributes: z.strictObject({ questions: z.array(ScientificQuestion) }),
+      }),
+    );
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'sop',
+        label: 'Wash method',
+        attributes: {
+          questions: [
+            {
+              id: 'wash',
+              question: 'Which supported wash instruction applies?',
+              stage: { stage: 'method', reason: 'Conflicting source instructions' },
+              responses: [
+                {
+                  text: "I don't know",
+                  by: person.actor,
+                  at: new Date().toISOString(),
+                  version: 1,
+                },
+              ],
+              disposition: { status: 'open' },
+            },
+          ],
+        },
+      }),
+    )) as RecordEnvelope;
+    const page = {
+      path: `/records/${record.id}`,
+      record: { id: record.id, name: record.name, version: 1 },
+      activeQuestion: { id: 'wash', stage: 'method' },
+    };
+    const original = await ask(registry, assistant, 'Investigate this method', { page });
+    expect(model.requests[0]?.system).toContain("I don't know");
+    expect(model.requests[0]?.system).toContain('"status":"open"');
+    const root = original.messages[0];
+    if (root?.role !== 'user') throw new Error('Expected originating user message');
+    const continued = await ask(registry, assistant, 'Continue investigating', {
+      page,
+      replyTo: { conversation: original.id, message: root.id },
+    });
+    expect(continued.messages[0]).toMatchObject({ role: 'user', origin: root.origin });
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', {
+            message: 'Missing',
+            page: { ...page, activeQuestion: { id: 'missing', stage: 'method' } },
+          }),
+        )
+      ).code,
+    ).toBe('not_found');
+    expect(
+      (
+        await refused(
+          registry.execute(person, 'assistant.ask', {
+            message: 'Changed stage',
+            page: { ...page, activeQuestion: { id: 'wash', stage: 'run' } },
+          }),
+        )
+      ).code,
+    ).toBe('invalid_state');
+    // Historical payload is preserved in storage, but never interpreted as the current contract.
+    await db
+      .update(records)
+      .set({
+        attributes: {
+          questions: [
+            { id: 'wash', question: 'Wash?', status: 'answered', answer: "I don't know" },
+          ],
+        },
+      })
+      .where(eq(records.id, record.id));
+    expect(
+      (await refused(registry.execute(person, 'assistant.ask', { message: 'Historical', page })))
+        .code,
+    ).toBe('unavailable');
+    const historical = await ask(registry, assistant, 'Inspect method', {
+      page: { path: page.path, record: page.record },
+    });
+    expect(historical.status).toBe('idle');
+    expect(model.requests.at(-1)?.system).toContain('unsupported historical questions');
+  });
+
+  it('blocks Apply while an assistant turn runs, allows a lab colleague after idle, and returns an approved receipt during a later turn', async () => {
+    let release: (turn: ModelTurn) => void = () => undefined;
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'widget',
+        label: 'Stock',
+        attributes,
+        status: 'active',
+      }),
+    )) as RecordEnvelope;
+    model.turns.push({
+      text: '',
+      toolCalls: [
+        {
+          id: 'proposal',
+          name: 'records_update',
+          input: { id: record.id, expectedVersion: 1, label: 'Updated' },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    const conversation = await ask(registry, assistant, 'Change stock');
+    const tool = conversation.messages.find(
+      (message) => message.role === 'tool' && message.outcome === 'proposed',
+    );
+    if (tool?.role !== 'tool') throw new Error('Expected proposal');
+    const proposal = (tool.result as { proposal: Proposal }).proposal;
+    model.turns.push(() => new Promise<ModelTurn>((resolve) => (release = resolve)));
+    await registry.execute(person, 'assistant.ask', {
+      message: 'More evidence',
+      conversationId: conversation.id,
+    });
+    await expect.poll(() => model.requests.length).toBe(2);
+    expect(
+      (await refused(registry.execute(other, 'proposals.approve', { id: proposal.id }))).code,
+    ).toBe('invalid_state');
+    release({ text: 'Ready.', toolCalls: [], stop: 'end' });
+    await assistant.wait(conversation.id);
+    const applied = (await output(
+      registry.execute(other, 'proposals.approve', { id: proposal.id }),
+    )) as Proposal;
+    expect(applied.status).toBe('approved');
+    expect(applied.decidedBy).toEqual(other.actor);
+    model.turns.push(() => new Promise<ModelTurn>((resolve) => (release = resolve)));
+    await registry.execute(person, 'assistant.ask', {
+      message: 'Another request',
+      conversationId: conversation.id,
+    });
+    await expect.poll(() => model.requests.length).toBe(3);
+    expect(await output(registry.execute(other, 'proposals.approve', { id: proposal.id }))).toEqual(
+      applied,
+    );
+    release({ text: 'Done.', toolCalls: [], stop: 'end' });
+    await assistant.wait(conversation.id);
+  });
+
+  it('makes an empty model reply an explicit limit instead of a blank terminal turn', async () => {
+    const { assistant, registry } = setup(
+      new FakeModel([{ text: '', toolCalls: [], stop: 'end' }]),
+    );
+    const conversation = await ask(registry, assistant, 'Investigate');
+    expect(conversation.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      text: expect.stringContaining('no usable reply'),
+    });
+  });
   it('runs operations as an agent for the person and saves the conversation', async () => {
     const { assistant, registry } = setup();
     const conversation = await ask(registry, assistant, createWidget('Tip box'), {

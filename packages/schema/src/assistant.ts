@@ -1,22 +1,37 @@
 import { z } from 'zod';
 import { OperationErrorBody } from './operation.ts';
+import { OriginatingIntent } from './scientific-decisions.ts';
 
 export const ConversationId = z.string().regex(/^cnv_[0-9A-HJKMNP-TV-Z]{26}$/, 'must be a cnv_ ID');
 
 /** Where the person was when they asked, so the assistant knows what "this" means. */
-export const PageContext = z.object({
-  /** The app path, e.g. "/records/wdg_…". */
-  path: z.string().max(500),
-  title: z.string().max(200).optional(),
-  /** The record the page shows, at the version the person is looking at (ADR 0055). */
-  record: z
-    .object({
-      id: z.string().max(40),
-      name: z.string().max(40),
-      version: z.number().int().positive(),
-    })
-    .optional(),
-});
+export const PageContext = z
+  .object({
+    /** The app path, e.g. "/records/wdg_…". */
+    path: z.string().max(500),
+    title: z.string().max(200).optional(),
+    /** The record the page shows, at the version the person is looking at (ADR 0055). */
+    record: z
+      .object({
+        id: z.string().max(40),
+        name: z.string().max(40),
+        version: z.number().int().positive(),
+      })
+      .optional(),
+    /** The visible question; the server checks its record, version and stage. */
+    activeQuestion: z
+      .strictObject({
+        id: z.string().regex(/^[a-z0-9_-]+$/),
+        stage: z.enum(['method', 'experiment', 'run']),
+      })
+      .optional(),
+    /** A persisted proposal, whose current state is always read from the server. */
+    proposal: z.strictObject({ id: z.string().regex(/^prp_[0-9A-HJKMNP-TV-Z]{26}$/) }).optional(),
+  })
+  .refine((page) => !page.activeQuestion || Boolean(page.record), {
+    message: 'A selected question needs its record and version',
+    path: ['activeQuestion'],
+  });
 export type PageContext = z.infer<typeof PageContext>;
 
 /** idle: waiting for the person. running: the model is working. failed: the last run stopped with an error. */
@@ -85,6 +100,8 @@ export const AssistantMessage = z.discriminatedUnion('role', [
     role: z.literal('user'),
     text: z.string(),
     page: PageContext.optional(),
+    /** Stamped by the assistant service, never supplied as authority by a model. */
+    origin: OriginatingIntent.optional(),
     attachments: z.array(Attachment).optional(),
   }),
   z.object({
