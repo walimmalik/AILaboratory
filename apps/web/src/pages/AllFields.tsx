@@ -146,6 +146,8 @@ function Part({
   const confirmed = section.state === 'confirmed';
   const changed = section.fields.some((f) => f.state === 'changed');
   const archived = record.status === 'archived';
+  const ownedQuestions =
+    record.kind === 'sop' && section.fields.some((f) => f.field === 'questions');
   const title = sectioned ? section.title : 'Values';
 
   return (
@@ -157,7 +159,7 @@ function Part({
             {changed ? 'changed, needs review' : 'needs review'}
           </span>
         )}
-        {!editing && !archived && (
+        {!editing && !archived && !ownedQuestions && (
           <button
             type="button"
             className="link-btn"
@@ -168,7 +170,7 @@ function Part({
           </button>
         )}
       </div>
-      {editing ? (
+      {editing && !ownedQuestions ? (
         <SectionEditor
           record={record}
           fields={section.fields.map((f) => f.field)}

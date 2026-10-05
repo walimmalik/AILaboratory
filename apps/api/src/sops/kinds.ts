@@ -1,7 +1,9 @@
 import { evaluateVariables, getUnit, isUnit, type VariableDefinition } from '@ailab/domain';
 import { type CheckResult, defineKind, type Quantity, SopAttributes } from '@ailab/schema';
 import { memoryLinks } from '../memory/links.ts';
+import { stable } from '../records/pins.ts';
 import { citationsOf } from './citations.ts';
+import { stageProblem } from './questions.ts';
 import { bindRoles, readField } from './resolve.ts';
 
 const PLAN = '(plan 012, digital SOPs)';
@@ -115,10 +117,26 @@ export const sop = defineKind({
     { id: 'layout', title: 'Plate layout', fields: ['layout'] },
     { id: 'analysis', title: 'Analysis', fields: ['analysis'] },
     { id: 'timing', title: 'Timing', fields: ['timing'] },
-    { id: 'questions', title: 'Open questions', fields: ['questions'] },
   ],
-  related: async (a, { get, actor, current }) => {
+  related: async (a, { get, actor, current, via }) => {
     const invalid: string[] = [];
+    // Raw historical snapshots remain readable, but are outside the current operational contract.
+    if (!SopAttributes.safeParse(a).success)
+      return {
+        invalid: [
+          'This SOP uses an unsupported question contract; reconcile its history before scientific use',
+        ],
+        checks: [
+          check(
+            'questions_answered',
+            'Scientific questions are resolved',
+            'blocker',
+            'Unsupported question contract; history needs reconciliation',
+            'Create a separate current draft',
+            'questions',
+          ),
+        ],
+      };
     const roles = [...a.materials.map((m) => m.role), ...(a.solutions ?? []).map((s) => s.role)];
     const produced = a.steps.flatMap((s) => (s.produces ?? []).map((p) => p.role));
     const variables = a.variables.map((v) => v.name);
@@ -127,6 +145,7 @@ export const sop = defineKind({
       ['role', [...roles, ...produced]],
       ['variable', variables],
       ['step', steps],
+      ['question', (a.questions ?? []).map((q) => q.id)],
     ] as const) {
       for (const d of duplicates(names)) invalid.push(`The ${what} ${d} is named twice`);
     }
@@ -170,20 +189,26 @@ export const sop = defineKind({
         invalid.push(`Question ${q.id} is about step ${q.about.step}, which is not a step`);
       if (q.about?.variable && !variableSet.has(q.about.variable))
         invalid.push(`Question ${q.id} is about ${q.about.variable}, which is not a variable`);
-      if (q.status === 'answered' && !q.answer)
-        invalid.push(`Question ${q.id} is answered but has no answer`);
+      if (q.about?.material && !roles.includes(q.about.material))
+        invalid.push(`Question ${q.id} is about ${q.about.material}, which is not a material`);
+      const problem = stageProblem(a, q);
+      if (problem) invalid.push(problem);
     }
-    // A person settles a question (sops.answer_question, G6); an agent's write, approved or not,
-    // keeps each question's status and answer as they were, and asks new ones open.
-    if (actor?.type === 'agent') {
-      const before = new Map(
-        ((current?.attributes as SopAttributes | undefined)?.questions ?? []).map((q) => [q.id, q]),
-      );
-      for (const q of a.questions ?? []) {
-        const was = before.get(q.id);
-        if (q.status !== (was?.status ?? 'open') || q.answer !== was?.answer)
+    // Operation ownership applies to every actor and approved proposal, including omission.
+    if (actor) {
+      const before = (current?.attributes as SopAttributes | undefined)?.questions ?? [];
+      const after = a.questions ?? [];
+      if (stable(before) !== stable(after)) {
+        const append =
+          ['sops.draft', 'sops.ask_question', 'sops.review'].includes(via ?? '') &&
+          stable(after.slice(0, before.length)) === stable(before) &&
+          after
+            .slice(before.length)
+            .every((q) => q.responses.length === 0 && q.disposition.status === 'open');
+        const respond = via === 'sops.answer_question' && actor.type === 'user';
+        if (!append && !respond)
           invalid.push(
-            `Question ${q.id} is for a person to answer (sops.answer_question); leave its status and answer as they are`,
+            'Questions are operation-owned; use sops.draft, sops.ask_question or sops.answer_question and preserve their history',
           );
       }
     }
@@ -235,7 +260,12 @@ export const sop = defineKind({
         ? [`step ${t.step}`]
         : [],
     );
-    const open = (a.questions ?? []).filter((q) => q.status === 'open');
+    const open = (a.questions ?? []).filter(
+      (q) => q.stage.stage === 'method' && q.disposition.status === 'open',
+    );
+    const later = (a.questions ?? []).filter(
+      (q) => q.stage.stage !== 'method' && q.disposition.status !== 'resolved',
+    );
     const uncited = a.source ? a.steps.filter((s) => !s.cite?.length) : [];
     return {
       checks: [
@@ -281,10 +311,18 @@ export const sop = defineKind({
         ),
         check(
           'questions_answered',
-          'Open questions are answered',
+          'Method questions are resolved',
           'blocker',
           open.length ? `${open.length} open: ${open.map((q) => q.question).join(' ')}` : undefined,
-          'Answer each question or accept its suggestion',
+          'Reconcile the method with a specific scientific decision; a response alone does not resolve it',
+          'questions',
+        ),
+        check(
+          'later_stage_questions',
+          'Later-stage facts remain to be checked',
+          'warning',
+          later.length ? later.map((q) => `${q.stage.stage}: ${q.question}`).join('; ') : undefined,
+          'Supply each declared input or material before planning or starting a run',
           'questions',
         ),
         check(

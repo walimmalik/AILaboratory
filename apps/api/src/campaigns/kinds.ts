@@ -14,6 +14,7 @@ import {
 } from '@ailab/schema';
 import { checkPin, type PinReport, stable, waitingOn } from '../records/pins.ts';
 import { inputProblem } from '../sops/inputs.ts';
+import { obligationOf } from '../sops/questions.ts';
 
 /** Kinds that are definitions, so bindings pin their version (ADR 0039). */
 export const PINNED_KINDS: readonly string[] = [
@@ -210,6 +211,7 @@ export const experiment = defineKind({
     const drafts: PinReport[] = [];
     const newer: string[] = [];
     const misfits: string[] = [];
+    const obligations: string[] = [];
     for (const p of a.protocol) {
       const pin = await checkPin(context, p.sop, 'sop', 'an SOP');
       if (pin.invalid) invalid.push(pin.invalid);
@@ -220,6 +222,18 @@ export const experiment = defineKind({
       if (!pin.pinned) continue;
       const sop = pin.pinned.attributes as SopAttributes;
       const where = `${p.id} (${pin.pinned.name} v${p.sop.version})`;
+      for (const q of sop.questions ?? []) {
+        const obligation = obligationOf(q);
+        if (!obligation) continue;
+        const b = obligation.binding;
+        const supplied =
+          b.type === 'input'
+            ? (p.inputs ?? []).some((i) => i.name === b.variable)
+            : b.type === 'material_role'
+              ? (p.bindings ?? []).some((r) => r.role === b.role)
+              : false;
+        if (!supplied) obligations.push(`${where}: ${q.question}`);
+      }
       for (const d of duplicates((p.bindings ?? []).map((b) => b.role)))
         invalid.push(`${where}: the role ${d} is bound twice`);
       for (const d of duplicates((p.inputs ?? []).map((i) => i.name)))
@@ -281,6 +295,14 @@ export const experiment = defineKind({
     const waiting = waitingOn(...drafts);
     return {
       checks: [
+        check(
+          'sop_obligations',
+          'The SOP’s later-stage facts are supplied',
+          'blocker',
+          obligations.length ? obligations.join('; ') : undefined,
+          'Supply the declared protocol inputs or material bindings',
+          'protocol',
+        ),
         check(
           'has_protocol',
           'It follows an SOP',

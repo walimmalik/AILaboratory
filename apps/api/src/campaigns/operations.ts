@@ -123,13 +123,16 @@ export async function calculateExperiment(
       deps.db,
     );
     if (result.status !== 'done') throw new Error(`sops.calculate was ${result.status}`);
-    const out = result.output as Omit<Calculated['parts'][number], 'part' | 'sop' | 'problems'>;
+    const out = result.output as Omit<Calculated['parts'][number], 'part' | 'sop' | 'problems'> & {
+      obligations: { passed: boolean; problem?: string }[];
+    };
     const sop = await new RecordService(deps.db, deps.kinds).get(ctx, p.sop.id);
     parts.push({
       part: p.id,
       sop: { id: sop.id, name: sop.name, version: p.sop.version },
       ...out,
       problems: [
+        ...out.obligations.flatMap((o) => (o.passed ? [] : [`${p.id}: ${o.problem}`])),
         ...out.bindings.flatMap((b) => (b.problem ? [`${p.id}: ${b.problem}`] : [])),
         ...out.variables.flatMap((v) =>
           v.ok ? [] : [`${p.id}: ${v.name} ${v.problem ?? v.error ?? 'has no value'}`],

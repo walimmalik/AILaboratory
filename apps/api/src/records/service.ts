@@ -18,6 +18,7 @@ import {
   type FieldEvidence,
   type KindDefinition,
   type KindSection,
+  type OriginatingIntent,
   type Readiness,
   type RecordEnvelope,
   RecordLink,
@@ -48,9 +49,46 @@ export interface RecordContext {
   approvedBy?: Actor;
   /** The operation making the change, kept on each version it writes (ADR 0053). */
   via?: string;
+  /** Original user request, stamped by the assistant after validating its persisted context. */
+  origin?: OriginatingIntent;
 }
 
 type RecordRow = typeof records.$inferSelect;
+
+/** Question bookkeeping has its own provenance and is not a scientific value to verify. */
+function sopQuestionEvidence(
+  kind: KindDefinition,
+  named: Record<string, EvidenceInput> | undefined,
+  evidence: Record<string, FieldEvidence>,
+): Record<string, FieldEvidence> {
+  if (kind.kind !== 'sop') return evidence;
+  const questionKey = (key: string) => key === 'questions' || key.startsWith('/questions/');
+  if (Object.keys(named ?? {}).some(questionKey))
+    throw new RecordError(
+      'invalid_attributes',
+      'Question evidence belongs in its passages and response/history, not scientific field evidence',
+    );
+  return Object.fromEntries(Object.entries(evidence).filter(([key]) => !questionKey(key)));
+}
+
+async function assertSopEditable(db: Db, record: RecordRow): Promise<void> {
+  if (record.kind !== 'sop') return;
+  const accepted = await db
+    .select({ version: recordVersions.version })
+    .from(recordVersions)
+    .where(
+      and(
+        eq(recordVersions.recordId, record.id),
+        sql`${recordVersions.snapshot}->>'status' = 'active'`,
+      ),
+    )
+    .limit(1);
+  if (record.status === 'active' || accepted.length)
+    throw new RecordError(
+      'invalid_state',
+      'Editing a confirmed method needs the revision workflow; create a separate new draft for now',
+    );
+}
 type Link = Omit<RecordLink, 'fromId'>;
 
 export interface CreateRecordInput {
@@ -106,14 +144,10 @@ export class RecordService {
     const attributes = parseAttributes(kind, input.attributes);
     const related = await this.#related(this.db, ctx, kind, attributes);
     const at = this.now();
-    const evidence = nextEvidence(
-      ctx.actor,
-      at,
-      undefined,
-      attributes,
-      {},
+    const evidence = sopQuestionEvidence(
+      kind,
       input.evidence,
-      kind.items,
+      nextEvidence(ctx.actor, at, undefined, attributes, {}, input.evidence, kind.items),
     );
     await checkCalculatedEvidence(this.db, ctx, attributes, input.evidence, kind.items);
     await checkCopiedEvidence(this.db, ctx, this.kinds, attributes, input.evidence, kind.items);
@@ -178,6 +212,12 @@ export class RecordService {
     return toEnvelope(await findRecord(this.db, ctx, id));
   }
 
+  /** Until the accepted-method revision workflow lands, no accepted snapshot may be edited. */
+  async assertSopEditable(ctx: RecordContext, id: string): Promise<void> {
+    const record = await findRecord(this.db, ctx, id);
+    await assertSopEditable(this.db, record);
+  }
+
   /** Records in the lab, most recently changed first. Archived records are left out unless asked for. */
   async list(ctx: RecordContext, input: ListRecordsInput = {}): Promise<RecordEnvelope[]> {
     const statuses = input.status
@@ -230,14 +270,18 @@ export class RecordService {
         if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
         await checkCalculatedEvidence(tx, ctx, attributes, input.evidence, kind.items);
         await checkCopiedEvidence(tx, ctx, this.kinds, attributes, input.evidence, kind.items);
-        const evidence = nextEvidence(
-          ctx.actor,
-          this.now(),
-          record.attributes,
-          attributes,
-          record.evidence,
+        const evidence = sopQuestionEvidence(
+          kind,
           input.evidence,
-          kind.items,
+          nextEvidence(
+            ctx.actor,
+            this.now(),
+            record.attributes,
+            attributes,
+            record.evidence,
+            input.evidence,
+            kind.items,
+          ),
         );
         return {
           label: input.label ?? record.label,
@@ -591,7 +635,8 @@ export class RecordService {
 
   /**
    * Runs a kind's `related` rules (ADR 0029) against records in the same lab, inside the caller's
-   * transaction. Invalid attributes are refused unless `refuse` is false (reading readiness).
+   * transaction. Invalid attributes are refused on writes and become blockers when `refuse` is
+   * false (reading readiness).
    */
   async #related(
     db: Db,
@@ -635,6 +680,7 @@ export class RecordService {
       },
       current: current ? toEnvelope(current) : undefined,
       actor: ctx.actor,
+      via: ctx.via,
       reservedPrefixes: this.kinds.list().flatMap(namePrefixesOf),
     });
     if (refuse && result.invalid?.length) {
@@ -653,7 +699,20 @@ export class RecordService {
         `The name prefix ${result.namePrefix} belongs to another kind of record`,
       );
     }
-    return result;
+    return {
+      ...result,
+      checks: [
+        ...(result.checks ?? []),
+        ...(result.invalid ?? []).map((message, index) => ({
+          id: `related_invalid_${index + 1}`,
+          label: 'Values fit the related records',
+          severity: 'blocker' as const,
+          source: 'Related record rules (ADR 0029)',
+          passed: false,
+          message,
+        })),
+      ],
+    };
   }
 
   /**
@@ -697,6 +756,7 @@ export class RecordService {
       const current = await findRecord(tx, ctx, id, { forUpdate: true });
       assertVersion(current, expectedVersion);
       const kind = this.kinds.get(current.kind);
+      if (operation === 'update' || operation === 'restore') await assertSopEditable(tx, current);
       const changes = await apply(current, kind, tx);
       const [row] = await tx
         .update(records)
