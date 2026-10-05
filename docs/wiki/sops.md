@@ -12,6 +12,7 @@ Two records, two plans: the **library document** is the source as published (011
 - **Search** (keyword search built: `library.search`, `library.read`; meaning-based next): hybrid Postgres full text plus pgvector over passages; every hit points to its page and heading. Embeddings are local by default; an OpenAI-compatible provider is optional (and sends text off the machine). One model per lab; switching re-embeds.
 - **Mining** (built, [ADR 0035](../decisions/0035-library-mentions.md): `library.mine` matches registry names and catalog numbers, agents add the assay and parameters with `library.propose_mentions`): an agent proposes what each passage mentions (products, labware, instruments, cell lines, assay type) and the parameters it states, linked to registry records. A person confirms in bulk. Record pages gain "Mentioned in".
 - **Test set**: `docs/sop-library` has 12 openly licensed SOPs, 7 papers and 4 code items, deliberately including messy SOPs (OpenWetWare), a 73-step ELISA, robot code, and the iGEM InterLab protocol in four forms as ground truth for 012. `seed/sops/own/` has 11 short lab SOPs with variables.
+- **Seed refresh**: seed-owned variables and steps refresh only before the SOP's first confirmation. Confirmed history stays pinned; the seed reports that a separate method draft is needed and leaves dependent template refreshes waiting. The working revision operation is future SG-10c work; the seed continues loading independent records.
 
 ## Digital SOPs (plan 012)
 
