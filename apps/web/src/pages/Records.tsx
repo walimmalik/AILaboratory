@@ -8,7 +8,11 @@ import { recordsQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { StatusChip } from './StatusChip.tsx';
 
-type StatusFilter = 'current' | 'draft' | 'active' | 'archived';
+export type StatusFilter = 'current' | 'draft' | 'active' | 'archived';
+export interface RecordListFilters {
+  search: string;
+  status: StatusFilter;
+}
 const filters: [StatusFilter, string][] = [
   ['current', 'Current'],
   ['draft', 'Drafts'],
@@ -65,6 +69,7 @@ export function RecordList({
   onSearch,
   searchAction,
   noMatch = 'Nothing matches.',
+  filters: controlledFilters,
 }: {
   title: string;
   kind?: string;
@@ -79,9 +84,17 @@ export function RecordList({
   searchAction?: ReactNode;
   /** What the list says when the find box matches nothing. */
   noMatch?: string;
+  /** Optional route-owned filters; all other lists keep their local browsing state. */
+  filters?: RecordListFilters & { onChange: (filters: RecordListFilters) => void };
 }) {
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('current');
+  const [localSearch, setLocalSearch] = useState('');
+  const [localStatus, setLocalStatus] = useState<StatusFilter>('current');
+  const search = controlledFilters?.search ?? localSearch;
+  const status = controlledFilters?.status ?? localStatus;
+  const setSearch = (next: string) =>
+    controlledFilters ? controlledFilters.onChange({ search: next, status }) : setLocalSearch(next);
+  const setStatus = (next: StatusFilter) =>
+    controlledFilters ? controlledFilters.onChange({ search, status: next }) : setLocalStatus(next);
   const deferred = useDeferredValue(search.trim());
   const {
     data = [],
