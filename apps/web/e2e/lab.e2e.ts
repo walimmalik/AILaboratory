@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import type { OperationErrorBody } from '@ailab/schema';
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 
 const api = 'http://localhost:3001';
@@ -908,7 +909,13 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   await page.route(
     responseRoute,
     (route) =>
-      route.fulfill({ status: 409, json: { code: 'conflict', message: 'Response not saved.' } }),
+      route.fulfill({
+        status: 409,
+        json: {
+          code: 'version_conflict',
+          message: 'Response not saved.',
+        } satisfies OperationErrorBody,
+      }),
     { times: 1 },
   );
   await answer.fill(`  ${response}  `);
