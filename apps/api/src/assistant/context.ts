@@ -3,7 +3,9 @@ import { OperationError } from '../operations/errors.ts';
 import { findProposal, toProposal } from '../operations/proposal-store.ts';
 import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
+import { skills } from '../skills/skills.ts';
 import { findConversation, messageRows, personOf } from './store.ts';
+import { pageNamespaces } from './toolset.ts';
 
 /** Selection is context only. Re-read it under the caller's scope before every turn. */
 export async function pageNote(
@@ -14,6 +16,12 @@ export async function pageNote(
   if (!page) return '';
   const records = new RecordService(deps.db, deps.kinds);
   const notes: string[] = [];
+  const namespaces = new Set(pageNamespaces(page, deps.kinds));
+  const relevantSkills = skills.filter((skill) => namespaces.has(skill.module));
+  if (relevantSkills.length)
+    notes.push(
+      `Skills for this page: ${relevantSkills.map((skill) => `${skill.module} (${skill.name})`).join(', ')}. To read each relevant owning skill, call ${relevantSkills.map((skill) => `skills_get with ${JSON.stringify({ name: skill.module })}`).join('; ')} unless already read. Use these exact existing skill names, not operation namespaces.`,
+    );
   if (page.record) {
     const record = await records.get(ctx, page.record.id);
     if (record.version !== page.record.version)

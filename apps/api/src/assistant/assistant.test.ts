@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createTenant } from '../auth.ts';
+import { run } from '../campaigns/kinds.ts';
 import type { Db } from '../db/client.ts';
 import { conversationMessages, records, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
@@ -27,6 +28,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { widget } from '../records/test-kinds.ts';
+import { findSkill } from '../skills/skills.ts';
 import { sop } from '../sops/kinds.ts';
 import {
   Assistant,
@@ -1351,6 +1353,48 @@ describe('assistant.ask', () => {
 });
 
 describe('tools and history', () => {
+  it('identifies the existing campaigns skill in run-list and run-record model context', async () => {
+    const skill = findSkill('campaigns');
+    if (!skill) throw new Error('Expected the owning campaigns skill');
+    expect(findSkill('runs')).toBeUndefined();
+    for (const path of ['/runs', `/records/${newId('run')}`]) {
+      const model = new FakeModel([
+        async () => {
+          const input = model.requests[0]?.system.match(/skills_get with (\{[^}]+\})/)?.[1];
+          if (!input) throw new Error('Expected exact owning-skill arguments in model context');
+          return {
+            text: '',
+            toolCalls: [{ id: 'read-skill', name: 'skills_get', input: JSON.parse(input) }],
+            stop: 'tool_use',
+          };
+        },
+      ]);
+      const { assistant, registry } = setup(model);
+      registry.deps.kinds.register(run);
+      const conversation = await ask(
+        registry,
+        assistant,
+        'Read the saved run instructions without changing records.',
+        {
+          page: { path },
+        },
+      );
+      expect(model.requests[0]?.system).toContain(
+        `Skills for this page: ${skill.module} (${skill.name}).`,
+      );
+      expect(model.requests[0]?.system).not.toContain('sops (ailab-sops)');
+      expect(model.requests[0]?.tools.map((tool) => tool.name)).toContain('runs_record_step');
+      expect(conversation.messages.find((message) => message.role === 'tool')).toMatchObject({
+        operationId: 'skills.get',
+        outcome: 'done',
+        result: { output: { module: skill.module, name: skill.name } },
+      });
+    }
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    await ask(registry, assistant, 'What is next?', { page: { path: '/today' } });
+    expect(model.requests[0]?.system).not.toContain('Skills for this page:');
+  });
   it('names a small core, the calculators and the page module, and runs the rest by ID', () => {
     const { registry } = setup();
     const names = toolsFor(registry).list.map((t) => t.name);
