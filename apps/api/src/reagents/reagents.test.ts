@@ -233,6 +233,57 @@ describe('reagents.scale_recipe', () => {
 });
 
 describe('lots', () => {
+  it('allows existing lot status and metadata edits after its product is archived', async () => {
+    const product = await antibody();
+    const received = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'existing',
+    });
+    await run(person, 'records.archive', { id: product.id, expectedVersion: product.version });
+    const discarded = await run<RecordEnvelope>(person, 'reagents.set_lot_status', {
+      id: received.id,
+      expectedVersion: received.version,
+      status: 'used_up',
+    });
+    expect(discarded.attributes.status).toBe('used_up');
+    const noted = await run<RecordEnvelope>(person, 'records.update', {
+      id: discarded.id,
+      expectedVersion: discarded.version,
+      attributes: { ...discarded.attributes, notes: 'Discarded after product retired' },
+    });
+    expect(noted.attributes.notes).toBe('Discarded after product retired');
+  });
+
+  it('refuses new lots and product rebinding to an archived product', async () => {
+    const product = await antibody();
+    const { product: other } = await draft(person, 'PBS', pbs);
+    const existing = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: other.id,
+      lotNumber: 'existing',
+    });
+    await run(person, 'records.archive', { id: product.id, expectedVersion: product.version });
+    await expect(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'New archived lot',
+        attributes: { product: product.id, lotNumber: 'new', status: 'unopened' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(person, 'reagents.receive_lot', {
+        product: product.id,
+        lotNumber: 'new',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      run(person, 'records.update', {
+        id: existing.id,
+        expectedVersion: existing.version,
+        attributes: { ...existing.attributes, product: product.id },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+  });
+
   it('finds duplicate lot numbers beyond the former 500-record boundary', async () => {
     const product = await antibody();
     const existing = await run<RecordEnvelope>(person, 'reagents.receive_lot', {

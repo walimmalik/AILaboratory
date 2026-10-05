@@ -141,7 +141,10 @@ export const lot = defineKind({
   attributes: LotAttributes,
   related: async (a, { get, list, current }) => {
     const product = await get(a.product);
-    if (product?.kind !== 'product' || product.status === 'archived') {
+    if (
+      product?.kind !== 'product' ||
+      (product.status === 'archived' && current?.attributes.product !== a.product)
+    ) {
       return { invalid: [`${a.product} is not a non-archived product in this lab`] };
     }
     const attributes = ProductAttributes.parse(product.attributes);
