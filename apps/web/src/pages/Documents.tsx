@@ -78,6 +78,7 @@ export function DocumentsPage() {
   const of = (r: RecordEnvelope) => r.attributes as Partial<DocumentAttributes>;
   const [words, setWords] = useState('');
   const [query, setQuery] = useState('');
+  const [mode, setMode] = useState<'text' | 'titles'>('text');
   const [adding, setAdding] = useState(false);
   return (
     <>
@@ -96,85 +97,143 @@ export function DocumentsPage() {
         }
       />
       {adding && <AddDocuments onClose={() => setAdding(false)} />}
-      <RecordList
-        title="Documents"
-        kind="document"
-        placeholder='Find by title, or search the text for words or "a phrase"'
-        empty="No documents yet. Add files, or load the seed lab."
-        onSearch={setWords}
-        noMatch="No title has those words."
-        searchAction={
-          <button
-            type="button"
-            className="btn"
-            disabled={!words.trim()}
-            onClick={() => setQuery(words.trim())}
-          >
-            Search the text
+      <div className="toolbar">
+        <fieldset className="segmented">
+          <legend className="sr-only">Document search mode</legend>
+          <button type="button" aria-pressed={mode === 'text'} onClick={() => setMode('text')}>
+            Document text
           </button>
-        }
-        toolbar={query ? <Passages query={query} onClear={() => setQuery('')} /> : undefined}
-        columns={[
-          {
-            header: 'Type',
-            cell: (r) => (of(r).type ? typeWords[of(r).type as DocumentType] : '—'),
-          },
-          {
-            header: 'Assay',
-            cell: (r) => of(r).assays?.join(', ') || '—',
-            filled: (r) => !!of(r).assays?.length,
-          },
-          {
-            header: 'Version',
-            cell: (r) => of(r).version ?? '—',
-            filled: (r) => !!of(r).version,
-          },
-          {
-            header: 'License',
-            cell: (r) => {
-              const license = of(r).license;
-              if (!license) return '—';
-              return license.sharePolicy === 'lab_private'
-                ? `${license.name}, lab only`
-                : license.name;
+          <button type="button" aria-pressed={mode === 'titles'} onClick={() => setMode('titles')}>
+            Titles
+          </button>
+        </fieldset>
+      </div>
+      {mode === 'text' && (
+        <section className="block" aria-label="Document text search">
+          <header>
+            <h2>Document text</h2>
+          </header>
+          <div className="body">
+            <p className="muted">Searches the text of available documents.</p>
+            <form
+              className="toolbar"
+              aria-label="Search document text"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setQuery(words.trim());
+              }}
+            >
+              <label htmlFor="document-text-search">Words or phrase</label>
+              <input
+                id="document-text-search"
+                className="field grow"
+                type="search"
+                placeholder='Words or "a phrase"'
+                value={words}
+                onChange={(event) => {
+                  setWords(event.target.value);
+                  setQuery('');
+                }}
+              />
+              <button type="submit" className="btn" disabled={!words.trim()}>
+                Search the text
+              </button>
+              <button
+                type="button"
+                className="link-btn"
+                disabled={!words && !query}
+                onClick={() => {
+                  setWords('');
+                  setQuery('');
+                }}
+              >
+                Clear
+              </button>
+            </form>
+            {query && <Passages query={query} />}
+          </div>
+        </section>
+      )}
+      <div hidden={mode !== 'titles'}>
+        <RecordList
+          title="Documents"
+          kind="document"
+          placeholder="Find by title or name"
+          empty="No documents yet. Add files, or load the seed lab."
+          noMatch="No title has those words."
+          columns={[
+            {
+              header: 'Type',
+              cell: (r) => (of(r).type ? typeWords[of(r).type as DocumentType] : '—'),
             },
-          },
-          {
-            header: 'Confirmed mentions',
-            cell: (r) => counts.get(r.id) ?? 0,
-            filled: (r) => !!counts.get(r.id),
-            className: 'num',
-          },
-        ]}
-      />
+            {
+              header: 'Assay',
+              cell: (r) => of(r).assays?.join(', ') || '—',
+              filled: (r) => !!of(r).assays?.length,
+            },
+            {
+              header: 'Version',
+              cell: (r) => of(r).version ?? '—',
+              filled: (r) => !!of(r).version,
+            },
+            {
+              header: 'License',
+              cell: (r) => {
+                const license = of(r).license;
+                if (!license) return '—';
+                return license.sharePolicy === 'lab_private'
+                  ? `${license.name}, lab only`
+                  : license.name;
+              },
+            },
+            {
+              header: 'Confirmed mentions',
+              cell: (r) => counts.get(r.id) ?? 0,
+              filled: (r) => !!counts.get(r.id),
+              className: 'num',
+            },
+          ]}
+        />
+      </div>
     </>
   );
 }
 
-/** Passages of the library's text with every word searched, under the find box. */
-function Passages({ query, onClear }: { query: string; onClear: () => void }) {
+/** Passages for the submitted text query. Editing the input clears this view. */
+function Passages({ query }: { query: string }) {
   const hits = useQuery({
     queryKey: ['library', 'search', query],
     queryFn: () => api.run(librarySearch, { text: query, limit: 20 }),
   });
   return (
-    <section className="passages" aria-label="Passages found">
+    <section className="passages" aria-label="Passages found" aria-live="polite">
       <p className="muted">
-        {hits.data
-          ? `${hits.data.hits.length} ${hits.data.hits.length === 1 ? 'passage' : 'passages'} with “${query}”`
-          : `Searching for “${query}”…`}{' '}
-        <button type="button" className="link-btn" onClick={onClear}>
-          Clear
-        </button>
+        {hits.isFetching || hits.isPending
+          ? `Searching for “${query}”…`
+          : hits.error
+            ? `Search failed for “${query}”.`
+            : `${hits.data?.hits.length ?? 0} ${hits.data?.hits.length === 1 ? 'passage' : 'passages'} with “${query}”`}
       </p>
-      {hits.error && <p className="error-text">{hits.error.message}</p>}
-      {query && hits.data?.hits.length === 0 && (
+      {hits.error && (
+        <>
+          {!hits.isFetching && <p className="error-text">{hits.error.message}</p>}
+          <button
+            type="button"
+            className="btn small"
+            disabled={hits.isFetching}
+            onClick={() => void hits.refetch()}
+          >
+            Try again
+          </button>
+        </>
+      )}
+      {!hits.error && hits.data?.hits.length === 0 && (
         <p className="empty">
           No passage has all those words. Try the words the source would use, or "or" between
           alternatives.
         </p>
       )}
-      {hits.data && hits.data.hits.length > 0 && (
+      {!hits.error && hits.data && hits.data.hits.length > 0 && (
         <ol className="hits">
           {hits.data.hits.map((hit) => (
             <li key={hit.passage.id}>

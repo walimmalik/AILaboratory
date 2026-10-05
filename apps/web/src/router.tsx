@@ -29,6 +29,7 @@ import {
   SamplesPage,
 } from './pages/Inventory.tsx';
 import { LabwarePage, VendorsPage } from './pages/Library.tsx';
+import { LibraryHome } from './pages/LibraryHome.tsx';
 import { MemoryPage } from './pages/Memory.tsx';
 import { NewRecordPage } from './pages/NewRecord.tsx';
 import { LayoutsPage, PlateMapsPage } from './pages/PlateMaps.tsx';
@@ -89,6 +90,11 @@ const records = createRoute({
   getParentRoute: () => app,
   path: '/records',
   component: RecordsPage,
+});
+const library = createRoute({
+  getParentRoute: () => app,
+  path: '/library',
+  component: LibraryHome,
 });
 const labware = createRoute({
   getParentRoute: () => app,
@@ -276,6 +282,7 @@ const routeTree = root.addChildren([
     activity,
     review,
     scanPage,
+    library,
     labware,
     instruments,
     instrumentModels,

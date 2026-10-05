@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import { areas, type KindPage, libraryPages } from '../lib/kinds.ts';
+import { type Area, areas, type KindPage, libraryPages } from '../lib/kinds.ts';
 import { reviewQuery } from '../queries.ts';
 
 /**
@@ -30,17 +30,21 @@ export function Head({
         </div>
         {actions}
       </div>
-      <AreaTabs page={page} />
+      <AreaTabs area={page.area} current={page.under ?? page.kind} />
     </>
   );
 }
 
-function AreaTabs({ page }: { page: KindPage }) {
+export function AreaTabs({ area, current }: { area: Area; current?: string }) {
   const drafts = useQuery(reviewQuery).data?.counts.drafts ?? {};
-  const tabs = areas.find((a) => a.area === page.area)?.tabs ?? [];
-  const current = page.under ?? page.kind;
+  const tabs = areas.find((a) => a.area === area)?.tabs ?? [];
   return (
-    <nav className="tabs area-tabs" aria-label={`${page.area} tabs`}>
+    <nav className="tabs area-tabs" aria-label={`${area} tabs`}>
+      {area === 'Library' && current && (
+        <Link to="/library" className="tab">
+          Start here
+        </Link>
+      )}
       {tabs.map((t) => {
         // A tab counts its own drafts and those of pages that sit under it.
         const waiting = libraryPages

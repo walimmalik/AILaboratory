@@ -12,6 +12,9 @@ async function openTab(page: Page, area: string, tab: string | RegExp) {
     .getByRole('navigation', { name: 'Modules' })
     .getByRole('link', { name: new RegExp(`^${area}`) })
     .click();
+  if (area === 'Library') {
+    await page.getByText('Browse the library', { exact: true }).click();
+  }
   await page
     .getByRole('navigation', { name: `${area} tabs` })
     .getByRole('link', { name: tab })
@@ -737,6 +740,62 @@ test('scanning a tube opens it and moves it into a box position', async ({ page 
   await expect(page.getByText(`Moved ${tube.name} to`)).toBeVisible();
   // Where it is ends with its position, not with the tube's own name (review 2026-10-02).
   await expect(found).toContainText(`Box ${stamp}, position B3`);
+});
+
+test('Library starts a fresh method discussion and keeps specialist browsing available', async ({
+  page,
+}) => {
+  await signIn(page);
+  const ask = page.getByLabel('Ask the assistant');
+  await ask.fill('An unrelated existing discussion');
+  await ask.press('Enter');
+  const panel = page.getByRole('complementary', { name: 'Assistant' });
+  await expect(panel.getByText('You said: An unrelated existing discussion')).toBeVisible();
+  const oldConversation = await panel
+    .getByRole('combobox', { name: 'Conversation', exact: true })
+    .inputValue();
+  await panel.getByRole('button', { name: 'Close the assistant' }).click();
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Library/ })
+    .click();
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Library tabs' })).toBeHidden();
+  const before = await asPerson(page, 'records.list', { kind: 'sop' });
+  const started = page.waitForRequest('**/api/v1/ops/assistant.ask');
+  await page.getByRole('button', { name: 'Draft a method', exact: true }).press('Enter');
+  const request = (await started).postDataJSON();
+  expect(request.conversationId).toBeUndefined();
+  expect(request.page).toMatchObject({ path: '/library', title: 'Library' });
+  expect(request.page.record).toBeUndefined();
+  await expect(panel.getByText(/^You said:/)).toBeVisible();
+  await expect(panel.getByRole('combobox', { name: 'Conversation', exact: true })).not.toHaveValue(
+    oldConversation,
+  );
+  const newConversation = await panel
+    .getByRole('combobox', { name: 'Conversation', exact: true })
+    .inputValue();
+  const conversation = await asPerson(page, 'assistant.get_conversation', { id: newConversation });
+  expect(conversation.messages[0].text).toBe(request.message);
+  expect(conversation.messages[0].page.path).toBe('/library');
+  expect(await asPerson(page, 'records.list', { kind: 'sop' })).toEqual(before);
+  await page.reload();
+  await expect(panel.getByRole('combobox', { name: 'Conversation', exact: true })).toHaveValue(
+    newConversation,
+  );
+  await expect(panel.getByText(/^You said:/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Close the assistant' }).click();
+  await page.getByRole('link', { name: 'Find instructions', exact: true }).click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await page
+    .getByRole('navigation', { name: 'Modules' })
+    .getByRole('link', { name: /^Library/ })
+    .click();
+  await page.getByRole('link', { name: 'Find a lab convention', exact: true }).click();
+  await expect(page).toHaveURL(/\/memory$/);
+  await openTab(page, 'Library', /^Labware/);
+  await expect(page).toHaveURL(/\/labware$/);
 });
 
 test('a file added on the documents page becomes a draft document with its file', async ({

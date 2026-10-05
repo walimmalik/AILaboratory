@@ -51,7 +51,10 @@ function ShellLayout() {
   const recordKind = useQuery({ ...recordQuery(recordId ?? ''), enabled: !!recordId }).data?.kind;
   const newKind = path.match(/^\/new\/([^/]+)$/)?.[1];
   const areaHere =
-    libraryPages.find((p) => p.path === path)?.area ?? kindPage(recordKind ?? newKind ?? '')?.area;
+    path === '/library'
+      ? 'Library'
+      : (libraryPages.find((p) => p.path === path)?.area ??
+        kindPage(recordKind ?? newKind ?? '')?.area);
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the menu whenever the page changes
   useEffect(() => setMenu(false), [path]);
   useEffect(() => {
@@ -161,7 +164,7 @@ function ShellLayout() {
               return (
                 <li key={area}>
                   <Link
-                    to={first.path}
+                    to={area === 'Library' ? '/library' : first.path}
                     className={here ? 'on' : undefined}
                     aria-current={here ? 'page' : undefined}
                   >
