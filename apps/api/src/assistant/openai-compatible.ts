@@ -108,8 +108,14 @@ export class OpenAiCompatibleModel implements ChatModel {
         ...(input === undefined ? { rawInput: call.function.arguments ?? '' } : {}),
       };
     });
-    const stop =
-      toolCalls.length > 0 ? 'tool_use' : (stopReasons[choice.finish_reason ?? 'stop'] ?? 'end');
+    const finish = stopReasons[choice.finish_reason ?? 'stop'] ?? 'end';
+    const stop = choice.message.refusal
+      ? 'refusal'
+      : finish === 'max_tokens' || finish === 'refusal'
+        ? finish
+        : toolCalls.length > 0
+          ? 'tool_use'
+          : finish;
     return {
       text: choice.message.content ?? choice.message.refusal ?? '',
       toolCalls,

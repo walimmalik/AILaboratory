@@ -38,7 +38,8 @@ export interface ModelRequest {
   signal?: AbortSignal;
 }
 
-export type StopReason = 'end' | 'tool_use' | 'max_tokens' | 'refusal';
+/** `continue` is an explicitly nonterminal commentary turn, with no tool calls to execute. */
+export type StopReason = 'end' | 'tool_use' | 'continue' | 'max_tokens' | 'refusal';
 
 export interface ModelTurn {
   text: string;
