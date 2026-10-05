@@ -109,7 +109,7 @@ export class OpenAiResponsesModel implements ChatModel {
             throw this.#invalid('duplicate function call ID');
           }
           if (item.status != null && item.status !== 'completed') unfinished = true;
-          const input = parseArguments(item.arguments);
+          const input = item.arguments.trim() ? parseArguments(item.arguments) : undefined;
           toolCalls.push({
             id: item.call_id,
             name: item.name,

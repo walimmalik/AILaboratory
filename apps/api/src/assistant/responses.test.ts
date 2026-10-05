@@ -203,6 +203,23 @@ describe('OpenAI Responses', () => {
     ]);
   });
 
+  it.each(['', ' ', '\n\t'])(
+    'treats blank arguments as malformed rather than an empty object',
+    async (arguments_) => {
+      const { fetch } = fakeFetch([reply([{ ...call, arguments: arguments_ }])]);
+      const turn = await make(fetch).complete(request);
+      expect(turn.toolCalls).toEqual([
+        { id: 'call_1', name: 'records_get', input: undefined, rawInput: arguments_ },
+      ]);
+    },
+  );
+
+  it('accepts an explicit empty JSON object as valid arguments', async () => {
+    const { fetch } = fakeFetch([reply([{ ...call, arguments: '{}' }])]);
+    const turn = await make(fetch).complete(request);
+    expect(turn.toolCalls).toEqual([{ id: 'call_1', name: 'records_get', input: {} }]);
+  });
+
   it.each([
     { ...call, call_id: undefined },
     { ...call, call_id: '' },
