@@ -60,6 +60,8 @@ export interface OperationImplementation<
   outcome?(output: z.infer<O>): ActivityEntry['outcome'];
   /** False for writes that change nothing in the lab (a person's seen marker): no ledger entry. */
   ledger?: false;
+  /** A stored result replay changes nothing: no repeated activity or after-commit work. */
+  replayed?(ctx: RecordContext, input: z.infer<I>, deps: OperationDeps): Promise<boolean>;
   /** Runs after a write is committed and logged, e.g. to start background work. Never on previews or proposals. */
   after?(ctx: RecordContext, input: z.infer<I>, output: z.infer<O>, deps: OperationDeps): void;
 }
@@ -97,6 +99,7 @@ class PreviewRollback extends Error {
 export class OperationRegistry {
   readonly #operations = new Map<string, OperationImplementation>();
   readonly #listeners: WriteListener[] = [];
+  readonly #committed = new WeakMap<Db, (() => void | Promise<void>)[]>();
   readonly deps: OperationDeps;
 
   constructor(deps: Omit<OperationDeps, 'registry'>) {
@@ -141,6 +144,52 @@ export class OperationRegistry {
     return operation;
   }
 
+  /** Owns the outer commit boundary; nested operation transactions merge their delivery work here. */
+  async transaction<T>(db: Db, run: (tx: Db) => Promise<T>): Promise<T> {
+    if (db !== this.deps.db && !this.#committed.has(db)) {
+      throw new Error('Nested operations must use the registry transaction boundary');
+    }
+    const parent = this.#committed.get(db);
+    const effects: (() => void | Promise<void>)[] = [];
+    const result = await db.transaction(async (tx) => {
+      this.#committed.set(tx, effects);
+      try {
+        return await run(tx);
+      } finally {
+        this.#committed.delete(tx);
+      }
+    });
+    if (parent) parent.push(...effects);
+    else
+      for (const effect of effects) {
+        try {
+          await effect();
+        } catch (error) {
+          // Mutation and ledger already committed. Delivery failure cannot become mutation failure.
+          console.error('Operation delivery failed after commit:', error);
+        }
+      }
+    return result;
+  }
+
+  async #activity(
+    db: Db,
+    ctx: RecordContext,
+    entry: Parameters<typeof recordActivity>[2],
+  ): Promise<void> {
+    const full = await recordActivity(db, ctx, entry);
+    const publish = () => this.deps.bus.publish(ctx.labId, full);
+    const effects = this.#committed.get(db);
+    if (effects) effects.push(publish);
+    else {
+      try {
+        publish();
+      } catch (error) {
+        console.error('Activity delivery failed after commit:', error);
+      }
+    }
+  }
+
   async execute(
     ctx: RecordContext,
     id: string,
@@ -163,6 +212,10 @@ export class OperationRegistry {
       return { status, output };
     }
 
+    if (db !== this.deps.db && !this.#committed.has(db)) {
+      throw new Error('Nested operations must use the registry transaction boundary');
+    }
+
     if (options.preview) {
       return { status: 'preview', output: await this.#dryRun(operation, ctx, input, deps) };
     }
@@ -176,15 +229,23 @@ export class OperationRegistry {
         const started = Date.now();
         const preview = await this.#dryRun(operation, ctx, input, deps);
         const reason = (input as { reason?: string }).reason;
-        const proposal = await createProposal(db, ctx, { operationId: id, input, preview, reason });
-        // A preview's new records were rolled back, so a proposal names only records that exist.
-        await recordActivity(db, this.deps.bus, ctx, {
-          operationId: id,
-          outcome: 'proposed',
-          recordIds: await existing(db, ctx, touched(operation, input, preview, this)),
-          proposalId: proposal.id,
-          input,
-          durationMs: Date.now() - started,
+        const proposal = await this.transaction(db, async (tx) => {
+          const proposal = await createProposal(tx, ctx, {
+            operationId: id,
+            input,
+            preview,
+            reason,
+          });
+          // A preview's new records were rolled back, so a proposal names only records that exist.
+          await this.#activity(tx, ctx, {
+            operationId: id,
+            outcome: 'proposed',
+            recordIds: await existing(tx, ctx, touched(operation, input, preview, this)),
+            proposalId: proposal.id,
+            input,
+            durationMs: Date.now() - started,
+          });
+          return proposal;
         });
         return { status: 'proposed', proposal };
       }
@@ -192,31 +253,34 @@ export class OperationRegistry {
 
     const started = Date.now();
     try {
-      const output = await db.transaction((tx) =>
-        this.#run(operation, ctx, input, { ...deps, db: tx }),
-      );
-      if (operation.ledger === false) return { status: 'done', output };
-      const recordIds = touched(operation, input, output, this);
-      await recordActivity(db, this.deps.bus, ctx, {
-        operationId: id,
-        outcome: operation.outcome?.(output) ?? 'succeeded',
-        recordIds,
-        nameHints: nameHints(output),
-        ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
-        input,
-        durationMs: Date.now() - started,
+      const output = await this.transaction(db, async (tx) => {
+        const txDeps = { ...deps, db: tx };
+        // Under the same row lock as the implementation, so concurrent retries cannot both apply.
+        const replayed = await operation.replayed?.(ctx, input, txDeps);
+        const output = await this.#run(operation, ctx, input, txDeps);
+        if (operation.ledger === false || replayed) return output;
+        const recordIds = touched(operation, input, output, this);
+        await this.#activity(tx, ctx, {
+          operationId: id,
+          outcome: operation.outcome?.(output) ?? 'succeeded',
+          recordIds,
+          nameHints: nameHints(output),
+          ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
+          input,
+          durationMs: Date.now() - started,
+        });
+        const effects = this.#committed.get(tx);
+        effects?.push(() => operation.after?.(ctx, input, output, { ...deps, db: this.deps.db }));
+        // Only a person's top-level write; nested calls arrive with their outer write.
+        if (ctx.actor.type === 'user' && db === this.deps.db)
+          for (const listener of this.#listeners)
+            effects?.push(() => listener(ctx, recordIds, { ...deps, db: this.deps.db }));
+        return output;
       });
-      operation.after?.(ctx, input, output, deps);
-      // Only a person's own top-level write; steps inside a change set arrive with the set.
-      if (ctx.actor.type === 'user' && db === this.deps.db)
-        for (const listener of this.#listeners)
-          await listener(ctx, recordIds, deps).catch((error: unknown) =>
-            console.error(`A write listener failed after ${id}:`, error),
-          );
       return { status: 'done', output };
     } catch (error) {
       if (operation.ledger === false) throw error;
-      await recordActivity(db, this.deps.bus, ctx, {
+      await this.#activity(db, ctx, {
         operationId: id,
         outcome: 'failed',
         recordIds: touched(operation, input, undefined, this),
@@ -315,7 +379,7 @@ export class OperationRegistry {
     deps: OperationDeps,
   ): Promise<unknown> {
     try {
-      await deps.db.transaction(async (tx) => {
+      await this.transaction(deps.db, async (tx) => {
         const output = await this.#run(operation, ctx, input, { ...deps, db: tx });
         throw new PreviewRollback(output);
       });

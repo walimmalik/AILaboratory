@@ -29,6 +29,8 @@ Each write operation declares an agent policy: `direct`, `propose`, or a rule de
 
 A **proposal** stores the input and a preview (the operation run and rolled back). A person confirms or rejects it. Confirming runs the change as the proposing agent, so history credits the agent and the ledger records who confirmed. If the record changed since the proposal, the proposal fails and nothing changes.
 
+Applying a proposal stores its actual result and touched records on that proposal in the same transaction as the change and activity entries (004g SG-15a). Retrying the same proposal returns that stored result without applying it twice, including after a reload or lost activity delivery. People-only and lab permissions still apply. The preview can show different IDs or readable names from those created for real; the stored result identifies the committed records. Decision preparation and scoped supporting-record confirmation remain planned under SG-03, with final SOP confirmation separate.
+
 **Earned autonomy (010-V7).** Wali wants agents to earn autonomy. The ledger will keep, per scenario ("move requested in the same conversation", "consume recorded by a run log"), how often proposals were confirmed unchanged, edited or rejected. When the record is good enough, a person can switch that scenario to auto-confirm; the switch is itself a recorded, reversible setting. Nothing auto-confirms at launch.
 
 ## Calculators: agents compute, they don't guess
@@ -38,6 +40,8 @@ Numbers agents rely on come from **calculators** ([ADR 0024](../decisions/0024-l
 ## Preview and all-or-nothing
 
 Every write runs in one transaction. `?preview=true` (REST) or `preview: true` (MCP) runs the real code and rolls back, returning exactly what would have happened; nothing is saved or logged. Batches are all-or-nothing.
+
+Nested writes publish activity and start background work only after the outer transaction commits. Rollback publishes no success. Failed stream delivery or background work does not change a committed result; the stored activity and proposal receipt remain available to read.
 
 ## The activity ledger
 

@@ -1,5 +1,5 @@
 import { newId } from '@ailab/domain';
-import type { Actor, OperationErrorBody, Proposal } from '@ailab/schema';
+import type { Actor, OperationErrorBody, Proposal, ProposalReceipt } from '@ailab/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { proposals } from '../db/schema.ts';
@@ -68,6 +68,7 @@ export async function decideProposal(
     decidedBy: Actor;
     reason?: string | undefined;
     error?: OperationErrorBody | undefined;
+    receipt?: ProposalReceipt | undefined;
   },
 ): Promise<Proposal> {
   const [row] = await db
@@ -78,6 +79,7 @@ export async function decideProposal(
       decidedAt: new Date(),
       decisionReason: decision.reason ?? null,
       error: decision.error ?? null,
+      receipt: decision.receipt ?? null,
     })
     .where(eq(proposals.id, id))
     .returning();
@@ -91,6 +93,7 @@ export function toProposal(row: Row): Proposal {
     operationId: row.operationId,
     input: row.input,
     preview: row.preview,
+    ...(row.decision ? { decision: row.decision } : {}),
     status: row.status,
     proposedBy: row.proposedBy,
     proposedAt: row.proposedAt.toISOString(),
@@ -99,5 +102,6 @@ export function toProposal(row: Row): Proposal {
     ...(row.decidedAt ? { decidedAt: row.decidedAt.toISOString() } : {}),
     ...(row.decisionReason ? { decisionReason: row.decisionReason } : {}),
     ...(row.error ? { error: row.error } : {}),
+    ...(row.receipt ? { receipt: row.receipt } : {}),
   };
 }

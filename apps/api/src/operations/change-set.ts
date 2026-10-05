@@ -100,7 +100,7 @@ export const changeSetOperations = [
     agentPolicy: async (ctx, input, deps) => {
       let policy: 'direct' | 'propose' = 'direct';
       try {
-        await deps.db.transaction(async (tx) => {
+        await deps.registry.transaction(deps.db, async (tx) => {
           await runSteps(ctx, input, deps, tx, async (operation, filled) => {
             if ((await deps.registry.policyFor(ctx, operation, filled, tx)) === 'propose') {
               policy = 'propose';
