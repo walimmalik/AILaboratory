@@ -7,7 +7,7 @@ import {
   type ConversationSummary,
   type PageContext,
 } from '@ailab/schema';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouterState } from '@tanstack/react-router';
 import {
   createContext,
@@ -16,10 +16,23 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { api } from './api.ts';
+import {
+  freshQuestionSelection,
+  latestQuestionSelection,
+  type QuestionSelection,
+  selectedQuestion,
+} from './lib/chat-question.ts';
 import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts';
+
+interface QuestionChoice {
+  conversation: string;
+  anchor: string;
+  selection: QuestionSelection | null;
+}
 
 interface SendOptions {
   fresh?: boolean;
@@ -43,22 +56,44 @@ interface AssistantUi {
   sendError: string | undefined;
   /** The shown conversation's latest state, live. */
   running: boolean;
+  questionSelection: QuestionSelection | undefined;
+  selectQuestion: (selection: QuestionSelection | undefined) => void;
+  acknowledgeResponse: (
+    previous: QuestionSelection,
+    updated: import('@ailab/schema').RecordEnvelope,
+  ) => void;
+  contextReady: boolean;
+  contextError: string | undefined;
+  refreshContext: () => Promise<unknown>;
 }
 
 const AssistantContext = createContext<AssistantUi | undefined>(undefined);
 
 const STORAGE_KEY = 'ailab.assistant';
 
-function remembered(): { open: boolean; conversationId?: string; width?: number } {
+function remembered(): {
+  open: boolean;
+  conversationId?: string;
+  width?: number;
+  questionChoice?: QuestionChoice;
+} {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
       open?: unknown;
       conversationId?: unknown;
       width?: unknown;
+      questionChoice?: QuestionChoice;
     };
     return {
       open: value.open === true,
       ...(typeof value.conversationId === 'string' ? { conversationId: value.conversationId } : {}),
+      ...(value.questionChoice?.conversation === value.conversationId &&
+      typeof value.questionChoice?.anchor === 'string' &&
+      (value.questionChoice.selection === null ||
+        (value.questionChoice.selection?.context.record &&
+          value.questionChoice.selection.context.activeQuestion))
+        ? { questionChoice: value.questionChoice }
+        : {}),
       ...(typeof value.width === 'number' && Number.isFinite(value.width)
         ? { width: Math.min(840, Math.max(320, value.width)) }
         : {}),
@@ -81,15 +116,72 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string>();
   const [running, setRunning] = useState(false);
+  const [questionChoice, setQuestionChoice] = useState(initial.questionChoice);
+  const contextQuery = useQuery({
+    ...conversationQuery(conversationId ?? ''),
+    enabled: Boolean(conversationId),
+  });
+  const conversation = contextQuery.data;
+  const contextReady =
+    !conversationId || (conversation?.id === conversationId && !contextQuery.error);
+  const contextError = conversationId ? contextQuery.error?.message : undefined;
+  const anchor = conversation?.messages.findLast((message) => message.role === 'user')?.id;
+  const questionSelection =
+    conversationId && conversation?.id === conversationId
+      ? questionChoice?.conversation === conversationId && questionChoice.anchor === anchor
+        ? (questionChoice.selection ?? undefined)
+        : latestQuestionSelection(conversation.messages, conversationId)
+      : undefined;
+  const selectQuestion = useCallback(
+    (selection: QuestionSelection | undefined) => {
+      if (conversationId && anchor)
+        setQuestionChoice({ conversation: conversationId, anchor, selection: selection ?? null });
+    },
+    [conversationId, anchor],
+  );
+  const displayedConversation = useRef(conversationId);
+  displayedConversation.current = conversationId;
+  const selectedRef = useRef(questionSelection);
+  selectedRef.current = questionSelection;
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const acknowledgeResponse = useCallback(
+    (previous: QuestionSelection, updated: import('@ailab/schema').RecordEnvelope) => {
+      const current = selectedRef.current;
+      if (
+        !current ||
+        !conversationId ||
+        displayedConversation.current !== conversationId ||
+        !anchorRef.current ||
+        current.context.record.id !== previous.context.record.id ||
+        current.context.record.version !== previous.context.record.version ||
+        current.context.activeQuestion.id !== previous.context.activeQuestion.id ||
+        current.context.activeQuestion.stage !== previous.context.activeQuestion.stage
+      )
+        return;
+      const question = selectedQuestion(updated, current);
+      if (question?.disposition.status === 'open')
+        setQuestionChoice({
+          conversation: conversationId,
+          anchor: anchorRef.current,
+          selection: freshQuestionSelection(updated, question, current),
+        });
+    },
+    [conversationId],
+  );
+  const sendLock = useRef(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, conversationId, width }));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ open, conversationId, width, questionChoice }),
+      );
     } catch {
       // Remembering the panel is a convenience; private windows may refuse storage.
     }
-  }, [open, conversationId, width]);
+  }, [open, conversationId, width, questionChoice]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -124,6 +216,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   }, [conversationId, queryClient]);
 
   const show = useCallback((id?: string) => {
+    displayedConversation.current = id;
     setConversationId(id);
     setSendError(undefined);
     setOpen(true);
@@ -131,7 +224,15 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   const send = useCallback(
     async (message: string, options: SendOptions = {}) => {
+      if (!options.fresh && !contextReady) {
+        setSendError(contextError ?? 'Wait for this conversation to load before replying.');
+        return false;
+      }
+      if (sendLock.current) return false;
+      sendLock.current = true;
+      const displayedAtStart = displayedConversation.current;
       const target = options.fresh ? undefined : conversationId;
+      const selected = !options.fresh && !options.context ? questionSelection : undefined;
       const heading = document.querySelector('.page h1')?.textContent?.trim();
       // On a record's page, say which record and version the person is looking at.
       const recordId = /^\/records\/([a-z]+_[0-9A-Z]+)/.exec(path)?.[1];
@@ -144,7 +245,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           message,
           ...(target ? { conversationId: target } : {}),
           ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-          ...(options.replyTo ? { replyTo: options.replyTo } : {}),
+          ...((options.replyTo ?? selected?.replyTo)
+            ? { replyTo: options.replyTo ?? selected?.replyTo }
+            : {}),
           page: {
             path,
             ...(heading ? { title: heading.slice(0, 200) } : {}),
@@ -152,21 +255,26 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               ? { record: { id: shown.id, name: shown.name, version: shown.version } }
               : {}),
             ...options.context,
+            ...selected?.context,
           },
         });
-        setRunning(true);
-        setConversationId(summary.id);
+        if (displayedConversation.current === displayedAtStart) {
+          setRunning(true);
+          setConversationId(summary.id);
+        }
         await queryClient.invalidateQueries({ queryKey: conversationQuery(summary.id).queryKey });
         void queryClient.invalidateQueries({ queryKey: conversationsQuery.queryKey });
         return true;
       } catch (error) {
-        setSendError(error instanceof ApiError ? error.message : 'Could not reach the API');
+        if (displayedConversation.current === displayedAtStart)
+          setSendError(error instanceof ApiError ? error.message : 'Could not reach the API');
         return false;
       } finally {
+        sendLock.current = false;
         setSending(false);
       }
     },
-    [conversationId, path, queryClient],
+    [conversationId, path, queryClient, questionSelection, contextReady, contextError],
   );
 
   const value = useMemo(
@@ -181,8 +289,29 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       sending,
       sendError,
       running,
+      questionSelection,
+      selectQuestion,
+      acknowledgeResponse,
+      contextReady,
+      contextError,
+      refreshContext: contextQuery.refetch,
     }),
-    [open, width, conversationId, show, send, sending, sendError, running],
+    [
+      open,
+      width,
+      conversationId,
+      show,
+      send,
+      sending,
+      sendError,
+      running,
+      questionSelection,
+      selectQuestion,
+      acknowledgeResponse,
+      contextReady,
+      contextError,
+      contextQuery.refetch,
+    ],
   );
   return <AssistantContext value={value}>{children}</AssistantContext>;
 }
