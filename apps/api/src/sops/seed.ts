@@ -1,8 +1,9 @@
-import { isUnit } from '@ailab/domain';
+import { isUnit, sameValue } from '@ailab/domain';
 import {
   type EvidenceInput,
   type Quantity,
   type RecordEnvelope,
+  type RecordVersion,
   type SopAttributes,
   type SopMaterial,
   type SopStep,
@@ -246,11 +247,23 @@ export function readSeedSops(
 export interface SopSeedReport {
   created: string[];
   existing: string[];
+  /** Drafts it made earlier whose variables or steps it has brought up to the seed file since. */
+  updated: string[];
+  /** SOP labels whose newer seed fields need a separate draft because they have confirmed history. */
+  blocked: string[];
   /** Materials whose default record the lab doesn't have yet. */
   unbound: string[];
 }
 
-/** Drafts each SOP the lab doesn't have yet (by title), binding defaults the lab has. */
+/** The fields a rerun brings up to the seed file, while their evidence still cites it. */
+const SEED_OWNED = ['variables', 'steps'] as const;
+
+/**
+ * Drafts each SOP the lab doesn't have yet (by title), binding defaults the lab has. An SOP it made
+ * earlier gets the seed file's newer variables and steps while nobody else has changed them (their
+ * evidence still cites the file), but only before its first confirmation. Confirmed history is
+ * immutable: report the need for a separate draft and continue without making a proposal.
+ */
 export async function loadSeedSops(
   registry: OperationRegistry,
   ctx: RecordContext,
@@ -266,10 +279,45 @@ export async function loadSeedSops(
     (
       await run<{ records: RecordEnvelope[] }>('records.list', { kind, search: label, limit: 50 })
     ).records.find((r) => r.label === label && r.status !== 'archived');
-  const report: SopSeedReport = { created: [], existing: [], unbound: [] };
+  const report: SopSeedReport = {
+    created: [],
+    existing: [],
+    updated: [],
+    blocked: [],
+    unbound: [],
+  };
   for (const s of sops) {
-    if (await find('sop', s.label)) {
-      report.existing.push(s.label);
+    const earlier = await find('sop', s.label);
+    if (earlier) {
+      const changed = SEED_OWNED.filter(
+        (field) =>
+          earlier.evidence[field]?.reference === s.evidence[field]?.reference &&
+          !sameValue(earlier.attributes[field], s.attributes[field]),
+      );
+      if (!changed.length) {
+        report.existing.push(s.label);
+        continue;
+      }
+      const { versions } = await run<{ versions: RecordVersion[] }>('records.history', {
+        id: earlier.id,
+      });
+      if (earlier.status === 'active' || versions.some((v) => v.snapshot.status === 'active')) {
+        report.blocked.push(s.label);
+        continue;
+      }
+      const result = await registry.execute(ctx, 'records.update', {
+        id: earlier.id,
+        expectedVersion: earlier.version,
+        attributes: {
+          ...earlier.attributes,
+          ...Object.fromEntries(changed.map((f) => [f, s.attributes[f]])),
+        },
+        evidence: Object.fromEntries(changed.map((f) => [f, s.evidence[f]])),
+        reason: `${changed.join(' and ')} from the seed file ${s.file}`,
+      });
+      const line = `${earlier.name} ${s.label} (${changed.join(', ')})`;
+      if (result.status === 'done') report.updated.push(line);
+      else throw new Error(`records.update was ${result.status}`);
       continue;
     }
     const materials = [...s.attributes.materials];

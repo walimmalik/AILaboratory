@@ -5,8 +5,9 @@ import {
   type ExperimentAttributes,
   type Readiness,
   type RecordEnvelope,
+  type RecordVersion,
 } from '@ailab/schema';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTenant } from '../auth.ts';
 import { campaignKinds } from '../campaigns/kinds.ts';
 import type { Db } from '../db/client.ts';
@@ -29,10 +30,10 @@ import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from '../sops/kinds.ts';
-import { readSeedSops } from '../sops/seed.ts';
+import { loadSeedSops, readSeedSops } from '../sops/seed.ts';
 import { transferKinds } from '../transfers/kinds.ts';
 import { assayKinds } from './kinds.ts';
-import { readSeedAssayTemplates } from './seed.ts';
+import { loadSeedAssayTemplates, readSeedAssayTemplates, type SeedAssayTemplate } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -444,6 +445,200 @@ describe('assay templates', () => {
         t.key,
       ).toBeUndefined();
     }
+  });
+
+  it('brings a template it loaded earlier up to the seed and the SOP version the lab has', async () => {
+    const file = (name: string) =>
+      readFileSync(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const folder = new URL('../../../../seed/sops/own/', import.meta.url);
+    const sops = readSeedSops(
+      readdirSync(folder)
+        .filter((n) => n.endsWith('.md'))
+        .map((name) => ({ name, text: readFileSync(new URL(name, folder), 'utf8') })),
+      {
+        labware: file('labware.yaml'),
+        reagentLibrary: file('reagent-library.yaml'),
+        entityLibrary: file('entity-library.yaml'),
+        instrumentLibrary: file('instrument-library.yaml'),
+      },
+    );
+    await loadSeedSops(
+      registry,
+      agent,
+      sops.filter((s) => s.key === 'sop-elisa-il6'),
+      'Seed lab',
+    );
+    const [elisa] = readSeedAssayTemplates(file('assay-templates.yaml'), {
+      sops: new Map(sops.map((s) => [s.key, s.label])),
+      layouts: file('layouts.yaml'),
+      labware: file('labware.yaml'),
+      instrumentLibrary: file('instrument-library.yaml'),
+    });
+    // Without its layout, plate type and preferred readers, which this test lab doesn't have.
+    const { layout: _, ...rest } = elisa as NonNullable<typeof elisa>;
+    const roles = (rest.attributes.roles as Record<string, unknown>[]).map(
+      ({ preferred: _p, record: _r, ...role }) => role,
+    );
+    const template = {
+      ...rest,
+      attributes: { ...rest.attributes, roles },
+      preferred: [],
+      records: [],
+    };
+    const load = () => loadSeedAssayTemplates(registry, agent, [template], 'Seed lab');
+    expect((await load()).created).toHaveLength(1);
+    expect(await load()).toMatchObject({ updated: [], existing: [template.label] });
+
+    // A newer SOP version moves the draft template's pin.
+    const sop = (await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'sop' }))
+      .records[0] as RecordEnvelope;
+    await run(person, 'records.update', {
+      id: sop.id,
+      expectedVersion: sop.version,
+      attributes: sop.attributes,
+      label: `${sop.label}`,
+      reason: 'A new version',
+    });
+    expect((await load()).updated).toEqual([expect.stringMatching(/\(parts\)$/)]);
+    expect(await load()).toMatchObject({ updated: [], existing: [template.label] });
+  });
+
+  it('leaves a confirmed seed method and its template unchanged and continues with independent templates', async () => {
+    const [newer] = readSeedSops(
+      [
+        {
+          name: 'elisa.md',
+          text: '---\nkey: elisa\ntitle: Seed ELISA\nvariables:\n  sample_dilution: 1\n---\n1. Read the plate.\n',
+        },
+      ],
+      {
+        labware: 'kinds: []',
+        reagentLibrary: 'products: []',
+        entityLibrary: 'entities: []',
+        instrumentLibrary: 'instrument_kinds: []',
+      },
+    );
+    const current = newer as NonNullable<typeof newer>;
+    await loadSeedSops(
+      registry,
+      agent,
+      [{ ...current, attributes: { ...current.attributes, variables: [] } }],
+      'Seed lab',
+    );
+    const method = await confirm(
+      (await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'sop' }))
+        .records[0] as RecordEnvelope,
+    );
+    const template: SeedAssayTemplate = {
+      key: 'seed-elisa',
+      label: 'Seed ELISA template',
+      sops: [{ part: 'assay', label: method.label }],
+      preferred: [],
+      records: [],
+      attributes: {
+        purpose: 'Measure IL-6',
+        roles: [],
+        essentials: [{ id: 'samples', input: 'subjects', label: 'Which samples' }],
+        replicates: { technical: 2, reason: 'Duplicates' },
+        readouts: [{ id: 'od', label: 'Absorbance', capability: 'read_absorbance', part: 'assay' }],
+      },
+    };
+    await loadSeedAssayTemplates(registry, agent, [template], 'Seed lab');
+    const saved = await confirm(
+      (await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'assay_template' }))
+        .records[0] as RecordEnvelope,
+    );
+    const history = await run<{ versions: RecordVersion[] }>(person, 'records.history', {
+      id: saved.id,
+    });
+    const refreshed: SeedAssayTemplate = {
+      ...template,
+      attributes: {
+        ...template.attributes,
+        essentials: [
+          ...(template.attributes.essentials as unknown[]),
+          {
+            id: 'dilution',
+            input: 'variable',
+            label: 'Dilution',
+            part: 'assay',
+            variable: 'sample_dilution',
+          },
+        ],
+      },
+    };
+    const sopReport = await loadSeedSops(registry, agent, [current], 'Seed lab');
+    expect(sopReport.blocked).toEqual([method.label]);
+    const other = await confirm(
+      await run(agent, 'sops.draft', { ...elisaSop, label: 'Independent method' }),
+    );
+    const independent = {
+      ...template,
+      key: 'independent',
+      label: 'Independent template',
+      sops: [{ part: 'assay', label: other.label }],
+    };
+    const report = await loadSeedAssayTemplates(
+      registry,
+      agent,
+      [refreshed, independent],
+      'Seed lab',
+      sopReport.blocked,
+    );
+    expect(report.waiting).toEqual([expect.stringContaining('separate draft')]);
+    expect(report.created).toHaveLength(1);
+    expect(report.proposed).toEqual([]);
+    expect(report.updated).toEqual([]);
+    expect(await run(person, 'records.get', { id: saved.id })).toEqual(saved);
+    expect(await run(person, 'records.get', { id: method.id })).toEqual(method);
+    expect(await run(person, 'records.history', { id: saved.id })).toEqual(history);
+    expect(await run(person, 'proposals.list', { status: 'pending' })).toMatchObject({
+      proposals: [],
+    });
+
+    // Even without the blocked refresh report (e.g. someone replaced the seed evidence), the
+    // operation's scientific validation prevents incompatible templates and reports why.
+    const incompatible = await loadSeedAssayTemplates(
+      registry,
+      agent,
+      [refreshed, { ...refreshed, label: 'New incompatible template' }],
+      'Seed lab',
+    );
+    expect(incompatible.waiting).toHaveLength(2);
+    for (const line of incompatible.waiting)
+      expect(line).toContain('has no input or default variable sample_dilution');
+    expect(incompatible.proposed).toEqual([]);
+    expect(await run(person, 'records.history', { id: saved.id })).toEqual(history);
+
+    // Historical working drafts still pin the version a person confirmed, not their envelope.
+    const execute = registry.execute.bind(registry);
+    const spy = vi
+      .spyOn(registry, 'execute')
+      .mockImplementation(async (ctx, id, input, options) => {
+        const result = await execute(ctx, id, input, options);
+        if (
+          id === 'records.list' &&
+          (input as { kind?: string }).kind === 'sop' &&
+          result.status === 'done'
+        ) {
+          const output = result.output as { records: RecordEnvelope[] };
+          return {
+            ...result,
+            output: {
+              records: output.records.map((r) =>
+                r.id === method.id ? { ...r, status: 'draft', version: r.version + 1 } : r,
+              ),
+            },
+          };
+        }
+        return result;
+      });
+    expect(await loadSeedAssayTemplates(registry, agent, [template], 'Seed lab')).toMatchObject({
+      existing: [template.label],
+      updated: [],
+      waiting: [],
+    });
+    spy.mockRestore();
   });
 });
 

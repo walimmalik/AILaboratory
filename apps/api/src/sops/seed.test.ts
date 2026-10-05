@@ -1,6 +1,13 @@
 import { readdir, readFile } from 'node:fs/promises';
-import type { Actor, Readiness, RecordEnvelope, SopAttributes } from '@ailab/schema';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type {
+  Actor,
+  Proposal,
+  Readiness,
+  RecordEnvelope,
+  RecordVersion,
+  SopAttributes,
+} from '@ailab/schema';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
@@ -38,6 +45,12 @@ afterEach(() => close());
 
 const seed = (path: string) =>
   readFile(new URL(`../../../../seed/${path}`, import.meta.url), 'utf8');
+
+async function run<T>(id: string, input: unknown): Promise<T> {
+  const result = await registry.execute(person, id, input);
+  if (result.status !== 'done') throw new Error(`${id} was ${result.status}`);
+  return result.output as T;
+}
 
 async function seedSops() {
   const folder = new URL('../../../../seed/sops/own/', import.meta.url);
@@ -149,4 +162,101 @@ describe('seed SOPs', () => {
     expect(checks.find((c) => c.id === 'has_steps')?.passed).toBe(true);
     expect(checks.find((c) => c.id === 'formulas_work')?.passed).toBe(true);
   });
+
+  it('brings an SOP it loaded earlier up to the seed file, unless someone changed it', async () => {
+    const sops = await seedSops();
+    const elisa = sops.find((s) => s.key === 'sop-elisa-il6') as (typeof sops)[number];
+    const older = {
+      ...elisa,
+      attributes: {
+        ...elisa.attributes,
+        variables: elisa.attributes.variables.filter((v) => v.name !== 'sample_dilution'),
+      },
+    };
+    await loadSeedSops(registry, loader, [older], 'Seed lab');
+    const again = await loadSeedSops(registry, loader, [elisa], 'Seed lab');
+    expect(again.updated).toEqual([expect.stringMatching(/^SOP-0001 .*\(variables\)$/)]);
+    const list = await registry.execute(person, 'records.list', { kind: 'sop', search: 'IL-6' });
+    const record = (
+      list.status === 'done' ? (list.output as { records: RecordEnvelope[] }).records : []
+    )[0] as RecordEnvelope;
+    expect(
+      (record.attributes as SopAttributes).variables.some((v) => v.name === 'sample_dilution'),
+    ).toBe(true);
+    expect(await loadSeedSops(registry, loader, [elisa], 'Seed lab')).toMatchObject({
+      updated: [],
+      existing: [elisa.label],
+    });
+
+    // A person's own change to the variables is theirs: the seed leaves them alone.
+    await registry.execute(person, 'records.update', {
+      id: record.id,
+      expectedVersion: record.version,
+      attributes: { ...record.attributes, variables: older.attributes.variables },
+    });
+    expect(await loadSeedSops(registry, loader, [elisa], 'Seed lab')).toMatchObject({
+      updated: [],
+      existing: [elisa.label],
+    });
+  });
+
+  it.each(['active', 'draft'] as const)(
+    'preserves confirmed seed history when the current envelope is %s and continues loading',
+    async (status) => {
+      const sops = await seedSops();
+      const elisa = sops.find((s) => s.key === 'sop-elisa-il6') as (typeof sops)[number];
+      const older = {
+        ...elisa,
+        attributes: {
+          ...elisa.attributes,
+          variables: elisa.attributes.variables.filter((v) => v.name !== 'sample_dilution'),
+        },
+      };
+      await loadSeedSops(registry, loader, [older], 'Seed lab');
+      const list = await run<{ records: RecordEnvelope[] }>('records.list', { kind: 'sop' });
+      const draft = list.records[0] as RecordEnvelope;
+      const record = await run<RecordEnvelope>('records.confirm', {
+        id: draft.id,
+        expectedVersion: draft.version,
+      });
+      expect(record.status).toBe('active');
+      const before = await run<{ versions: RecordVersion[] }>('records.history', { id: record.id });
+      // Simulate a pre-existing working-draft envelope; the authoritative history is still read
+      // through records.history. No supported operation creates working revisions yet.
+      const execute = registry.execute.bind(registry);
+      const calls = vi
+        .spyOn(registry, 'execute')
+        .mockImplementation(async (ctx, id, input, options) => {
+          const result = await execute(ctx, id, input, options);
+          if (status === 'draft' && id === 'records.list' && result.status === 'done') {
+            const output = result.output as { records: RecordEnvelope[] };
+            return {
+              ...result,
+              output: {
+                records: output.records.map((r) =>
+                  r.id === record.id ? { ...r, status: 'draft' } : r,
+                ),
+              },
+            };
+          }
+          return result;
+        });
+      const other = sops.find((s) => s.key !== elisa.key) as (typeof sops)[number];
+      const report = await loadSeedSops(registry, loader, [elisa, other], 'Seed lab');
+      expect(report.blocked).toEqual([elisa.label]);
+      expect(report.updated).toEqual([]);
+      expect(report.created).toHaveLength(1);
+      expect(calls.mock.calls.some(([, id]) => id === 'records.update')).toBe(false);
+      calls.mockRestore();
+      const after = await run<{ versions: RecordVersion[] }>('records.history', { id: record.id });
+      expect(after).toEqual(before);
+      const proposals = await run<{ proposals: Proposal[] }>('proposals.list', {
+        status: 'pending',
+      });
+      expect(proposals.proposals).toEqual([]);
+      expect((await loadSeedSops(registry, loader, [elisa], 'Seed lab')).blocked).toEqual([
+        elisa.label,
+      ]);
+    },
+  );
 });

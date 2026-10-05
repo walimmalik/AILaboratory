@@ -1,5 +1,12 @@
-import type { AssayTemplateAttributes, RecordEnvelope } from '@ailab/schema';
+import { sameValue } from '@ailab/domain';
+import type {
+  AssayTemplateAttributes,
+  Proposal,
+  RecordEnvelope,
+  RecordVersion,
+} from '@ailab/schema';
 import { parse } from 'yaml';
+import { toErrorBody } from '../operations/errors.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
 
@@ -77,16 +84,29 @@ export function readSeedAssayTemplates(
 export interface AssayTemplateSeedReport {
   created: string[];
   existing: string[];
-  /** Templates left out because the lab doesn't have a record they name yet. */
+  /** Drafts it made earlier, brought up to the seed file (and the SOP versions the lab has) since. */
+  updated: string[];
+  /** Confirmed templates it made earlier whose seed changes wait on a person. */
+  proposed: string[];
+  /** Templates left unchanged because a dependency is missing, blocked or incompatible. */
   waiting: string[];
 }
 
-/** Drafts each template the lab doesn't have yet (by label), once its SOPs and layout exist. */
+/** The note every seed-set template field carries; a field with other evidence was changed since. */
+const SEED_NOTE = 'Lab convention in seed/assay-templates.yaml';
+
+/**
+ * Drafts each template the lab doesn't have yet (by label), once its SOPs and layout exist. A
+ * template it made earlier gets the fields that differ from the seed file, or pin an older SOP or
+ * layout version than the lab's, while nobody else has changed them: a draft at once, a confirmed
+ * template as a proposal.
+ */
 export async function loadSeedAssayTemplates(
   registry: OperationRegistry,
   ctx: RecordContext,
   templates: SeedAssayTemplate[],
   reason: string,
+  blockedSops: readonly string[] = [],
 ): Promise<AssayTemplateSeedReport> {
   const run = async <T>(operation: string, input: unknown): Promise<T> => {
     const result = await registry.execute(ctx, operation, input);
@@ -97,18 +117,42 @@ export async function loadSeedAssayTemplates(
     (
       await run<{ records: RecordEnvelope[] }>('records.list', { kind, search: label, limit: 50 })
     ).records.find((r) => r.label === label && r.status !== 'archived');
-  const report: AssayTemplateSeedReport = { created: [], existing: [], waiting: [] };
+  const report: AssayTemplateSeedReport = {
+    created: [],
+    existing: [],
+    updated: [],
+    proposed: [],
+    waiting: [],
+  };
+  // Templates that already wait on a person for a seed change, so a rerun doesn't ask twice.
+  const pending = new Set(
+    (await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' })).proposals
+      .filter((p) => p.operationId === 'records.update')
+      .map((p) => (p.input as { id?: string }).id),
+  );
   for (const t of templates) {
-    if (await find('assay_template', t.label)) {
-      report.existing.push(t.label);
+    const earlier = await find('assay_template', t.label);
+    const blocked = t.sops.filter((s) => blockedSops.includes(s.label));
+    if (blocked.length) {
+      report.waiting.push(
+        `${t.label}: seed SOP refresh needs a separate draft (${blocked.map((s) => s.label).join(', ')})`,
+      );
       continue;
     }
     const lacking: string[] = [];
     const parts = [];
     for (const s of t.sops) {
       const sop = await find('sop', s.label);
-      if (sop) parts.push({ id: s.part, sop: { id: sop.id, version: sop.version } });
-      else lacking.push(`SOP ${s.label}`);
+      if (sop) {
+        // A pre-existing working draft must not replace a confirmed method pin.
+        const { versions } = await run<{ versions: RecordVersion[] }>('records.history', {
+          id: sop.id,
+        });
+        const confirmed = versions
+          .filter((v) => v.snapshot.status === 'active')
+          .sort((a, b) => b.version - a.version)[0];
+        parts.push({ id: s.part, sop: { id: sop.id, version: confirmed?.version ?? sop.version } });
+      } else lacking.push(`SOP ${s.label}`);
     }
     const layout = t.layout ? await find('layout', t.layout) : undefined;
     if (t.layout && !layout) lacking.push(`layout ${t.layout}`);
@@ -128,7 +172,8 @@ export async function loadSeedAssayTemplates(
       else lacking.push(`${r.kind.replace('_', ' ')} ${r.label}`);
     }
     if (lacking.length) {
-      report.waiting.push(`${t.label}: ${lacking.join(', ')}`);
+      if (earlier) report.existing.push(t.label);
+      else report.waiting.push(`${t.label}: ${lacking.join(', ')}`);
       continue;
     }
     const attributes = {
@@ -138,18 +183,61 @@ export async function loadSeedAssayTemplates(
       roles: roles.filter((r) => r.capability !== undefined || r.record !== undefined),
     } as AssayTemplateAttributes;
     const evidence = Object.fromEntries(
-      Object.keys(attributes).map((name) => [
-        name,
-        { source: 'stated', note: 'Lab convention in seed/assay-templates.yaml' },
-      ]),
+      Object.keys(attributes).map((name) => [name, { source: 'stated', note: SEED_NOTE }]),
     );
-    const record = await run<RecordEnvelope>('assays.draft_template', {
+    if (earlier) {
+      const was = earlier.attributes as Record<string, unknown>;
+      const changed = Object.keys(attributes).filter(
+        (key) =>
+          earlier.evidence[key]?.note === SEED_NOTE &&
+          !sameValue(was[key], (attributes as Record<string, unknown>)[key]),
+      );
+      if (!changed.length || pending.has(earlier.id)) {
+        report.existing.push(t.label);
+        continue;
+      }
+      const result = await save('records.update', {
+        id: earlier.id,
+        expectedVersion: earlier.version,
+        attributes: {
+          ...was,
+          ...Object.fromEntries(
+            changed.map((k) => [k, (attributes as Record<string, unknown>)[k]]),
+          ),
+        },
+        evidence: Object.fromEntries(changed.map((k) => [k, evidence[k]])),
+        reason: `${changed.join(', ')} from the seed file`,
+      });
+      if (!result) continue;
+      const line = `${earlier.name} ${t.label} (${changed.join(', ')})`;
+      if (result.status === 'proposed') report.proposed.push(line);
+      else if (result.status === 'done') report.updated.push(line);
+      else throw new Error(`records.update was ${result.status}`);
+      continue;
+    }
+    const result = await save('assays.draft_template', {
       label: t.label,
       ...attributes,
       evidence,
       reason,
     });
+    if (!result) continue;
+    if (result.status !== 'done') throw new Error(`assays.draft_template was ${result.status}`);
+    const record = result.output as RecordEnvelope;
     report.created.push(`${record.name} ${t.label}`);
+
+    // Related-record validation runs through the operation, including proposal previews. A
+    // template that no longer fits the available method waits; unrelated failures still stop seed.
+    async function save(operation: string, input: unknown) {
+      try {
+        return await registry.execute(ctx, operation, input);
+      } catch (error) {
+        const problem = toErrorBody(error);
+        if (problem.code !== 'invalid_attributes') throw error;
+        report.waiting.push(`${t.label}: ${problem.message}`);
+        return undefined;
+      }
+    }
   }
   return report;
 }

@@ -21,6 +21,8 @@ The registries that load this data (plans 007 to 010) don't exist yet. So this p
 - `seed/sops/own/`: 11 short SOPs with variables.
 - `seed/assays.yaml`: 6 templates (ELISA, single-point screen, dose-response with CellTiter-Glo or HiBiT, pNPP kinetic, Dual-Glo, plasmid assembly).
 
+Loader integration: reruns refresh seed-owned SOP variables and steps only before the first confirmed version. Confirmed history is preserved and reported as needing a separate draft; no replacement or update proposal is created. Dependent assay templates wait for that method refresh, and incompatible templates report their operation validation reason while independent seed work continues. Working method revisions remain future SG-10c work in plan 004g.
+
 ## Research scope at the start
 
 - Labware: about 25 types (ELISA and cell plates, Echo source plates, deep-well, PCR, reservoirs, tubes, Hamilton and Opentrons tips) with catalog numbers, geometry, max and dead volumes, and the Opentrons or Hamilton definition name where one exists.
