@@ -41,7 +41,7 @@ export function ExactInstructionsPage() {
   }, [selected, text.data, text.error]);
   const source = outline.data?.source;
   const selectedSection = search.section ?? text.data?.passages?.[0]?.section;
-  const error = search.error ?? outline.error?.message;
+  const error = search.error ?? outline.error;
   return (
     <>
       <div className="page-head">
@@ -59,10 +59,18 @@ export function ExactInstructionsPage() {
         </Link>
       </p>
       {error ? (
-        <p className="error-text" role="alert">
-          This exact source could not be opened. {error} Return to search for another source, or
-          check the link.
-        </p>
+        <>
+          <p className="error-text" role="alert">
+            This exact source could not be opened. {search.error} Return to search for another
+            source, or check the link.
+          </p>
+          {outline.error && (
+            <details>
+              <summary>Technical details</summary>
+              <pre className="json">{outline.error.message}</pre>
+            </details>
+          )}
+        </>
       ) : outline.isPending ? (
         <p className="muted">Opening the selected source…</p>
       ) : (
@@ -96,7 +104,7 @@ export function ExactInstructionsPage() {
               {source.parse.status === 'unavailable' ? (
                 <>
                   <p>Text could not be checked.</p>
-                  <p className="muted">{source.parse.reason}</p>
+                  <p className="muted">No checked text was selected for this saved file.</p>
                 </>
               ) : (
                 <>
@@ -139,9 +147,16 @@ export function ExactInstructionsPage() {
                             : 'This snapshot has no sections.'}
                         </p>
                       ) : text.error ? (
-                        <p className="error-text" role="alert">
-                          The selected text could not be opened. {text.error.message}
-                        </p>
+                        <>
+                          <p className="error-text" role="alert">
+                            The selected text could not be opened. Return to search for another
+                            source, or check the link.
+                          </p>
+                          <details>
+                            <summary>Technical details</summary>
+                            <pre className="json">{text.error.message}</pre>
+                          </details>
+                        </>
                       ) : text.isPending ? (
                         <p className="muted">Opening the selected text…</p>
                       ) : !text.data?.passages?.length ? (
