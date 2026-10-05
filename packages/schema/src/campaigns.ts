@@ -262,6 +262,13 @@ export const RunStep = z.strictObject({
   part: LocalName.describe('The protocol part it belongs to'),
   step: z.string().min(1).describe('The SOP step id'),
   title: z.string().min(1),
+  text: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Instruction captured from the pinned SOP when the run started; absent for older uncaptured runs',
+    ),
   planned: z.array(z.strictObject({ name: z.string().min(1), value: RunValue })),
   status: z.enum(['pending', 'done', 'skipped']),
   at: z.iso.datetime().optional().describe('When it was ticked'),

@@ -1,3 +1,15 @@
+.rich-text-quote {
+  margin: 8px 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: inherit;
+  color: inherit;
+}
+
+.rich-text-quote p {
+  margin: 0;
+}
+
 .rich-text-table-scroll {
   max-width: 100%;
   min-width: 0;

@@ -420,10 +420,18 @@ function runChanges(before: RunAttributes, a: RunAttributes): string[] {
   if (stable([a.startedAt, a.startedBy]) !== stable([before.startedAt, before.startedBy]))
     invalid.push('A run keeps when and by whom it was started');
   const shape = (steps: RunAttributes['steps']) =>
-    stable((steps ?? []).map(({ part, step, title, planned }) => ({ part, step, title, planned })));
+    stable(
+      (steps ?? []).map(({ part, step, title, text, planned }) => ({
+        part,
+        step,
+        title,
+        text,
+        planned,
+      })),
+    );
   if (shape(a.steps) !== shape(before.steps))
     invalid.push(
-      'A run keeps the steps and planned values it started with; record what differed as actuals',
+      'A run keeps the steps and planned values it started with, including captured instructions; record what differed as actuals',
     );
   if (!FINAL.includes(before.status)) return invalid;
   if (a.status !== before.status)
