@@ -1,4 +1,9 @@
-import type { CampaignAttributes, ExperimentAttributes, OverviewFact } from '@ailab/schema';
+import type {
+  CampaignAttributes,
+  ExperimentAttributes,
+  OverviewFact,
+  RunAttributes,
+} from '@ailab/schema';
 import { day, facts, type OverviewBuilder, parts, words } from '../records/overview.ts';
 
 /** "A, B and C". */
@@ -83,4 +88,17 @@ const experiment: OverviewBuilder = async (record, read) => {
   };
 };
 
-export const campaignOverviews: Record<string, OverviewBuilder> = { experiment };
+const run: OverviewBuilder = async (record) => {
+  const a = record.attributes as RunAttributes;
+  return {
+    identity: parts('Run', record.summary),
+    facts: facts(
+      { label: 'run status', value: words(a.status), field: 'status' },
+      a.date && { label: 'date', value: a.date, field: 'date' },
+      a.startedAt && { label: 'started at', value: a.startedAt, field: 'startedAt' },
+      a.finishedAt && { label: 'finished at', value: a.finishedAt, field: 'finishedAt' },
+    ),
+  };
+};
+
+export const campaignOverviews: Record<string, OverviewBuilder> = { experiment, run };

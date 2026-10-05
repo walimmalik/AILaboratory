@@ -47,7 +47,6 @@ export const FALLBACK_KINDS = new Set([
   'liquid_class',
   'liquid_class_verification',
   'liquid_type',
-  'run',
   'set',
   'sop',
   'transfer_plan',
