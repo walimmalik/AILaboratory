@@ -111,7 +111,8 @@ function MapPlates({ map }: { map: RecordEnvelope }) {
   return (
     <section className="block" aria-label={map.label}>
       <header>
-        <h2>
+        {/* A record's name, not a section label: it keeps its own case (review 2026-10-02). */}
+        <h2 className="named">
           <Link to="/records/$id" params={{ id: map.id }} className={ink(map)}>
             {map.label}
           </Link>{' '}
