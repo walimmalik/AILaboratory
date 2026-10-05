@@ -1,6 +1,6 @@
 import type { ExactSourceReference } from '@ailab/schema';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExactInstructionsSearch } from '../lib/exact-source.ts';
@@ -13,12 +13,23 @@ const fixture = vi.hoisted(() => ({
   text: {} as Record<string, unknown>,
   queries: [] as { queryKey: unknown[]; enabled: boolean }[],
   effects: [] as (() => void)[],
+  effectDependencies: [] as unknown[][],
+  copied: '',
   target: { focus: vi.fn(), scrollIntoView: vi.fn() },
 }));
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
-  useEffect: (effect: () => void) => fixture.effects.push(effect),
+  useEffect: (effect: () => void, dependencies: unknown[]) => {
+    fixture.effects.push(effect);
+    fixture.effectDependencies.push(dependencies);
+  },
   useRef: () => ({ current: fixture.target }),
+  useState: () => [
+    fixture.copied,
+    (value: string) => {
+      fixture.copied = value;
+    },
+  ],
 }));
 vi.mock('@tanstack/react-query', async (original) => ({
   ...(await original<typeof import('@tanstack/react-query')>()),
@@ -68,6 +79,16 @@ function html() {
   return renderToStaticMarkup(<ExactInstructionsPage />);
 }
 
+function copyButton(node: ReactNode): ReactElement<{ onClick: () => void }> | undefined {
+  for (const child of Children.toArray(node)) {
+    if (!isValidElement<{ children?: ReactNode; onClick: () => void }>(child)) continue;
+    if (child.type === 'button' && child.props.children === 'Copy link') return child;
+    const nested = copyButton(child.props.children);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 beforeEach(() => {
   fixture.search = {
     source: { ...source, title: 'Untrusted caller title' },
@@ -88,11 +109,46 @@ beforeEach(() => {
   fixture.text = { data: { source, passages }, isPending: false };
   fixture.queries = [];
   fixture.effects = [];
+  fixture.effectDependencies = [];
+  fixture.copied = '';
+  vi.unstubAllGlobals();
   fixture.target.focus.mockClear();
   fixture.target.scrollIntoView.mockClear();
 });
 
 describe('historical source reader', () => {
+  it.each(['source', 'passage', 'section'] as const)(
+    'clears copied-link status when the %s selection changes',
+    async (change) => {
+      const copiedUrl = 'https://lab.example/library/instructions?passage=p-7';
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('window', { location: { href: copiedUrl } });
+      vi.stubGlobal('navigator', { clipboard: { writeText } });
+      const button = copyButton(ExactInstructionsPage());
+      expect(button).toBeDefined();
+      button?.props.onClick();
+      await Promise.resolve();
+      expect(writeText).toHaveBeenCalledWith(copiedUrl);
+      expect(html()).toContain('Link copied.');
+
+      fixture.search =
+        change === 'source'
+          ? { ...fixture.search, source: { ...source, version: 2 } }
+          : change === 'passage'
+            ? { ...fixture.search, passage: 'p-8' }
+            : { source, section: 3 };
+      fixture.effects = [];
+      fixture.effectDependencies = [];
+      html();
+      expect(fixture.effectDependencies[0]).toEqual([
+        fixture.search.source,
+        fixture.search.passage,
+        fixture.search.section,
+      ]);
+      fixture.effects[0]?.();
+      expect(html()).not.toContain('Link copied.');
+    },
+  );
   it('shows server historical metadata, passage location, line breaks and immutable warnings', () => {
     const result = html();
     expect(result).toContain('<h1>Historical source</h1>');

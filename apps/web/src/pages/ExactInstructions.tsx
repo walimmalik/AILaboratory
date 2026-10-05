@@ -29,6 +29,10 @@ export function ExactInstructionsPage() {
   });
   const target = useRef<HTMLElement>(null);
   const [copied, setCopied] = useState('');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: copy feedback belongs to this source and text selection.
+  useEffect(() => {
+    setCopied('');
+  }, [search.source, search.passage, search.section]);
   useEffect(() => {
     if (selected && text.data && !text.error) {
       target.current?.focus({ preventScroll: true });
