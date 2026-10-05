@@ -76,8 +76,9 @@ const IMPORT = /import\s+(type\s+)?\{([^}]*)\}\s+from\s+'@ailab\/schema';?/g;
 
 /**
  * The contracts a source file calls: the names it imports from `@ailab/schema` as values (not
- * `type` imports) and then uses in its code, outside comments and the import itself. A name in a
- * comment, a string or an unused import doesn't count.
+ * `type` imports) and then passes as contract values in its code, outside comments and the import
+ * itself. Reading a contract's schemas or metadata is not a call. Bare values also cover the
+ * web app's conditional calls and contract maps; comments, strings and unused imports don't count.
  */
 function contractsCalled(source: string): Set<string> {
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -92,7 +93,9 @@ function contractsCalled(source: string): Set<string> {
   }
   const body = code.replace(IMPORT, '').replace(/'[^'\n]*'|"[^"\n]*"/g, "''");
   return new Set(
-    imported.filter(([, local]) => new RegExp(`\\b${local}\\b`).test(body)).map(([name]) => name),
+    imported
+      .filter(([, local]) => new RegExp(`\\b${local}\\b(?!\\s*(?:\\.|\\?\\.))`).test(body))
+      .map(([name]) => name),
   );
 }
 
@@ -124,6 +127,34 @@ describe('what counts as a web caller', () => {
       'let x: RecordEnvelope;',
     ].join('\n');
     expect([...contractsCalled(source)]).toEqual(['recordsUpdate', 'recordsArchive']);
+  });
+
+  it('ignores schema and metadata reads but still detects an actual call of the same contract', () => {
+    const source = [
+      "import { changesApply, recordsCreate, recordsUpdate as update } from '@ailab/schema';",
+      'const parsed = changesApply.output.safeParse(output);',
+      'const operation = changesApply.id;',
+      'recordsCreate.input.parse(input);',
+      'const wording = update?.verbs.done;',
+    ].join('\n');
+    expect([...contractsCalled(source)]).toEqual([]);
+    expect([...contractsCalled(`${source}\napi.run(changesApply, { steps });`)]).toEqual([
+      'changesApply',
+    ]);
+  });
+
+  it('counts contracts forwarded through conditional calls and a map of actions', () => {
+    const source = [
+      "import { recordsArchive, recordsUnarchive, recordsUpdate as update } from '@ailab/schema';",
+      'const actions = { archive: recordsArchive, unarchive: recordsUnarchive };',
+      'api.run(actions[action], input);',
+      'api.run(edit ? update : recordsArchive, input);',
+    ].join('\n');
+    expect([...contractsCalled(source)]).toEqual([
+      'recordsArchive',
+      'recordsUnarchive',
+      'recordsUpdate',
+    ]);
   });
 });
 

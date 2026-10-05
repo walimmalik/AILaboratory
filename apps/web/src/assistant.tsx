@@ -31,6 +31,8 @@ interface SendOptions {
 interface AssistantUi {
   open: boolean;
   setOpen: (open: boolean) => void;
+  width: number;
+  setWidth: (width: number) => void;
   /** The conversation the panel shows; undefined means a new one starts with the next message. */
   conversationId: string | undefined;
   /** Opens the panel on a conversation, or on a fresh one. */
@@ -47,15 +49,19 @@ const AssistantContext = createContext<AssistantUi | undefined>(undefined);
 
 const STORAGE_KEY = 'ailab.assistant';
 
-function remembered(): { open: boolean; conversationId?: string } {
+function remembered(): { open: boolean; conversationId?: string; width?: number } {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as {
       open?: unknown;
       conversationId?: unknown;
+      width?: unknown;
     };
     return {
       open: value.open === true,
       ...(typeof value.conversationId === 'string' ? { conversationId: value.conversationId } : {}),
+      ...(typeof value.width === 'number' && Number.isFinite(value.width)
+        ? { width: Math.min(840, Math.max(320, value.width)) }
+        : {}),
     };
   } catch {
     return { open: false };
@@ -70,6 +76,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const initial = useMemo(remembered, []);
   const [open, setOpen] = useState(initial.open);
+  const [width, setWidth] = useState(initial.width ?? 400);
   const [conversationId, setConversationId] = useState(initial.conversationId);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string>();
@@ -78,11 +85,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, conversationId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ open, conversationId, width }));
     } catch {
       // Remembering the panel is a convenience; private windows may refuse storage.
     }
-  }, [open, conversationId]);
+  }, [open, conversationId, width]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -163,8 +170,19 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ open, setOpen, conversationId, show, send, sending, sendError, running }),
-    [open, conversationId, show, send, sending, sendError, running],
+    () => ({
+      open,
+      setOpen,
+      width,
+      setWidth,
+      conversationId,
+      show,
+      send,
+      sending,
+      sendError,
+      running,
+    }),
+    [open, width, conversationId, show, send, sending, sendError, running],
   );
   return <AssistantContext value={value}>{children}</AssistantContext>;
 }

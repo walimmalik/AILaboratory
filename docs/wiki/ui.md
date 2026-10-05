@@ -6,6 +6,7 @@ The "bench console" design system, accepted by Wali on 2026-09-29 as mockup v3 (
 
 - Module nav on the left, the page in the middle, the agent panel docked on the right and collapsible.
 - A global ask bar in the top bar (`/` focuses it) starts a new conversation; the panel continues the one shown.
+- Drag the assistant panel's left edge to resize it on desktop, or focus the divider and use Left/Right arrows (Shift for a larger step, Home/End for the limits). Its width is remembered; on a phone the panel fills the screen.
 - A status bar at the bottom like a terminal statusline: the lab, instrument lamps, and what the agent is doing.
 - Two modes per page: **explore** (browse registries, read-only, rich views) and **design** (a draft with the agent beside it and a readiness panel).
 - Desktop first. Bench views (loading instructions, plate setup, the run checklist) must work on a tablet.
@@ -86,6 +87,8 @@ Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md),
 - **Labware drawings:** a labware type drawn to scale from above with named wells, and one well cut through its centre filled to the maximum volume. Values the record doesn't give are drawn dashed and listed, so a draft has a picture without the picture claiming values nobody entered.
 
 ## Interaction
+
+The assistant keeps replies and scientific questions visible. Routine tool work folds under **Work details**, closed at first, with a live action count and the ordered steps and technical details inside. Empty exchanges have no repeated model heading. Failures, proposed changes, saved records, memory acceptance and generated files stay visible. Each completed turn's saved-draft handoff appears above its final reply and remains during follow-up work: **Open SOP draft** or **Open draft**, with its title, code and current Review status. A blocked draft says **needs attention before confirmation**, with the full questions and checks on the linked record. A read-only lookup never becomes a saved-draft handoff; readiness comes from Review, and confirmation happens on the record page.
 
 - No 100-option forms or wizards. The agent fills the options; the page shows the result; a person adjusts. Small fixes by hand (select wells and pick a role), bigger ones by asking.
 - Agent changes are highlighted like track changes against the last confirmed values, with the confirmed value struck through, plus a list of what changed.
