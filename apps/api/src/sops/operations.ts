@@ -248,10 +248,10 @@ export const sopOperations = [
           questions: (a.questions ?? []).map((q) => (q.id === question.id ? changed : q)),
         },
         reason:
-          input.reason ??
-          (input.action.type === 'correct'
+          input.action.type === 'correct'
             ? input.action.reason
-            : `Responded to "${question.question}"; the scientific issue remains open`),
+            : (input.reason ??
+              `Responded to "${question.question}"; the scientific issue remains open`),
       });
     },
   }),

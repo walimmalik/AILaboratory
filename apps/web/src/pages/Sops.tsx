@@ -394,7 +394,14 @@ function Question({ record, id }: { record: RecordEnvelope; id: string }) {
       {q.suggestion && <p className="question-line agent-ink">Suggested: {q.suggestion}</p>}
       <Cites cites={q.passages} />
       <p className="muted">
-        {q.stage.stage === 'method' ? 'Method question' : 'Experiment input'}: {q.stage.reason}
+        {q.stage.stage === 'method'
+          ? 'Method question'
+          : q.stage.stage === 'run'
+            ? 'Run preparation'
+            : q.stage.binding.type === 'material_role'
+              ? 'Experiment material'
+              : 'Experiment input'}
+        : {q.stage.reason}
       </p>
       {q.responses.length > 0 && (
         <div>

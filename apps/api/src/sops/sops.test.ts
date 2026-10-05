@@ -633,6 +633,7 @@ describe('scientific question lifecycle', () => {
     const corrected = await run<RecordEnvelope>(person, 'sops.answer_question', {
       ...input,
       expectedVersion: partiallyConfirmed.version,
+      reason: 'Record this edit',
       action: {
         type: 'correct',
         text: 'Which coating temperature does the method require?',
@@ -654,10 +655,13 @@ describe('scientific question lifecycle', () => {
         stage: elisa.questions[0]?.stage,
       }),
     ]);
-    const history = await run<{ versions: { snapshot: RecordEnvelope }[] }>(
+    const history = await run<{ versions: { snapshot: RecordEnvelope; reason?: string }[] }>(
       person,
       'records.history',
       { id: sop.id },
+    );
+    expect(history.versions.find((v) => v.snapshot.version === corrected.version)?.reason).toBe(
+      'Clarify the wording',
     );
     expect(
       history.versions.some(
