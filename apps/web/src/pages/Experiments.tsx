@@ -677,10 +677,14 @@ function RunStepRow({
     if (mode !== 'none') tick.mutate(mode);
   };
   const planned = plannedText(step);
+  const instructionIsTitle = step.text === step.title;
   return (
     <li>
       <p className="sop-line">
-        <b>{step.title}.</b>{' '}
+        <b className={instructionIsTitle ? 'run-instruction' : undefined}>
+          {step.title}
+          {!instructionIsTitle && '.'}
+        </b>{' '}
         {step.status === 'pending' ? (
           <span className="muted">to do</span>
         ) : (
@@ -690,6 +694,11 @@ function RunStepRow({
           </span>
         )}
       </p>
+      {step.text ? (
+        !instructionIsTitle && <p className="sop-line run-instruction">{step.text}</p>
+      ) : (
+        <p className="sop-line muted sop-note">Instruction text was not captured for this run.</p>
+      )}
       {planned && <p className="sop-line muted sop-note">Planned: {planned}</p>}
       {step.deviation && (
         <p className="sop-line warn-ink sop-note">
