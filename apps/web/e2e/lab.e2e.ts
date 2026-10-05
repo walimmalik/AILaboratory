@@ -916,7 +916,7 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
 
   // Confirm reviews the sections, but an unanswered scientific issue keeps the SOP in draft.
   await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
-  await expect(readiness).toContainText('Fix what blocks it first.');
+  await expect(readiness).toContainText('Fix what blocks it, then confirm.');
   await expect(readiness).toContainText('1 to fix');
   await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
   await readiness.getByText('technical details', { exact: true }).click();

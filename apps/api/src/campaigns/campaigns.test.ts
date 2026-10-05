@@ -1,5 +1,5 @@
 import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -346,6 +346,78 @@ describe('experiments pin the SOP versions they follow (ADR 0039)', () => {
 });
 
 describe('experiment stages and runs', () => {
+  it('reports a blocker when an accepted experiment pins an unsupported historical SOP question contract', async () => {
+    const campaign = await activeCampaign();
+    const sop = await confirm(
+      await run(person, 'sops.draft', {
+        label: 'Historical pin',
+        materials: [],
+        variables: [],
+        steps: [{ id: 'read', action: 'read', text: 'Read the selected samples' }],
+      }),
+    );
+    const confirmed = await confirm(
+      await run(person, 'experiments.draft', {
+        label: 'Pinned experiment',
+        campaign: campaign.id,
+        question: 'Compare samples',
+        subjects: [{ record: (await subject()).id }],
+        protocol: [{ id: 'read', sop: { id: sop.id, version: sop.version } }],
+      }),
+    );
+    const planned = await run(person, 'experiments.set_stage', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      stage: 'planned',
+    });
+    expect((await run<Readiness>(person, 'records.readiness', { id: planned.id })).ready).toBe(
+      true,
+    );
+    const snapshot = {
+      ...sop,
+      attributes: {
+        ...sop.attributes,
+        questions: [
+          { id: 'legacy', question: 'Which wash?', status: 'answered', answer: "I don't know" },
+        ],
+      },
+    };
+    await db
+      .update(recordVersions)
+      .set({ snapshot })
+      .where(and(eq(recordVersions.recordId, sop.id), eq(recordVersions.version, sop.version)));
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: planned.id });
+    expect(readiness.ready).toBe(false);
+    expect(readiness.checks).toContainEqual(
+      expect.objectContaining({
+        passed: false,
+        severity: 'blocker',
+        message: expect.stringContaining('unsupported question contract'),
+      }),
+    );
+    await expect(
+      registry.execute(person, 'experiments.calculate', { id: planned.id }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('unsupported question contract'),
+    });
+    await expect(
+      registry.execute(person, 'runs.start', {
+        experiment: planned.id,
+        expectedVersion: planned.version,
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('unsupported question contract'),
+    });
+    const history = await run<{ versions: { version: number; snapshot: RecordEnvelope }[] }>(
+      person,
+      'records.history',
+      { id: sop.id },
+    );
+    expect(history.versions.find((v) => v.version === sop.version)?.snapshot).toEqual(snapshot);
+    expect((await run(person, 'records.get', { id: sop.id })).attributes).toEqual(sop.attributes);
+  });
   it('enforces the pinned SOP question obligation at experiment readiness, calculation and run start', async () => {
     const campaign = await activeCampaign();
     const sop = await confirm(

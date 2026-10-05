@@ -635,7 +635,8 @@ export class RecordService {
 
   /**
    * Runs a kind's `related` rules (ADR 0029) against records in the same lab, inside the caller's
-   * transaction. Invalid attributes are refused unless `refuse` is false (reading readiness).
+   * transaction. Invalid attributes are refused on writes and become blockers when `refuse` is
+   * false (reading readiness).
    */
   async #related(
     db: Db,
@@ -698,7 +699,20 @@ export class RecordService {
         `The name prefix ${result.namePrefix} belongs to another kind of record`,
       );
     }
-    return result;
+    return {
+      ...result,
+      checks: [
+        ...(result.checks ?? []),
+        ...(result.invalid ?? []).map((message, index) => ({
+          id: `related_invalid_${index + 1}`,
+          label: 'Values fit the related records',
+          severity: 'blocker' as const,
+          source: 'Related record rules (ADR 0029)',
+          passed: false,
+          message,
+        })),
+      ],
+    };
   }
 
   /**
