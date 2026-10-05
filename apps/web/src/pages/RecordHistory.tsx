@@ -26,6 +26,7 @@ import { useMe } from '../session.ts';
 import { sourcePhrase } from './AllFields.tsx';
 import { ItemDiff, itemChanges } from './ItemDiff.tsx';
 import { RestoreVersion } from './RecordActions.tsx';
+import { Cites } from './Sops.tsx';
 import { LinkedName, renderValue } from './Value.tsx';
 
 const PAGE = 30;
@@ -465,6 +466,7 @@ function QuestionChange({
           </small>
         </div>
       ))}
+      <Cites cites={after.passages} />
     </div>
   );
 }
@@ -488,6 +490,7 @@ export function QuestionSnapshot({ question }: { question: ScientificQuestion | 
         · {question.disposition.status.replaceAll('_', ' ')}
       </p>
       <p className="muted">Why at this stage: {question.stage.reason}</p>
+      <Cites cites={question.passages} />
       {question.responses.length === 0 ? (
         <p className="muted">No responses recorded.</p>
       ) : (

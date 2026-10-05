@@ -1,8 +1,8 @@
 import { diffValues, evidenceKeyOf, keyOf, type ValueChange } from '@ailab/domain';
-import type { FieldEvidence, SopVariable } from '@ailab/schema';
+import { type FieldEvidence, SopStep, type SopVariable } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import { itemName, partLabel } from '../lib/format.ts';
+import { fieldLabel, formatValue, itemName, partLabel } from '../lib/format.ts';
 import {
   kindWords,
   type SopDoc,
@@ -12,7 +12,8 @@ import {
   wordsText,
 } from '../lib/sop-text.ts';
 import { kindsQuery } from '../queries.ts';
-import { renderValue } from './Value.tsx';
+import { actionWords, Cites } from './Sops.tsx';
+import { LinkedName, renderValue } from './Value.tsx';
 
 const SHOWN = 8;
 
@@ -105,7 +106,10 @@ export function ItemDiff({
     kind === 'sop'
       ? sopTerms((after?.attributes ?? before?.attributes ?? {}) as SopDoc)
       : undefined;
-  const words = (value: unknown, path: string): ReactNode => itemWords(value, path, terms);
+  const beforeTerms =
+    adjacent && kind === 'sop' ? sopTerms((before?.attributes ?? {}) as SopDoc) : terms;
+  const words = (value: unknown, path: string, previous = false): ReactNode =>
+    itemWords(value, path, previous ? beforeTerms : terms, adjacent);
 
   // Items of a touched list that didn't change, so "8 other steps unchanged" can be said.
   const touched = new Map<string, Set<string>>();
@@ -146,26 +150,26 @@ export function ItemDiff({
                   </th>
                   {adjacent ? (
                     <td>
-                      <span className="history-comparison">
+                      <div className="history-comparison">
                         {c.change === 'added' || isNew ? (
                           <span className="muted">Added</span>
                         ) : (
                           <>
-                            <span className="muted">{words(c.before, c.path)}</span>
+                            <div className="muted">{words(c.before, c.path, true)}</div>
                             <span>→</span>
                           </>
                         )}
                         {c.change === 'removed' ? (
                           <span>Removed</span>
                         ) : (
-                          <span>{words(c.after, c.path)}</span>
+                          <div>{words(c.after, c.path)}</div>
                         )}
                         {said && (
                           <span className="agent-ink" title={note}>
                             · {said}
                           </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                   ) : (
                     <>
@@ -219,7 +223,12 @@ const singular = (list: string) =>
  * A changed value in lab words: an SOP's step words with values by their names, an added item on
  * one line ("Wash volume = 300 µL, protocol default"), anything else as the record page shows it.
  */
-function itemWords(value: unknown, path: string, terms: Terms | undefined): ReactNode {
+function itemWords(
+  value: unknown,
+  path: string,
+  terms: Terms | undefined,
+  fullStep = false,
+): ReactNode {
   const [list = '', key, ...inside] = path.split('/').slice(1);
   if (terms && typeof value === 'string') return wordsText(value, terms);
   if (key !== undefined && inside.length === 0 && value && typeof value === 'object') {
@@ -230,8 +239,58 @@ function itemWords(value: unknown, path: string, terms: Terms | undefined): Reac
       return `${itemName(item) ?? key}${text ? ` = ${text}` : ''}, ${kindWords(v, terms)}`;
     }
     if (terms && list === 'steps' && typeof item.text === 'string') {
+      if (fullStep) {
+        const parsed = SopStep.safeParse(item);
+        if (parsed.success) return <HistoryStep step={parsed.data} terms={terms} />;
+        return (
+          <div>
+            <div>
+              {itemName(item) ?? key}: {wordsText(item.text, terms)}
+            </div>
+            <div className="muted">
+              Scientific settings cannot be rendered for this historical step. The stored step
+              remains available under Version and technical details.
+            </div>
+          </div>
+        );
+      }
       return `${itemName(item) ?? key}: ${wordsText(item.text, terms)}`;
     }
   }
   return renderValue(value, list);
+}
+
+/** Complete persisted settings on an added or removed step, using that snapshot's SOP terms. */
+function HistoryStep({ step, terms }: { step: SopStep; terms: Terms }) {
+  const material = (role: string) =>
+    terms.materials.find((term) => term.name === role)?.label ?? fieldLabel(role);
+  const settings = [
+    ...(step.parameters ?? []).map(
+      (parameter) =>
+        `${fieldLabel(parameter.name)}: ${parameter.variable ? (terms.values.find((term) => term.name === parameter.variable)?.label ?? fieldLabel(parameter.variable)) : formatValue(parameter.quantity ?? parameter.number ?? parameter.text)}`,
+    ),
+    ...(step.repeat ? [`Repeat ${step.repeat} times`] : []),
+    ...(step.uses?.length ? [`Uses ${step.uses.map(material).join(', ')}`] : []),
+    ...(step.produces?.length
+      ? [`Produces ${step.produces.map((output) => output.label).join(', ')}`]
+      : []),
+    ...(step.group ? [`Group: ${step.group}`] : []),
+  ];
+  return (
+    <div className="history-step">
+      <div>
+        <b>{step.title ?? actionWords[step.action]}</b>: {wordsText(step.text, terms)}
+      </div>
+      {step.title && step.title !== actionWords[step.action] && (
+        <div className="muted">Action: {actionWords[step.action]}</div>
+      )}
+      {settings.length > 0 && <div>{settings.join(' · ')}</div>}
+      {step.prerequisite && (
+        <div>
+          First follow <LinkedName id={step.prerequisite} />
+        </div>
+      )}
+      <Cites cites={step.cite} />
+    </div>
+  );
 }

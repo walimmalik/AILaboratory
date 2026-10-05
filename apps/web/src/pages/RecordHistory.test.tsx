@@ -1,4 +1,4 @@
-import type { RecordEnvelope, RecordVersion, ScientificQuestion } from '@ailab/schema';
+import type { RecordEnvelope, RecordVersion, ScientificQuestion, SopStep } from '@ailab/schema';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,12 @@ import { QuestionSnapshot, RecordHistory } from './RecordHistory.tsx';
 vi.mock('../session.ts', () => ({ useMe: () => ({ user: { id: 'usr_scientist' } }) }));
 vi.mock('@tanstack/react-query', () => ({
   queryOptions: (options: unknown) => options,
-  useQuery: () => ({ data: [] }),
+  useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
+    data:
+      queryKey[0] === 'record'
+        ? { label: 'ELISA method source' }
+        : [{ kind: 'sop', items: { steps: 'id', questions: 'id' } }],
+  }),
 }));
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
@@ -18,6 +23,99 @@ vi.mock('../assistant.tsx', () => ({ useAssistant: () => ({ show: vi.fn() }) }))
 vi.mock('./RecordActions.tsx', () => ({ RestoreVersion: () => null }));
 
 describe('scientific question history', () => {
+  it('shows persisted document, page and quote on both a new question and its later response', () => {
+    const userId = `usr_${'0'.repeat(26)}`;
+    const question: ScientificQuestion = {
+      id: 'wash_duration',
+      question: 'Which wash duration is supported?',
+      stage: { stage: 'method', reason: 'The source needs clarification' },
+      disposition: { status: 'open' },
+      responses: [],
+      passages: [{ document: `doc_${'0'.repeat(26)}`, page: 4, quote: 'Wash for ten minutes.' }],
+    };
+    const initial = renderToStaticMarkup(<QuestionSnapshot question={question} />);
+    expect(initial).toContain('ELISA method source');
+    expect(initial).toContain('p. 4');
+    expect(initial).toContain('Wash for ten minutes.');
+    const base = {
+      id: 'sop_cited',
+      kind: 'sop',
+      label: 'Cited wash',
+      status: 'draft',
+      version: 1,
+      attributes: { questions: [question] },
+      evidence: {},
+      reviews: {},
+    } as unknown as RecordEnvelope;
+    const updated = {
+      ...base,
+      version: 2,
+      attributes: {
+        questions: [
+          {
+            ...question,
+            responses: [
+              {
+                text: 'Please check the duration with the scientist',
+                by: { type: 'user' as const, userId },
+                at: '2026-10-05T10:00:00Z',
+                version: 2,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const versions = [base, updated].map((snapshot) => ({
+      recordId: base.id,
+      version: snapshot.version,
+      operation: snapshot.version === 1 ? 'create' : 'update',
+      actor: { type: 'user', userId },
+      at: '2026-10-05T10:00:00Z',
+      snapshot,
+    })) as RecordVersion[];
+    const response = renderToStaticMarkup(
+      <RecordHistory record={updated} versions={versions} ledger={[]} selected="v2" />,
+    ).split('<details class="tech">')[0];
+    expect(response).toContain('Please check the duration with the scientist');
+    expect(response).toContain('ELISA method source');
+    expect(response).toContain('p. 4');
+    expect(response).toContain('Wash for ten minutes.');
+  });
+
+  it('shows complete scientific settings for added and removed SOP steps only in the History comparison', () => {
+    const step: SopStep = {
+      id: 'incubate',
+      action: 'incubate',
+      title: 'Incubate',
+      text: 'Incubate with `wash_buffer`.',
+      parameters: [{ name: 'duration', quantity: { value: '10', unit: 'min' } }],
+      repeat: 3,
+      uses: ['wash_buffer'],
+      produces: [{ role: 'washed_plate', label: 'Washed plate' }],
+    };
+    const full = {
+      attributes: {
+        steps: [step],
+        materials: [{ role: 'wash_buffer', label: 'Wash buffer', type: 'reagent' }],
+      },
+    };
+    const empty = { attributes: { steps: [], materials: [] } };
+    for (const change of ['added', 'removed'] as const) {
+      const before = change === 'added' ? empty : full;
+      const after = change === 'added' ? full : empty;
+      const html = renderToStaticMarkup(
+        <ItemDiff kind="sop" before={before} after={after} adjacent />,
+      );
+      expect(html).toContain('duration: 10 min');
+      expect(html).toContain('Repeat 3 times');
+      expect(html).toContain('Uses Wash buffer');
+      expect(html).toContain('Produces Washed plate');
+      expect(html).not.toContain('Uses wash_buffer');
+    }
+    const proposal = renderToStaticMarkup(<ItemDiff kind="sop" before={empty} after={full} />);
+    expect(proposal).not.toContain('duration: 10 min');
+  });
   it('keeps collapsed and expanded History readable when a stored question does not match the current contract', () => {
     const record = {
       id: 'sop_historical',

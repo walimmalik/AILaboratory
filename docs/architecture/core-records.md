@@ -55,6 +55,8 @@ Collapsed entries preview up to two actual scalar or quantity changes and a shor
 
 `?tab=history&entry=v<N>` selects and expands that historical snapshot on reload; an inventory event uses its persisted `iev_…` ID. This selects a History entry, not a historical Overview. Versions and physical events are individual entries, even when their timestamps or actors match. The projection has no proposal/approval correlation, so proposal outcomes stay on Review and Activity. Originating assistant conversations are offered only when the stored agent `sessionRef` identifies a conversation. Working/accepted method revisions remain separate pending work (ADR 0069).
 
+Scientific question citations use the existing source disclosure: stored document, page and quote, including citations retained when a response is added. Added and removed SOP steps show their recorded parameters with units, repeat count, materials used and products made, using that snapshot's names; group, prerequisite and citations remain available too. Semantic question and step rendering requires the current schema; unsupported historical data stays unchanged and inspectable in technical details, with an unavailable-comparison notice.
+
 The screen initially renders the newest 30 available entries in oldest-to-newest order, with Show earlier activity and Newest activity controls. This is progressive rendering of the existing operation results, not server pagination: record history is complete, while the existing container query returns at most 500 physical events.
 
 ## Draft and confirm
