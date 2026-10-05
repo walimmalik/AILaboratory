@@ -1,9 +1,19 @@
-import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
+import { newId } from '@ailab/domain';
+import type {
+  Actor,
+  ExperimentAttributes,
+  Proposal,
+  Readiness,
+  RecordEnvelope,
+  RecordVersion,
+  RunAttributes,
+  SopAttributes,
+} from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { records, recordVersions } from '../db/schema.ts';
+import { proposals, records, recordVersions } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
 import { fileKinds } from '../files/kinds.ts';
@@ -857,13 +867,19 @@ describe('binding the protocol (013b)', () => {
   });
 });
 
+const COAT_INSTRUCTIONS =
+  'Add coating solution to every well. Seal the plate and incubate overnight. Keep the plate covered until washing.';
+
+const instructionsOf = (record: RecordEnvelope) =>
+  (record.attributes as RunAttributes).steps?.map((s) => s.text);
+
 async function plannedExperiment() {
   const campaign = await activeCampaign();
   const sop = await confirm(
     await run(agent, 'sops.draft', {
       ...coating,
       steps: [
-        { ...coating.steps[0], title: 'Coat' },
+        { ...coating.steps[0], title: 'Coat', text: COAT_INSTRUCTIONS },
         { id: 'wash', action: 'wash', title: 'Wash', text: 'Wash the plate.', repeat: 3 },
       ],
     }),
@@ -901,6 +917,7 @@ describe('recording runs (013c)', () => {
           part: 'coating',
           step: 'coat',
           title: 'Coat',
+          text: COAT_INSTRUCTIONS,
           planned: [{ name: 'volume', value: { value: '100', unit: 'uL' } }],
           status: 'pending',
         },
@@ -1031,6 +1048,8 @@ describe('recording runs (013c)', () => {
       note: 'Reads look fine',
     });
     expect(finished.attributes).toMatchObject({ status: 'done', notes: 'Reads look fine' });
+    for (const current of [started, coated, skipped, deviated, attached, finished])
+      expect(instructionsOf(current)).toEqual([COAT_INSTRUCTIONS, 'Wash the plate.']);
     await expect(
       registry.execute(person, 'runs.record_deviation', {
         id: finished.id,
@@ -1158,6 +1177,8 @@ describe('recording runs (013c)', () => {
     const stepFixed = await correct(person, finished, late);
     if (stepFixed.status !== 'done') throw new Error('runs.correct was proposed');
     const fixed = stepFixed.output as RecordEnvelope;
+    for (const current of [started, done, finished, fixed])
+      expect(instructionsOf(current)).toEqual([COAT_INSTRUCTIONS, 'Wash the plate.']);
     expect(fixed.attributes).toMatchObject({
       status: 'done',
       finishedAt,
@@ -1179,6 +1200,205 @@ describe('recording runs (013c)', () => {
     expect((noted.output as RecordEnvelope).attributes).toMatchObject({
       deviations: [{ what: 'Plate sat on the bench 40 min before reading', corrected: true }],
     });
+    expect(instructionsOf(noted.output as RecordEnvelope)).toEqual([
+      COAT_INSTRUCTIONS,
+      'Wash the plate.',
+    ]);
+  });
+});
+
+describe('run step instructions', () => {
+  it('captures the pinned SOP instruction even after a newer accepted SOP version changed it', async () => {
+    const experiment = await plannedExperiment();
+    const pin = (experiment.attributes as ExperimentAttributes).protocol[0]?.sop;
+    if (!pin) throw new Error('Missing pinned SOP');
+    const sop = await run(person, 'records.get', { id: pin.id });
+    const original = sop.attributes as SopAttributes;
+    const successor = {
+      ...sop,
+      version: sop.version + 1,
+      attributes: {
+        ...original,
+        steps: original.steps.map((s) => ({
+          ...s,
+          text: 'New instructions from a later edition.',
+        })),
+      },
+    };
+    // Represent an already accepted successor, matching the pinned-input fixture above;
+    // this test does not introduce a public revision path for confirmed SOPs.
+    await db
+      .update(records)
+      .set({ version: successor.version, attributes: successor.attributes })
+      .where(eq(records.id, sop.id));
+    await db.insert(recordVersions).values({
+      recordId: sop.id,
+      version: successor.version,
+      operation: 'update',
+      actor: person.actor,
+      at: new Date(),
+      snapshot: successor,
+    });
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
+    expect((started.attributes as RunAttributes).steps?.[0]).toMatchObject({
+      title: 'Coat',
+      text: COAT_INSTRUCTIONS,
+      planned: [{ name: 'volume', value: { value: '100', unit: 'uL' } }],
+    });
+    const history = await run<{ versions: RecordVersion[] }>(person, 'records.history', {
+      id: started.id,
+    });
+    expect(instructionsOf(history.versions[0]?.snapshot as RecordEnvelope)).toEqual([
+      COAT_INSTRUCTIONS,
+      'Wash the plate.',
+    ]);
+    expect((await run(person, 'records.get', { id: sop.id })).attributes.steps).toEqual(
+      successor.attributes.steps,
+    );
+  });
+
+  it.each(['change', 'delete', 'add'] as const)(
+    'refuses %s of captured text through updates, restore and saved-proposal approval',
+    async (attempt) => {
+      const experiment = await plannedExperiment();
+      let started = await run(person, 'runs.start', {
+        experiment: experiment.id,
+        expectedVersion: experiment.version,
+      });
+      if (attempt === 'add') {
+        const a = started.attributes as RunAttributes;
+        started = {
+          ...started,
+          attributes: { ...a, steps: a.steps?.map(({ text: _text, ...s }) => s) },
+        };
+        // Honest pre-capture record fixture; production code must never backfill it.
+        await db
+          .update(records)
+          .set({ attributes: started.attributes })
+          .where(eq(records.id, started.id));
+        await db
+          .update(recordVersions)
+          .set({ snapshot: started })
+          .where(
+            and(
+              eq(recordVersions.recordId, started.id),
+              eq(recordVersions.version, started.version),
+            ),
+          );
+      }
+      const noted = await run(person, 'records.update', {
+        id: started.id,
+        expectedVersion: started.version,
+        attributes: { ...started.attributes, notes: 'A separate note' },
+      });
+      const a = noted.attributes as RunAttributes;
+      const altered = {
+        ...a,
+        steps: a.steps?.map((s, i) => {
+          if (i !== 0) return s;
+          if (attempt === 'delete') {
+            const { text: _text, ...rest } = s;
+            return rest;
+          }
+          return { ...s, text: 'Retrospective instructions that were not captured' };
+        }),
+      };
+      const input = { id: noted.id, expectedVersion: noted.version, attributes: altered };
+      for (const ctx of [person, agent])
+        await expect(registry.execute(ctx, 'records.update', input)).rejects.toMatchObject({
+          code: 'invalid_attributes',
+          message: expect.stringContaining('captured instructions'),
+        });
+      // A saved earlier snapshot with different instruction facts cannot bypass the guard.
+      await db
+        .update(recordVersions)
+        .set({ snapshot: { ...started, attributes: altered } })
+        .where(
+          and(eq(recordVersions.recordId, started.id), eq(recordVersions.version, started.version)),
+        );
+      for (const ctx of [person, agent])
+        await expect(
+          registry.execute(ctx, 'records.restore', {
+            id: noted.id,
+            expectedVersion: noted.version,
+            version: started.version,
+          }),
+        ).rejects.toMatchObject({
+          code: 'invalid_attributes',
+          message: expect.stringContaining('captured instructions'),
+        });
+      const proposal = newId('prp');
+      await db.insert(proposals).values({
+        id: proposal,
+        orgId: person.orgId,
+        labId: person.labId,
+        operationId: 'records.update',
+        input,
+        status: 'pending',
+        proposedBy: agent.actor,
+        proposedAt: new Date(),
+      });
+      expect(await run<Proposal>(person, 'proposals.approve', { id: proposal })).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_attributes' },
+      });
+      expect(instructionsOf(await run(person, 'records.get', { id: noted.id }))).toEqual(
+        instructionsOf(started),
+      );
+    },
+  );
+
+  it('reads and records older uncaptured runs without inventing instructions or rewriting their history', async () => {
+    const experiment = await plannedExperiment();
+    const started = await run(person, 'runs.start', {
+      experiment: experiment.id,
+      expectedVersion: experiment.version,
+    });
+    const a = started.attributes as RunAttributes;
+    const uncaptured = {
+      ...started,
+      attributes: { ...a, steps: a.steps?.map(({ text: _text, ...s }) => s) },
+    };
+    await db
+      .update(records)
+      .set({ attributes: uncaptured.attributes })
+      .where(eq(records.id, started.id));
+    await db
+      .update(recordVersions)
+      .set({ snapshot: uncaptured })
+      .where(
+        and(eq(recordVersions.recordId, started.id), eq(recordVersions.version, started.version)),
+      );
+    expect(instructionsOf(await run(person, 'records.get', { id: started.id }))).toEqual([
+      undefined,
+      undefined,
+    ]);
+    const done = await run(person, 'runs.done_as_planned', {
+      id: started.id,
+      expectedVersion: started.version,
+    });
+    const finished = await run(person, 'runs.finish', {
+      id: done.id,
+      expectedVersion: done.version,
+      status: 'done',
+    });
+    const corrected = await run(person, 'runs.correct', {
+      id: finished.id,
+      expectedVersion: finished.version,
+      part: 'coating',
+      step: 'coat',
+      changed: [{ name: 'volume', value: { value: '90', unit: 'uL' } }],
+      why: 'Late observation',
+    });
+    expect(instructionsOf(corrected)).toEqual([undefined, undefined]);
+    const history = await run<{ versions: RecordVersion[] }>(person, 'records.history', {
+      id: started.id,
+    });
+    for (const version of history.versions)
+      expect(instructionsOf(version.snapshot)).toEqual([undefined, undefined]);
   });
 });
 

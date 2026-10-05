@@ -62,6 +62,21 @@ The module's lab memory detector (005c-1, `campaigns/detectors.ts`): `runs.finis
 
 `apps/api/src/campaigns/runs.ts` holds the run operations.
 
+### Captured step instructions (004g / SG-09 producer slice)
+
+`runs.start` also copies each step's complete `text` from the already pinned SOP record snapshot,
+alongside its existing title and resolved planned values. `RunStep.text` is the instruction as
+captured when that run started. It is never looked up from a current SOP or replaced by a title.
+The run kind includes it in the immutable checklist comparison, so generic updates, restores and
+saved proposal approval cannot change, delete or retrospectively add it. Recording ticks, skips,
+deviations, finishing and later corrections preserves it.
+
+Older runs may lack `text`; that records uncaptured history rather than an empty instruction.
+They remain readable and recordable without backfilling from any later SOP. This producer slice
+captures only the instruction already present in the pinned SOP. It does not establish source
+completeness, repair seed instructions, resolve a full run manifest or validate hardware behavior.
+The run-view consumer and complete SG-09/SG-13 acceptance remain separate work.
+
 ## Conclusions and sets (013c)
 
 `experiments.conclude` is the only way to concluded (`experiments.set_stage` refuses it). It needs a running or analysing experiment with no run still in progress and at least one finished run, and a verdict (supported, refuted, inconclusive) for every hypothesis, each with the records that show it. The conclusion keeps its summary, the runs it rests on (every finished run unless given), and who concluded and when; runs and evidence are linked as `evidence`. From an agent it is a proposal: the agent drafts, a person confirms (E9).

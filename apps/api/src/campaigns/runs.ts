@@ -124,6 +124,7 @@ export const runOperations = [
             part: p.id,
             step: s.id,
             title: s.title ?? s.text,
+            text: s.text,
             planned,
             status: 'pending',
           });
