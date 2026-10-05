@@ -42,6 +42,8 @@ Selected-question chat offers **Record response** beneath the person's message, 
 
 Earlier recorded chat answers keep their SOP, question and current issue status visible, with old controls under **Revisit response**. Unsaved answers stay actionable; revisiting a changed SOP still requires reviewing the current question before continuing.
 
+Long selected questions in the composer use a two-line visual preview with the complete original text under **Full question**. Short questions stay directly visible. The SOP/status, stale-version warning and **Use current question** action remain outside this disclosure; changing the selected question resets it to closed. This changes presentation only, not the saved question, response text or request context.
+
 This slice exposes originating intent to downstream decision operations; persisting it on ordinary proposals, supporting records and review groups belongs to SG-03. It adds no task store or synthetic intent classification. Safe replay of missing tool messages, stop/resume controls and dedicated Apply decision cards remain separate packages.
 
 ## Models

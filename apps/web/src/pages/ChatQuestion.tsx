@@ -23,9 +23,10 @@ export function SelectedQuestionContext({
 }) {
   const question = selectedQuestion(record, selection);
   const stale = record?.version !== selection.context.record.version;
+  const longQuestion = Boolean(question && question.question.length > 160);
   return (
     <section className="chat-question" aria-label="Selected SOP question">
-      <p>
+      <p className={longQuestion ? 'chat-question-preview' : undefined}>
         <b>{question?.question ?? 'Selected question unavailable'}</b>
       </p>
       <p className="muted">
@@ -56,6 +57,12 @@ export function SelectedQuestionContext({
           </button>
         )}
       </div>
+      {longQuestion && question && (
+        <details key={`${selection.context.record.id}:${question.id}:${question.question}`}>
+          <summary>Full question</summary>
+          <p className="chat-question-full">{question.question}</p>
+        </details>
+      )}
       <details>
         <summary>Change question</summary>
         {record && (
