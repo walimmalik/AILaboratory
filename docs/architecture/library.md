@@ -25,9 +25,16 @@ The Documents screen opens in **Document text** mode: submit words or a quoted p
 or Search the text. Results identify the submitted words and show the source name, heading, page
 and matching passage. Editing the query clears previous results; Clear resets the query; failed
 searches can be retried. **Titles** switches to the existing name/title list and its status filters,
-preserving that browse state while switching modes. Those filters do not apply to text results:
+preserving that browse state while switching modes. Route search state keeps the mode, submitted
+text query (`q`), editable words (`words`), title query (`title`) and title status (`status`) separate;
+filter changes replace the URL so Back and reload restore the search without adding a history
+entry for every keystroke. Only Documents opts into `RecordList`'s controlled filters; other lists
+keep their local state. Those title filters do not apply to text results:
 `library.search` searches parsed passages from non-archived documents' current original files in
-the current lab. Result links open the source record and its existing assistant context; they do
+the current lab. Result links carry the passage's section index to the record route (`section`)
+and its existing assistant context. The text viewer follows record/section changes with
+`library.read`, and explicitly reports a section that is invalid, absent or no longer available
+in the current parsed document instead of silently displaying section zero. These links do
 not claim to pin an immutable protocol edition. No additional search operation is introduced.
 
 ## Files (011a)

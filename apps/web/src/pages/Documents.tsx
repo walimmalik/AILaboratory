@@ -15,9 +15,10 @@ import {
   type RecordEnvelope,
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
 import { api } from '../api.ts';
+import type { DocumentSection, DocumentsSearch } from '../lib/document-search.ts';
 import { recordQuery } from '../queries.ts';
 import { Head, page } from './AreaHead.tsx';
 import { DocumentMentions, mentionsQuery } from './Mentions.tsx';
@@ -76,9 +77,13 @@ export function DocumentsPage() {
   for (const m of confirmed.data?.mentions ?? [])
     counts.set(m.document, (counts.get(m.document) ?? 0) + 1);
   const of = (r: RecordEnvelope) => r.attributes as Partial<DocumentAttributes>;
-  const [words, setWords] = useState('');
-  const [query, setQuery] = useState('');
-  const [mode, setMode] = useState<'text' | 'titles'>('text');
+  const search = useSearch({ from: '/app/documents' });
+  const navigate = useNavigate({ from: '/documents' });
+  const words = search.words ?? search.q ?? '';
+  const query = search.q ?? '';
+  const mode = search.mode ?? 'text';
+  const updateSearch = (changes: Partial<DocumentsSearch>) =>
+    void navigate({ search: (previous) => ({ ...previous, ...changes }), replace: true });
   const [adding, setAdding] = useState(false);
   return (
     <>
@@ -100,10 +105,18 @@ export function DocumentsPage() {
       <div className="toolbar">
         <fieldset className="segmented">
           <legend className="sr-only">Document search mode</legend>
-          <button type="button" aria-pressed={mode === 'text'} onClick={() => setMode('text')}>
+          <button
+            type="button"
+            aria-pressed={mode === 'text'}
+            onClick={() => updateSearch({ mode: 'text' })}
+          >
             Document text
           </button>
-          <button type="button" aria-pressed={mode === 'titles'} onClick={() => setMode('titles')}>
+          <button
+            type="button"
+            aria-pressed={mode === 'titles'}
+            onClick={() => updateSearch({ mode: 'titles' })}
+          >
             Titles
           </button>
         </fieldset>
@@ -120,7 +133,7 @@ export function DocumentsPage() {
               aria-label="Search document text"
               onSubmit={(event) => {
                 event.preventDefault();
-                setQuery(words.trim());
+                updateSearch({ q: words.trim() || undefined });
               }}
             >
               <label htmlFor="document-text-search">Words or phrase</label>
@@ -131,8 +144,7 @@ export function DocumentsPage() {
                 placeholder='Words or "a phrase"'
                 value={words}
                 onChange={(event) => {
-                  setWords(event.target.value);
-                  setQuery('');
+                  updateSearch({ words: event.target.value, q: undefined });
                 }}
               />
               <button type="submit" className="btn" disabled={!words.trim()}>
@@ -143,8 +155,7 @@ export function DocumentsPage() {
                 className="link-btn"
                 disabled={!words && !query}
                 onClick={() => {
-                  setWords('');
-                  setQuery('');
+                  updateSearch({ words: '', q: undefined });
                 }}
               >
                 Clear
@@ -161,6 +172,11 @@ export function DocumentsPage() {
           placeholder="Find by title or name"
           empty="No documents yet. Add files, or load the seed lab."
           noMatch="No title has those words."
+          filters={{
+            search: search.title ?? '',
+            status: search.status ?? 'current',
+            onChange: (filters) => updateSearch({ title: filters.search, status: filters.status }),
+          }}
           columns={[
             {
               header: 'Type',
@@ -238,7 +254,11 @@ function Passages({ query }: { query: string }) {
           {hits.data.hits.map((hit) => (
             <li key={hit.passage.id}>
               <p className="hit-doc">
-                <Link to="/records/$id" params={{ id: hit.document.id }}>
+                <Link
+                  to="/records/$id"
+                  params={{ id: hit.document.id }}
+                  search={{ section: hit.passage.section }}
+                >
                   {hit.document.label}
                 </Link>{' '}
                 <span className="muted">
@@ -395,12 +415,18 @@ function AddDocuments({ onClose }: { onClose: () => void }) {
 }
 
 /** A document's page: its files, its text by section with mentions marked, what it mentions. */
-export function DocumentBlocks({ record }: { record: RecordEnvelope }) {
+export function DocumentBlocks({
+  record,
+  section,
+}: {
+  record: RecordEnvelope;
+  section?: DocumentSection | undefined;
+}) {
   const mentions = useQuery(mentionsQuery({ document: record.id })).data?.mentions ?? [];
   return (
     <>
       <FilesBlock record={record} />
-      <TextBlock record={record} mentions={mentions} />
+      <TextBlock record={record} mentions={mentions} section={section} />
       <DocumentMentions mentions={mentions} />
     </>
   );
@@ -490,17 +516,31 @@ export function markMentions(text: string, mentions: readonly Mention[]): ReactN
   return out;
 }
 
-function TextBlock({ record, mentions }: { record: RecordEnvelope; mentions: Mention[] }) {
+export function TextBlock({
+  record,
+  mentions,
+  section: requestedSection,
+}: {
+  record: RecordEnvelope;
+  mentions: Mention[];
+  section?: DocumentSection | undefined;
+}) {
   const queryClient = useQueryClient();
-  const [section, setSection] = useState(0);
+  const navigate = useNavigate({ from: '/records/$id' });
+  const section = requestedSection ?? 0;
   const outline = useQuery({
     queryKey: ['library', 'read', record.id],
     queryFn: () => api.run(libraryRead, { document: record.id }),
   });
+  const sections = outline.data?.outline ?? [];
+  const available = typeof section === 'number' && sections.some((item) => item.index === section);
   const passages = useQuery({
     queryKey: ['library', 'read', record.id, section],
-    queryFn: () => api.run(libraryRead, { document: record.id, section }),
-    enabled: Boolean(outline.data?.parse),
+    queryFn: () => {
+      if (typeof section !== 'number') throw new Error('The requested section is unavailable.');
+      return api.run(libraryRead, { document: record.id, section });
+    },
+    enabled: Boolean(outline.data?.parse) && available,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['library'] });
   const parse = useMutation({
@@ -512,8 +552,8 @@ function TextBlock({ record, mentions }: { record: RecordEnvelope; mentions: Men
     onSuccess: refresh,
   });
   const parsed = outline.data?.parse;
-  const sections = outline.data?.outline ?? [];
-  const error = parse.error ?? mine.error ?? outline.error;
+  const error =
+    parse.error ?? mine.error ?? outline.error ?? (available ? passages.error : undefined);
   return (
     <section className="block" aria-label="Text">
       <header>
@@ -549,6 +589,12 @@ function TextBlock({ record, mentions }: { record: RecordEnvelope; mentions: Men
           )}
         </div>
         {error && <p className="error-text">{error.message}</p>}
+        {requestedSection !== undefined && !outline.isPending && !outline.error && !available && (
+          <p className="error-text">
+            The requested section is unavailable in this document's current text. Choose a section
+            below, or return to Documents and search again.
+          </p>
+        )}
         {parsed && parsed.warnings.length > 0 && (
           <p className="muted">{parsed.warnings.join(' ')}</p>
         )}
@@ -561,7 +607,12 @@ function TextBlock({ record, mentions }: { record: RecordEnvelope; mentions: Men
                     type="button"
                     className="link-btn"
                     aria-pressed={section === s.index}
-                    onClick={() => setSection(s.index)}
+                    onClick={() =>
+                      void navigate({
+                        search: (previous) => ({ ...previous, section: s.index }),
+                        replace: true,
+                      })
+                    }
                   >
                     {s.heading.join(' › ') || 'Start'}
                   </button>
@@ -576,7 +627,8 @@ function TextBlock({ record, mentions }: { record: RecordEnvelope; mentions: Men
               ))}
             </ul>
             <div className="passages">
-              {(passages.data?.passages ?? []).map((p) => (
+              {available && passages.isPending && <p className="muted">Loading section…</p>}
+              {(available ? (passages.data?.passages ?? []) : []).map((p) => (
                 <p key={p.id} className="passage">
                   {markMentions(
                     p.text,

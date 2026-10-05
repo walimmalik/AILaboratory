@@ -10,6 +10,7 @@ import type {
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
+import type { DocumentSection } from '../lib/document-search.ts';
 import { formatShortDay, formatValue, formatWhen, proposalTouches } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
@@ -49,7 +50,7 @@ import { LinkedName, renderValue } from './Value.tsx';
  */
 export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
-  const { tab = 'overview', entry } = useSearch({ from: '/app/records/$id' });
+  const { tab = 'overview', entry, section } = useSearch({ from: '/app/records/$id' });
   const navigate = useNavigate({ from: '/records/$id' });
   const record = useQuery(recordQuery(id));
   const overview = useQuery(overviewQuery(id)).data;
@@ -82,7 +83,13 @@ export function RecordPage() {
   const versions = [...(history.data ?? [])].sort((a, b) => b.version - a.version);
   const isSop = r.kind === 'sop' && (readiness?.sections.length ?? 0) > 0;
   const open = (next: string) =>
-    navigate({ search: next === 'overview' ? {} : { tab: next }, replace: true });
+    navigate({
+      search: {
+        ...(section === undefined ? {} : { section }),
+        ...(next === 'overview' ? {} : { tab: next }),
+      },
+      replace: true,
+    });
   // "Fix in …" and an estimate's name open the part where it is edited.
   const fix = (section: string) => {
     setEditing(section);
@@ -209,7 +216,7 @@ export function RecordPage() {
           {isSop && readiness ? (
             <SopPage record={r} readiness={readiness} editing={editing} onEdit={setEditing} />
           ) : (
-            <KindBlocks record={r} />
+            <KindBlocks record={r} section={section} />
           )}
           {r.kind !== 'document' && <MentionedIn record={r} />}
         </>
@@ -284,7 +291,13 @@ function PlateMapCrumbs({ record }: { record: RecordEnvelope }) {
 }
 
 /** The record's own picture and the blocks its kind adds, shown on the Overview. */
-function KindBlocks({ record: r }: { record: RecordEnvelope }) {
+function KindBlocks({
+  record: r,
+  section,
+}: {
+  record: RecordEnvelope;
+  section?: DocumentSection | undefined;
+}) {
   return (
     <>
       {r.kind === 'labware_type' && (
@@ -309,7 +322,7 @@ function KindBlocks({ record: r }: { record: RecordEnvelope }) {
       {r.kind === 'set' && <SetBlocks record={r} />}
       {r.kind === 'container' && <ContainerBlocks record={r} />}
       {r.kind === 'entity' && <EntityBlocks record={r} />}
-      {r.kind === 'document' && <DocumentBlocks record={r} />}
+      {r.kind === 'document' && <DocumentBlocks record={r} section={section} />}
     </>
   );
 }

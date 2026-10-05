@@ -6,6 +6,11 @@ import {
   Outlet,
   redirect,
 } from '@tanstack/react-router';
+import {
+  type DocumentSection,
+  validateDocumentSection,
+  validateDocumentsSearch,
+} from './lib/document-search.ts';
 import { ActivityPage } from './pages/Activity.tsx';
 import { CalculatorsPage } from './pages/Calculators.tsx';
 import {
@@ -188,6 +193,7 @@ const documents = createRoute({
   getParentRoute: () => app,
   path: '/documents',
   component: DocumentsPage,
+  validateSearch: validateDocumentsSearch,
 });
 const sops = createRoute({
   getParentRoute: () => app,
@@ -243,13 +249,16 @@ const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
   component: RecordPage,
-  // The tab and exact expanded History entry are shareable and survive reload.
-  validateSearch: (search: Record<string, unknown>): { tab?: string; entry?: string } => ({
+  // The tab, expanded History entry and document section are shareable and survive reload.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab?: string; entry?: string; section?: DocumentSection | undefined } => ({
     ...(typeof search.tab === 'string' ? { tab: search.tab } : {}),
     ...(typeof search.entry === 'string' &&
     /^(v[1-9]\d*|iev_[0-9A-HJKMNP-TV-Z]{26})$/.test(search.entry)
       ? { entry: search.entry }
       : {}),
+    ...(search.section === undefined ? {} : { section: validateDocumentSection(search.section) }),
   }),
 });
 const newRecord = createRoute({
