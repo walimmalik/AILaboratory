@@ -751,7 +751,7 @@ test('a file added on the documents page becomes a draft document with its file'
   await expect(page.getByRole('region', { name: 'Text' })).toContainText('not read yet');
 });
 
-test('an SOP reads as a procedure with its run values, and a person settles its open question', async ({
+test('an SOP reads as a procedure with its run values, and a response keeps its method question open', async ({
   page,
   request,
 }) => {
@@ -790,7 +790,7 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
         id: 'q1',
         question: 'Overnight at 4 °C or at room temperature?',
         suggestion: 'At 4 °C',
-        status: 'open',
+        stage: { stage: 'method', reason: 'The incubation temperature changes the method.' },
       },
     ],
   });
@@ -892,13 +892,41 @@ test('an SOP reads as a procedure with its run values, and a person settles its 
 
   const questions = page.getByRole('region', { name: 'Questions to settle' });
   await expect(questions).toContainText('1 open');
-  await questions.getByRole('button', { name: 'Accept the suggestion' }).click();
-  await expect(questions).toContainText('all settled');
+  await expect(questions).toContainText(
+    'Method question: The incubation temperature changes the method.',
+  );
+  await expect(questions.getByRole('button', { name: 'Accept the suggestion' })).toHaveCount(0);
+  const response = 'I do not know which temperature is correct; the source needs checking.';
+  await questions.getByRole('textbox', { name: 'Your answer' }).fill(response);
+  await questions.getByRole('button', { name: 'Record response' }).click();
+  await expect(questions).toContainText(response);
+  await expect(questions).toContainText('Response received; the scientific issue remains open.');
+  await expect(questions).toContainText('1 open');
 
-  // One Confirm settles every part and makes the SOP active.
+  await page.reload();
+  await expect(questions).toContainText(response);
+  await expect(questions).toContainText('Response received; the scientific issue remains open.');
+  await expect(questions).toContainText('1 open');
+  const methodBlocker = readiness.getByRole('row').filter({
+    hasText: '1 open: Overnight at 4 °C or at room temperature?',
+  });
+  await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
+  await expect(methodBlocker).toContainText('a response alone does not resolve it');
+  await expect(readiness).toContainText('1 to fix');
+
+  // Confirm reviews the sections, but an unanswered scientific issue keeps the SOP in draft.
   await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
-  await expect(readiness).toContainText('✓ confirmed');
-  await expect(page.locator('.chip.active')).toHaveText('confirmed');
+  await expect(readiness).toContainText('Fix what blocks it first.');
+  await expect(readiness).toContainText('1 to fix');
+  await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
+  await readiness.getByText('technical details', { exact: true }).click();
+  for (const section of ['Materials', 'Values', 'Steps']) {
+    await expect(
+      readiness.getByRole('listitem').filter({ hasText: new RegExp(`^${section}: confirmed`) }),
+    ).toHaveCount(1);
+  }
+  await expect(questions).toContainText('1 open');
+  await expect(page.locator('.record-head .chip.draft')).toHaveText('draft');
 });
 
 /** A person confirms every section of a draft at once, which activates it. */
