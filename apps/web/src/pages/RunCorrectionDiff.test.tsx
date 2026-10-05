@@ -124,6 +124,19 @@ describe('run actual correction diff', () => {
       expect(shown).not.toContain('90 µL (recorded as planned)');
     }
   });
+  it('provides explicit before/after labels for the narrow correction layout only', () => {
+    for (const adjacent of [false, true]) {
+      const shown = visible(html(side(), side(corrected(dispense, '80')), adjacent));
+      expect(shown).toContain('run-correction-diff');
+      expect(shown).toContain('<span class="diff-side">Before: </span>');
+      expect(shown).toContain('<span class="diff-side">After: </span>');
+    }
+    const generic = renderToStaticMarkup(
+      <ItemDiff kind="run" before={{ label: 'Before' }} after={{ label: 'After' }} />,
+    );
+    expect(generic).not.toContain('run-correction-diff');
+    expect(generic).not.toContain('diff-side');
+  });
   it('shows a correction back to the original plan as recorded as planned', () => {
     const prior = corrected(dispense, '80');
     const shown = visible(html(side(prior), side(corrected(prior, '100'))));

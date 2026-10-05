@@ -139,7 +139,9 @@ export function ItemDiff({
   return (
     <>
       <div className="table-wrap">
-        <table className={`review-fields item-diff${adjacent ? ' history-diff' : ''}`}>
+        <table
+          className={`review-fields item-diff${adjacent ? ' history-diff' : ''}${correction ? ' run-correction-diff' : ''}`}
+        >
           <caption className="sr-only">{caption}</caption>
           {adjacent && (
             <thead>
@@ -172,14 +174,20 @@ export function ItemDiff({
                           <span className="muted">Added</span>
                         ) : (
                           <>
-                            <div className="muted">{words(c.before, c.path, true)}</div>
-                            <span>→</span>
+                            <div className="muted">
+                              {correction && <span className="diff-side">Before: </span>}
+                              {words(c.before, c.path, true)}
+                            </div>
+                            <span className={correction ? 'diff-arrow' : undefined}>→</span>
                           </>
                         )}
                         {c.change === 'removed' ? (
                           <span>Removed</span>
                         ) : (
-                          <div>{words(c.after, c.path)}</div>
+                          <div>
+                            {correction && <span className="diff-side">After: </span>}
+                            {words(c.after, c.path)}
+                          </div>
                         )}
                         {said && (
                           <span className="agent-ink" title={note}>
@@ -191,6 +199,7 @@ export function ItemDiff({
                   ) : (
                     <>
                       <td>
+                        {correction && <span className="diff-side">Before: </span>}
                         {c.change === 'added' || isNew ? (
                           <span className="muted">{isNew ? 'new' : 'added'}</span>
                         ) : (
@@ -198,6 +207,7 @@ export function ItemDiff({
                         )}
                       </td>
                       <td>
+                        {correction && <span className="diff-side">After: </span>}
                         {c.change === 'removed' ? (
                           <span className="muted">removed</span>
                         ) : (

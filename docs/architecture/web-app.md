@@ -86,7 +86,9 @@ diff in Review and History. Changed steps show before/after actuals with units, 
 separately, recorded differences, reasons, impact and correction sources. A prior actual is never
 labelled as the plan. Unchanged steps and raw correction provenance remain under **Full checklist
 and correction details**. Unsupported historical shapes or other checklist edits retain the
-generic diff. This changes presentation only; proposal authority and atomic approval stay with
+generic diff. On narrow screens, correction fields stack their title and original plan above
+explicit Before and After values, so the decision can be read without scrolling sideways.
+This changes presentation only; proposal authority and atomic approval stay with
 the existing operations. The broader scientific Review work in 004g / SG-06 remains pending.
 
 ## Tests

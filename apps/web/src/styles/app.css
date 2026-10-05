@@ -1078,6 +1078,50 @@ table.item-diff th {
 table.item-diff tr.agent-said th {
   color: var(--agent);
 }
+.run-correction-diff .diff-side {
+  display: none;
+}
+@media (max-width: 720px) {
+  table.run-correction-diff,
+  table.run-correction-diff tbody {
+    display: block;
+    width: 100%;
+  }
+  table.run-correction-diff thead {
+    display: none;
+  }
+  table.run-correction-diff tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 6px;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.run-correction-diff tr:last-child {
+    border-bottom: 0;
+  }
+  table.run-correction-diff th,
+  table.run-correction-diff td {
+    width: auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding-block: 3px;
+    border: 0;
+  }
+  table.run-correction-diff .diff-side {
+    display: inline;
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+  table.run-correction-diff .history-comparison {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  table.run-correction-diff .diff-arrow {
+    display: none;
+  }
+}
 p.check-group {
   margin: 8px 0 2px;
   font: 600 12px var(--font-ui);
