@@ -384,7 +384,7 @@ function Sources({
 const by = (e: FieldEvidence, me: Me | undefined) => who(e.by, me);
 
 /** The source in lab words (plan 004f, state words): only beside values. */
-function sourcePhrase(e: FieldEvidence, me: Me | undefined): string {
+export function sourcePhrase(e: FieldEvidence, me: Me | undefined): string {
   switch (e.source) {
     case 'person':
       return `entered by ${who(e.by, me)}`;

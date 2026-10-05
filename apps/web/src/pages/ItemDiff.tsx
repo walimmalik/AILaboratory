@@ -81,6 +81,9 @@ export function ItemDiff({
   after,
   changes: given,
   isNew = false,
+  caption = 'What would change',
+  adjacent = false,
+  labels,
 }: {
   kind: string;
   before: DiffSide | undefined;
@@ -88,6 +91,9 @@ export function ItemDiff({
   /** Already worked out (records.diff); otherwise compared here. */
   changes?: ValueChange[];
   isNew?: boolean;
+  caption?: string;
+  adjacent?: boolean;
+  labels?: Record<string, string>;
 }) {
   const kinds = useQuery(kindsQuery).data;
   const items = kinds?.find((k) => k.kind === kind)?.items ?? {};
@@ -118,37 +124,73 @@ export function ItemDiff({
   return (
     <>
       <div className="table-wrap">
-        <table className="review-fields item-diff">
-          <caption className="sr-only">What would change</caption>
+        <table className={`review-fields item-diff${adjacent ? ' history-diff' : ''}`}>
+          <caption className="sr-only">{caption}</caption>
+          {adjacent && (
+            <thead>
+              <tr>
+                <th>What changed</th>
+                <th>Before → After</th>
+              </tr>
+            </thead>
+          )}
           <tbody>
             {shown.map((c) => {
               const said = agentSaid(after?.evidence?.[evidenceKey(c.path, items)]);
               const note = after?.evidence?.[evidenceKey(c.path, items)]?.note;
               return (
                 <tr key={c.path} className={said ? 'agent-said' : undefined}>
-                  <th scope="row" title={c.path}>
-                    {partLabel(c.path, after?.attributes, items, before?.attributes)}
+                  <th scope="row" title={adjacent ? undefined : c.path}>
+                    {labels?.[c.path] ??
+                      partLabel(c.path, after?.attributes, items, before?.attributes)}
                   </th>
-                  <td>
-                    {c.change === 'added' || isNew ? (
-                      <span className="muted">{isNew ? 'new' : 'added'}</span>
-                    ) : (
-                      <span className="was">{words(c.before, c.path)}</span>
-                    )}
-                  </td>
-                  <td>
-                    {c.change === 'removed' ? (
-                      <span className="muted">removed</span>
-                    ) : (
-                      <span className="now">{words(c.after, c.path)}</span>
-                    )}
-                    {said && (
-                      <span className="agent-ink" title={note}>
-                        {' '}
-                        · {said}
+                  {adjacent ? (
+                    <td>
+                      <span className="history-comparison">
+                        {c.change === 'added' || isNew ? (
+                          <span className="muted">Added</span>
+                        ) : (
+                          <>
+                            <span className="muted">{words(c.before, c.path)}</span>
+                            <span>→</span>
+                          </>
+                        )}
+                        {c.change === 'removed' ? (
+                          <span>Removed</span>
+                        ) : (
+                          <span>{words(c.after, c.path)}</span>
+                        )}
+                        {said && (
+                          <span className="agent-ink" title={note}>
+                            · {said}
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </td>
+                    </td>
+                  ) : (
+                    <>
+                      <td>
+                        {c.change === 'added' || isNew ? (
+                          <span className="muted">{isNew ? 'new' : 'added'}</span>
+                        ) : (
+                          <span className="was">{words(c.before, c.path)}</span>
+                        )}
+                      </td>
+                      <td>
+                        {c.change === 'removed' ? (
+                          <span className="muted">removed</span>
+                        ) : (
+                          <span className="now">{words(c.after, c.path)}</span>
+                        )}
+                        {said && (
+                          <span className="agent-ink" title={note}>
+                            {' '}
+                            · {said}
+                          </span>
+                        )}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}

@@ -237,9 +237,14 @@ const record = createRoute({
   getParentRoute: () => app,
   path: '/records/$id',
   component: RecordPage,
-  // The tab a record page opens on (plan 004f N4); none is the Overview.
-  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
-    typeof search.tab === 'string' ? { tab: search.tab } : {},
+  // The tab and exact expanded History entry are shareable and survive reload.
+  validateSearch: (search: Record<string, unknown>): { tab?: string; entry?: string } => ({
+    ...(typeof search.tab === 'string' ? { tab: search.tab } : {}),
+    ...(typeof search.entry === 'string' &&
+    /^(v[1-9]\d*|iev_[0-9A-HJKMNP-TV-Z]{26})$/.test(search.entry)
+      ? { entry: search.entry }
+      : {}),
+  }),
 });
 const newRecord = createRoute({
   getParentRoute: () => app,

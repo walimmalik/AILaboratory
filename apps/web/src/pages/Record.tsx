@@ -1,29 +1,16 @@
 import type {
   Configuration,
   Connection,
-  InventoryEvent,
   OverviewFact,
   OverviewPart,
   PlateMapAttributes,
   Readiness,
   RecordEnvelope,
-  RecordVersion,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
-import {
-  actorLabel,
-  diffRecords,
-  formatShortDay,
-  formatValue,
-  formatWhen,
-  isAgent,
-  kindFieldWords,
-  operationVerb,
-  proposalTouches,
-  verbAlone,
-} from '../lib/format.ts';
+import { formatShortDay, formatValue, formatWhen, proposalTouches } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
 import {
   historyQuery,
@@ -34,7 +21,6 @@ import {
   readinessQuery,
   recordQuery,
 } from '../queries.ts';
-import { useMe } from '../session.ts';
 import { AllFields } from './AllFields.tsx';
 import { AssayTemplateBlocks } from './AssayDesign.tsx';
 import { DocumentBlocks } from './Documents.tsx';
@@ -48,22 +34,13 @@ import { MentionedIn } from './Mentions.tsx';
 import { OpentronsBlock } from './OpentronsBlock.tsx';
 import { LayoutBlocks, PlateMapBlocks } from './PlateMaps.tsx';
 import { LiquidClassBlocks, ProductBlocks } from './Reagents.tsx';
-import { RecordActions, RestoreVersion } from './RecordActions.tsx';
+import { RecordActions } from './RecordActions.tsx';
+import { RecordHistory } from './RecordHistory.tsx';
 import { fieldLabel, ReadinessBlock } from './RecordReview.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
 import { LinkedName, renderValue } from './Value.tsx';
-
-const operationWords: Record<string, string> = {
-  create: 'created',
-  update: 'edited',
-  activate: 'confirmed and activated',
-  confirm_section: 'confirmed',
-  archive: 'archived',
-  unarchive: 'unarchived',
-  restore: 'restored an earlier version',
-};
 
 /**
  * One record (plan 004f N4): its name with the code as a tag, an identity line and its key facts,
@@ -72,7 +49,7 @@ const operationWords: Record<string, string> = {
  */
 export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
-  const { tab = 'overview' } = useSearch({ from: '/app/records/$id' });
+  const { tab = 'overview', entry } = useSearch({ from: '/app/records/$id' });
   const navigate = useNavigate({ from: '/records/$id' });
   const record = useQuery(recordQuery(id));
   const overview = useQuery(overviewQuery(id)).data;
@@ -240,7 +217,20 @@ export function RecordPage() {
 
       {ownTabs.map((t) => t.id === current && <Fragment key={t.id}>{t.render(r)}</Fragment>)}
 
-      {current === 'history' && <History record={r} versions={versions} ledger={ledger} />}
+      {current === 'history' &&
+        (history.error ? (
+          <p className="error-text">{history.error.message}</p>
+        ) : !history.data ? (
+          <p className="empty">Loading history…</p>
+        ) : (
+          <RecordHistory
+            key={r.id}
+            record={r}
+            versions={versions}
+            ledger={ledger}
+            selected={entry}
+          />
+        ))}
 
       {current === 'connections' && <Connections from={from} to={to} />}
 
@@ -419,125 +409,6 @@ function RecordMissing({ id, error }: { id: string; error: Error }) {
   );
 }
 
-/** Every version: who changed what, when and why, with Restore. */
-/** What a physical event did, as the History tab says it. */
-const EVENT_WORDS: Record<InventoryEvent['type'], string> = {
-  fill: 'filled',
-  transfer: 'transferred',
-  stamp: 'stamped',
-  consume: 'used',
-  correct: 'corrected',
-  discard: 'discarded',
-};
-
-/**
- * One timeline (plan 004f-2): every version of the record and, for a container, every physical
- * event in its ledger (fills, transfers, use, corrections), newest first.
- */
-function History({
-  record: r,
-  versions,
-  ledger,
-}: {
-  record: RecordEnvelope;
-  versions: RecordVersion[];
-  ledger: InventoryEvent[];
-}) {
-  const me = useMe();
-  const rows: { at: string; key: string; version?: RecordVersion; event?: InventoryEvent }[] = [
-    ...versions.map((v) => ({ at: v.at, key: `v${v.version}`, version: v })),
-    ...ledger.map((e) => ({ at: e.at, key: e.id, event: e })),
-  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  return (
-    <section className="block" aria-label="History">
-      <div className="body">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>What</th>
-                <th>Who</th>
-                <th>Version</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const actor = row.version?.actor ?? row.event?.actor;
-                return (
-                  <tr key={row.key}>
-                    <td className="when">{formatWhen(row.at)}</td>
-                    <td>
-                      {row.version ? (
-                        <VersionWords kind={r.kind} versions={versions} v={row.version} />
-                      ) : row.event ? (
-                        <EventWords event={row.event} container={r.id} />
-                      ) : null}
-                    </td>
-                    <td className={actor && isAgent(actor) ? 'agent-ink' : undefined}>
-                      {actor ? actorLabel(actor, me) : ''}
-                    </td>
-                    <td className="q">{row.version ? `v${row.version.version}` : ''}</td>
-                    <td>
-                      {row.version && <RestoreVersion record={r} version={row.version.version} />}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** A version's change in words: the operation, the sections confirmed, the fields changed, why. */
-function VersionWords({
-  kind,
-  versions,
-  v,
-}: {
-  kind: string;
-  versions: RecordVersion[];
-  v: RecordVersion;
-}) {
-  const previous = versions.find((p) => p.version === v.version - 1)?.snapshot;
-  // Fields in lab words: a plate map's "overrides" are its hand edits (review 2026-10-02).
-  const changed = diffRecords(previous, v.snapshot).map((c) => kindFieldWords(kind, c.field));
-  return (
-    <>
-      {v.via && !v.via.startsWith('records.')
-        ? verbAlone(operationVerb(v.via))
-        : (operationWords[v.operation] ?? v.operation)}
-      {v.operation === 'confirm_section' && (
-        <span> {confirmedSections(previous, v.snapshot).join(', ')}</span>
-      )}
-      {v.operation === 'confirm_section' &&
-        previous?.status === 'draft' &&
-        v.snapshot.status === 'active' && <span> and activated</span>}
-      {v.operation !== 'create' && changed.length > 0 && (
-        <span className="muted"> ({changed.join(', ')})</span>
-      )}
-      {v.reason && <span className="muted"> · “{v.reason}”</span>}
-    </>
-  );
-}
-
-/** A physical event in words: what happened to how many of this container's wells, and why. */
-function EventWords({ event, container }: { event: InventoryEvent; container: string }) {
-  const wells = new Set(event.lines.filter((l) => l.container === container).map((l) => l.well));
-  return (
-    <>
-      {EVENT_WORDS[event.type]} {wells.size} {wells.size === 1 ? 'well' : 'wells'}
-      {event.reason && <span className="muted"> · “{event.reason}”</span>}
-    </>
-  );
-}
-
 /**
  * Fields a kind shows in its lab form rather than as a table (UI rule 1). Everything else goes
  * through the shared value renderer, which already names records and lists items as tables.
@@ -565,16 +436,6 @@ function CampaignAim({ aim, record }: { aim: unknown; record: RecordEnvelope }) 
   const campaign = useQuery({ ...recordQuery(id ?? ''), enabled: !!id }).data;
   const aims = (campaign?.attributes.aims ?? []) as { id: string; text: string }[];
   return <>{aims.find((a) => a.id === aim)?.text ?? String(aim)}</>;
-}
-
-/** The sections a confirmation added or refreshed, by their ID. */
-function confirmedSections(
-  before: { reviews?: Record<string, { confirmedAt: string }> } | undefined,
-  after: { reviews?: Record<string, { confirmedAt: string }> },
-): string[] {
-  return Object.entries(after.reviews ?? {})
-    .filter(([id, review]) => before?.reviews?.[id]?.confirmedAt !== review.confirmedAt)
-    .map(([id]) => fieldLabel(id));
 }
 
 /**

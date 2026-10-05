@@ -51,3 +51,9 @@ Each step is one PR; each is useful alone.
 | 004f-5 Overviews per kind | One PR each: experiment (stage steps and the design readable on arrival), plate layout and plate map (N5), container, lot and product, sample and entity, instrument and model, labware type, vendor |
 
 Before 004f-1 and 004f-4 are built, the draft state of the new frame (an agent-proposed lot) and the narrow layout of Inventory are mocked and shown to Wali with the PR.
+
+## 004f-6: Connected object History (#198)
+
+Accepted 2026-10-05 following Wali's request for a GitHub-style object timeline; presentation recorded in ADR 0063's History amendment. One bounded step replaces the shared record History table with connected oldest-to-newest entries, short summaries, existing human/agent attribution, exact version/event links and expandable recorded diffs, reasons, sources and inventory lines. A recent window and earlier/newest controls limit initial reading. Existing Restore confirmation and record-service guards remain authoritative.
+
+This step uses `records.history` and `inventory.history`, without schema changes. Proposal/approval links, request grouping and working/accepted method revision events are not supported by this projection and remain further slices of #198; they must be based on explicit stored relationships. An agent's stored conversation reference is available when present. Reuse starts across all record kinds; experiment activity and run logs are candidates only when their own authoritative chronology supports a useful view.

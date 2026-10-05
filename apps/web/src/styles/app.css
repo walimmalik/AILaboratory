@@ -2839,3 +2839,137 @@ td.record-name .one-line {
 .plate .well.chosen.chosen {
   box-shadow: 0 0 0 2px var(--ink);
 }
+
+/* Connected entries share one outline; facts and comparisons stay close together. */
+.history-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.history-orientation {
+  margin: 0;
+  font-size: 12px;
+}
+.history-entry {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 10px;
+  position: relative;
+  padding: 10px 0 12px;
+  scroll-margin-top: 80px;
+}
+.history-entry:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 30px;
+  bottom: -8px;
+  width: 1px;
+  background: var(--rule);
+}
+.history-marker {
+  color: var(--ink-3);
+  text-align: center;
+  line-height: 22px;
+}
+.history-marker.agent-ink {
+  color: var(--agent);
+}
+.history-entry.selected .history-marker {
+  color: var(--accent);
+}
+.history-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.history-heading {
+  margin: 0;
+}
+.history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.history-details > :where(summary) {
+  cursor: pointer;
+  padding: 3px 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.history-disclosure {
+  color: var(--accent);
+  margin-left: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.history-context {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.history-expanded {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 0 4px;
+}
+.history-expanded :where(p) {
+  margin: 0;
+}
+.history-comparison {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.history-diff {
+  width: auto;
+  max-width: 100%;
+}
+.history-diff :where(th, td) {
+  vertical-align: top;
+}
+.record-history table.item-diff.history-diff th {
+  min-width: 0;
+  width: auto;
+  white-space: normal;
+}
+.history-sources > :where(summary) {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+}
+.history-sources :where(li + li) {
+  margin-top: 6px;
+}
+.history-question {
+  display: grid;
+  gap: 6px;
+}
+@media (max-width: 600px) {
+  .history-entry {
+    grid-template-columns: 18px minmax(0, 1fr);
+    column-gap: 6px;
+  }
+  .history-entry:not(:last-child)::before {
+    left: 8px;
+  }
+  .history-top {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .history-meta {
+    justify-content: flex-start;
+    flex-shrink: 1;
+  }
+}
