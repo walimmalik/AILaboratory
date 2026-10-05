@@ -11,6 +11,7 @@ import {
   validateDocumentSection,
   validateDocumentsSearch,
 } from './lib/document-search.ts';
+import { validateExactInstructionsSearch } from './lib/exact-source.ts';
 import { ActivityPage } from './pages/Activity.tsx';
 import { CalculatorsPage } from './pages/Calculators.tsx';
 import {
@@ -19,6 +20,7 @@ import {
   WorklistFormatsPage,
 } from './pages/DesignLists.tsx';
 import { DocumentsPage } from './pages/Documents.tsx';
+import { ExactInstructionsPage } from './pages/ExactInstructions.tsx';
 import { CampaignsPage, ExperimentsPage, RunsPage, SetsPage } from './pages/Experiments.tsx';
 import {
   EquipmentPage,
@@ -100,6 +102,12 @@ const library = createRoute({
   getParentRoute: () => app,
   path: '/library',
   component: LibraryHome,
+});
+const exactInstructions = createRoute({
+  getParentRoute: () => app,
+  path: '/library/instructions',
+  component: ExactInstructionsPage,
+  validateSearch: validateExactInstructionsSearch,
 });
 const labware = createRoute({
   getParentRoute: () => app,
@@ -309,6 +317,7 @@ const routeTree = root.addChildren([
     entities,
     entityKinds,
     documents,
+    exactInstructions,
     memory,
     sops,
     campaigns,
