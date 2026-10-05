@@ -47,6 +47,18 @@ ID and name prefixes are unique across kinds; a kind that names records with mor
 
 Errors are `RecordError` with a `code` (`not_found`, `unknown_kind`, `invalid_attributes`, `invalid_input`, `invalid_state`, `version_conflict`, `invalid_link`, `linked`, `not_ready`) and a message written for a person or an agent to act on.
 
+## Reading History
+
+The record History tab is a connected, chronological timeline (004f-6, [ADR 0063](../decisions/0063-areas-and-record-pages.md)). It reads the existing full snapshots from `records.history` and, for containers, physical events from `inventory.history`; no new audit store or inferred events are introduced. Each entry keeps its actor, timestamp and exact version. An agent remains credited as the writer; section confirmations in the snapshot separately name the person who confirmed them. A section confirmation that leaves the record a draft says so, rather than calling the whole method confirmed.
+
+Collapsed entries preview up to two actual scalar or quantity changes and a short excerpt of the recorded reason; structured payloads are not summarized by a model. Expanded versions compare their label, lifecycle status and attributes with the preceding stored version through the shared keyed-item diff renderer: named fields with adjacent Before → After values, followed by Why and available Sources. Scientific question responses show the question and new response in plain words, with the recorded author, time and version; responding does not resolve the question. Section confirmations and lifecycle metadata are under Version and technical details alongside the operation and full snapshot. Inventory events show the actual lines for this container, quantities with units, linked source/destination containers and any instrument report. Restore still calls `records.restore` with the current expected version and retains its confirmation and server guards.
+
+`?tab=history&entry=v<N>` selects and expands that historical snapshot on reload; an inventory event uses its persisted `iev_…` ID. This selects a History entry, not a historical Overview. Versions and physical events are individual entries, even when their timestamps or actors match. The projection has no proposal/approval correlation, so proposal outcomes stay on Review and Activity. Originating assistant conversations are offered only when the stored agent `sessionRef` identifies a conversation. Working/accepted method revisions remain separate pending work (ADR 0069).
+
+Scientific question citations use the existing source disclosure: stored document, page and quote, including citations retained when a response is added. Added and removed SOP steps show their recorded parameters with units, repeat count, materials used and products made, using that snapshot's names; group, prerequisite and citations remain available too. Semantic question and step rendering requires the current schema; unsupported historical data stays unchanged and inspectable in technical details, with an unavailable-comparison notice.
+
+The screen initially renders the newest 30 available entries in oldest-to-newest order, with Show earlier activity and Newest activity controls. This is progressive rendering of the existing operation results, not server pagination: record history is complete, while the existing container query returns at most 500 physical events.
+
 ## Draft and confirm
 
 Agents draft, people confirm (ADR 0021). Every record carries:

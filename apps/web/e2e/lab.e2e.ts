@@ -98,11 +98,16 @@ test('an agent proposes a change, a person confirms it on the Review page, and t
   await page.getByRole('row', { name: new RegExp(record.name) }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${label} (ELISA)`);
   await page.getByRole('link', { name: /^History/ }).click();
-  const history = page.getByRole('row', { name: /v2/ });
+  const history = page.locator('#history-v2');
   await expect(history).toContainText('E2E agent for you');
-  await expect(history).toContainText('“Match the ELISA SOP”');
+  await history.getByRole('link', { name: 'Open version 2 in history' }).click();
+  await expect(page).toHaveURL(/tab=history&entry=v2/);
+  await page.reload();
+  await expect(history).toContainText('Match the ELISA SOP');
+  await expect(history.getByText('Hide change', { exact: true })).toBeVisible();
+  await expect(history.getByRole('cell', { name: `${label} (ELISA)` })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Activity' }).click();
+  await page.getByRole('link', { name: 'Activity', exact: true }).click();
   await expect(
     page.getByRole('row', { name: /confirmed a proposed change/ }).first(),
   ).toBeVisible();
@@ -314,7 +319,7 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   await expect(volume.getByText(/Confirmed by you/)).toBeVisible();
   await expect(volume.locator('.now')).toHaveCount(0);
   await page.getByRole('link', { name: /^History/ }).click();
-  await expect(page.getByRole('row', { name: /v4/ })).toContainText(/confirmed .+ and activated/);
+  await expect(page.locator('#history-v4')).toContainText(/confirmed .+ and activated/);
 });
 
 test('labware has its own page in the library, and the Review page groups drafts by kind', async ({
@@ -648,9 +653,12 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   await expect(handling).toContainText('scheduler keeps to it');
   // The physical ledger is part of the record's one History timeline (plan 004f-2).
   await page.getByRole('link', { name: /^History/ }).click();
-  await expect(page.getByRole('region', { name: 'History' })).toContainText(
-    /3 wells · “Plated the reagent”/,
-  );
+  const fill = page.locator('.history-entry').filter({ hasText: 'filled 3 wells' });
+  await fill.getByText('View change', { exact: true }).click();
+  await expect(fill).toContainText('Plated the reagent');
+  await expect(
+    fill.getByRole('table', { name: 'Well changes recorded by this event', exact: true }),
+  ).toContainText('µL');
   await page.getByRole('link', { name: /^Connections/ }).click();
   const basedOn = page.getByRole('region', { name: 'Based on' });
   await expect(basedOn).toContainText('is a');
@@ -1210,6 +1218,7 @@ test('a person restores a version, archives and unarchives a record, and discard
   await expect(heading).toContainText(`Renamed ${label}`);
 
   await page.getByRole('link', { name: /^History/ }).click();
+  await page.getByRole('link', { name: 'Open version 1 in history' }).click();
   await page.getByRole('button', { name: 'Restore version 1' }).click();
   await page.getByRole('button', { name: 'Restore v1' }).click();
   await expect(heading).not.toContainText('Renamed');

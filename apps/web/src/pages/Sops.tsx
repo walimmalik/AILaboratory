@@ -341,7 +341,7 @@ function StepClarification({
 }
 
 /** A step's source passages, folded away: page and quote. */
-function Cites({ cites }: { cites: Citation[] | undefined }) {
+export function Cites({ cites }: { cites: Citation[] | undefined }) {
   if (!cites?.length) return null;
   return (
     <details className="cites no-print">

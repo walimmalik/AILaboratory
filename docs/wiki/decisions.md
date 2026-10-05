@@ -263,3 +263,5 @@ Locked 2026-09-30. Wali asked how the timeline is computed; the plan answers it 
 ## Responses and model continuation
 
 [ADR 0070](../decisions/0070-responses-agent-continuation.md), accepted 2026-10-05: explicit Responses transport for compatible endpoints, bounded nonterminal continuation, and no execution of refused/truncated tool calls. Existing operations and human approval remain authoritative; default provider/model and Chat Completions configuration remain unchanged.
+
+History presentation amendment (2026-10-05, #198): connected chronological entries with short summaries, actor attribution, exact snapshot links and expandable changes, reusing record snapshots and physical events. Section confirmations do not imply activation while the snapshot remains draft. Proposal correlation and method revision adoption remain later work. [ADR 0063](../decisions/0063-areas-and-record-pages.md#history-presentation-amendment-2026-10-05), [004f-6](../plans/004f-navigation-and-record-pages.md#004f-6-connected-object-history-198).
