@@ -1,6 +1,6 @@
 import type { RecordEnvelope } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useDeferredValue, useState } from 'react';
 import { actorLabel, formatWhen, isAgent, proposalTouches } from '../lib/format.ts';
 import { kindNoun } from '../lib/kinds.ts';
@@ -180,16 +180,32 @@ export function RecordList({
                   <tr
                     key={r.id}
                     className="clickable"
-                    tabIndex={0}
-                    onClick={() => open(r.id)}
-                    onKeyDown={(e) => e.key === 'Enter' && open(r.id)}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (
+                        e.defaultPrevented ||
+                        e.button !== 0 ||
+                        e.metaKey ||
+                        e.ctrlKey ||
+                        e.shiftKey ||
+                        e.altKey ||
+                        target.closest(
+                          'a, button, input, select, textarea, label, summary, [contenteditable], [role="button"], [role="link"]',
+                        ) ||
+                        e.currentTarget.ownerDocument.getSelection()?.toString()
+                      )
+                        return;
+                      open(r.id);
+                    }}
                   >
                     {/* The name first, its code as a tag after it (plan 004f: codes are never prefixes). */}
                     <td className="record-name">
-                      <span className="one-line" title={r.label}>
-                        {r.label}
-                      </span>{' '}
-                      <span className="code">{r.name}</span>
+                      <Link to="/records/$id" params={{ id: r.id }}>
+                        <span className="one-line" title={r.label}>
+                          {r.label}
+                        </span>{' '}
+                        <span className="code">{r.name}</span>
+                      </Link>
                     </td>
                     {shownColumns.map((c) => (
                       <td
