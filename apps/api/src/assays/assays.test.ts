@@ -29,10 +29,10 @@ import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { sopKinds } from '../sops/kinds.ts';
-import { readSeedSops } from '../sops/seed.ts';
+import { loadSeedSops, readSeedSops } from '../sops/seed.ts';
 import { transferKinds } from '../transfers/kinds.ts';
 import { assayKinds } from './kinds.ts';
-import { readSeedAssayTemplates } from './seed.ts';
+import { loadSeedAssayTemplates, readSeedAssayTemplates } from './seed.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -444,6 +444,62 @@ describe('assay templates', () => {
         t.key,
       ).toBeUndefined();
     }
+  });
+
+  it('brings a template it loaded earlier up to the seed and the SOP version the lab has', async () => {
+    const file = (name: string) =>
+      readFileSync(new URL(`../../../../seed/${name}`, import.meta.url), 'utf8');
+    const folder = new URL('../../../../seed/sops/own/', import.meta.url);
+    const sops = readSeedSops(
+      readdirSync(folder)
+        .filter((n) => n.endsWith('.md'))
+        .map((name) => ({ name, text: readFileSync(new URL(name, folder), 'utf8') })),
+      {
+        labware: file('labware.yaml'),
+        reagentLibrary: file('reagent-library.yaml'),
+        entityLibrary: file('entity-library.yaml'),
+        instrumentLibrary: file('instrument-library.yaml'),
+      },
+    );
+    await loadSeedSops(
+      registry,
+      agent,
+      sops.filter((s) => s.key === 'sop-elisa-il6'),
+      'Seed lab',
+    );
+    const [elisa] = readSeedAssayTemplates(file('assay-templates.yaml'), {
+      sops: new Map(sops.map((s) => [s.key, s.label])),
+      layouts: file('layouts.yaml'),
+      labware: file('labware.yaml'),
+      instrumentLibrary: file('instrument-library.yaml'),
+    });
+    // Without its layout, plate type and preferred readers, which this test lab doesn't have.
+    const { layout: _, ...rest } = elisa as NonNullable<typeof elisa>;
+    const roles = (rest.attributes.roles as Record<string, unknown>[]).map(
+      ({ preferred: _p, record: _r, ...role }) => role,
+    );
+    const template = {
+      ...rest,
+      attributes: { ...rest.attributes, roles },
+      preferred: [],
+      records: [],
+    };
+    const load = () => loadSeedAssayTemplates(registry, agent, [template], 'Seed lab');
+    expect((await load()).created).toHaveLength(1);
+    expect(await load()).toMatchObject({ updated: [], existing: [template.label] });
+
+    // A newer SOP version moves the draft template's pin.
+    const sop = (await run<{ records: RecordEnvelope[] }>(person, 'records.list', { kind: 'sop' }))
+      .records[0] as RecordEnvelope;
+    await run(person, 'records.update', {
+      id: sop.id,
+      expectedVersion: sop.version,
+      attributes: sop.attributes,
+      label: `${sop.label}`,
+      reason: 'A new version',
+    });
+    expect((await load()).updated).toEqual([expect.stringMatching(/\(parts\)$/)]);
+    expect(await load()).toMatchObject({ updated: [], existing: [template.label] });
   });
 });
 

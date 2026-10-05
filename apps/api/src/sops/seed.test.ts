@@ -149,4 +149,41 @@ describe('seed SOPs', () => {
     expect(checks.find((c) => c.id === 'has_steps')?.passed).toBe(true);
     expect(checks.find((c) => c.id === 'formulas_work')?.passed).toBe(true);
   });
+
+  it('brings an SOP it loaded earlier up to the seed file, unless someone changed it', async () => {
+    const sops = await seedSops();
+    const elisa = sops.find((s) => s.key === 'sop-elisa-il6') as (typeof sops)[number];
+    const older = {
+      ...elisa,
+      attributes: {
+        ...elisa.attributes,
+        variables: elisa.attributes.variables.filter((v) => v.name !== 'sample_dilution'),
+      },
+    };
+    await loadSeedSops(registry, loader, [older], 'Seed lab');
+    const again = await loadSeedSops(registry, loader, [elisa], 'Seed lab');
+    expect(again.updated).toEqual([expect.stringMatching(/^SOP-0001 .*\(variables\)$/)]);
+    const list = await registry.execute(person, 'records.list', { kind: 'sop', search: 'IL-6' });
+    const record = (
+      list.status === 'done' ? (list.output as { records: RecordEnvelope[] }).records : []
+    )[0] as RecordEnvelope;
+    expect(
+      (record.attributes as SopAttributes).variables.some((v) => v.name === 'sample_dilution'),
+    ).toBe(true);
+    expect(await loadSeedSops(registry, loader, [elisa], 'Seed lab')).toMatchObject({
+      updated: [],
+      existing: [elisa.label],
+    });
+
+    // A person's own change to the variables is theirs: the seed leaves them alone.
+    await registry.execute(person, 'records.update', {
+      id: record.id,
+      expectedVersion: record.version,
+      attributes: { ...record.attributes, variables: older.attributes.variables },
+    });
+    expect(await loadSeedSops(registry, loader, [elisa], 'Seed lab')).toMatchObject({
+      updated: [],
+      existing: [elisa.label],
+    });
+  });
 });

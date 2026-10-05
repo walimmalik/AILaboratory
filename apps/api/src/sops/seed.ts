@@ -1,6 +1,7 @@
-import { isUnit } from '@ailab/domain';
+import { isUnit, sameValue } from '@ailab/domain';
 import {
   type EvidenceInput,
+  type Proposal,
   type Quantity,
   type RecordEnvelope,
   type SopAttributes,
@@ -246,11 +247,22 @@ export function readSeedSops(
 export interface SopSeedReport {
   created: string[];
   existing: string[];
+  /** Drafts it made earlier whose variables or steps it has brought up to the seed file since. */
+  updated: string[];
+  /** Confirmed SOPs it made earlier whose newer seed variables or steps wait on a person. */
+  proposed: string[];
   /** Materials whose default record the lab doesn't have yet. */
   unbound: string[];
 }
 
-/** Drafts each SOP the lab doesn't have yet (by title), binding defaults the lab has. */
+/** The fields a rerun brings up to the seed file, while their evidence still cites it. */
+const SEED_OWNED = ['variables', 'steps'] as const;
+
+/**
+ * Drafts each SOP the lab doesn't have yet (by title), binding defaults the lab has. An SOP it made
+ * earlier gets the seed file's newer variables and steps while nobody else has changed them (their
+ * evidence still cites the file): a draft at once, a confirmed SOP as a proposal, as labware does.
+ */
 export async function loadSeedSops(
   registry: OperationRegistry,
   ctx: RecordContext,
@@ -266,10 +278,45 @@ export async function loadSeedSops(
     (
       await run<{ records: RecordEnvelope[] }>('records.list', { kind, search: label, limit: 50 })
     ).records.find((r) => r.label === label && r.status !== 'archived');
-  const report: SopSeedReport = { created: [], existing: [], unbound: [] };
+  const report: SopSeedReport = {
+    created: [],
+    existing: [],
+    updated: [],
+    proposed: [],
+    unbound: [],
+  };
+  // SOPs that already wait on a person for a seed change, so a rerun doesn't ask twice.
+  const pending = new Set(
+    (await run<{ proposals: Proposal[] }>('proposals.list', { status: 'pending' })).proposals
+      .filter((p) => p.operationId === 'records.update')
+      .map((p) => (p.input as { id?: string }).id),
+  );
   for (const s of sops) {
-    if (await find('sop', s.label)) {
-      report.existing.push(s.label);
+    const earlier = await find('sop', s.label);
+    if (earlier) {
+      const changed = SEED_OWNED.filter(
+        (field) =>
+          earlier.evidence[field]?.reference === s.evidence[field]?.reference &&
+          !sameValue(earlier.attributes[field], s.attributes[field]),
+      );
+      if (!changed.length || pending.has(earlier.id)) {
+        report.existing.push(s.label);
+        continue;
+      }
+      const result = await registry.execute(ctx, 'records.update', {
+        id: earlier.id,
+        expectedVersion: earlier.version,
+        attributes: {
+          ...earlier.attributes,
+          ...Object.fromEntries(changed.map((f) => [f, s.attributes[f]])),
+        },
+        evidence: Object.fromEntries(changed.map((f) => [f, s.evidence[f]])),
+        reason: `${changed.join(' and ')} from the seed file ${s.file}`,
+      });
+      const line = `${earlier.name} ${s.label} (${changed.join(', ')})`;
+      if (result.status === 'proposed') report.proposed.push(line);
+      else if (result.status === 'done') report.updated.push(line);
+      else throw new Error(`records.update was ${result.status}`);
       continue;
     }
     const materials = [...s.attributes.materials];
