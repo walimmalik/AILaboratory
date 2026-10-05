@@ -260,6 +260,178 @@ describe('assistant.ask', () => {
     ).toBe('invalid_state');
   });
 
+  it.each(['root', 'immediate'] as const)(
+    'retains the root intent across pending proposal chains through %s replies',
+    async (reference) => {
+      const model = new FakeModel([]);
+      const { assistant, registry } = setup(model);
+      const record = (await output(
+        registry.execute(person, 'records.create', {
+          kind: 'widget',
+          label: 'Stock',
+          attributes,
+          status: 'active',
+        }),
+      )) as RecordEnvelope;
+      const propose = (label: string) =>
+        model.turns.push({
+          text: '',
+          toolCalls: [
+            {
+              id: label,
+              name: 'records_update',
+              input: { id: record.id, expectedVersion: 1, label },
+            },
+          ],
+          stop: 'tool_use',
+        });
+      const pending = (conversation: Conversation) => {
+        const tool = conversation.messages.findLast(
+          (message) => message.role === 'tool' && message.outcome === 'proposed',
+        );
+        if (tool?.role !== 'tool') throw new Error('Expected pending proposal');
+        return (tool.result as { proposal: Proposal }).proposal;
+      };
+      propose('First preview');
+      const first = await ask(registry, assistant, 'Update the stock');
+      const root = first.messages[0];
+      if (root?.role !== 'user') throw new Error('Expected root request');
+      const rootReply = { conversation: first.id, message: root.id };
+      propose('Revised preview');
+      const revised = await ask(registry, assistant, 'Revise the pending change', {
+        page: { path: '/review', proposal: { id: pending(first).id } },
+        replyTo: rootReply,
+      });
+      const immediate = revised.messages[0];
+      if (immediate?.role !== 'user') throw new Error('Expected contextual reply');
+      expect(immediate.origin).toEqual(root.origin);
+      const proposal = pending(revised);
+      expect(proposal.proposedBy).toMatchObject({ sessionRef: revised.id });
+      const selected = { page: { path: '/review', proposal: { id: proposal.id } } };
+      // Re-read persisted messages before continuing from either supported reference.
+      await registry.execute(person, 'assistant.get_conversation', { id: revised.id });
+      const replyTo =
+        reference === 'root' ? rootReply : { conversation: revised.id, message: immediate.id };
+      const continued = await ask(registry, assistant, 'Explain the revised change', {
+        ...selected,
+        replyTo,
+      });
+      expect(continued.messages[0]).toMatchObject({ origin: root.origin });
+      expect(model.requests.at(-1)?.system).toContain('"status":"pending"');
+      expect(model.requests.at(-1)?.system).toContain('conversation text grants no approval');
+      propose('Separate preview');
+      const separate = await ask(registry, assistant, 'Separate request in the producing chat', {
+        conversationId: revised.id,
+      });
+      expect(
+        (
+          await refused(
+            registry.execute(person, 'assistant.ask', {
+              message: 'Reuse another turn',
+              replyTo: rootReply,
+              page: { path: '/review', proposal: { id: pending(separate).id } },
+            }),
+          )
+        ).code,
+      ).toBe('invalid_input');
+      const unrelated = await ask(registry, assistant, 'Separate stock request');
+      expect(
+        (
+          await refused(
+            registry.execute(person, 'assistant.ask', {
+              message: 'Unrelated continuation',
+              ...selected,
+              replyTo: { conversation: unrelated.id, message: unrelated.messages[0]?.id },
+            }),
+          )
+        ).code,
+      ).toBe('invalid_input');
+      expect(
+        (
+          await refused(
+            registry.execute(other, 'assistant.ask', {
+              message: 'Wrong owner',
+              ...selected,
+              replyTo: rootReply,
+            }),
+          )
+        ).code,
+      ).toBe('not_found');
+      await registry.execute(person, 'proposals.reject', { id: proposal.id });
+      expect(
+        (
+          await refused(
+            registry.execute(person, 'assistant.ask', {
+              message: 'Rejected continuation',
+              ...selected,
+              replyTo: { conversation: revised.id, message: immediate.id },
+            }),
+          )
+        ).code,
+      ).toBe('invalid_state');
+    },
+  );
+
+  it('refuses a different selected question despite an incidental read of the same SOP', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    registry.deps.kinds.register(
+      defineKind({
+        kind: 'sop',
+        idPrefix: 'sop',
+        namePrefix: 'SOP',
+        nameWidth: 4,
+        attributes: z.strictObject({ questions: z.array(ScientificQuestion) }),
+      }),
+    );
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'sop',
+        label: 'Method',
+        attributes: {
+          questions: ['wash', 'incubation'].map((id) => ({
+            id,
+            question: `Which ${id} instruction applies?`,
+            stage: { stage: 'method', reason: 'Conflicting source instructions' },
+            responses: [],
+            disposition: { status: 'open' },
+          })),
+        },
+      }),
+    )) as RecordEnvelope;
+    const page = {
+      path: `/records/${record.id}`,
+      record: { id: record.id, name: record.name, version: 1 },
+      activeQuestion: { id: 'wash', stage: 'method' },
+    };
+    model.turns.push({
+      text: '',
+      toolCalls: [{ id: 'read', name: 'records_get', input: { id: record.id } }],
+      stop: 'tool_use',
+    });
+    const original = await ask(registry, assistant, 'Investigate the wash question', { page });
+    expect(original.messages.find((message) => message.role === 'tool')).toMatchObject({
+      outcome: 'done',
+      result: { output: { id: record.id } },
+    });
+    const root = original.messages[0];
+    if (root?.role !== 'user') throw new Error('Expected root request');
+    const replyTo = { conversation: original.id, message: root.id };
+    const error = await refused(
+      registry.execute(person, 'assistant.ask', {
+        message: 'Continue',
+        replyTo,
+        page: { ...page, activeQuestion: { id: 'incubation', stage: 'method' } },
+      }),
+    );
+    expect(error.code).toBe('invalid_input');
+    const continued = await ask(registry, assistant, 'Continue the wash investigation', {
+      page,
+      replyTo,
+    });
+    expect(continued.messages[0]).toMatchObject({ origin: root.origin });
+  });
+
   it('passes trusted origins to tools and pauses remaining tool calls when a proposal is pending', async () => {
     const model = new FakeModel([]);
     const { assistant, registry } = setup(model);

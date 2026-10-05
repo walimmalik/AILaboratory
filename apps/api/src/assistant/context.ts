@@ -108,15 +108,31 @@ export async function replyOrigin(
       'invalid_input',
       'A contextual reply needs a selected pending proposal or open question.',
     );
-  await findConversation(deps.db, ctx, reply.conversation);
-  const rows = await messageRows(deps.db, reply.conversation);
+  const scopedRows = new Map<string, Awaited<ReturnType<typeof messageRows>>>();
+  const loadRows = async (conversation: string) => {
+    const existing = scopedRows.get(conversation);
+    if (existing) return existing;
+    await findConversation(deps.db, ctx, conversation);
+    const rows = await messageRows(deps.db, conversation);
+    scopedRows.set(conversation, rows);
+    return rows;
+  };
+  const rows = await loadRows(reply.conversation);
   const index = rows.findIndex((row) => row.body.role === 'user' && row.body.id === reply.message);
   const original = rows[index]?.body;
+  if (original?.role !== 'user' || original.origin?.type !== 'user_message')
+    throw new OperationError(
+      'invalid_input',
+      'The originating user message is unavailable. Send this as a new request.',
+    );
+  const origin = original.origin;
+  const rootRows = await loadRows(origin.conversation);
+  const root = rootRows.find((row) => row.body.id === origin.message)?.body;
   if (
-    original?.role !== 'user' ||
-    original.origin?.type !== 'user_message' ||
-    original.origin.conversation !== reply.conversation ||
-    original.origin.message !== reply.message
+    root?.role !== 'user' ||
+    root.origin?.type !== 'user_message' ||
+    root.origin.conversation !== origin.conversation ||
+    root.origin.message !== origin.message
   )
     throw new OperationError(
       'invalid_input',
@@ -128,13 +144,25 @@ export async function replyOrigin(
     const proposal = await findProposal(deps.db, ctx, page.proposal.id);
     if (proposal.status !== 'pending')
       throw new OperationError('invalid_state', 'The selected proposal is no longer pending.');
+    // The proposal identifies its producing conversation, including a reply in a new chat.
+    // Read only that conversation and require its actual producing turn to retain this root.
+    const session = proposal.proposedBy.type === 'agent' && proposal.proposedBy.sessionRef;
+    const producedRows = session ? await loadRows(session) : [];
+    const producedIndex = producedRows.findIndex(
+      (row) =>
+        row.body.role === 'tool' &&
+        row.body.outcome === 'proposed' &&
+        (row.body.result as { proposal?: { id?: string } })?.proposal?.id === proposal.id,
+    );
+    const producer = producedRows
+      .slice(0, producedIndex)
+      .findLast((row) => row.body.role === 'user')?.body;
     if (
-      !turn.some(
-        (row) =>
-          row.body.role === 'tool' &&
-          row.body.outcome === 'proposed' &&
-          (row.body.result as { proposal?: { id?: string } })?.proposal?.id === proposal.id,
-      )
+      producedIndex < 0 ||
+      producer?.role !== 'user' ||
+      producer.origin?.type !== 'user_message' ||
+      producer.origin.conversation !== origin.conversation ||
+      producer.origin.message !== origin.message
     )
       throw new OperationError(
         'invalid_input',
@@ -143,6 +171,18 @@ export async function replyOrigin(
   }
   if (page.activeQuestion && page.record) {
     const id = page.record.id;
+    if (
+      [root, original].some(
+        (message) =>
+          message.page?.activeQuestion &&
+          (message.page.record?.id !== id ||
+            message.page.activeQuestion.id !== page.activeQuestion?.id),
+      )
+    )
+      throw new OperationError(
+        'invalid_input',
+        'This question is unrelated to the selected user message.',
+      );
     const matches =
       (original.page?.record?.id === id &&
         (!original.page.activeQuestion ||
@@ -163,7 +203,7 @@ export async function replyOrigin(
         'This question is unrelated to the selected user message.',
       );
   }
-  return original.origin;
+  return origin;
 }
 
 /** Existing tool results retain proposal identity across reloads without a new task store. */
