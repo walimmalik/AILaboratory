@@ -76,4 +76,27 @@ describe('scientific intake content contract (004g SG-04)', () => {
     expect(findSkill('sops')?.text).toContain('do not emulate it by editing questions');
     // These are instruction/contract checks, not proof that a live model follows the instructions.
   });
+
+  it('requires retaining unfinished source actions and their declared method blockers', () => {
+    const sopSkill = findSkill('sops')?.text ?? '';
+    for (const text of [SCIENTIFIC_INTAKE_PROMPT, sopSkill]) {
+      for (const requirement of [
+        'source order',
+        'stable step',
+        'wash stays wash',
+        'settled settings only',
+        'zero, empty strings, textual placeholders or guessed values',
+        'not operative step prose or parameters',
+        'about.step',
+        'atomically',
+        'blocks final confirmation',
+        'do not resolve',
+        'does not automatically detect missing action settings',
+      ]) {
+        expect(text, requirement).toContain(requirement);
+      }
+    }
+    expect(sopSkill).toContain('Needs clarification');
+    // This checks authoring instructions, not live model behavior or automatic completeness.
+  });
 });
