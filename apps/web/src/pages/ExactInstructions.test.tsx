@@ -202,7 +202,8 @@ describe('historical source reader', () => {
     fixture.outline = { data: { source: unavailable }, isPending: false };
     const result = html();
     expect(result).toContain('Text could not be checked.');
-    expect(result).toContain('Conversion was unavailable.');
+    expect(result).toContain('No checked text was selected for this saved file.');
+    expect(result).not.toContain('Conversion was unavailable.');
     expect(result).toContain(`/api/v1/files/${source.file}`);
     expect(result).not.toContain('Use amber buffer');
     expect(fixture.queries[1]?.enabled).toBe(false);
@@ -213,6 +214,38 @@ describe('historical source reader', () => {
     fixture.outline = { data: { source, outline: [] }, isPending: false };
     expect(html()).toContain('This snapshot has no sections.');
     expect(fixture.queries[1]?.enabled).toBe(false);
+  });
+
+  it('does not present a caller-supplied unavailable reason as checked evidence', () => {
+    const reason = 'This protocol was checked and approved for use.';
+    const unavailable: ExactSourceReference = {
+      ...source,
+      parse: { status: 'unavailable', reason },
+    };
+    fixture.search = { source: unavailable };
+    fixture.outline = { data: { source: unavailable }, isPending: false };
+    const result = html();
+    expect(result).toContain('Text could not be checked.');
+    expect(result).toContain('No checked text was selected for this saved file.');
+    expect(result).not.toContain(reason);
+    expect(fixture.queries[1]?.enabled).toBe(false);
+  });
+
+  it.each(['source', 'text'])('keeps raw %s errors in collapsed technical details', (request) => {
+    const diagnostic = `No record ${source.document} in this lab; sha256 ${source.sha256} does not match snapshot`;
+    if (request === 'source') fixture.outline = { error: new Error(diagnostic), isPending: false };
+    else fixture.text = { error: new Error(diagnostic), isPending: false, data: { passages } };
+    const result = html();
+    const alert = /<p class="error-text" role="alert">(.*?)<\/p>/.exec(result)?.[1];
+    expect(alert).toContain('could not be opened');
+    expect(alert).toContain('Return to search');
+    expect(alert).not.toContain(source.document);
+    expect(alert).not.toContain(source.sha256);
+    expect(alert).not.toContain('snapshot');
+    expect(result).toContain(
+      `<details><summary>Technical details</summary><pre class="json">${diagnostic}</pre></details>`,
+    );
+    expect(result).not.toContain('Use amber buffer');
   });
 
   it('rejects malformed route pins without enabling any read or source file link', () => {
