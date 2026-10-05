@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { RecordId, recordIdOf } from './ids.ts';
-import { DocumentId } from './library.ts';
+import { DocumentId, ExactSourceCitation } from './library.ts';
 import { DecimalString, Quantity } from './quantity.ts';
+import { QuestionDisposition, QuestionResponse, QuestionStage } from './scientific-decisions.ts';
 
 /**
  * Digital SOPs (plan 012): a lab procedure as a structured, versioned design document. Materials are
@@ -243,6 +244,40 @@ export const OpenQuestion = z.strictObject({
   answer: z.string().min(1).optional(),
 });
 export type OpenQuestion = z.infer<typeof OpenQuestion>;
+
+/**
+ * Plan 004g replacement contract, not yet used by SopAttributes or sops.answer_question.
+ * Activate only with SG-02 and the SG-10c accepted-history/future-use gate. A reply never settles it.
+ */
+export const ScientificQuestion = z
+  .strictObject({
+    id: OpenQuestion.shape.id,
+    about: OpenQuestion.shape.about,
+    question: z.string().min(1),
+    suggestion: OpenQuestion.shape.suggestion,
+    passages: z.array(ExactSourceCitation).optional(),
+    stage: QuestionStage,
+    responses: z.array(QuestionResponse),
+    disposition: QuestionDisposition,
+  })
+  .superRefine((question, ctx) => {
+    if (question.disposition.status === 'deferred') {
+      const obligation = question.disposition.action.obligation;
+      if (question.stage.stage !== obligation.stage)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stage'],
+          message: 'A deferred question uses its accepted target stage',
+        });
+      else if (JSON.stringify(question.stage.binding) !== JSON.stringify(obligation.binding))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stage', 'binding'],
+          message: 'A deferred question retains its accepted downstream binding',
+        });
+    }
+  });
+export type ScientificQuestion = z.infer<typeof ScientificQuestion>;
 
 export const SopAttributes = z.strictObject({
   purpose: z.string().min(1).optional(),
