@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { itemChanges } from '../pages/ItemDiff.tsx';
 import { partLabel } from './format.ts';
 import {
-  changedQuestions,
+  compareHistoryQuestions,
   historyChangeLabel,
   historyChangePreview,
   historyEntries,
@@ -197,14 +197,34 @@ describe('record History timeline', () => {
     expect(versionSummary(after, before.snapshot, ['wash_volume_conflict · responses'])).toBe(
       'answered a question',
     );
-    expect(changedQuestions(before.snapshot, after.snapshot)).toMatchObject([
+    expect(compareHistoryQuestions(before.snapshot, after.snapshot).changes).toMatchObject([
       {
         id: question.id,
         before: { question: question.question, responses: [] },
         after: { question: question.question, responses: [response] },
       },
     ]);
-    expect(changedQuestions(after.snapshot, after.snapshot)).toEqual([]);
+    expect(compareHistoryQuestions(after.snapshot, after.snapshot)).toEqual({
+      available: true,
+      changes: [],
+    });
+  });
+
+  it('refuses semantic comparison of unsupported historical questions without changing the snapshots', () => {
+    const questions = [{ id: 'old', question: 'Wash settings?', answer: 'Unknown' }];
+    const historical = version(1, { questions });
+    expect(compareHistoryQuestions(undefined, historical.snapshot)).toEqual({
+      available: false,
+      changes: [],
+    });
+    expect(compareHistoryQuestions(historical.snapshot, version(2).snapshot)).toEqual({
+      available: false,
+      changes: [],
+    });
+    expect(historical.snapshot.attributes.questions).toEqual(questions);
+    expect(
+      compareHistoryQuestions(undefined, version(1, { questions: { invalid: true } }).snapshot),
+    ).toEqual({ available: false, changes: [] });
   });
 
   it('counts only unique wells in this container and preserves actual inventory facts', () => {

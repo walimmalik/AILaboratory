@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
 import { actorLabel, fieldLabel, formatWhen, isAgent } from '../lib/format.ts';
 import {
-  changedQuestions,
+  compareHistoryQuestions,
   historyChangeLabel,
   historyChangePreview,
   historyEntries,
@@ -113,19 +113,25 @@ export function RecordHistory({
                     historyChangeLabel(change.path, version?.snapshot ?? record, items, previous),
                   ]),
                 );
-                const questions =
+                const questionComparison =
                   comparable && record.kind === 'sop'
-                    ? changedQuestions(previous, version.snapshot)
-                    : [];
+                    ? compareHistoryQuestions(previous, version.snapshot)
+                    : { available: true, changes: [] };
+                const questions = questionComparison.changes;
                 const response = questions
                   .flatMap(
                     (question) =>
                       question.after?.responses.slice(question.before?.responses.length ?? 0) ?? [],
                   )
                   .at(-1);
-                const preview = response
-                  ? `Response: “${historyExcerpt(response.text)}”`
-                  : historyChangePreview(changes, labels);
+                const preview = [
+                  response
+                    ? `Response: “${historyExcerpt(response.text)}”`
+                    : historyChangePreview(changes, labels),
+                  !questionComparison.available ? 'Scientific question comparison unavailable' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
                 const reason = version?.reason ?? event?.reason;
                 const conversation =
                   actor?.type === 'agent' && actor.sessionRef?.startsWith('cnv_')
@@ -241,6 +247,13 @@ export function RecordHistory({
                                     after={question.after}
                                   />
                                 ))}
+                                {!questionComparison.available && (
+                                  <p className="muted">
+                                    Scientific question comparison is unavailable for this
+                                    historical version. The stored questions remain available under
+                                    Version and technical details.
+                                  </p>
+                                )}
                                 {comparable && changes.length === 0 && (
                                   <p className="muted">No field values changed.</p>
                                 )}

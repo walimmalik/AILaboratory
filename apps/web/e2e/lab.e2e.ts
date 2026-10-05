@@ -106,7 +106,7 @@ test('an agent proposes a change, a person confirms it on the Review page, and t
   await expect(history.getByText('Hide change', { exact: true })).toBeVisible();
   await expect(history.getByRole('cell', { name: `${label} (ELISA)` })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Activity' }).click();
+  await page.getByRole('link', { name: 'Activity', exact: true }).click();
   await expect(
     page.getByRole('row', { name: /confirmed a proposed change/ }).first(),
   ).toBeVisible();
@@ -655,7 +655,9 @@ test('a plate shows its wells shaded by volume, the rules it inherits and its le
   const fill = page.locator('.history-entry').filter({ hasText: 'filled 3 wells' });
   await fill.getByText('View change', { exact: true }).click();
   await expect(fill).toContainText('Plated the reagent');
-  await expect(fill.getByRole('table')).toContainText('µL');
+  await expect(
+    fill.getByRole('table', { name: 'Well changes recorded by this event', exact: true }),
+  ).toContainText('µL');
   await page.getByRole('link', { name: /^Connections/ }).click();
   const basedOn = page.getByRole('region', { name: 'Based on' });
   await expect(basedOn).toContainText('is a');

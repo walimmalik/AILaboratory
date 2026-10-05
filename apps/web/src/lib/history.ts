@@ -1,8 +1,8 @@
 import type { ValueChange } from '@ailab/domain';
-import type {
-  InventoryEvent,
-  RecordEnvelope,
-  RecordVersion,
+import {
+  type InventoryEvent,
+  type RecordEnvelope,
+  type RecordVersion,
   ScientificQuestion,
 } from '@ailab/schema';
 import {
@@ -110,16 +110,27 @@ export function historyChangePreview(
     .join(' · ');
 }
 
-/** Persisted scientific questions whose wording or response history changed in this version. */
-export function changedQuestions(previous: RecordEnvelope | undefined, current: RecordEnvelope) {
-  const before = (previous?.attributes.questions ?? []) as ScientificQuestion[];
-  const after = (current.attributes.questions ?? []) as ScientificQuestion[];
+/** Semantic comparison requires the current question contract; stored snapshots remain untouched. */
+export function compareHistoryQuestions(
+  previous: RecordEnvelope | undefined,
+  current: RecordEnvelope,
+) {
+  const beforeResult = ScientificQuestion.array().safeParse(
+    previous?.attributes.questions === undefined ? [] : previous.attributes.questions,
+  );
+  const afterResult = ScientificQuestion.array().safeParse(
+    current.attributes.questions === undefined ? [] : current.attributes.questions,
+  );
+  if (!beforeResult.success || !afterResult.success) return { available: false, changes: [] };
+  const before = beforeResult.data;
+  const after = afterResult.data;
   const ids = new Set([...before, ...after].map((question) => question.id));
-  return [...ids].flatMap((id) => {
+  const changes = [...ids].flatMap((id) => {
     const was = before.find((question) => question.id === id);
     const now = after.find((question) => question.id === id);
     return JSON.stringify(was) === JSON.stringify(now) ? [] : [{ id, before: was, after: now }];
   });
+  return { available: true, changes };
 }
 
 /** Reviews actually added or refreshed in this snapshot, without implying proposal approval. */

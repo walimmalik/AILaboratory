@@ -1,16 +1,58 @@
-import type { ScientificQuestion } from '@ailab/schema';
+import type { RecordEnvelope, RecordVersion, ScientificQuestion } from '@ailab/schema';
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ItemDiff } from './ItemDiff.tsx';
-import { QuestionSnapshot } from './RecordHistory.tsx';
+import { QuestionSnapshot, RecordHistory } from './RecordHistory.tsx';
 
 vi.mock('../session.ts', () => ({ useMe: () => ({ user: { id: 'usr_scientist' } }) }));
 vi.mock('@tanstack/react-query', () => ({
   queryOptions: (options: unknown) => options,
   useQuery: () => ({ data: [] }),
 }));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  Link: ({ children }: { children: ReactNode }) => <a href="/test">{children}</a>,
+}));
+vi.mock('../assistant.tsx', () => ({ useAssistant: () => ({ show: vi.fn() }) }));
+vi.mock('./RecordActions.tsx', () => ({ RestoreVersion: () => null }));
 
 describe('scientific question history', () => {
+  it('keeps collapsed and expanded History readable when a stored question does not match the current contract', () => {
+    const record = {
+      id: 'sop_historical',
+      kind: 'sop',
+      label: 'Historical wash',
+      status: 'draft',
+      version: 1,
+      attributes: { questions: [{ id: 'old', question: 'Wash settings?', answer: 'Unknown' }] },
+      evidence: {},
+      reviews: {},
+    } as unknown as RecordEnvelope;
+    const version = {
+      recordId: record.id,
+      version: 1,
+      operation: 'create',
+      actor: { type: 'user', userId: 'usr_scientist' },
+      at: '2026-10-05T09:00:00Z',
+      snapshot: record,
+    } as RecordVersion;
+    const collapsed = renderToStaticMarkup(
+      <RecordHistory record={record} versions={[version]} ledger={[]} />,
+    );
+    expect(collapsed).toContain('Scientific question comparison unavailable');
+    expect(collapsed).toContain('View change');
+    const expanded = renderToStaticMarkup(
+      <RecordHistory record={record} versions={[version]} ledger={[]} selected="v1" />,
+    );
+    expect(expanded).toContain(
+      'Scientific question comparison is unavailable for this historical version',
+    );
+    expect(expanded).toContain('Version and technical details');
+    expect(expanded).toContain('Wash settings?');
+    expect(expanded).toContain('Unknown');
+    expect(expanded).not.toContain('No responses recorded.');
+  });
   it('keeps before and after values adjacent once, while preserving proposal diff presentation', () => {
     const before = { attributes: { workingVolume: { max: { value: '300', unit: 'uL' } } } };
     const after = { attributes: { workingVolume: { max: { value: '320', unit: 'uL' } } } };
