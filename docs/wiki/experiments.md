@@ -18,6 +18,9 @@ The scientific frame (013), the designers that fill it (014, 016, 017) the workf
 - **Run view is a checklist** (Wali: "users are lazy"). Tick a step to record it as done as planned; "all done as planned" ticks the rest. Type a value only when something differed, which makes it a deviation with a short reason. Scanning is optional; without it the run uses what the plan reserved.
 - **Captured instructions (SG-09 slice):** new runs store each step's instruction from the pinned SOP, alongside its title and planned values. Recording or correcting a run cannot rewrite those instructions. The run checklist displays captured text with its line breaks; identical title and text appears once. Older absent-text runs show “Instruction text was not captured for this run.” and are not backfilled. Agents read the same captured field through the record API. Seed completeness and the full execution manifest remain pending; see [campaigns architecture](../architecture/campaigns.md#captured-step-instructions-004g--sg-09-slice).
 - **Results**: runs attach data files through the file store, linked to the plate and read step. Conclusions per hypothesis (supported, refuted, inconclusive) are drafted by an agent and confirmed by a person. Parsing and statistics are analysis (020).
+- **Run state and times:** Key facts label execution state **run status**, separate from record
+  confirmation in the header. Recorded start and finish times use the reader's local time, as
+  checklist timestamps do; absent times are left out.
 - **Visibility**: everyone in the lab sees everything; owners and contributors drive "my work" filters.
 - A concluded experiment can propose lab memories ("edge wells evaporate at 48 h").
 

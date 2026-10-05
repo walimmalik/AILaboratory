@@ -210,7 +210,7 @@ export function RecordPage() {
             />
           )}
           {overview && overview.facts.length > 0 && (
-            <KeyFacts facts={overview.facts} marked={unsourcedFields(r, readiness)} />
+            <KeyFacts kind={r.kind} facts={overview.facts} marked={unsourcedFields(r, readiness)} />
           )}
           <LabNotes record={r} />
           {isSop && readiness ? (
@@ -349,7 +349,15 @@ function Identity({ parts, fallback }: { parts: OverviewPart[] | undefined; fall
 }
 
 /** The few facts a person needs first, chosen per kind by the API (N4); unsourced ones marked (N7). */
-function KeyFacts({ facts, marked }: { facts: OverviewFact[]; marked: Set<string> }) {
+export function KeyFacts({
+  kind,
+  facts,
+  marked,
+}: {
+  kind: string;
+  facts: OverviewFact[];
+  marked: Set<string>;
+}) {
   return (
     <section className="block" aria-label="Key facts">
       <div className="body">
@@ -366,6 +374,8 @@ function KeyFacts({ facts, marked }: { facts: OverviewFact[]; marked: Set<string
                   <Link to="/records/$id" params={{ id: f.record }} className="ref">
                     {f.value}
                   </Link>
+                ) : kind === 'run' && (f.field === 'startedAt' || f.field === 'finishedAt') ? (
+                  <time dateTime={f.value}>{formatWhen(f.value)}</time>
                 ) : (
                   f.value
                 )}

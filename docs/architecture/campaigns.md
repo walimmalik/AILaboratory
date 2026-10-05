@@ -62,6 +62,11 @@ The module's lab memory detector (005c-1, `campaigns/detectors.ts`): `runs.finis
 
 `apps/api/src/campaigns/runs.ts` holds the run operations.
 
+The run overview chooses the same simple run facts: execution status, date, start and finish when
+recorded. It labels execution state **run status**, distinct from the record's confirmation in
+the page header. Start and finish retain their ISO values in `records.overview`; the run page
+formats those two facts in the reader's time zone using the same formatter as checklist times.
+
 ### Captured step instructions (004g / SG-09 slice)
 
 `runs.start` also copies each step's complete `text` from the already pinned SOP record snapshot,
