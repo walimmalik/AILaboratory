@@ -2,7 +2,7 @@ import type { RecordEnvelope, RecordVersion, ScientificQuestion, SopStep } from 
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ItemDiff } from './ItemDiff.tsx';
+import { ItemDiff, itemChanges } from './ItemDiff.tsx';
 import { QuestionSnapshot, RecordHistory } from './RecordHistory.tsx';
 
 vi.mock('../session.ts', () => ({ useMe: () => ({ user: { id: 'usr_scientist' } }) }));
@@ -23,6 +23,85 @@ vi.mock('../assistant.tsx', () => ({ useAssistant: () => ({ show: vi.fn() }) }))
 vi.mock('./RecordActions.tsx', () => ({ RestoreVersion: () => null }));
 
 describe('scientific question history', () => {
+  it('renders the whole step array produced by an initial snapshot diff, with stored variable quantities', () => {
+    const at = '2026-10-05T09:00:00Z';
+    const actor = { type: 'user' as const, userId: `usr_${'0'.repeat(26)}` };
+    const step: SopStep = {
+      id: 'read',
+      action: 'read',
+      title: 'Read plate',
+      text: 'Read using `wash_buffer` at `read_wavelength`.',
+      parameters: [
+        { name: 'duration', quantity: { value: '10', unit: 'min' } },
+        { name: 'wavelength', variable: 'read_wavelength' },
+      ],
+      repeat: 3,
+      uses: ['wash_buffer'],
+      produces: [{ role: 'plate_read', label: 'Plate reading' }],
+    };
+    const snapshot: RecordEnvelope = {
+      id: `sop_${'0'.repeat(26)}`,
+      kind: 'sop',
+      name: 'SOP-0001',
+      label: 'Plate reading',
+      orgId: `org_${'0'.repeat(26)}`,
+      labId: `lab_${'0'.repeat(26)}`,
+      status: 'draft',
+      version: 1,
+      attributes: {
+        variables: [
+          {
+            name: 'read_wavelength',
+            label: 'Read wavelength',
+            kind: 'default',
+            value: { value: '450', unit: 'nm' },
+          },
+        ],
+        materials: [{ role: 'wash_buffer', label: 'Wash buffer', type: 'reagent' }],
+        steps: [step],
+      },
+      evidence: {},
+      reviews: {},
+      createdAt: at,
+      createdBy: actor,
+      updatedAt: at,
+      updatedBy: actor,
+    };
+    const changes = itemChanges(undefined, snapshot, {
+      steps: 'id',
+      variables: 'name',
+      materials: 'role',
+    });
+    expect(changes.find((change) => change.path === '/steps')).toMatchObject({
+      change: 'added',
+      after: [step],
+    });
+    const html = renderToStaticMarkup(
+      <ItemDiff kind="sop" before={undefined} after={snapshot} changes={changes} adjacent isNew />,
+    );
+    expect(html).toContain('duration: 10 min');
+    expect(html).toContain('wavelength: 450 nm (Read wavelength, protocol default)');
+    expect(html).toContain('Repeat 3 times');
+    expect(html).toContain('Uses Wash buffer');
+    expect(html).toContain('Produces Plate reading');
+    expect(html).not.toContain('[object Object]');
+    const removed = itemChanges(snapshot, undefined, {
+      steps: 'id',
+      variables: 'name',
+      materials: 'role',
+    });
+    expect(removed.find((change) => change.path === '/steps')).toMatchObject({
+      change: 'removed',
+      before: [step],
+    });
+    const old = renderToStaticMarkup(
+      <ItemDiff kind="sop" before={snapshot} after={undefined} changes={removed} adjacent />,
+    );
+    expect(old).toContain('wavelength: 450 nm (Read wavelength, protocol default)');
+    expect(old).toContain('Repeat 3 times');
+    expect(old).toContain('Uses Wash buffer');
+    expect(old).not.toContain('[object Object]');
+  });
   it('shows persisted document, page and quote on both a new question and its later response', () => {
     const userId = `usr_${'0'.repeat(26)}`;
     const question: ScientificQuestion = {
