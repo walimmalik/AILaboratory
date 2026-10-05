@@ -7,6 +7,10 @@ import {
   roleCounts,
   shade,
   subjectCount,
+  subjectRoleOf,
+  subjectsText,
+  subjectWells,
+  wellsText,
 } from './platemaps.ts';
 
 const plate = {
@@ -68,5 +72,17 @@ describe('plate map display', () => {
   it('counts roles and subjects', () => {
     expect(roleCounts(plate)[0]).toEqual({ role: 'sample', count: 3 });
     expect(subjectCount(plate)).toBe(2);
+  });
+
+  it('says where each subject sits and counts in one word', () => {
+    expect(subjectWells(plate as never)[0]).toEqual({
+      subject: 'ent_1',
+      label: 'Donor 1',
+      wells: ['A3', 'A4'],
+    });
+    expect(subjectRoleOf([plate as never])).toBe('sample');
+    expect(subjectsText(3)).toBe('3 samples');
+    expect(subjectsText(1, 'compound')).toBe('1 compound');
+    expect(wellsText(1)).toBe('1 well');
   });
 });

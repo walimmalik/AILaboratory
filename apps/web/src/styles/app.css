@@ -2797,3 +2797,45 @@ td.record-name .one-line {
     white-space: nowrap;
   }
 }
+
+/* A memory's statement reads as text; it underlines only under the pointer (UX review 2026-10-02, #9). */
+.memory-rows .statement {
+  color: inherit;
+  text-decoration: none;
+}
+.memory-rows .statement:hover {
+  text-decoration: underline;
+}
+
+/* Plate maps (UX review 2026-10-02, #11): the hand-edit dot has a key, the lightest points of a
+   series keep a ring so they read in the night theme, and blanks keep a visible dash. */
+.legend i.changed-by-hand {
+  background: radial-gradient(circle, var(--ink) 0 30%, var(--well-empty) 32%);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.plate .well.role-subject.shade-1,
+.plate .well.role-subject.shade-2 {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.plate .well.role-standard.shade-1,
+.plate .well.role-standard.shade-2 {
+  box-shadow: inset 0 0 0 1px var(--warn);
+}
+.plate .well.role-blank,
+.legend i.role-blank {
+  border-color: var(--ink-2);
+}
+.subject-wells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 2px 16px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.subject-wells .mono {
+  font-size: 12px;
+}
+/* A chosen well keeps its ring over the series ring above. */
+.plate .well.chosen.chosen {
+  box-shadow: 0 0 0 2px var(--ink);
+}
