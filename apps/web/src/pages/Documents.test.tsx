@@ -17,11 +17,14 @@ const fixture = vi.hoisted(() => ({
   outline: {} as Record<string, unknown>,
   passages: {} as Record<string, unknown>,
   reads: [] as { queryKey: unknown[]; queryFn: () => Promise<unknown>; enabled?: boolean }[],
+  hash: '',
+  effects: [] as (() => void)[],
 }));
 
 // Exercise the actual page event handlers without introducing a DOM test dependency.
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
+  useEffect: (effect: () => void) => fixture.effects.push(effect),
   useState: (initial: unknown) => {
     const index = fixture.cursor++;
     if (fixture.values[index] === undefined) fixture.values[index] = initial;
@@ -55,6 +58,7 @@ vi.mock('./Records.tsx', () => ({ RecordList: () => <section>Title browse list</
 vi.mock('@tanstack/react-router', async (original) => ({
   ...(await original<typeof import('@tanstack/react-router')>()),
   useSearch: () => fixture.documentSearch,
+  useLocation: () => fixture.hash,
   useNavigate:
     ({ from }: { from: string }) =>
     (options: {
@@ -72,13 +76,15 @@ vi.mock('@tanstack/react-router', async (original) => ({
     children,
     params,
     search,
+    hash,
   }: {
     children: ReactNode;
     params: { id: string };
     search?: { section?: number };
+    hash?: string;
   }) => (
     <a
-      href={`/records/${params.id}${search?.section === undefined ? '' : `?section=${search.section}`}`}
+      href={`/records/${params.id}${search?.section === undefined ? '' : `?section=${search.section}`}${hash ? `#${hash}` : ''}`}
     >
       {children}
     </a>
@@ -130,6 +136,8 @@ beforeEach(() => {
   fixture.outline = {};
   fixture.passages = {};
   fixture.reads = [];
+  fixture.hash = '';
+  fixture.effects = [];
   vi.mocked(api.run).mockClear();
 });
 
@@ -307,7 +315,7 @@ describe('document search modes', () => {
     };
     const html = resultsHtml();
     expect(html).toContain('1 passage with “wash”');
-    expect(html).toContain('href="/records/doc_source?section=2"');
+    expect(html).toContain('href="/records/doc_source?section=2#document-text"');
     expect(html).toContain('Plate wash procedure');
     expect(html).toContain('Method › Washing, page 3');
     expect(html).toContain('Use <mark>wash</mark> buffer.');
@@ -332,6 +340,34 @@ describe('matched document sections', () => {
       data: { passages: [{ id: 'passage_2', text: 'Read at 450 nm.' }] },
     };
   }
+  it('reveals only an explicit source-hit target after the selected text has loaded', () => {
+    prepare();
+    const scrollIntoView = vi.fn();
+    const getElementById = vi.fn(() => ({ scrollIntoView }));
+    vi.stubGlobal('document', { getElementById });
+    try {
+      expect(
+        renderToStaticMarkup(<TextBlock record={record} mentions={[]} section={2} />),
+      ).toContain('id="document-text"');
+      fixture.effects.at(-1)?.();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      fixture.hash = 'document-text';
+      fixture.passages = { isPending: true };
+      renderToStaticMarkup(<TextBlock record={record} mentions={[]} section={2} />);
+      fixture.effects.at(-1)?.();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      prepare();
+      renderToStaticMarkup(<TextBlock record={record} mentions={[]} section={2} />);
+      fixture.effects.at(-1)?.();
+      expect(getElementById).toHaveBeenCalledWith('document-text');
+      expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: 'start' });
+      renderToStaticMarkup(<TextBlock record={record} mentions={[]} />);
+      fixture.effects.at(-1)?.();
+      expect(scrollIntoView).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it('reads the matching section and reacts to record/section changes', async () => {
     prepare();
     expect(renderToStaticMarkup(<TextBlock record={record} mentions={[]} section={2} />)).toContain(

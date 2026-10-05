@@ -15,8 +15,8 @@ import {
   type RecordEnvelope,
 } from '@ailab/schema';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { type ReactNode, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-router';
+import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import type { DocumentSection, DocumentsSearch } from '../lib/document-search.ts';
 import { recordQuery } from '../queries.ts';
@@ -258,6 +258,7 @@ function Passages({ query }: { query: string }) {
                   to="/records/$id"
                   params={{ id: hit.document.id }}
                   search={{ section: hit.passage.section }}
+                  hash="document-text"
                 >
                   {hit.document.label}
                 </Link>{' '}
@@ -426,7 +427,7 @@ export function DocumentBlocks({
   return (
     <>
       <FilesBlock record={record} />
-      <TextBlock record={record} mentions={mentions} section={section} />
+      <TextBlock key={record.id} record={record} mentions={mentions} section={section} />
       <DocumentMentions mentions={mentions} />
     </>
   );
@@ -527,6 +528,7 @@ export function TextBlock({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: '/records/$id' });
+  const hash = useLocation({ select: (location) => location.hash });
   const section = requestedSection ?? 0;
   const outline = useQuery({
     queryKey: ['library', 'read', record.id],
@@ -554,8 +556,15 @@ export function TextBlock({
   const parsed = outline.data?.parse;
   const error =
     parse.error ?? mine.error ?? outline.error ?? (available ? passages.error : undefined);
+  const targetReady = !outline.isPending && (!available || !passages.isPending);
+  // The router's hash scroll may precede asynchronous record/text loading. Reveal the target
+  // when that read settles, and only for an explicit source-hit anchor or section navigation.
+  useEffect(() => {
+    if (hash === 'document-text' && requestedSection !== undefined && targetReady)
+      document.getElementById('document-text')?.scrollIntoView({ block: 'start' });
+  }, [requestedSection, hash, targetReady]);
   return (
-    <section className="block" aria-label="Text">
+    <section id="document-text" className="block" aria-label="Text">
       <header>
         <h2>Text</h2>
         <span className="state muted num">
