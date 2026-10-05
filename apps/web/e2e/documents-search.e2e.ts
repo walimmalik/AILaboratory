@@ -1,4 +1,9 @@
-import type { libraryRead, librarySearch, OperationErrorBody } from '@ailab/schema';
+import type {
+  ExactSourceReference,
+  libraryRead,
+  librarySearch,
+  OperationErrorBody,
+} from '@ailab/schema';
 import { expect, test } from '@playwright/test';
 
 test('document text search separates browsing, recovers from failure and carries source context', async ({
@@ -22,10 +27,19 @@ test('document text search separates browsing, recovers from failure and carries
   // CI has no document converter. Search and parsed text responses are fixtures here; title browsing,
   // record navigation, assistant requests and persistence use the real API. Live acceptance
   // separately searches a genuinely parsed illustrative document with the actual operation.
+  const fixtureSource: ExactSourceReference = {
+    document: source.id,
+    version: source.version,
+    file: source.id.replace('doc_', 'fil_'),
+    sha256: 'a'.repeat(64),
+    parse: { status: 'parsed', snapshot: 'b'.repeat(64) },
+    title: source.label,
+  };
   const hit = {
     hits: [
       {
         document: { id: source.id, name: source.name, label: source.label, type: 'sop' },
+        source: fixtureSource,
         passage: {
           id: 'illustrative-search-passage',
           section: 1,
@@ -40,9 +54,11 @@ test('document text search separates browsing, recovers from failure and carries
   } satisfies ReturnType<typeof librarySearch.output.parse>;
   const parsed = {
     document: source,
+    source: fixtureSource,
     parse: {
-      file: source.id.replace('doc_', 'fil_'),
-      sha256: 'illustrative-search-fixture',
+      file: fixtureSource.file,
+      sha256: fixtureSource.sha256,
+      snapshot: 'b'.repeat(64),
       converter: 'test-fixture',
       sections: 2,
       passages: 2,

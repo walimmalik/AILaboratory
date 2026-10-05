@@ -152,7 +152,8 @@ export type Converted = z.infer<typeof Converted>;
 /** How a document's file was turned into text. */
 export const DocumentParse = z.object({
   file: FileId,
-  sha256: z.string(),
+  sha256: Sha256,
+  snapshot: Sha256,
   converter: z.string(),
   sections: z.number().int().min(0),
   passages: z.number().int().min(0),
@@ -177,6 +178,15 @@ export const PassageText = z.object({
   text: z.string(),
 });
 export type PassageText = z.infer<typeof PassageText>;
+
+/** Immutable conversion facts and ordered content; empty sections remain in the outline. */
+export const SourceSnapshotContent = z.strictObject({
+  converter: z.string().min(1),
+  warnings: z.array(z.string()),
+  outline: z.array(SectionOutline),
+  passages: z.array(PassageText),
+});
+export type SourceSnapshotContent = z.infer<typeof SourceSnapshotContent>;
 
 /** How a mention was found: the deterministic matcher, or an agent reading the passage. */
 export const MentionHow = z.enum(['catalog_number', 'name', 'synonym', 'model', 'agent']);

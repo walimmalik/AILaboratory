@@ -7,6 +7,7 @@ import {
   DocumentId,
   DocumentParse,
   DocumentType,
+  ExactSourceReference,
   Mention,
   MentionStatus,
   PassageText,
@@ -64,7 +65,11 @@ export const libraryParse = defineContract({
     document: DocumentId,
     file: FileId.optional().describe('Defaults to the original'),
   }),
-  output: z.object({ document: RecordEnvelope, parse: DocumentParse }),
+  output: z.object({
+    document: RecordEnvelope,
+    parse: DocumentParse,
+    source: ExactSourceReference,
+  }),
 });
 
 export const librarySearch = defineContract({
@@ -90,6 +95,7 @@ export const librarySearch = defineContract({
           type: DocumentType,
         }),
         passage: PassageText,
+        source: ExactSourceReference,
         snippet: z.string().describe('The passage around the match, matches between [[ and ]]'),
         rank: z.number(),
       }),
@@ -97,27 +103,40 @@ export const librarySearch = defineContract({
   }),
 });
 
+const ReadSelection = {
+  section: z.number().int().min(0).optional().describe('A section index from the outline'),
+  pages: z
+    .strictObject({ from: z.number().int().positive(), to: z.number().int().positive() })
+    .optional(),
+  passages: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(100)
+    .optional()
+    .describe('Passage ids in the selected snapshot; exact references refuse missing ids'),
+};
+
 export const libraryRead = defineContract({
   id: 'library.read',
   verbs: { done: 'read', intent: 'read' },
   summary:
-    "Read a parsed document: without `section`, its outline (headings, pages, passage counts); with `section`, that section's passages in order; with `pages`, the passages on those pages; with `passages`, those passages by id",
+    "Read instructions by current document or exact source reference: without `section`, its outline (headings, pages, passage counts); with `section`, that section's passages in order; with `pages`, the passages on those pages; with `passages`, those passages by id. Exact references never fall back to newer text",
   effect: 'read',
-  input: z.strictObject({
-    document: DocumentId,
-    section: z.number().int().min(0).optional().describe('A section index from the outline'),
-    pages: z
-      .strictObject({ from: z.number().int().positive(), to: z.number().int().positive() })
-      .optional(),
-    passages: z
-      .array(z.string().min(1))
-      .min(1)
-      .max(100)
-      .optional()
-      .describe('Passage ids, e.g. from a citation; ids from an earlier parse are not found'),
-  }),
+  input: z.union([
+    z.strictObject({
+      document: DocumentId.describe('Discover current instructions'),
+      ...ReadSelection,
+    }),
+    z.strictObject({
+      source: ExactSourceReference.describe('Read these exact historical instructions'),
+      ...ReadSelection,
+    }),
+  ]),
   output: z.object({
     document: RecordEnvelope,
+    source: ExactSourceReference.optional().describe(
+      'The actual selected file/version and parse identity; absent when there is no original file',
+    ),
     parse: DocumentParse.optional().describe('Absent until library.parse has run'),
     outline: z.array(SectionOutline).optional(),
     passages: z.array(PassageText).optional(),
