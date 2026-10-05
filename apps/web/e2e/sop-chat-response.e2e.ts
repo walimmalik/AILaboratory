@@ -127,6 +127,24 @@ test('chat records an unknown answer once, preserves its question across navigat
   await chat.getByRole('textbox', { name: 'Message the assistant', exact: true }).fill(laterAnswer);
   await chat.getByRole('textbox', { name: 'Message the assistant', exact: true }).press('Enter');
   await expect(chat.getByText(`You said: ${laterAnswer}`, { exact: true })).toBeVisible();
+  let responseStarted: (() => void) | undefined;
+  const saving = new Promise<void>((resolve) => {
+    responseStarted = resolve;
+  });
+  let releaseStaleResponse: (() => void) | undefined;
+  const staleResponse = new Promise<void>((resolve) => {
+    releaseStaleResponse = resolve;
+  });
+  await page.route('**/api/v1/ops/sops.answer_question', async (route) => {
+    responseStarted?.();
+    await staleResponse;
+    await route.continue();
+  });
+  const laterCard = chat
+    .locator('.msg')
+    .filter({ has: page.getByText(laterAnswer, { exact: true }) });
+  await laterCard.getByRole('button', { name: 'Record response', exact: true }).click();
+  await saving;
   const changedQuestion =
     'Which manufacturer instruction establishes the compatible wash conditions?';
   const corrected = await operation<RecordEnvelope>(page, 'sops.answer_question', {
@@ -135,11 +153,13 @@ test('chat records an unknown answer once, preserves its question across navigat
     question: 'wash',
     action: { type: 'correct', text: changedQuestion, reason: 'Clarify the evidence needed.' },
   });
-  const laterCard = chat
-    .locator('.msg')
-    .filter({ has: page.getByText(laterAnswer, { exact: true }) });
-  await laterCard.getByRole('button', { name: 'Record response', exact: true }).click();
+  releaseStaleResponse?.();
   await expect(laterCard).toContainText(changedQuestion);
+  // Live record events can refresh the displayed question before the rejected write returns.
+  // Wait for its conflict, so the fresh-review click cannot race the pending request.
+  await expect(
+    laterCard.getByRole('button', { name: 'Review current question', exact: true }),
+  ).toBeEnabled();
   await expect(laterCard.getByRole('button', { name: 'Record response', exact: true })).toHaveCount(
     0,
   );
