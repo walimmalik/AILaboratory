@@ -306,7 +306,17 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         return true;
       } catch (error) {
         if (displayedConversation.current === displayedAtStart)
-          setSendError(error instanceof ApiError ? error.message : 'Could not reach the API');
+          setSendError(
+            reader &&
+              sourceSelection &&
+              error instanceof ApiError &&
+              error.code === 'invalid_input' &&
+              error.message === 'The selected file SHA256 does not match the exact reference'
+              ? 'These instructions could not be checked. Return to document search and open the source again.'
+              : error instanceof ApiError
+                ? error.message
+                : 'Could not reach the API',
+          );
         return false;
       } finally {
         sendLock.current = false;

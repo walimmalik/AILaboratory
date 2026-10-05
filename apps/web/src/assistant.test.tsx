@@ -1,3 +1,4 @@
+import { ApiError } from '@ailab/client';
 import {
   assistantAsk,
   type Conversation,
@@ -226,6 +227,43 @@ describe('conversation-scoped question selection', () => {
       'Keep this question',
     );
     expect(api.run).toHaveBeenCalledOnce();
+  });
+  it('keeps a refused source question typed and gives a plain source-check failure without masking other errors', async () => {
+    fixture.location = { pathname: '/library/instructions', search: { source } };
+    fixture.assistant = ui();
+    const start = fixture.cursor;
+    const input = Children.toArray(Composer().props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    if (!isValidElement<{ onChange: (event: { target: { value: string } }) => void }>(input))
+      throw new Error('Missing input');
+    input.props.onChange({ target: { value: 'Check this source before answering' } });
+    vi.mocked(api.run).mockRejectedValue(
+      new ApiError(400, {
+        code: 'invalid_input',
+        message: 'The selected file SHA256 does not match the exact reference',
+      }),
+    );
+    fixture.cursor = start;
+    await Composer().props.onSubmit({ preventDefault: () => {} });
+    expect(ui().sendError).toBe(
+      'These instructions could not be checked. Return to document search and open the source again.',
+    );
+    fixture.cursor = start;
+    const retained = Children.toArray(Composer().props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    expect(isValidElement<{ value: string }>(retained) && retained.props.value).toBe(
+      'Check this source before answering',
+    );
+    vi.mocked(api.run).mockRejectedValue(
+      new ApiError(404, { code: 'not_found', message: 'Conversation could not be found' }),
+    );
+    expect(await ui().send('Unrelated error')).toBe(false);
+    expect(ui().sendError).toBe('Conversation could not be found');
+    vi.mocked(api.run).mockRejectedValue(new Error('Network unavailable'));
+    expect(await ui().send('Network error')).toBe(false);
+    expect(ui().sendError).toBe('Could not reach the API');
   });
   it('keeps the panel composer mounted when the first send gains an ID, but resets it for explicit switches', async () => {
     fixture.storage = JSON.stringify({ open: true });

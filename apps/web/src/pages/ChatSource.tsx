@@ -1,4 +1,4 @@
-import type { PageContext } from '@ailab/schema';
+import type { ExactSourceReference, PageContext } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { exactInstructionsSearch, exactSourceQuery } from '../lib/exact-source.ts';
@@ -11,7 +11,23 @@ export function ChatSourceContext({
   selection: NonNullable<PageContext['selectedSource']>;
   historical?: boolean;
 }) {
-  const resolved = useQuery({ ...exactSourceQuery(selection.source), enabled: !historical });
+  // Display labels and unchecked reasons do not distinguish an immutable source identity.
+  const reference: ExactSourceReference = {
+    document: selection.source.document,
+    version: selection.source.version,
+    file: selection.source.file,
+    sha256: selection.source.sha256,
+    parse:
+      selection.source.parse.status === 'parsed'
+        ? selection.source.parse
+        : { status: 'unavailable', reason: 'No checked text selected' },
+    title: 'Selected instructions',
+  };
+  const resolved = useQuery({
+    ...exactSourceQuery(reference),
+    staleTime: 60_000,
+    retryOnMount: false,
+  });
   const source = resolved.data?.source;
   const selector =
     selection.passage !== undefined
