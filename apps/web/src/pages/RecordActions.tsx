@@ -9,12 +9,39 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
+import { ChangeMemory } from './Memory.tsx';
 
 /**
  * What a person can do to a record as a whole (plan 004e R11): archive or unarchive it, or discard
  * a draft. Each asks once more before it acts.
  */
 export function RecordActions({ record }: { record: RecordEnvelope }) {
+  // A lab memory is corrected, replaced or retired with why, the same as on the Lab memory page
+  // (UX review 2026-10-02, #9); a retired one stays retired.
+  if (record.kind === 'memory' && record.status !== 'draft')
+    return <MemoryActions record={record} />;
+  return <GeneralActions record={record} />;
+}
+
+function MemoryActions({ record }: { record: RecordEnvelope }) {
+  const [changing, setChanging] = useState(false);
+  if (record.status !== 'active') return null;
+  return changing ? (
+    <ChangeMemory
+      key={`${record.id}:${record.version}`}
+      memory={record}
+      onClose={() => setChanging(false)}
+    />
+  ) : (
+    <div className="actions record-actions">
+      <button type="button" className="link-btn" onClick={() => setChanging(true)}>
+        Change or retire
+      </button>
+    </div>
+  );
+}
+
+function GeneralActions({ record }: { record: RecordEnvelope }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [asking, setAsking] = useState<'archive' | 'unarchive' | 'discard'>();
