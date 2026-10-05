@@ -7,6 +7,7 @@ import type {
   PassageText,
   RecordEnvelope,
 } from '@ailab/schema';
+import { libraryRead } from '@ailab/schema';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -102,6 +103,80 @@ async function ask(page: PageContext, conversationId?: string) {
   return run<Conversation>('assistant.get_conversation', { id: summary.id });
 }
 describe('exact selected-source assistant preflight', () => {
+  it('replays each exact reference after changing source or leaving the reader without trusting display labels', async () => {
+    const first = await fixture();
+    const second = await fixture();
+    const unchecked = await fixture(false);
+    await run('library.parse', { document: unchecked.document.id });
+    const passage = first.passages?.[0]?.id;
+    if (!passage) throw new Error('Expected passage');
+    const spoof = (source: ExactSourceReference) => ({
+      ...source,
+      title: 'Spoofed source title',
+      printedRevision: 'Spoofed edition',
+    });
+    const a = {
+      path: '/library/instructions',
+      title: 'Spoofed page title',
+      selectedSource: { source: spoof(first.source), passage },
+    };
+    const b = {
+      path: '/library/instructions',
+      title: 'Spoofed page title',
+      selectedSource: { source: spoof(second.source), section: 0 },
+    };
+    const conversation = await ask(a);
+    await ask(b, conversation.id);
+    await ask({ path: '/library' }, conversation.id);
+    const c = {
+      path: '/library/instructions',
+      title: 'Spoofed page title',
+      selectedSource: {
+        source: {
+          ...spoof(unchecked.source),
+          parse: { status: 'unavailable' as const, reason: 'Spoofed unchecked reason' },
+        },
+      },
+    };
+    await ask(c, conversation.id);
+    const final = await ask({ path: '/library' }, conversation.id);
+    expect(final.messages.filter((message) => message.role === 'tool')).toEqual([]);
+    const replayInputs = (request: ModelRequest) =>
+      request.messages.flatMap((message) => {
+        if (message.role !== 'user') return [];
+        const serialized = message.text
+          .split('Historical instructions reference for this message (library.read input): ')[1]
+          ?.split('. This identifies')[0];
+        if (!serialized) return [];
+        expect(message.text).not.toContain('Spoofed');
+        expect(message.text).toContain('not the current selection, source contents or approval');
+        return [libraryRead.input.parse(JSON.parse(serialized))];
+      });
+    const expected = (source: ExactSourceReference) => ({
+      document: source.document,
+      version: source.version,
+      file: source.file,
+      sha256: source.sha256,
+      parse:
+        source.parse.status === 'parsed'
+          ? source.parse
+          : { status: 'unavailable', reason: 'No checked text selected' },
+      title: 'Selected instructions',
+    });
+    expect(replayInputs(complete.mock.calls[1]?.[0] as ModelRequest)).toEqual([
+      { source: expected(first.source), passages: [passage] },
+      { source: expected(second.source), section: 0 },
+    ]);
+    expect(complete.mock.calls[1]?.[0].system).toContain(JSON.stringify(second.source));
+    expect(complete.mock.calls[2]?.[0].system).not.toContain('Selected exact instructions');
+    expect(replayInputs(complete.mock.calls[4]?.[0] as ModelRequest)).toEqual([
+      { source: expected(first.source), passages: [passage] },
+      { source: expected(second.source), section: 0 },
+      { source: expected(unchecked.source) },
+    ]);
+    expect(complete.mock.calls[3]?.[0].system).not.toContain('Spoofed unchecked reason');
+    expect(complete.mock.calls[4]?.[0].system).not.toContain('Selected exact instructions');
+  });
   it('keeps the pin and selector on replay after reparse and resolves authoritative historical metadata', async () => {
     const old = await fixture();
     const passage = old.passages?.[0]?.id;

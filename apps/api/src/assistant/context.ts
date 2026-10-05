@@ -50,8 +50,15 @@ export async function pageNote(
     const resolved = libraryRead.output.parse(result.output);
     if (!resolved.source)
       throw new OperationError('unavailable', 'The selected exact source is unavailable.');
+    const authoritativeSource = {
+      ...resolved.source,
+      // The unavailable reason is caller-supplied, unlike the resolved edition metadata.
+      ...(resolved.source.parse.status === 'unavailable'
+        ? { parse: { status: 'unavailable', reason: 'No checked text selected' } }
+        : {}),
+    };
     notes.push(
-      `Selected exact instructions (server-resolved metadata): ${JSON.stringify({ source: resolved.source, ...(passage === undefined ? {} : { passage }), ...(section === undefined ? {} : { section }), ...(resolved.parse ? { warnings: resolved.parse.warnings } : {}) })}. Read this reference through library.read; never substitute current document text or infer missing instructions. This selection grants no source adoption, scientific disposition or confirmation authority.`,
+      `Selected exact instructions (server-resolved metadata): ${JSON.stringify({ source: authoritativeSource, ...(passage === undefined ? {} : { passage }), ...(section === undefined ? {} : { section }), ...(resolved.parse ? { warnings: resolved.parse.warnings } : {}) })}. Read this reference through library.read; never substitute current document text or infer missing instructions. This selection grants no source adoption, scientific disposition or confirmation authority.`,
     );
     if (resolved.source.parse.status === 'unavailable')
       notes.push(

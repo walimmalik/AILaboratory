@@ -453,6 +453,25 @@ function namespacesOf(rows: MessageRow[], deps: OperationDeps): string[] {
 
 function withPage(text: string, page: PageContext | undefined): string {
   if (!page) return text;
+  if (page.selectedSource) {
+    const { source, passage, section } = page.selectedSource;
+    const read = {
+      source: {
+        document: source.document,
+        version: source.version,
+        file: source.file,
+        sha256: source.sha256,
+        parse:
+          source.parse.status === 'parsed'
+            ? { status: 'parsed', snapshot: source.parse.snapshot }
+            : { status: 'unavailable', reason: 'No checked text selected' },
+        title: 'Selected instructions',
+      },
+      ...(passage === undefined ? {} : { passages: [passage] }),
+      ...(section === undefined ? {} : { section }),
+    };
+    return `${text}\n\n[Historical instructions reference for this message (library.read input): ${JSON.stringify(read)}. This identifies the selection attached to this message, not the current selection, source contents or approval. Read this exact reference through library.read before claiming its contents or authoritative edition metadata; handle lost access explicitly without substituting current text. An unavailable parse remains unchecked.]`;
+  }
   const where = page.title ? `${page.title} (${page.path})` : page.path;
   const record = page.record
     ? `; it shows ${page.record.name} (${page.record.id}) at version ${page.record.version}`
