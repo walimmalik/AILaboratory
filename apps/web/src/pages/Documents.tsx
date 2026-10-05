@@ -97,24 +97,17 @@ export function DocumentsPage() {
         }
       />
       {adding && <AddDocuments onClose={() => setAdding(false)} />}
-      <nav className="toolbar" aria-label="Document search mode">
-        <button
-          type="button"
-          className="btn small"
-          aria-pressed={mode === 'text'}
-          onClick={() => setMode('text')}
-        >
-          Document text
-        </button>
-        <button
-          type="button"
-          className="btn small"
-          aria-pressed={mode === 'titles'}
-          onClick={() => setMode('titles')}
-        >
-          Titles
-        </button>
-      </nav>
+      <div className="toolbar">
+        <fieldset className="segmented">
+          <legend className="sr-only">Document search mode</legend>
+          <button type="button" aria-pressed={mode === 'text'} onClick={() => setMode('text')}>
+            Document text
+          </button>
+          <button type="button" aria-pressed={mode === 'titles'} onClick={() => setMode('titles')}>
+            Titles
+          </button>
+        </fieldset>
+      </div>
       {mode === 'text' && (
         <section className="block" aria-label="Document text search">
           <header>

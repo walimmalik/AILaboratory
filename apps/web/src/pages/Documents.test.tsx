@@ -90,6 +90,8 @@ beforeEach(() => {
 
 describe('document search modes', () => {
   it('defaults to text, submits trimmed words through the form, and clears both input and results', async () => {
+    expect(element('fieldset').props.className).toBe('segmented');
+    expect(element('legend').props.children).toBe('Document search mode');
     expect(element('button', 'Document text').props['aria-pressed']).toBe(true);
     expect(element('button', 'Search the text').props.disabled).toBe(true);
     typeWords('  wash buffer  ');
@@ -138,6 +140,8 @@ describe('document search modes', () => {
       true,
     );
     (element('button', 'Titles').props.onClick as () => void)();
+    expect(element('button', 'Titles').props['aria-pressed']).toBe(true);
+    expect(element('button', 'Document text').props['aria-pressed']).toBe(false);
     expect(pageElements().some((node) => node.type === 'form')).toBe(false);
     expect(browse()?.props).toMatchObject({
       kind: 'document',
