@@ -242,6 +242,8 @@ Baseline `source: {document, revision?}` uses a free string; citations identify 
 
 Adding v2 must not change a SOP legitimately using v1. Re-parsing the same bytes may produce new passage boundaries; keep the prior parse snapshot readable and require explicit review where citation identity/text changes. Missing file/digest mismatch is an actionable failure. A PDF parse failure can leave the selected file attached and openable, with **Text could not be checked**; no matched-citation or scientific evidence claim is made. File/source access retains lab scope and license rules. No manual schema identifiers appear in this scientist flow.
 
+First bounded SG-18 delivery slice: library-owned immutable converted snapshots and exact-reference reads through `library.read`, with parse/search results identifying the snapshot they returned. Current discovery uses the same stored snapshots. Preserve only observable retained text when upgrading the current parse; do not reconstruct deleted parses or infer old SOP pins. Acceptance covers historical versions, same-file reparses, actual-byte verification, missing pinned passages, lab isolation and atomic publication. An independent producer checkpoint precedes SOP source/citation consumers and the chooser. This slice alone does not make existing SOP source associations exact or deliver source adoption in the UI.
+
 ## 5. Generated science and default agent behavior
 
 ### 5.1 Content contract

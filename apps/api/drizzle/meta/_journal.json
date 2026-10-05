@@ -120,6 +120,13 @@
       "when": 1791198020802,
       "tag": "0016_ordinary_maddog",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791231127758,
+      "tag": "0017_third_lockjaw",
+      "breakpoints": true
     }
   ]
 }
