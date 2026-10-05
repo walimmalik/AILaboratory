@@ -21,6 +21,15 @@ The lab's reading shelf (plan [011](../plans/011-sop-library.md)): stored files,
 | Screens | `apps/web/src/pages/Documents.tsx`, "Mentioned in" in `apps/web/src/pages/Mentions.tsx` |
 | Agent skill | `skills/library/SKILL.md` |
 
+The Documents screen opens in **Document text** mode: submit words or a quoted phrase with Enter
+or Search the text. Results identify the submitted words and show the source name, heading, page
+and matching passage. Editing the query clears previous results; Clear resets the query; failed
+searches can be retried. **Titles** switches to the existing name/title list and its status filters,
+preserving that browse state while switching modes. Those filters do not apply to text results:
+`library.search` searches parsed passages from non-archived documents' current original files in
+the current lab. Result links open the source record and its existing assistant context; they do
+not claim to pin an immutable protocol edition. No additional search operation is introduced.
+
 ## Files (011a)
 
 Bytes live in a content-addressed store, named by their sha256, so identical files are stored once. `FILE_STORE_DIR` sets the folder (default `apps/api/data/files`; the `files` volume at `/data/files` in compose). A `file` record (`fil_`, `FIL-0001`) is created active and holds `sha256`, `size` in bytes, `mediaType`, `originalName` and `source`: `upload`, `url` (with the URL), `folder` (with its path in an imported folder) `derived` (from another file, linked `derived_from`) or `export` (written from a record at a version, such as an Echo pick list from a transfer plan, linked `exported_from`). The bytes never change; the record service refuses a new hash or size. Only `files.upload` makes a file record (the kind's `createdBy`); `records.create` refuses the kind, since knowing a hash is not holding the bytes.
