@@ -331,6 +331,13 @@ a {
   text-transform: uppercase;
   color: var(--ink-2);
 }
+.block > header h2.named {
+  font: 500 14px / 1.3 var(--font-ui);
+  font-variation-settings: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
 .block > header .state {
   font-family: var(--font-mono);
   font-size: 12px;
