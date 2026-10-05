@@ -44,6 +44,14 @@ describe('RichText', () => {
     expect(result).toContain('class="rich-text-quote"');
   });
 
+  it('renders Windows-line-ending quotes identically to LF quotes beside prose and lists', () => {
+    const text = 'Before\n> First cited line\n> Second cited line\nAfter\n\n- Follow up';
+    expect(html(text.replaceAll('\n', '\r\n'))).toBe(html(text));
+    expect(html(text.replaceAll('\n', '\r\n'))).toContain(
+      '<p>Before</p><blockquote class="rich-text-quote"><p>First cited line<br/>Second cited line</p></blockquote><p>After</p><ul><li>Follow up</li></ul>',
+    );
+  });
+
   it('renders pipe tables with semantic headers, cells and a keyboard-accessible scroll region', () => {
     const result = html('| Reagent | Amount |\n| --- | --- |\n| Buffer | 200 uL |');
     expect(result).toContain(

@@ -37,7 +37,7 @@ export function RichText({ text, className }: { text: string; className?: string
     quote = [];
   };
 
-  const source = text.split('\n');
+  const source = text.split(/\r?\n/);
   for (let i = 0; i < source.length; i++) {
     const line = source[i] ?? '';
     const quoted = /^\s*> ?(.*)$/.exec(line);
