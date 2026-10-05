@@ -1,4 +1,5 @@
 import { libraryRead, librarySearch, type RecordEnvelope } from '@ailab/schema';
+import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,17 +76,19 @@ vi.mock('@tanstack/react-router', async (original) => ({
     },
   Link: ({
     children,
+    to,
     params,
     search,
     hash,
   }: {
     children: ReactNode;
-    params: { id: string };
-    search?: { section?: number };
+    to: string;
+    params?: { id: string };
+    search?: Record<string, unknown>;
     hash?: string;
   }) => (
     <a
-      href={`/records/${params.id}${search?.section === undefined ? '' : `?section=${search.section}`}${hash ? `#${hash}` : ''}`}
+      href={`${params ? `/records/${params.id}` : to}${defaultStringifySearch(search ?? {})}${hash ? `#${hash}` : ''}`}
     >
       {children}
     </a>
@@ -310,6 +313,14 @@ describe('document search modes', () => {
         hits: [
           {
             document: { id: 'doc_source', label: 'Plate wash procedure' },
+            source: {
+              document: 'doc_00000000000000000000000001',
+              version: 1,
+              file: 'fil_00000000000000000000000001',
+              sha256: 'a'.repeat(64),
+              parse: { status: 'parsed', snapshot: 'b'.repeat(64) },
+              title: 'Plate wash procedure',
+            },
             passage: { id: 'passage_1', heading: ['Method', 'Washing'], page: 3, section: 2 },
             snippet: 'Use [[wash]] buffer.',
           },
@@ -318,7 +329,15 @@ describe('document search modes', () => {
     };
     const html = resultsHtml();
     expect(html).toContain('1 passage with “wash”');
-    expect(html).toContain('href="/records/doc_source?section=2#document-text"');
+    const href = /href="([^"]+)"/.exec(html)?.[1]?.replaceAll('&amp;', '&');
+    expect(href).toMatch(/^\/library\/instructions\?/);
+    const linkSearch = defaultParseSearch(href?.slice(href.indexOf('?')) ?? '') as Record<
+      string,
+      unknown
+    >;
+    expect(linkSearch.passage).toBe('passage_1');
+    expect(linkSearch.source).toMatchObject({ version: 1, parse: { snapshot: 'b'.repeat(64) } });
+    expect(linkSearch.back).toMatchObject({ q: 'wash', words: 'wash' });
     expect(html).toContain('Plate wash procedure');
     expect(html).toContain('Method › Washing, page 3');
     expect(html).toContain('Use <mark>wash</mark> buffer.');

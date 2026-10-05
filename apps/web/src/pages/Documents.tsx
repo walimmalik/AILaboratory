@@ -19,6 +19,7 @@ import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-route
 import { type ReactNode, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import type { DocumentSection, DocumentsSearch } from '../lib/document-search.ts';
+import { exactInstructionsSearch } from '../lib/exact-source.ts';
 import { recordQuery } from '../queries.ts';
 import { Head, page } from './AreaHead.tsx';
 import { DocumentMentions, mentionsQuery } from './Mentions.tsx';
@@ -165,7 +166,7 @@ export function DocumentsPage() {
                 Clear
               </button>
             </form>
-            {query && <Passages query={query} />}
+            {query && <Passages query={query} back={search} />}
           </div>
         </section>
       )}
@@ -220,7 +221,7 @@ export function DocumentsPage() {
 }
 
 /** Passages for the submitted text query. Editing the input clears this view. */
-function Passages({ query }: { query: string }) {
+function Passages({ query, back }: { query: string; back: DocumentsSearch }) {
   const hits = useQuery({
     queryKey: ['library', 'search', query],
     queryFn: () => api.run(librarySearch, { text: query, limit: 20 }),
@@ -259,12 +260,10 @@ function Passages({ query }: { query: string }) {
             <li key={hit.passage.id}>
               <p className="hit-doc">
                 <Link
-                  to="/records/$id"
-                  params={{ id: hit.document.id }}
-                  search={{ section: hit.passage.section }}
-                  hash="document-text"
+                  to="/library/instructions"
+                  search={exactInstructionsSearch(hit.source, { passage: hit.passage.id }, back)}
                 >
-                  {hit.document.label}
+                  {hit.source.title}
                 </Link>{' '}
                 <span className="muted">
                   {hit.passage.heading.join(' › ')}
