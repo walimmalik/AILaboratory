@@ -436,14 +436,17 @@ function Question({ record, id }: { record: RecordEnvelope; id: string }) {
         sop: record.id,
         expectedVersion: record.version,
         question: id,
-        action: { type: 'response', text },
+        action: { type: 'response', text: text.trim() },
       }),
-    onSuccess: refresh,
+    onSuccess: (_result, submitted) => {
+      setAnswer((current) => (current === submitted ? '' : current));
+      return refresh();
+    },
   });
   if (!q) return null;
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (answer.trim()) settle.mutate(answer.trim());
+    if (answer.trim()) settle.mutate(answer);
   };
   return (
     <form
