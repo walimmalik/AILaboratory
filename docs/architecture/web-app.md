@@ -5,6 +5,7 @@ React + Vite (`apps/web`). Plan 004: the shell, sign-in, the live activity ledge
 ## Rules
 
 - **Data only through operations.** Pages call `api` from `src/api.ts` (`@ailab/client`). A lint rule forbids `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` in `apps/web/src`, so the UI can do nothing an agent can't.
+
 - **Bench console design system.** Colors are tokens in `src/styles/tokens.css` with day and night values; the theme switch sets `data-theme` on `<html>` (or follows the system). Teal accent for actions and selection, violet agent ink for anything an agent did or proposed that nobody has confirmed, semantic colors only for state. Fonts are self-hosted (IBM Plex Mono and Sans, Martian Mono for headings), so the app works offline.
 - **Containers.** One outline per top-level block (`.block`). No boxes inside boxes, no colored side stripes, no tinted header bands. State is said in words ("waiting for review", "● live").
 - **Areas and record pages (plan 004f, ADR 0063).** The menu is eight areas (Today, Review, Activity, Scan, Experiments, Inventory, Instruments, Library) plus the foot; each area is one page with tabs, and a kind and its items (product and lots, entity and samples, model and instruments, layout and plate maps) share one view. A record page leads with an identity line, key facts chosen per kind and its own picture, then the tabs Overview · the kind's tabs · History · Connections · All fields; confirmed content is open, never folded to bookkeeping; codes are tags after names; reading width is capped near 1,200 px. Built in steps 004f-1 to 004f-5: the record frame, Connections and History, the menu, Inventory's Stock list, and kind tabs with plate maps inside their experiments and layouts and per-kind Overviews.
@@ -13,6 +14,10 @@ React + Vite (`apps/web`). Plan 004: the shell, sign-in, the live activity ledge
 - **Plain lab language.** Operation IDs, record IDs and JSON go under "technical details". Helpers in `src/lib/format.ts` turn operations and actors into words ("Claude for you edited WDG-0001", "proposed to edit WDG-0001; waits for your review").
 
 ## Pieces
+
+Library opens at `/library` with three task actions (004g / SG-07): **Draft a method**, **Find instructions** and **Find a lab convention**. Drafting opens a fresh assistant conversation through `assistant.ask`, asking for purpose and an available protocol/source before scientific settings or record creation. A failed send retains that intake for retry; drafting waits while the assistant is working, availability is being checked or the assistant is unavailable. Failed availability checks offer **Check again**.
+
+The find actions open the existing Documents and Lab memory search pages. **Browse the library** starts folded and retains the nine specialist tabs and their draft counts, including plate maps counted under Plate layouts. Specialist pages keep their paths, filters and tabs, with **Start here** returning to the task entry. The existing Library menu entry and its combined draft count remain the entry point. Sources: `src/pages/LibraryHome.tsx`, `AreaHead.tsx`, `Shell.tsx` and `router.tsx`.
 
 | Piece | Where |
 | --- | --- |
