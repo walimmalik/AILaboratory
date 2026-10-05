@@ -14,7 +14,7 @@ import {
 } from '../operations/index.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
-import { reagentKinds } from './kinds.ts';
+import { lot as lotKind, reagentKinds } from './kinds.ts';
 import { loadSeedReagents, readSeedReagents } from './seed.ts';
 
 let db: Db;
@@ -233,6 +233,98 @@ describe('reagents.scale_recipe', () => {
 });
 
 describe('lots', () => {
+  it('allows existing lot status and metadata edits after its product is archived', async () => {
+    const product = await antibody();
+    const received = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'existing',
+    });
+    await run(person, 'records.archive', { id: product.id, expectedVersion: product.version });
+    const discarded = await run<RecordEnvelope>(person, 'reagents.set_lot_status', {
+      id: received.id,
+      expectedVersion: received.version,
+      status: 'used_up',
+    });
+    expect(discarded.attributes.status).toBe('used_up');
+    const noted = await run<RecordEnvelope>(person, 'records.update', {
+      id: discarded.id,
+      expectedVersion: discarded.version,
+      attributes: { ...discarded.attributes, notes: 'Discarded after product retired' },
+    });
+    expect(noted.attributes.notes).toBe('Discarded after product retired');
+  });
+
+  it('refuses new lots and product rebinding to an archived product', async () => {
+    const product = await antibody();
+    const { product: other } = await draft(person, 'PBS', pbs);
+    const existing = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: other.id,
+      lotNumber: 'existing',
+    });
+    await run(person, 'records.archive', { id: product.id, expectedVersion: product.version });
+    await expect(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'New archived lot',
+        attributes: { product: product.id, lotNumber: 'new', status: 'unopened' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(person, 'reagents.receive_lot', {
+        product: product.id,
+        lotNumber: 'new',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      run(person, 'records.update', {
+        id: existing.id,
+        expectedVersion: existing.version,
+        attributes: { ...existing.attributes, product: product.id },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+  });
+
+  it('finds duplicate lot numbers beyond the former 500-record boundary', async () => {
+    const product = await antibody();
+    const existing = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'duplicate',
+    });
+    const result = await lotKind.related?.(
+      { product: product.id, lotNumber: 'duplicate', status: 'unopened' },
+      {
+        get: async () => product,
+        getVersion: async () => undefined,
+        list: async () => [
+          ...Array.from({ length: 500 }, (_, i) => ({
+            ...existing,
+            attributes: { ...existing.attributes, lotNumber: `other-${i}` },
+          })),
+          existing,
+        ],
+        actor: person.actor,
+        reservedPrefixes: [],
+      },
+    );
+    expect(result?.invalid).toContain(`${product.label} already has lot duplicate`);
+  });
+  it('refuses wrong-dimensional certificate values through generic creation', async () => {
+    const product = await antibody();
+    const error = await refused(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'Invalid certificate',
+        attributes: {
+          product: product.id,
+          lotNumber: 'bad',
+          status: 'unopened',
+          values: [{ field: 'workingConcentration', value: { value: '2', unit: 'nM' } }],
+        },
+      }),
+    );
+    expect(error.code).toBe('invalid_attributes');
+    expect(error.message).toContain('Working concentration is given in ug/mL, not nM');
+  });
   async function antibody() {
     const { product } = await draft(person, 'IL-6 Capture Antibody', {
       category: 'antibody',
@@ -241,6 +333,241 @@ describe('lots', () => {
     });
     return product;
   }
+
+  it('keeps optional certificates incomplete and applies the same field rules on create and update', async () => {
+    const product = await antibody();
+    const generic = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'lot',
+      label: 'No certificate yet',
+      attributes: { product: product.id, lotNumber: 'draft', status: 'unopened' },
+    });
+    const received = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'received',
+      values: undefined,
+    });
+    for (const values of [
+      [{ field: 'unknown', value: { value: '1', unit: 'ug/mL' } }],
+      [{ field: 'workingConcentration', value: { value: '1', unit: 'nM' } }],
+      [{ field: 'workingConcentration', value: { value: '1', unit: 'invented' } }],
+      [{ field: 'workingConcentration', value: { ratio: '1:200' } }],
+    ]) {
+      for (const ctx of [person, agent]) {
+        await expect(
+          run(ctx, 'records.create', {
+            kind: 'lot',
+            label: 'Bad certificate',
+            attributes: { product: product.id, lotNumber: 'bad', status: 'unopened', values },
+          }),
+        ).rejects.toMatchObject({ code: 'invalid_attributes' });
+        await expect(
+          run(ctx, 'records.update', {
+            id: generic.id,
+            expectedVersion: generic.version,
+            attributes: { ...generic.attributes, values },
+          }),
+        ).rejects.toMatchObject({ code: 'invalid_attributes' });
+      }
+      await expect(
+        run(person, 'reagents.receive_lot', {
+          product: product.id,
+          lotNumber: 'bad',
+          values,
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    }
+    const updated = await run<RecordEnvelope>(person, 'records.update', {
+      id: generic.id,
+      expectedVersion: generic.version,
+      attributes: {
+        ...generic.attributes,
+        values: [{ field: 'workingConcentration', value: { value: '0.002', unit: 'mg/mL' } }],
+      },
+    });
+    expect(updated.version).toBe(2);
+    expect(received.attributes.values).toBeUndefined();
+    const { product: noFields } = await draft(person, 'PBS', pbs);
+    await expect(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'Undefined field map',
+        attributes: {
+          product: noFields.id,
+          lotNumber: 'bad',
+          status: 'unopened',
+          values: [{ field: 'stock', value: { ratio: '1:200' } }],
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+  });
+
+  it('checks product and component membership in this lab for generic and specialized writes', async () => {
+    const component = await antibody();
+    const { product: kit } = await draft(
+      person,
+      'Kit',
+      {
+        category: 'assay_kit',
+        origin: 'bought',
+      },
+      [{ product: component.id }],
+    );
+    const componentLot = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: component.id,
+      lotNumber: 'component',
+    });
+    const { product: unrelated } = await draft(person, 'PBS', pbs);
+    const unrelatedLot = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: unrelated.id,
+      lotNumber: 'unrelated',
+    });
+    const { product: foreign } = await draft(otherLab, 'Foreign', pbs);
+    const foreignLot = await run<RecordEnvelope>(otherLab, 'reagents.receive_lot', {
+      product: foreign.id,
+      lotNumber: 'foreign',
+    });
+    const valid = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'lot',
+      label: 'Valid kit',
+      attributes: {
+        product: kit.id,
+        lotNumber: 'kit',
+        status: 'unopened',
+        componentLots: [componentLot.id],
+      },
+    });
+    for (const componentLots of [[unrelatedLot.id], [foreignLot.id]]) {
+      await expect(
+        run(person, 'records.create', {
+          kind: 'lot',
+          label: 'Invalid kit',
+          attributes: { ...valid.attributes, lotNumber: 'bad', componentLots },
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+      await expect(
+        run(person, 'records.update', {
+          id: valid.id,
+          expectedVersion: valid.version,
+          attributes: { ...valid.attributes, componentLots },
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+      await expect(
+        run(person, 'reagents.receive_lot', { product: kit.id, lotNumber: 'bad', componentLots }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    }
+    await expect(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'Foreign product',
+        attributes: { product: foreign.id, lotNumber: 'bad', status: 'unopened' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(otherLab, 'records.update', {
+        id: valid.id,
+        expectedVersion: valid.version,
+        attributes: valid.attributes,
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+    await expect(
+      run(otherLab, 'records.restore', {
+        id: valid.id,
+        expectedVersion: valid.version,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('refuses duplicate identity on create, update, restore and agent approval without counting itself', async () => {
+    const product = await antibody();
+    const first = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'A',
+    });
+    const moved = await run<RecordEnvelope>(person, 'records.update', {
+      id: first.id,
+      expectedVersion: first.version,
+      attributes: { ...first.attributes, lotNumber: 'B' },
+    });
+    const second = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'lot',
+      label: 'A',
+      attributes: first.attributes,
+    });
+    await expect(
+      run(person, 'records.create', {
+        kind: 'lot',
+        label: 'Duplicate',
+        attributes: second.attributes,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(person, 'records.update', {
+        id: moved.id,
+        expectedVersion: moved.version,
+        attributes: first.attributes,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(person, 'records.restore', { id: moved.id, expectedVersion: moved.version, version: 1 }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    const changed = await run<RecordEnvelope>(person, 'records.update', {
+      id: moved.id,
+      expectedVersion: moved.version,
+      attributes: { ...moved.attributes, notes: 'Updated' },
+    });
+    const restored = await run<RecordEnvelope>(person, 'records.restore', {
+      id: changed.id,
+      expectedVersion: changed.version,
+      version: 2,
+    });
+    expect(restored.attributes.lotNumber).toBe('B');
+    const proposed = await registry.execute(agent, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'C',
+    });
+    expect(proposed.status).toBe('proposed');
+    if (proposed.status !== 'proposed') throw new Error('Expected proposal');
+    await run(person, 'reagents.receive_lot', { product: product.id, lotNumber: 'C' });
+    const failed = await run<Proposal>(person, 'proposals.approve', { id: proposed.proposal.id });
+    expect(failed).toMatchObject({ status: 'failed', error: { code: 'invalid_attributes' } });
+  });
+
+  it('rechecks certificate values on restore and specialized status updates after the product changes', async () => {
+    const product = await antibody();
+    const received = await run<RecordEnvelope>(person, 'reagents.receive_lot', {
+      product: product.id,
+      lotNumber: 'A',
+      values: [{ field: 'workingConcentration', value: { value: '2', unit: 'ug/mL' } }],
+    });
+    const edited = await run<RecordEnvelope>(person, 'records.update', {
+      id: received.id,
+      expectedVersion: received.version,
+      attributes: { ...received.attributes, notes: 'Updated' },
+    });
+    await run(person, 'records.update', {
+      id: product.id,
+      expectedVersion: product.version,
+      attributes: {
+        ...product.attributes,
+        lotFields: [{ key: 'workingConcentration', label: 'Working concentration', unit: 'nM' }],
+      },
+    });
+    await expect(
+      run(person, 'records.restore', {
+        id: received.id,
+        expectedVersion: edited.version,
+        version: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      run(person, 'reagents.set_lot_status', {
+        id: received.id,
+        expectedVersion: edited.version,
+        status: 'opened',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+  });
 
   it('records a lot with its certificate values, and moves it through its statuses', async () => {
     const product = await antibody();
