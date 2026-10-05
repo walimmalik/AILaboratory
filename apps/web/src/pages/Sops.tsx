@@ -117,6 +117,11 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
   const unfinished = questions?.filter(
     (q) => q.stage.stage === 'method' && q.disposition.status === 'open',
   );
+  const clarificationNotice = !questions
+    ? 'Question history needs reconciliation. We cannot determine whether this procedure is complete.'
+    : unfinished && unfinished.length > 0
+      ? 'Settle open method questions before final confirmation.'
+      : undefined;
   const calc = useQuery(calculationQuery(record));
   // Values read as their numbers at the bench; names shows which value each number is.
   const [names, setNames] = useState(false);
@@ -189,19 +194,13 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
       </header>
       <TermCards describe={describe}>
         <div className="body">
-          {record.status === 'draft' && (
-            <p className="warn-ink">Draft procedure — not confirmed for use.</p>
+          {(record.status === 'draft' || clarificationNotice) && (
+            <p className="warn-ink">
+              {record.status === 'draft' && 'Draft procedure — not confirmed for use.'}
+              {record.status === 'draft' && clarificationNotice && ' '}
+              {clarificationNotice}
+            </p>
           )}
-          {!questions ? (
-            <p className="warn-ink">
-              Question history needs reconciliation. We cannot determine whether this procedure is
-              complete.
-            </p>
-          ) : unfinished && unfinished.length > 0 ? (
-            <p className="warn-ink">
-              This procedure has open method questions. Settle them before final confirmation.
-            </p>
-          ) : null}
           {a.purpose && <p>{a.purpose}</p>}
           {a.variables.length > 0 && a.steps.length > 0 && (
             <fieldset className="segmented no-print bench-switch">
@@ -314,16 +313,15 @@ function StepClarification({
     if (selected) void assistant.send(selected.message, { context: selected.context });
   };
   return (
-    <>
-      <p className="sop-line sop-note warn-ink">
-        Method details remain unsettled. Review the linked{' '}
-        {questions.length === 1 ? 'question' : 'questions'} before confirming the procedure.
-      </p>
-      <ul className="sop-question-links no-print" aria-label="Clarification questions">
-        {questions.map((q, i) => (
+    <details className="sop-clarifications no-print">
+      <summary className="cite-toggle">
+        {questions.length} {questions.length === 1 ? 'question' : 'questions'} to clarify
+      </summary>
+      <ul className="sop-question-links" aria-label="Clarification questions">
+        {questions.map((q) => (
           <li key={q.id}>
             <a href={`#sop-question-${q.id}`} aria-label={`Review question: ${q.question}`}>
-              {questions.length === 1 ? 'Review question' : `Review question ${i + 1}`}
+              {q.question}
             </a>
             {' · '}
             <button
@@ -338,7 +336,7 @@ function StepClarification({
           </li>
         ))}
       </ul>
-    </>
+    </details>
   );
 }
 

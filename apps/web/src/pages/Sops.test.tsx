@@ -87,11 +87,16 @@ describe('unfinished SOP steps', () => {
     expect(bench).toContain('href="#sop-question-wash_volume"');
     expect(markup).toContain('id="sop-question-wash_volume"');
     expect(bench).toContain('aria-label="Discuss with assistant: Which wash volume is supported?"');
-    // The interactive choice list is hidden in print; the badge and warning sit outside it.
-    const printed = bench.replace(/<ul class="sop-question-links no-print"[\s\S]*?<\/ul>/g, '');
+    expect(bench).toContain('<summary class="cite-toggle">1 question to clarify</summary>');
+    // The interactive disclosure is hidden in print; the badge and procedure notice remain.
+    const printed = bench.replace(
+      /<details class="sop-clarifications no-print"[\s\S]*?<\/details>/g,
+      '',
+    );
     expect(printed).toContain('Needs clarification');
-    expect(printed).toContain('Method details remain unsettled.');
+    expect(printed).toContain('Settle open method questions before final confirmation.');
     expect(printed).not.toContain('Discuss with assistant');
+    expect(bench.match(/<p class="warn-ink">/g)).toHaveLength(1);
   });
 
   it('offers each linked question explicitly with one badge', () => {
@@ -100,8 +105,15 @@ describe('unfinished SOP steps', () => {
     for (const id of ['wash_volume', 'wash_count']) {
       expect(markup).toContain(`href="#sop-question-${id}"`);
     }
-    expect(markup).toContain('Review question 1');
-    expect(markup).toContain('Review question 2');
+    expect(markup).toContain('<summary class="cite-toggle">2 questions to clarify</summary>');
+    expect(markup).toContain(
+      'aria-label="Review question: Which wash volume is supported?">Which wash volume is supported?</a>',
+    );
+    expect(markup).toContain(
+      'aria-label="Review question: Which wash count is supported?">Which wash count is supported?</a>',
+    );
+    expect(markup).not.toContain('Method details remain unsettled');
+    expect(markup).not.toContain('Review question 1');
     expect(markup).toContain('Discuss with assistant: Which wash count is supported?');
   });
 
