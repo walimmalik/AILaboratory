@@ -24,9 +24,9 @@ Every capability is an **operation**. People (through the web app) and agents (t
 4. Writes:
    - **Preview** (`?preview=true`): runs in a transaction and rolls back. Returns `{status: "preview", output}`; nothing is saved or logged, not even a readable-name counter.
    - **Agent with a `propose` policy**: previews, stores a proposal with that preview, logs `proposed`, and returns `{status: "proposed", proposal}`.
-   - **Otherwise**: runs in one transaction (all-or-nothing), logs `succeeded`, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
+   - **Otherwise**: runs in one transaction (all-or-nothing) with its `succeeded` ledger entry, returns `{status: "done", output}`. A refused write is rolled back and logged as `failed` with its error, then the error is returned.
 5. Output is checked against the contract before it leaves the server.
-6. An implementation may declare `after`, which runs once a write is committed and logged (never on previews or proposals). `assistant.ask` uses it to start the assistant in the background.
+6. Activity delivery and an implementation's `after` work wait for the outermost registry transaction to commit. Nested savepoints merge their delivery work into that boundary; a rollback discards it (including previews). Delivery or hook failure is logged without changing the committed result. `assistant.ask` uses `after` to start the assistant in the background.
 7. Write listeners (`registry.onWrite`) run after each committed write a person makes at the top level, with the records it touched (a change set counts once, with every record). Lab memory's repeated-override detector is one (plan 005c-1b). A listener's failure is logged and never fails the write.
 8. The registry runs each operation with its ID in the record context (`via`), so every version it writes names it (ADR 0053). An implementation with `ledger: false` (only `records.mark_seen`) writes no ledger entry.
 
@@ -55,6 +55,12 @@ A write declares `agentPolicy`: `direct`, `propose`, or a function deciding per 
 | `assistant.ask` | people only |
 
 Approving (`proposals.approve`, people only) runs the stored input as the proposing agent inside the approval's transaction, so history credits the agent and the ledger shows `succeeded` (by the agent, with the proposal ID) and `approved` (by the person). If the record changed since the proposal, the proposal becomes `failed` with the error and nothing changes. The preview in a proposal shows what would have happened at proposal time; readable names shown in a create preview may differ from the final ones.
+
+**Approval receipts (004g SG-15a).** The existing proposal row stores `receipt` with the actual validated output, actual touched record IDs, optional calculation handle and receipt time. Applying locks that row and commits the mutation, receipt, approved status and ledger entries together. Retrying an approved proposal returns the same stored proposal and receipt, even after reload or lost stream delivery, without another mutation, ledger entry or hook. The receipt describes the committed output rather than the rolled-back preview. Approved historical rows without a receipt refuse replay with a clear message. Agent restrictions and lab isolation apply to retries too. Decision preparation, question disposition and supporting-record confirmation scopes remain SG-03 work; final SOP confirmation remains separate.
+
+The optional typed `decision` metadata is SG-01 foundation for that later path: existing conversation/message intent, read/write record versions and affected paths, exact source references, preview identity and bounded operation/question/confirmation scopes. Nullable metadata and receipt columns preserve existing proposal rows. These contracts do not enable decision preparation or new Apply UI behavior.
+
+Code that composes registry writes must keep their outer boundary in `registry.transaction(db, callback)` and pass its transaction to nested `execute` calls. A supplied transaction not owned by the registry is refused: returning from an unknown savepoint cannot establish that the caller's outer transaction committed. Record-service transactions that do not compose registry calls remain ordinary database transactions.
 
 **Skills** (ADR 0054). `pnpm generate` bundles `skills/<module>/SKILL.md` into `apps/api/src/skills/skills.generated.json`; `skills.list` and `skills.get` serve them, MCP lists each as the resource `skill://<module>`, and a test fails when an operation is named in no skill.
 
