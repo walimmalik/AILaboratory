@@ -911,17 +911,25 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   await expect(questions).toContainText(response);
   await expect(questions).toContainText('Response received; the scientific issue remains open.');
   await expect(questions).toContainText('1 open');
+  await expect(readiness).toContainText('1 method decision remains');
+  await expect(readiness.getByRole('button', { name: 'Confirm SOP', exact: true })).toHaveCount(0);
+  await readiness.getByText('All readiness checks', { exact: true }).click();
   const methodBlocker = readiness.getByRole('row').filter({
     hasText: '1 open: Overnight at 4 °C or at room temperature?',
   });
   await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
   await expect(methodBlocker).toContainText('a response alone does not resolve it');
-  await expect(readiness).toContainText('1 to fix');
+  await expect(readiness).toContainText('1 method decision remains');
 
-  // Confirm reviews the sections, but an unanswered scientific issue keeps the SOP in draft.
-  await readiness.getByRole('button', { name: `Confirm ${drafted.output.name}` }).click();
-  await expect(readiness).toContainText('Fix what blocks it, then confirm.');
-  await expect(readiness).toContainText('1 to fix');
+  // Section review has an explicit scope; an unanswered scientific issue keeps the SOP in draft.
+  await expect(readiness).toContainText('Reviews overview, materials, values, steps');
+  await expect(readiness).toContainText('The SOP remains a draft');
+  await readiness.getByRole('button', { name: 'Review ready sections', exact: true }).click();
+  await expect(readiness.getByRole('status')).toContainText(
+    'Reviewed overview, materials, values, steps',
+  );
+  await expect(readiness.getByRole('status')).toContainText('The SOP remains a draft');
+  await expect(readiness).toContainText('1 method decision remains');
   await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
   await readiness.getByText('technical details', { exact: true }).click();
   for (const section of ['Materials', 'Values', 'Steps']) {
@@ -931,6 +939,11 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   }
   await expect(questions).toContainText('1 open');
   await expect(page.locator('.record-head .chip.draft')).toHaveText('draft');
+  await page.reload();
+  await expect(readiness).toContainText(
+    'The SOP remains a draft. Settle the remaining issues before final confirmation.',
+  );
+  await expect(readiness.getByRole('status')).toHaveCount(0);
 });
 
 /** A person confirms every section of a draft at once, which activates it. */

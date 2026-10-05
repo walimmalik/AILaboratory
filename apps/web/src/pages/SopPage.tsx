@@ -7,6 +7,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { api } from '../api.ts';
+import { useAssistant } from '../assistant.tsx';
+import { questionDiscussion } from '../lib/sop-questions.ts';
+import { sopReadiness, sopReviewOutcome } from '../lib/sop-readiness.ts';
 import { kindsQuery, readinessQuery } from '../queries.ts';
 import { EditorScope, FormRow, type JsonSchema, ValueEditor } from './FieldEditor.tsx';
 import { Checks, Estimates, fieldLabel } from './RecordReview.tsx';
@@ -47,7 +50,7 @@ export function SopPage({
   );
 }
 
-/** What stands between the SOP and the lab, and the one Confirm that clears what can be cleared. */
+/** Scientific decisions first; section review and final confirmation have explicit scopes. */
 function SopStatus({
   record,
   readiness,
@@ -60,16 +63,12 @@ function SopStatus({
   onEdit: (part: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const assistant = useAssistant();
   const draft = record.status === 'draft';
-  const failing = readiness.checks.filter((c) => !c.passed && c.severity === 'blocker');
-  const held = new Set(failing.flatMap((c) => (c.section ? [c.section] : [])));
-  const toReview = readiness.sections.filter((s) => s.state === 'needs_review');
-  const confirmable = toReview.filter((s) => !held.has(s.id));
-  const waiting = toReview.filter((s) => held.has(s.id));
-  // With nothing failing, confirming everything that waits makes a draft active.
-  const activates = draft && failing.length === 0;
+  const review = sopReadiness(record, readiness);
+  const { failing, toReview, confirmable, activates, canConfirm, methodQuestions } = review;
   const confirm = useMutation({
-    mutationFn: () =>
+    mutationFn: (_review: { sections: { id: string; title: string }[]; partial: boolean }) =>
       confirmable.length === 0 && activates
         ? api.run(recordsActivate, { id: record.id, expectedVersion: readiness.version })
         : api.run(recordsConfirm, { id: record.id, expectedVersion: readiness.version }),
@@ -80,15 +79,28 @@ function SopStatus({
         ),
       ),
   });
-  const canConfirm = confirmable.length > 0 || (activates && toReview.length === 0);
+  const remaining = review.summarized
+    ? `${methodQuestions?.length} method ${methodQuestions?.length === 1 ? 'decision remains' : 'decisions remain'}${
+        review.otherBlockers.length
+          ? ` · ${review.otherBlockers.length} other ${review.otherBlockers.length === 1 ? 'blocker' : 'blockers'}`
+          : ''
+      }`
+    : `${failing.length} ${failing.length === 1 ? 'check blocks' : 'checks block'} confirmation`;
   const state = !draft
     ? toReview.length === 0 && failing.length === 0
       ? { text: '✓ confirmed', tone: 'ok-ink' }
       : { text: 'changed since it was confirmed', tone: 'warn-ink' }
     : readiness.ready || (activates && canConfirm)
       ? { text: 'ready to confirm', tone: 'ok-ink' }
-      : { text: `${failing.length} to fix`, tone: 'warn-ink' };
-  const words = (parts: typeof toReview) => parts.map((s) => s.title.toLowerCase()).join(', ');
+      : { text: remaining, tone: 'warn-ink' };
+  const discuss = (id: string) => {
+    const selected = questionDiscussion(record, id);
+    if (selected) void assistant.send(selected.message, { context: selected.context });
+  };
+  const outcome =
+    confirm.variables && confirm.data?.version === record.version
+      ? sopReviewOutcome(confirm.data, confirm.variables.sections, confirm.variables.partial)
+      : undefined;
 
   return (
     <section className="block no-print" aria-label="Readiness">
@@ -98,23 +110,65 @@ function SopStatus({
       </header>
       <div className="body">
         <Estimates record={record} readiness={readiness} onOpen={(path) => onEdit(partFor(path))} />
-        {readiness.checks.some((c) => !c.passed) && (
+        {!!methodQuestions?.length && (
+          <>
+            <p className="actions">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={assistant.sending || assistant.running}
+                onClick={() => {
+                  const first = methodQuestions[0];
+                  if (first) discuss(first.id);
+                }}
+              >
+                Resolve with assistant
+              </button>
+              <span className="muted">
+                Settle method decisions; choose samples and run details later.
+              </span>
+            </p>
+            <details className="sop-readiness-decisions">
+              <summary>Choose a method decision ({methodQuestions.length})</summary>
+              <ul className="sop-question-links" aria-label="Method decisions">
+                {methodQuestions.map((q) => (
+                  <li key={q.id}>
+                    <a href={`#sop-question-${q.id}`} aria-label={`Review question: ${q.question}`}>
+                      {q.question}
+                    </a>
+                    {' · '}
+                    <button
+                      type="button"
+                      className="link-btn"
+                      aria-label={`Discuss with assistant: ${q.question}`}
+                      disabled={assistant.sending || assistant.running}
+                      onClick={() => discuss(q.id)}
+                    >
+                      Discuss with assistant
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </>
+        )}
+        {review.visibleChecks.some((c) => !c.passed) && (
           <Checks
-            checks={readiness.checks}
+            checks={review.visibleChecks.filter((c) => !c.passed)}
             titles={titles}
             onFix={onEdit}
             target={{ id: record.id, version: readiness.version }}
           />
         )}
         <div className="actions">
-          {canConfirm && (
+          {canConfirm && record.status !== 'archived' && (
             <button
               type="button"
-              className="btn primary"
+              className={failing.length ? 'btn' : 'btn primary'}
               disabled={confirm.isPending}
-              onClick={() => confirm.mutate()}
+              onClick={() => confirm.mutate({ sections: confirmable, partial: failing.length > 0 })}
             >
-              {draft ? `Confirm ${record.name}` : 'Confirm the changes'}
+              {review.actionLabel}
             </button>
           )}
           {record.status !== 'archived' && (
@@ -122,27 +176,21 @@ function SopStatus({
               Edit
             </button>
           )}
-          <span className="muted">
-            {canConfirm
-              ? `${
-                  confirmable.length === 0
-                    ? 'Everything is confirmed.'
-                    : confirmable.length === readiness.sections.length
-                      ? 'Confirms the whole SOP as it stands.'
-                      : `Confirms ${words(confirmable)} as they stand.`
-                }${activates ? ` ${record.name} becomes active for the lab.` : ''}${
-                  waiting.length
-                    ? ` ${capital(words(waiting))} ${waiting.length === 1 ? 'waits' : 'wait'} for the fixes above.`
-                    : ''
-                }`
-              : toReview.length > 0
-                ? 'Fix what blocks it first.'
-                : draft
-                  ? 'Fix what blocks it, then confirm.'
-                  : ''}
-          </span>
+          {!outcome && <span className="muted">{review.before}</span>}
         </div>
+        {outcome && <p role="status">{outcome}</p>}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
+        {readiness.checks.length > 0 && (
+          <details className="sop-readiness-checks">
+            <summary>All readiness checks</summary>
+            <Checks
+              checks={readiness.checks}
+              titles={titles}
+              onFix={onEdit}
+              target={{ id: record.id, version: readiness.version }}
+            />
+          </details>
+        )}
         <details className="tech">
           <summary>technical details</summary>
           <ul className="plain">
@@ -159,8 +207,6 @@ function SopStatus({
     </section>
   );
 }
-
-const capital = (text: string) => `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
 
 /** The parts of the SOP a person edits, in the order they read it. Questions and sources are not. */
 const parts: { id: string; title: string; fields: string[] }[] = [
