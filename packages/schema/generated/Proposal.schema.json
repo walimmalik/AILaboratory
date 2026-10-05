@@ -11,6 +11,1282 @@
     },
     "input": {},
     "preview": {},
+    "decision": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "user_message"
+                },
+                "conversation": {
+                  "type": "string",
+                  "pattern": "^cnv_[0-9A-HJKMNP-TV-Z]{26}$"
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "conversation",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "unknown"
+                },
+                "changeSet": {
+                  "description": "Known original change-set boundary only",
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "paths": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "starts_with",
+                  "pattern": "^\\/.*"
+                },
+                "description": "Affected/read attribute paths; versions remain record-wide"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "paths"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "writes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "paths": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "starts_with",
+                  "pattern": "^\\/.*"
+                },
+                "description": "Affected/read attribute paths; versions remain record-wide"
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "paths"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "document": {
+                "type": "string",
+                "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "file": {
+                "type": "string",
+                "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "The sha256 of the bytes, lowercase hex"
+              },
+              "parse": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "const": "parsed"
+                      },
+                      "snapshot": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                        "description": "Content digest identifying the immutable converted-text snapshot"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "snapshot"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "const": "unavailable"
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "printedRevision": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "document",
+              "version",
+              "file",
+              "sha256",
+              "parse",
+              "title"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "previewIdentity": {
+          "type": "object",
+          "properties": {
+            "digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "Digest of the server-derived exact changes/checks/consequences"
+            },
+            "preparedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            }
+          },
+          "required": [
+            "digest",
+            "preparedAt"
+          ],
+          "additionalProperties": false
+        },
+        "scope": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "operation_change"
+                },
+                "disposition": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "resolve"
+                        },
+                        "sop": {
+                          "type": "string",
+                          "pattern": "^sop_[0-9A-HJKMNP-TV-Z]{26}$"
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]+$"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "basis": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "evidence"
+                                },
+                                "sources": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "document": {
+                                        "type": "string",
+                                        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "file": {
+                                        "type": "string",
+                                        "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$",
+                                        "description": "The sha256 of the bytes, lowercase hex"
+                                      },
+                                      "parse": {
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "parsed"
+                                          },
+                                          "snapshot": {
+                                            "type": "string",
+                                            "pattern": "^[0-9a-f]{64}$",
+                                            "description": "Content digest identifying the immutable converted-text snapshot"
+                                          }
+                                        },
+                                        "required": [
+                                          "status",
+                                          "snapshot"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "printedRevision": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "document",
+                                      "version",
+                                      "file",
+                                      "sha256",
+                                      "parse",
+                                      "title"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "records": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "paths": {
+                                        "minItems": 1,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "format": "starts_with",
+                                          "pattern": "^\\/.*"
+                                        },
+                                        "description": "Affected/read attribute paths; versions remain record-wide"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "version",
+                                      "paths"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "sources",
+                                "records"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "scientific_rationale"
+                                },
+                                "rationale": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "validation": {
+                                  "type": "string",
+                                  "const": "unvalidated_method_variation"
+                                },
+                                "sources": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "document": {
+                                        "type": "string",
+                                        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "file": {
+                                        "type": "string",
+                                        "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$",
+                                        "description": "The sha256 of the bytes, lowercase hex"
+                                      },
+                                      "parse": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "status": {
+                                                "type": "string",
+                                                "const": "parsed"
+                                              },
+                                              "snapshot": {
+                                                "type": "string",
+                                                "pattern": "^[0-9a-f]{64}$",
+                                                "description": "Content digest identifying the immutable converted-text snapshot"
+                                              }
+                                            },
+                                            "required": [
+                                              "status",
+                                              "snapshot"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "status": {
+                                                "type": "string",
+                                                "const": "unavailable"
+                                              },
+                                              "reason": {
+                                                "type": "string",
+                                                "minLength": 1
+                                              }
+                                            },
+                                            "required": [
+                                              "status",
+                                              "reason"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "printedRevision": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "document",
+                                      "version",
+                                      "file",
+                                      "sha256",
+                                      "parse",
+                                      "title"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "rationale",
+                                "validation",
+                                "sources"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "affected": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "paths": {
+                                "minItems": 1,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "starts_with",
+                                  "pattern": "^\\/.*"
+                                },
+                                "description": "Affected/read attribute paths; versions remain record-wide"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "paths"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "sop",
+                        "expectedVersion",
+                        "question",
+                        "reason",
+                        "basis",
+                        "affected"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "defer"
+                        },
+                        "sop": {
+                          "type": "string",
+                          "pattern": "^sop_[0-9A-HJKMNP-TV-Z]{26}$"
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]+$"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "obligation": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "stage": {
+                                  "type": "string",
+                                  "const": "experiment"
+                                },
+                                "condition": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "binding": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "input"
+                                        },
+                                        "variable": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "variable"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "material_role"
+                                        },
+                                        "role": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "role"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "stage",
+                                "condition",
+                                "binding"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "stage": {
+                                  "type": "string",
+                                  "const": "run"
+                                },
+                                "condition": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "binding": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "input"
+                                        },
+                                        "variable": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "variable"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "material_role"
+                                        },
+                                        "role": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "role"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "run_check"
+                                        },
+                                        "check": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "check"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "stage",
+                                "condition",
+                                "binding"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "sop",
+                        "expectedVersion",
+                        "question",
+                        "reason",
+                        "obligation"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "question_disposition"
+                },
+                "disposition": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "resolve"
+                        },
+                        "sop": {
+                          "type": "string",
+                          "pattern": "^sop_[0-9A-HJKMNP-TV-Z]{26}$"
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]+$"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "basis": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "evidence"
+                                },
+                                "sources": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "document": {
+                                        "type": "string",
+                                        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "file": {
+                                        "type": "string",
+                                        "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$",
+                                        "description": "The sha256 of the bytes, lowercase hex"
+                                      },
+                                      "parse": {
+                                        "type": "object",
+                                        "properties": {
+                                          "status": {
+                                            "type": "string",
+                                            "const": "parsed"
+                                          },
+                                          "snapshot": {
+                                            "type": "string",
+                                            "pattern": "^[0-9a-f]{64}$",
+                                            "description": "Content digest identifying the immutable converted-text snapshot"
+                                          }
+                                        },
+                                        "required": [
+                                          "status",
+                                          "snapshot"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "printedRevision": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "document",
+                                      "version",
+                                      "file",
+                                      "sha256",
+                                      "parse",
+                                      "title"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "records": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "paths": {
+                                        "minItems": 1,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "format": "starts_with",
+                                          "pattern": "^\\/.*"
+                                        },
+                                        "description": "Affected/read attribute paths; versions remain record-wide"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "version",
+                                      "paths"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "sources",
+                                "records"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "scientific_rationale"
+                                },
+                                "rationale": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "validation": {
+                                  "type": "string",
+                                  "const": "unvalidated_method_variation"
+                                },
+                                "sources": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "document": {
+                                        "type": "string",
+                                        "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "version": {
+                                        "type": "integer",
+                                        "exclusiveMinimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "file": {
+                                        "type": "string",
+                                        "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                      },
+                                      "sha256": {
+                                        "type": "string",
+                                        "pattern": "^[0-9a-f]{64}$",
+                                        "description": "The sha256 of the bytes, lowercase hex"
+                                      },
+                                      "parse": {
+                                        "oneOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "status": {
+                                                "type": "string",
+                                                "const": "parsed"
+                                              },
+                                              "snapshot": {
+                                                "type": "string",
+                                                "pattern": "^[0-9a-f]{64}$",
+                                                "description": "Content digest identifying the immutable converted-text snapshot"
+                                              }
+                                            },
+                                            "required": [
+                                              "status",
+                                              "snapshot"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "status": {
+                                                "type": "string",
+                                                "const": "unavailable"
+                                              },
+                                              "reason": {
+                                                "type": "string",
+                                                "minLength": 1
+                                              }
+                                            },
+                                            "required": [
+                                              "status",
+                                              "reason"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      "title": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      "printedRevision": {
+                                        "type": "string",
+                                        "minLength": 1
+                                      }
+                                    },
+                                    "required": [
+                                      "document",
+                                      "version",
+                                      "file",
+                                      "sha256",
+                                      "parse",
+                                      "title"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "rationale",
+                                "validation",
+                                "sources"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "affected": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "paths": {
+                                "minItems": 1,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "starts_with",
+                                  "pattern": "^\\/.*"
+                                },
+                                "description": "Affected/read attribute paths; versions remain record-wide"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "version",
+                              "paths"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "sop",
+                        "expectedVersion",
+                        "question",
+                        "reason",
+                        "basis",
+                        "affected"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "defer"
+                        },
+                        "sop": {
+                          "type": "string",
+                          "pattern": "^sop_[0-9A-HJKMNP-TV-Z]{26}$"
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "question": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]+$"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "obligation": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "stage": {
+                                  "type": "string",
+                                  "const": "experiment"
+                                },
+                                "condition": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "binding": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "input"
+                                        },
+                                        "variable": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "variable"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "material_role"
+                                        },
+                                        "role": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "role"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "stage",
+                                "condition",
+                                "binding"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "stage": {
+                                  "type": "string",
+                                  "const": "run"
+                                },
+                                "condition": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "binding": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "input"
+                                        },
+                                        "variable": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "variable"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "material_role"
+                                        },
+                                        "role": {
+                                          "type": "string",
+                                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "role"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "run_check"
+                                        },
+                                        "check": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "check"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "stage",
+                                "condition",
+                                "binding"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "sop",
+                        "expectedVersion",
+                        "question",
+                        "reason",
+                        "obligation"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "disposition"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "confirmation_scope"
+                },
+                "records": {
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "kind": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "version",
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "description": "Exact server-derived records, in dependency order"
+                }
+              },
+              "required": [
+                "type",
+                "records"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "reads",
+        "writes",
+        "sources",
+        "previewIdentity",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "output": {
+          "description": "Actual result validated against the approved operation output"
+        },
+        "recordIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$"
+          }
+        },
+        "calculation": {
+          "type": "string",
+          "pattern": "^calc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "committedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "output",
+        "recordIds",
+        "committedAt"
+      ],
+      "additionalProperties": false
+    },
     "status": {
       "type": "string",
       "enum": [

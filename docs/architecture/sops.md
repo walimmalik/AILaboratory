@@ -97,6 +97,29 @@ Values and steps have editors of their own built on one highlighted text box ([A
 
 The SOP's parts are titled Values and Steps in readiness (their ids stay `variables` and `procedure`).
 
+## Scientific decisions: contract foundation (004g / SG-01)
+
+The shared replacement `ScientificQuestion` schema is published from `packages/schema/src/sops.ts`; its response, stage, disposition and proposal metadata schemas live in `scientific-decisions.ts`. This is a contract foundation, **not an enabled reconciliation workflow**. `SopAttributes.questions`, `sops.draft`, `sops.answer_question` and current readiness still use `OpenQuestion`. No new prepare or approval operation is registered here, and old `answered` values are not evidence of a scientific resolution under the new contract.
+
+The replacement retains each stable question ID and its step/variable/material links. A response records the person's words, identity, time and record version separately from an open/resolved/deferred disposition. Resolution requires the accepted proposal, proposer and human acceptor, exact affected record versions/paths, evidence or a labelled unvalidated scientific rationale, and passing named checks at the rechecked version. An insufficient correction remains open; its writes and failed readiness remain available through existing proposal receipts, record history and checks. A reopening refers to the former version and changed dependencies rather than copying another full snapshot.
+
+For example, an unknown reply remains open (example IDs are illustrative):
+
+```json
+{
+  "id": "wash_volume",
+  "about": {"step": "wash"},
+  "question": "Which compatible wash method should be used?",
+  "stage": {"stage": "method", "reason": "The source instruction conflicts with the plate maximum"},
+  "responses": [{"text": "I don't know", "by": {"type": "user", "userId": "usr_01J9Z3K8Q4ABCDEFGHJKMNPQRS"}, "at": "2026-10-05T12:00:00Z", "version": 3}],
+  "disposition": {"status": "open"}
+}
+```
+
+A deferral must retain an existing concrete downstream binding, such as `{"stage":"run","condition":"Name the operator before execution","binding":{"type":"run_check","check":"operator"}}`. Experiment obligations name a declared `input` variable or `material_role`; run obligations may additionally name a run check. Schema validation supplies the shape, while SG-02 must verify the binding exists and that a method defect has not been misclassified. A question's deferred stage and binding must agree with its accepted disposition. Pinned downstream consumers must enforce the retained obligation before their applicable acceptance boundary.
+
+**Activation gate:** SG-02 and the accepted-history/future-use slice of SG-10c deploy together for a populated lab, with SG-10b's accepted-input guard. Before replacing `OpenQuestion`, inventory and migrate current answered questions while preserving their original text, record history, accepted snapshots and completed-run pins. Draft old answers become response received; uncertain historical accepted answers require affected future use to be re-reviewed, including an existing pinned design's new execution. Unknown historical actor/time must not be invented to fill `QuestionResponse`; retain known original evidence in record history. This foundation makes no historical migration or future-use eligibility claim. SG-03 owns decision application/rechecks; SG-18 owns immutable source reads. The new-draft milestone remains separately bounded by plan 004g §7.
+
 ## Not yet
 
 Dead volume per pipetting instrument kind (007 L4) as a field to read; expectations for the lab's own and the OpenWetWare SOPs (only InterLab so far, and not yet hand-checked); a separate reviewer model setting; keeping or reverting single reviewer fixes on the page.

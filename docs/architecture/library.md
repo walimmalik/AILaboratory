@@ -99,6 +99,14 @@ What a passage mentions is a row in `library_mentions`: a registry record, the a
 
 The seed loads `seed/sops/own` (the lab's own, shareable) and `docs/sop-library` (the three Promega manuals are reported missing). `pnpm --filter @ailab/api library:import --folder <path>` imports any other folder, such as the Promega manuals on the laptop (`C:\dev\sop-library`, which has the same manifest); a Markdown folder also needs `--license`.
 
+## Exact instruction references: contract foundation (004g / SG-01)
+
+`ExactSourceReference` in `packages/schema/src/library.ts` pins a document record version, file ID and byte sha256 separately from its readable title/printed revision. Its parse identity is the sha256 of the immutable converted-text snapshot, so parsing the same file into different passages changes that identity. `ExactSourceCitation` binds a passage ID and quote to a parsed snapshot; it rejects an unavailable parse. An attached but unparsed file is representable with `parse: {status: "unavailable", reason: "…"}` and cannot support an evidence-only question resolution. A scientist's explicit unvalidated rationale may retain such an attachment without claiming its text was checked.
+
+Example reference (digests shortened here for readability; payloads require 64 lowercase hex characters): `{"document":"doc_…","version":2,"file":"fil_…","sha256":"<file digest>","parse":{"status":"parsed","snapshot":"<converted-text digest>"},"title":"Reviewed wash instructions","printedRevision":"Edition 1"}`. Printed revision is display metadata and never chooses the bytes. No new parse ID or decision table is introduced.
+
+This publishes the SG-18 producer shape only. Current `SopAttributes.source`, `Citation`, `library.read` and parse persistence still use their existing contracts. SG-18 must retain immutable snapshots, resolve the selected historical file/version, verify its bytes/digest and scope, and read the named passages without falling back to latest. Adding a newer edition must leave an old pin unchanged; adoption and changed citation context require explicit preview/review. Existing uncertain source associations require the SG-02/SG-10c populated-lab gate described in [sops.md](sops.md). This foundation does not claim exact-source reading or source migration is available.
+
 ## Not yet
 
 Docling for PDF and DOCX, embeddings and hybrid ranking (011b-2); fetching a document by URL or DOI; a PDF viewer beside the text and a text diff between revisions on the document page. Removing stored bytes nobody references.
