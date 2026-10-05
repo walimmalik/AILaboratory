@@ -1,4 +1,9 @@
-import { type OriginatingIntent, type PageContext, ScientificQuestion } from '@ailab/schema';
+import {
+  libraryRead,
+  type OriginatingIntent,
+  type PageContext,
+  ScientificQuestion,
+} from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { findProposal, toProposal } from '../operations/proposal-store.ts';
 import type { OperationDeps } from '../operations/registry.ts';
@@ -14,6 +19,11 @@ export async function pageNote(
   page: PageContext | undefined,
 ): Promise<string> {
   if (!page) return '';
+  if (/^\/library\/instructions(?:\/|$)/.test(page.path) && !page.selectedSource)
+    throw new OperationError(
+      'invalid_input',
+      'The exact instructions reader needs its selected source. Refresh the reader before asking.',
+    );
   const records = new RecordService(deps.db, deps.kinds);
   const notes: string[] = [];
   const namespaces = new Set(pageNamespaces(page, deps.kinds));
@@ -22,6 +32,39 @@ export async function pageNote(
     notes.push(
       `Skills for this page: ${relevantSkills.map((skill) => `${skill.module} (${skill.name})`).join(', ')}. To read each relevant owning skill, call ${relevantSkills.map((skill) => `skills_get with ${JSON.stringify({ name: skill.module })}`).join('; ')} unless already read. Use these exact existing skill names, not operation namespaces.`,
     );
+  if (page.selectedSource) {
+    const { source, passage, section } = page.selectedSource;
+    const result = await deps.registry.execute(
+      ctx,
+      libraryRead.id,
+      {
+        source,
+        ...(passage === undefined ? {} : { passages: [passage] }),
+        ...(section === undefined ? {} : { section }),
+      },
+      {},
+      deps.db,
+    );
+    if (result.status !== 'done')
+      throw new OperationError('internal', 'The selected instructions could not be resolved.');
+    const resolved = libraryRead.output.parse(result.output);
+    if (!resolved.source)
+      throw new OperationError('unavailable', 'The selected exact source is unavailable.');
+    const authoritativeSource = {
+      ...resolved.source,
+      // The unavailable reason is caller-supplied, unlike the resolved edition metadata.
+      ...(resolved.source.parse.status === 'unavailable'
+        ? { parse: { status: 'unavailable', reason: 'No checked text selected' } }
+        : {}),
+    };
+    notes.push(
+      `Selected exact instructions (server-resolved metadata): ${JSON.stringify({ source: authoritativeSource, ...(passage === undefined ? {} : { passage }), ...(section === undefined ? {} : { section }), ...(resolved.parse ? { warnings: resolved.parse.warnings } : {}) })}. Read this reference through library.read; never substitute current document text or infer missing instructions. This selection grants no source adoption, scientific disposition or confirmation authority.`,
+    );
+    if (resolved.source.parse.status === 'unavailable')
+      notes.push(
+        'Text could not be checked for this attachment. Keep it unchecked; do not invent or infer its instructions.',
+      );
+  }
   if (page.record) {
     const record = await records.get(ctx, page.record.id);
     if (record.version !== page.record.version)

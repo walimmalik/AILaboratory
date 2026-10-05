@@ -26,6 +26,7 @@ import {
   type QuestionSelection,
   selectedQuestion,
 } from './lib/chat-question.ts';
+import { validateExactInstructionsSearch } from './lib/exact-source.ts';
 import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts';
 
 interface QuestionChoice {
@@ -59,6 +60,8 @@ interface AssistantUi {
   /** The shown conversation's latest state, live. */
   running: boolean;
   questionSelection: QuestionSelection | undefined;
+  sourceSelection: PageContext['selectedSource'];
+  sourceContextError: string | undefined;
   selectQuestion: (selection: QuestionSelection | undefined) => void;
   acknowledgeResponse: (
     previous: QuestionSelection,
@@ -125,16 +128,33 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     enabled: Boolean(conversationId),
   });
   const conversation = contextQuery.data;
+  const location = useRouterState({ select: (s) => s.location });
+  const path = location.pathname;
+  const reader = path === '/library/instructions';
+  const sourceSearch = reader ? validateExactInstructionsSearch(location.search) : undefined;
+  const sourceSelection = sourceSearch?.source
+    ? {
+        source: sourceSearch.source,
+        ...(sourceSearch.passage === undefined ? {} : { passage: sourceSearch.passage }),
+        ...(sourceSearch.section === undefined ? {} : { section: sourceSearch.section }),
+      }
+    : undefined;
+  const sourceContextError = sourceSearch?.error;
   const contextReady =
     !conversationId || (conversation?.id === conversationId && !contextQuery.error);
   const contextError = conversationId ? contextQuery.error?.message : undefined;
-  const anchor = conversation?.messages.findLast((message) => message.role === 'user')?.id;
-  const questionSelection =
+  // Reader turns temporarily replace, rather than clear, the remembered SOP question.
+  const questionMessages = conversation?.messages.filter(
+    (message) => message.role !== 'user' || !message.page?.selectedSource,
+  );
+  const anchor = questionMessages?.findLast((message) => message.role === 'user')?.id;
+  const rememberedQuestion =
     conversationId && conversation?.id === conversationId
       ? questionChoice?.conversation === conversationId && questionChoice.anchor === anchor
         ? (questionChoice.selection ?? undefined)
-        : latestQuestionSelection(conversation.messages, conversationId)
+        : latestQuestionSelection(questionMessages ?? [], conversationId)
       : undefined;
+  const questionSelection = reader ? undefined : rememberedQuestion;
   const selectQuestion = useCallback(
     (selection: QuestionSelection | undefined) => {
       if (conversationId && anchor)
@@ -173,7 +193,6 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     [conversationId],
   );
   const sendLock = useRef(false);
-  const path = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     try {
@@ -228,6 +247,20 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   const send = useCallback(
     async (message: string, options: SendOptions = {}) => {
+      if (reader && (options.replyTo || options.context)) {
+        setOpen(true);
+        setSendError(
+          'Source instructions cannot be combined with a SOP question or proposal. Return to that context before continuing it.',
+        );
+        return false;
+      }
+      if (reader && !sourceSelection) {
+        setOpen(true);
+        setSendError(
+          sourceContextError ?? 'Open a valid exact source before asking about these instructions.',
+        );
+        return false;
+      }
       if (!options.fresh && !contextReady) {
         setSendError(contextError ?? 'Wait for this conversation to load before replying.');
         return false;
@@ -261,6 +294,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               : {}),
             ...options.context,
             ...selected?.context,
+            ...(sourceSelection ? { selectedSource: sourceSelection } : {}),
           },
         });
         if (displayedConversation.current === displayedAtStart) {
@@ -272,14 +306,34 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
         return true;
       } catch (error) {
         if (displayedConversation.current === displayedAtStart)
-          setSendError(error instanceof ApiError ? error.message : 'Could not reach the API');
+          setSendError(
+            reader &&
+              sourceSelection &&
+              error instanceof ApiError &&
+              error.code === 'invalid_input' &&
+              error.message === 'The selected file SHA256 does not match the exact reference'
+              ? 'These instructions could not be checked. Return to document search and open the source again.'
+              : error instanceof ApiError
+                ? error.message
+                : 'Could not reach the API',
+          );
         return false;
       } finally {
         sendLock.current = false;
         setSending(false);
       }
     },
-    [conversationId, path, queryClient, questionSelection, contextReady, contextError],
+    [
+      conversationId,
+      path,
+      queryClient,
+      questionSelection,
+      contextReady,
+      contextError,
+      reader,
+      sourceSelection,
+      sourceContextError,
+    ],
   );
 
   const value = useMemo(
@@ -296,6 +350,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       sendError,
       running,
       questionSelection,
+      sourceSelection,
+      sourceContextError,
       selectQuestion,
       acknowledgeResponse,
       contextReady,
@@ -313,6 +369,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       sendError,
       running,
       questionSelection,
+      sourceSelection,
+      sourceContextError,
       selectQuestion,
       acknowledgeResponse,
       contextReady,

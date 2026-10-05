@@ -18,7 +18,7 @@ The lab's reading shelf (plan [011](../plans/011-sop-library.md)): stored files,
 | Mentions: matcher, table, operations | `packages/domain/src/mentions.ts`, `library_mentions`, `apps/api/src/library/mentions.ts` |
 | Folder import (manifest or Markdown with front matter) | `apps/api/src/library/import.ts`, command `library:import` |
 | Download route | `GET /v1/files/:id` in `apps/api/src/app.ts` |
-| Screens | `apps/web/src/pages/Documents.tsx`, "Mentioned in" in `apps/web/src/pages/Mentions.tsx` |
+| Screens | `apps/web/src/pages/Documents.tsx`, exact source reader in `ExactInstructions.tsx`, "Mentioned in" in `Mentions.tsx` |
 | Agent skill | `skills/library/SKILL.md` |
 
 The Documents screen opens in **Document text** mode: submit words or a quoted phrase with Enter
@@ -31,11 +31,31 @@ filter changes replace the URL so Back and reload restore the search without add
 entry for every keystroke. Only Documents opts into `RecordList`'s controlled filters; other lists
 keep their local state. Those title filters do not apply to text results:
 `library.search` searches parsed passages from non-archived documents' current original files in
-the current lab. Result links carry the passage's section index to the record route (`section`)
-and its existing assistant context. The text viewer follows record/section changes with
-`library.read`, and explicitly reports a section that is invalid, absent or no longer available
-in the current parsed document instead of silently displaying section zero. These links do
-not claim to pin an immutable protocol edition. No additional search operation is introduced.
+the current lab. Result links carry the hit's full `source` reference and passage ID to
+`/library/instructions`, plus the search state for returning to the results. That read-only
+reader calls `library.read {source}` for the outline and the same source with a passage or
+section selector for text. Its query keys include the complete reference and selector;
+section links, reload and Copy link retain the selected snapshot. Historical title, printed
+revision, headings, pages and conversion warnings come from the server. The source file
+opens through the existing authenticated file route. Invalid or conflicting links and failed
+exact reads show explicit errors, never current content; unavailable attachments remain
+"Text could not be checked" even after a later parse. Empty sections remain navigable.
+The current record page still supports current discovery, editing and mentions separately.
+Asking from the exact reader derives `PageContext.selectedSource` from the current validated URL:
+the full reference and optionally one passage or section. Before saving the ask or starting model
+work, the assistant service resolves that selection through `library.read` under the caller's lab.
+Invalid pins or missing selected text refuse the ask without substituting current content. The
+model receives server-resolved edition metadata and parsed conversion warnings; unavailable
+attachments remain unchecked, with neutral wording rather than caller-supplied reasons.
+
+Each human message retains its selected source and selector. Historical references remain
+inspectable in chat and in model replay after navigating to another source or leaving the reader;
+they are not a current selection or proof of continued access. The assistant must read an exact
+reference before describing its instructions and report lost access rather than use current text.
+Source selection stays separate from SOP question and proposal context. Opening or discussing a
+source grants no adoption, scientific disposition, approval or confirmation authority. These
+checks establish source identity, not scientific validity or guaranteed model compliance.
+No additional Library operation is introduced. See [assistant architecture](assistant.md).
 
 ## Files (011a)
 
@@ -103,6 +123,7 @@ What a passage mentions is a row in `library_mentions`: a registry record, the a
 ## Screens (011d)
 
 - **Documents** (Library menu, `/documents`): text search with the matches highlighted and each passage's document, heading and page; adding files (several at once, with a type and a license: each becomes a draft document, is read and mined when it can be, and reports what happened); the list with type, assay, version, license and confirmed mentions.
+- **Source instructions** (`/library/instructions`): read-only exact snapshot reached from a search passage or copied link, with its outline, historical file and conversion limitations. It has no parse, edit, mine or mention controls. Asking the assistant carries the current exact selection, and chat retains the reference on that message.
 - **A document's page** adds its files (open or download each), its text by section with mentioned words underlined (proposed ones in agent ink), buttons to read the text again and find mentions, and what it mentions with Confirm and Reject.
 - **Other record pages** show "Mentioned in" when the library mentions them.
 
@@ -127,7 +148,7 @@ Exact reads verify the selected document version, file membership at that versio
 
 For populated databases, an added nullable current pointer marks only retained pre-snapshot data awaiting one-time materialization. Under the same document lock, the materializer preserves observable passage IDs, text and headings before reading or replacing that projection. Afterwards both read modes use the snapshot resolver. Earlier empty-section headings were not stored; they are not invented, and the retained snapshot reports that limitation when section counts show missing headings. Deleted historical parses cannot be recovered. This does not infer exact pins from free-string SOP revisions or rewrite confirmed SOPs.
 
-Current `SopAttributes.source`, `Citation`, SOP citation checking and scientist selection/adoption UI still use their existing contracts; their SG-18 consumer integration is pending. Existing Documents links still navigate current text. Explicit source adoption and changed citation context require preview/review in that consumer slice. Existing uncertain source associations require the SG-02/SG-10c populated-lab gate described in [sops.md](sops.md). Library producer support does not claim complete SOP edition adoption.
+Current `SopAttributes.source`, `Citation`, SOP citation checking and scientist selection/adoption UI still use their existing contracts; their SG-18 integration is pending. Documents search now opens the read-only exact Library reader. Explicit SOP source adoption and changed citation context require preview/review in a later consumer slice. Existing uncertain source associations require the SG-02/SG-10c populated-lab gate described in [sops.md](sops.md). Exact Library reading does not claim complete SOP edition adoption.
 
 ## Not yet
 

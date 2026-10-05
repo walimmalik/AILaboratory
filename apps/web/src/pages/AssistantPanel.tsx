@@ -36,6 +36,7 @@ import {
 } from '../queries.ts';
 import { RememberCard, UsedMemories } from './AssistantMemory.tsx';
 import { ChatQuestionResponse, SelectedQuestionContext } from './ChatQuestion.tsx';
+import { ChatSourceContext } from './ChatSource.tsx';
 import { FileCard } from './FileCard.tsx';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
@@ -485,6 +486,9 @@ function Message({
       <li className="msg">
         <div className="who mono muted">you</div>
         {message.text && <p className="text">{message.text}</p>}
+        {message.page?.selectedSource && (
+          <ChatSourceContext selection={message.page.selectedSource} historical />
+        )}
         {message.attachments?.map((file) => (
           <p key={file.id} className="attachment muted">
             attached <span className="mono">{file.name}</span>
@@ -586,13 +590,15 @@ export function Composer() {
     enabled: Boolean(selection),
   });
   const question = selection ? selectedQuestion(selectedRecord.data, selection) : undefined;
-  const contextBlocked = Boolean(
-    selection &&
-      (selectedRecord.isFetching ||
-        selectedRecord.error ||
-        question?.disposition.status !== 'open' ||
-        selectedRecord.data?.version !== selection.context.record.version),
-  );
+  const contextBlocked =
+    Boolean(assistant.sourceContextError) ||
+    Boolean(
+      selection &&
+        (selectedRecord.isFetching ||
+          selectedRecord.error ||
+          question?.disposition.status !== 'open' ||
+          selectedRecord.data?.version !== selection.context.record.version),
+    );
 
   const attach = async (list: FileList | null) => {
     setFileError(undefined);
@@ -665,6 +671,12 @@ export function Composer() {
           record={selectedRecord.data}
           onSelect={assistant.selectQuestion}
         />
+      )}
+      {assistant.sourceSelection && <ChatSourceContext selection={assistant.sourceSelection} />}
+      {assistant.sourceContextError && (
+        <p className="error-text" role="alert">
+          {assistant.sourceContextError} Open a valid source before sending.
+        </p>
       )}
       {selection && selectedRecord.error && (
         <p className="error-text">{selectedRecord.error.message}</p>

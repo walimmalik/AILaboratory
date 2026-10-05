@@ -1,4 +1,10 @@
-import { assistantAsk, type Conversation, type RecordEnvelope } from '@ailab/schema';
+import { ApiError } from '@ailab/client';
+import {
+  assistantAsk,
+  type Conversation,
+  type ExactSourceReference,
+  type RecordEnvelope,
+} from '@ailab/schema';
 import { Children, isValidElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './api.ts';
@@ -17,6 +23,7 @@ const fixture = vi.hoisted(() => ({
   storage: '',
   shownRecord: { id: 'sop_OTHER', name: 'SOP-OTHER', version: 99 },
   assistant: undefined as ReturnType<typeof useAssistant> | undefined,
+  location: { pathname: '/records/sop_OTHER', search: {} as Record<string, unknown> },
 }));
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -57,11 +64,19 @@ vi.mock('@tanstack/react-query', () => ({
     setQueryData: vi.fn(),
   }),
 }));
-vi.mock('@tanstack/react-router', () => ({ useRouterState: () => '/records/sop_OTHER' }));
+vi.mock('@tanstack/react-router', () => ({ useRouterState: () => fixture.location }));
 vi.mock('./api.ts', () => ({ api: { run: vi.fn(), subscribeConversation: vi.fn() } }));
 const context = {
   record: { id: 'sop_selected', name: 'SOP-0001', version: 7 },
   activeQuestion: { id: 'wash', stage: 'method' as const },
+};
+const source: ExactSourceReference = {
+  document: 'doc_01J9Z3K8Q4ABCDEFGHJKMNPQRS',
+  version: 2,
+  file: 'fil_01J9Z3K8Q4ABCDEFGHJKMNPQRS',
+  sha256: 'a'.repeat(64),
+  parse: { status: 'parsed', snapshot: 'b'.repeat(64) },
+  title: 'Pinned method',
 };
 function ui() {
   fixture.cursor = 0;
@@ -78,6 +93,7 @@ function composerKey() {
   return composer.key;
 }
 beforeEach(() => {
+  fixture.location = { pathname: '/records/sop_OTHER', search: {} };
   fixture.values = [];
   fixture.refs = [];
   fixture.cursor = 0;
@@ -110,6 +126,145 @@ beforeEach(() => {
 });
 
 describe('conversation-scoped question selection', () => {
+  it('uses the current reader selection for panel and fresh asks, including same-path changes, and restores the SOP choice', async () => {
+    ui().selectQuestion({ context: { ...context, record: { ...context.record, version: 8 } } });
+    fixture.location = { pathname: '/library/instructions', search: { source, passage: 'first' } };
+    expect(ui().questionSelection).toBeUndefined();
+    expect(await ui().send('Read this passage')).toBe(true);
+    expect(api.run).toHaveBeenLastCalledWith(
+      assistantAsk,
+      expect.objectContaining({
+        page: expect.objectContaining({ selectedSource: { source, passage: 'first' } }),
+      }),
+    );
+    const first = vi.mocked(api.run).mock.calls.at(-1)?.[1] as {
+      page: Record<string, unknown>;
+      replyTo?: unknown;
+    };
+    expect(first.page.record).toBeUndefined();
+    expect(first.page.activeQuestion).toBeUndefined();
+    expect(first.replyTo).toBeUndefined();
+    fixture.location.search = { source: { ...source, version: 3 }, section: 0 };
+    expect(await ui().send('New source request', { fresh: true })).toBe(true);
+    expect(api.run).toHaveBeenLastCalledWith(
+      assistantAsk,
+      expect.objectContaining({
+        page: expect.objectContaining({
+          selectedSource: { source: { ...source, version: 3 }, section: 0 },
+        }),
+      }),
+    );
+    const fresh = vi.mocked(api.run).mock.calls.at(-1)?.[1] as { conversationId?: unknown };
+    expect(fresh.conversationId).toBeUndefined();
+    // A persisted source turn must not discard the choice remembered before visiting the reader.
+    fixture.conversation?.messages.push({
+      id: 'msg_source',
+      role: 'user',
+      at: '2026-10-06T00:00:00Z',
+      text: 'Read source',
+      page: { path: '/library/instructions', selectedSource: { source } },
+    });
+    fixture.location = { pathname: '/library', search: {} };
+    expect(ui().questionSelection?.context.record.version).toBe(8);
+  });
+  it('rejects invalid reader and explicit decision contexts without resetting the composer or calling the API', async () => {
+    fixture.location = { pathname: '/library/instructions', search: {} };
+    const key = ui().composerKey;
+    expect(await ui().send('Keep my typed question', { fresh: true })).toBe(false);
+    expect(ui().composerKey).toBe(key);
+    expect(ui().sendError).toContain('valid exact source');
+    expect(api.run).not.toHaveBeenCalled();
+    fixture.location.search = { source };
+    for (const options of [
+      { context },
+      { context: { proposal: { id: 'prp_selected' } } },
+      { replyTo: { conversation: 'cnv_selected', message: 'msg_selected' } },
+    ]) {
+      expect(await ui().send('Explicit contextual action', options)).toBe(false);
+      expect(ui().sendError).toContain('cannot be combined');
+    }
+    expect(api.run).not.toHaveBeenCalled();
+  });
+  it('keeps the conversation loading guard on the reader while fresh source requests remain available', async () => {
+    fixture.location = { pathname: '/library/instructions', search: { source } };
+    fixture.conversation = undefined;
+    expect(await ui().send('Wait for history')).toBe(false);
+    expect(api.run).not.toHaveBeenCalled();
+    expect(await ui().send('Fresh source request', { fresh: true })).toBe(true);
+    expect(api.run).toHaveBeenLastCalledWith(
+      assistantAsk,
+      expect.objectContaining({
+        page: expect.objectContaining({ selectedSource: { source } }),
+      }),
+    );
+  });
+  it('lets the reader composer send without validating a remembered stale SOP and retains text on refusal', async () => {
+    fixture.location = { pathname: '/library/instructions', search: { source } };
+    fixture.assistant = ui();
+    const start = fixture.cursor;
+    let composer = Composer();
+    const input = Children.toArray(composer.props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    if (!isValidElement<{ onChange: (event: { target: { value: string } }) => void }>(input))
+      throw new Error('Missing composer input');
+    input.props.onChange({ target: { value: 'My source question' } });
+    fixture.cursor = start;
+    composer = Composer();
+    await composer.props.onSubmit({ preventDefault: () => {} });
+    expect(api.run).toHaveBeenCalledOnce();
+    input.props.onChange({ target: { value: 'Keep this question' } });
+    fixture.location.search = {};
+    fixture.assistant = ui();
+    fixture.cursor = start;
+    composer = Composer();
+    await composer.props.onSubmit({ preventDefault: () => {} });
+    fixture.cursor = start;
+    const retained = Children.toArray(Composer().props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    expect(isValidElement<{ value: string }>(retained) && retained.props.value).toBe(
+      'Keep this question',
+    );
+    expect(api.run).toHaveBeenCalledOnce();
+  });
+  it('keeps a refused source question typed and gives a plain source-check failure without masking other errors', async () => {
+    fixture.location = { pathname: '/library/instructions', search: { source } };
+    fixture.assistant = ui();
+    const start = fixture.cursor;
+    const input = Children.toArray(Composer().props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    if (!isValidElement<{ onChange: (event: { target: { value: string } }) => void }>(input))
+      throw new Error('Missing input');
+    input.props.onChange({ target: { value: 'Check this source before answering' } });
+    vi.mocked(api.run).mockRejectedValue(
+      new ApiError(400, {
+        code: 'invalid_input',
+        message: 'The selected file SHA256 does not match the exact reference',
+      }),
+    );
+    fixture.cursor = start;
+    await Composer().props.onSubmit({ preventDefault: () => {} });
+    expect(ui().sendError).toBe(
+      'These instructions could not be checked. Return to document search and open the source again.',
+    );
+    fixture.cursor = start;
+    const retained = Children.toArray(Composer().props.children).find(
+      (child) => isValidElement(child) && child.type === 'textarea',
+    );
+    expect(isValidElement<{ value: string }>(retained) && retained.props.value).toBe(
+      'Check this source before answering',
+    );
+    vi.mocked(api.run).mockRejectedValue(
+      new ApiError(404, { code: 'not_found', message: 'Conversation could not be found' }),
+    );
+    expect(await ui().send('Unrelated error')).toBe(false);
+    expect(ui().sendError).toBe('Conversation could not be found');
+    vi.mocked(api.run).mockRejectedValue(new Error('Network unavailable'));
+    expect(await ui().send('Network error')).toBe(false);
+    expect(ui().sendError).toBe('Could not reach the API');
+  });
   it('keeps the panel composer mounted when the first send gains an ID, but resets it for explicit switches', async () => {
     fixture.storage = JSON.stringify({ open: true });
     fixture.conversation = undefined;

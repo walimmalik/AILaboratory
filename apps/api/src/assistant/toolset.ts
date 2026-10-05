@@ -47,6 +47,7 @@ const PAGE_NAMESPACES: [RegExp, string[]][] = [
   [/^\/(containers|places|samples|scan)/, ['inventory', 'samples', 'locations']],
   [/^\/(entities|entity-kinds)/, ['entities']],
   [/^\/documents/, ['library', 'files']],
+  [/^\/library\/instructions(?:\/|$)/, ['library', 'files']],
   [/^\/sops/, ['sops']],
   [/^\/(campaigns|experiments|runs|sets)/, ['campaigns', 'experiments', 'runs', 'sets']],
   [/^\/(plate-maps|layouts)/, ['platemaps', 'layouts', 'transfers']],
