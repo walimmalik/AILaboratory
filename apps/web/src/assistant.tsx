@@ -24,7 +24,7 @@ import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts
 interface SendOptions {
   fresh?: boolean;
   attachments?: AttachmentInput[];
-  context?: Pick<PageContext, 'activeQuestion' | 'proposal'>;
+  context?: Pick<PageContext, 'record' | 'activeQuestion' | 'proposal'>;
   replyTo?: { conversation: string; message: string };
 }
 

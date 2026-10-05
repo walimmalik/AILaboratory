@@ -2,7 +2,8 @@ import {
   type Citation,
   type RecordEnvelope,
   type ReviewFinding,
-  SopAttributes,
+  type ScientificQuestion,
+  type SopAttributes,
   type SopStep,
   type StepParameter,
   sopsAnswerQuestion,
@@ -15,7 +16,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { api } from '../api.ts';
+import { useAssistant } from '../assistant.tsx';
 import { formatValue } from '../lib/format.ts';
+import { currentQuestions, questionDiscussion, stepQuestions } from '../lib/sop-questions.ts';
 import { fieldWords, sopTerms } from '../lib/sop-text.ts';
 import { recordQuery } from '../queries.ts';
 import { Head, page as kindPage } from './AreaHead.tsx';
@@ -30,10 +33,6 @@ import { describeSop, TermAnchor, TermCards } from './SopText.tsx';
  */
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
-const currentQuestions = (record: RecordEnvelope) => {
-  const parsed = SopAttributes.safeParse(record.attributes);
-  return parsed.success ? (parsed.data.questions ?? []) : undefined;
-};
 
 export const actionWords: Record<SopStep['action'], string> = {
   add: 'Add',
@@ -114,6 +113,15 @@ const calculationQuery = (record: RecordEnvelope) => ({
 
 function ProcedureBlock({ record }: { record: RecordEnvelope }) {
   const a = of(record);
+  const questions = currentQuestions(record);
+  const unfinished = questions?.filter(
+    (q) => q.stage.stage === 'method' && q.disposition.status === 'open',
+  );
+  const clarificationNotice = !questions
+    ? 'Question history needs reconciliation. We cannot determine whether this procedure is complete.'
+    : unfinished && unfinished.length > 0
+      ? 'Settle open method questions before final confirmation.'
+      : undefined;
   const calc = useQuery(calculationQuery(record));
   // Values read as their numbers at the bench; names shows which value each number is.
   const [names, setNames] = useState(false);
@@ -180,12 +188,19 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
       <header>
         <h2>At the bench</h2>
         <span className="state muted num">
-          {a.steps.length} steps
+          {a.steps.length} {a.steps.length === 1 ? 'step' : 'steps'}
           {unsure.length > 0 && ` · ${unsure.length} values to settle`}
         </span>
       </header>
       <TermCards describe={describe}>
         <div className="body">
+          {(record.status === 'draft' || clarificationNotice) && (
+            <p className="warn-ink">
+              {record.status === 'draft' && 'Draft procedure — not confirmed for use.'}
+              {record.status === 'draft' && clarificationNotice && ' '}
+              {clarificationNotice}
+            </p>
+          )}
           {a.purpose && <p>{a.purpose}</p>}
           {a.variables.length > 0 && a.steps.length > 0 && (
             <fieldset className="segmented no-print bench-switch">
@@ -211,6 +226,9 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
                     )}
                     {inline(s.text)}
                     {s.repeat && <span className="muted"> Repeat {s.repeat} times.</span>}
+                    {!!stepQuestions(questions, s.id)?.length && (
+                      <span className="sop-clarification-badge warn-ink">Needs clarification</span>
+                    )}
                   </p>
                   {(s.parameters?.length || s.uses?.length) && (
                     <p className="sop-line muted sop-note">
@@ -228,6 +246,7 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
                       ) : null}
                     </p>
                   )}
+                  <StepClarification record={record} questions={stepQuestions(questions, s.id)} />
                   <Cites cites={s.cite} />
                 </li>
               ))}
@@ -277,6 +296,47 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
         </div>
       </TermCards>
     </section>
+  );
+}
+
+function StepClarification({
+  record,
+  questions,
+}: {
+  record: RecordEnvelope;
+  questions: ScientificQuestion[] | undefined;
+}) {
+  const assistant = useAssistant();
+  if (!questions?.length) return null;
+  const discuss = (id: string) => {
+    const selected = questionDiscussion(record, id);
+    if (selected) void assistant.send(selected.message, { context: selected.context });
+  };
+  return (
+    <details className="sop-clarifications no-print">
+      <summary className="cite-toggle">
+        {questions.length} {questions.length === 1 ? 'question' : 'questions'} to clarify
+      </summary>
+      <ul className="sop-question-links" aria-label="Clarification questions">
+        {questions.map((q) => (
+          <li key={q.id}>
+            <a href={`#sop-question-${q.id}`} aria-label={`Review question: ${q.question}`}>
+              {q.question}
+            </a>
+            {' · '}
+            <button
+              type="button"
+              className="link-btn"
+              aria-label={`Discuss with assistant: ${q.question}`}
+              disabled={assistant.sending || assistant.running}
+              onClick={() => discuss(q.id)}
+            >
+              Discuss with assistant
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -386,7 +446,12 @@ function Question({ record, id }: { record: RecordEnvelope; id: string }) {
     if (answer.trim()) settle.mutate(answer.trim());
   };
   return (
-    <form className="question" onSubmit={submit} aria-label={q.question}>
+    <form
+      className="question"
+      id={`sop-question-${q.id}`}
+      onSubmit={submit}
+      aria-label={q.question}
+    >
       <p className="question-line">
         <b>{q.question}</b>
         {q.about?.step && <span className="muted"> · step {q.about.step}</span>}

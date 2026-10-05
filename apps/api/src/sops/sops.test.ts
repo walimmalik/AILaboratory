@@ -3,6 +3,7 @@ import {
   type Converted,
   type Readiness,
   type RecordEnvelope,
+  type SopAttributes,
   SopExpectation,
 } from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
@@ -251,6 +252,183 @@ const elisa = {
 };
 
 describe('sops.draft', () => {
+  it('retains a cited unfinished wash before read and keeps its method question blocking acceptance', async () => {
+    const sourceText =
+      '# Procedure\nWash the plate. Use 300 uL wash buffer per well.\n\nAlternate worksheet: use 350 uL wash buffer per well.\n\nRead absorbance at 450 nm.';
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'wash-and-read.md',
+      mediaType: 'text/markdown',
+      text: sourceText,
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Wash and read source',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    await run(person, 'library.parse', { document: doc.id });
+    const { passages } = await run<{ passages: { id: string; text: string }[] }>(
+      person,
+      'library.read',
+      { document: doc.id, section: 0 },
+    );
+    const cite = (index: number, quote: string) => ({
+      document: doc.id,
+      passage: passages[index]?.id,
+      quote,
+    });
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      label: 'Wash and read, working volume unresolved',
+      source: { document: doc.id },
+      materials: [
+        { role: 'plate', label: 'Plate', type: 'labware' },
+        { role: 'wash_buffer', label: 'Wash buffer', type: 'reagent' },
+        { role: 'reader', label: 'Plate reader', type: 'instrument' },
+      ],
+      variables: [],
+      steps: [
+        {
+          id: 'wash',
+          action: 'wash',
+          title: 'Wash',
+          text: 'Wash the plate.',
+          uses: ['plate', 'wash_buffer'],
+          cite: [cite(0, 'Wash the plate.')],
+        },
+        {
+          id: 'read',
+          action: 'read',
+          title: 'Read',
+          text: 'Read absorbance at 450 nm.',
+          uses: ['plate', 'reader'],
+          parameters: [{ name: 'wavelength', quantity: q('450', 'nm') }],
+          cite: [cite(2, 'Read absorbance at 450 nm.')],
+        },
+      ],
+      questions: [
+        {
+          id: 'wash_volume',
+          about: { step: 'wash' },
+          stage: {
+            stage: 'method',
+            reason: 'The sources disagree on the working wash volume',
+          },
+          question:
+            'Which compatible wash approach is scientifically supported: the 300 uL instruction or the 350 uL worksheet?',
+          passages: [
+            cite(0, 'Use 300 uL wash buffer per well.'),
+            cite(1, 'Alternate worksheet: use 350 uL wash buffer per well.'),
+          ],
+        },
+      ],
+    });
+    const stored = await run<RecordEnvelope>(person, 'records.get', { id: sop.id });
+    expect(stored.attributes).toEqual(sop.attributes);
+    const a = stored.attributes as SopAttributes;
+    expect(a.steps.map((s) => [s.id, s.action])).toEqual([
+      ['wash', 'wash'],
+      ['read', 'read'],
+    ]);
+    expect(a.steps[0]).toEqual({
+      id: 'wash',
+      action: 'wash',
+      title: 'Wash',
+      text: 'Wash the plate.',
+      uses: ['plate', 'wash_buffer'],
+      cite: [cite(0, 'Wash the plate.')],
+    });
+    expect(a.steps[1]?.parameters).toEqual([{ name: 'wavelength', quantity: q('450', 'nm') }]);
+    expect(a.questions?.[0]).toMatchObject({
+      id: 'wash_volume',
+      about: { step: 'wash' },
+      disposition: { status: 'open' },
+      responses: [],
+    });
+    expect(await run(agent, 'sops.check_citations', { sop: sop.id })).toMatchObject({
+      problems: 0,
+    });
+
+    const stillBlocked = async (current: RecordEnvelope) => {
+      const ready = await run<Readiness>(person, 'records.readiness', { id: current.id });
+      expect(ready.checks.find((c) => c.id === 'questions_answered')).toMatchObject({
+        passed: false,
+        severity: 'blocker',
+      });
+      expect(current.status).toBe('draft');
+      await expect(
+        registry.execute(person, 'records.activate', {
+          id: current.id,
+          expectedVersion: current.version,
+        }),
+      ).rejects.toMatchObject({ code: 'not_ready' });
+      return current;
+    };
+    let current = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: stored.id,
+      expectedVersion: stored.version,
+    });
+    current = await stillBlocked(current);
+    for (const text of ["I don't know", 'Use the 300 uL instruction']) {
+      current = await run<RecordEnvelope>(person, 'sops.answer_question', {
+        sop: current.id,
+        expectedVersion: current.version,
+        question: 'wash_volume',
+        action: { type: 'response', text },
+      });
+      current = await stillBlocked(current);
+    }
+    current = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: current.id,
+      expectedVersion: current.version,
+      question: 'wash_volume',
+      action: {
+        type: 'correct',
+        text: 'Which working wash volume is scientifically supported?',
+        reason: 'Clarify the decision',
+      },
+    });
+    current = await stillBlocked(current);
+    current = await run<RecordEnvelope>(person, 'records.update', {
+      id: current.id,
+      expectedVersion: current.version,
+      attributes: {
+        ...current.attributes,
+        steps: (current.attributes as SopAttributes).steps.map((s) =>
+          s.id === 'read' ? { ...s, title: 'Read absorbance' } : s,
+        ),
+      },
+    });
+    // A person's edit reviews its changed section; another confirm has no sections left to review.
+    await expect(
+      registry.execute(person, 'records.confirm', {
+        id: current.id,
+        expectedVersion: current.version,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    current = await run<RecordEnvelope>(person, 'records.get', { id: current.id });
+    current = await stillBlocked(current);
+    expect((current.attributes as SopAttributes).questions?.[0]).toMatchObject({
+      id: 'wash_volume',
+      about: { step: 'wash' },
+      stage: { stage: 'method' },
+      disposition: { status: 'open' },
+      responses: [{ text: "I don't know" }, { text: 'Use the 300 uL instruction' }],
+    });
+    expect((current.attributes as SopAttributes).steps[0]).toEqual(a.steps[0]);
+  });
+
+  it('does not infer undeclared missing settings from a bare wash action', async () => {
+    // Existing readiness guards declared questions; it is not an action-completeness engine.
+    const sop = await run<RecordEnvelope>(person, 'sops.draft', {
+      label: 'Bare wash, no declared uncertainty',
+      materials: [],
+      variables: [],
+      steps: [{ id: 'wash', action: 'wash', text: 'Wash the plate.' }],
+    });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.some((c) => c.severity === 'blocker' && !c.passed)).toBe(false);
+  });
+
   it('drafts an SOP whose readiness lists open questions and passes its formulas', async () => {
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
     expect(sop).toMatchObject({ kind: 'sop', name: 'SOP-0001', status: 'draft' });
