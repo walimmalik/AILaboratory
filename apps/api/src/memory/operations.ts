@@ -1,5 +1,6 @@
-import { checkAgainFor, isDue } from '@ailab/domain';
+import { CHECK_AGAIN_MONTHS, checkAgainFor, isDue } from '@ailab/domain';
 import {
+  type EvidenceInput,
   type MemoryAttributes,
   type MemoryInput,
   memoryFor,
@@ -16,6 +17,7 @@ import type { z } from 'zod';
 import { OperationError } from '../operations/errors.ts';
 import { proposeIfActive } from '../operations/record-operations.ts';
 import { implement, type OperationDeps } from '../operations/registry.ts';
+import { saveCalculation } from '../records/calculations.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { activeMemories, bundle, evidenceByMemory, lookup, nearby } from './match.ts';
 
@@ -42,6 +44,37 @@ function attributesOf(input: z.infer<typeof MemoryInput>): MemoryAttributes {
     strength: input.strength ?? 'note',
     appliesTo: input.appliesTo ?? { to: 'lab' },
     ...(checkAgain ? { checkAgain } : {}),
+  };
+}
+
+/**
+ * A new memory's attributes, with the default check-again date marked calculated: the date is kept
+ * as a calculation, so it reads "calculated" rather than unverified (UX review 2026-10-02, #9).
+ */
+async function drafted(
+  deps: OperationDeps,
+  ctx: RecordContext,
+  input: z.infer<typeof MemoryInput>,
+): Promise<{ attributes: MemoryAttributes; evidence: Record<string, EvidenceInput> }> {
+  const attributes = attributesOf(input);
+  if (input.checkAgain || !attributes.checkAgain) return { attributes, evidence: {} };
+  const from = today();
+  const calculation = await saveCalculation(
+    deps.db,
+    ctx,
+    'memory.check_again',
+    { kind: input.kind, from },
+    { checkAgain: attributes.checkAgain },
+  );
+  return {
+    attributes,
+    evidence: {
+      checkAgain: {
+        source: 'calculated',
+        calculation,
+        note: `A ${input.kind} is checked again ${CHECK_AGAIN_MONTHS[input.kind]} months after it is written`,
+      },
+    },
   };
 }
 
@@ -94,7 +127,9 @@ export const memoryOperations = [
         ctx.actor.type === 'agent' &&
         !evidence?.source &&
         (input.source.from === 'stated' || input.source.from === 'conversation');
+      const { attributes, evidence: dated } = await drafted(deps, ctx, input);
       const named = {
+        ...dated,
         ...(said
           ? { source: { source: 'stated' as const, note: 'Where the person said it' } }
           : {}),
@@ -103,7 +138,7 @@ export const memoryOperations = [
       return service(deps).create(ctx, {
         kind: 'memory',
         label: labelOf(input.statement),
-        attributes: attributesOf(input),
+        attributes,
         ...(Object.keys(named).length ? { evidence: named } : {}),
         reason: reason ?? 'Proposed for the lab memory',
       });
@@ -113,12 +148,13 @@ export const memoryOperations = [
     actors: 'people',
     agentPolicy: 'direct',
     run: async (ctx, { reason, ...input }, deps) => {
-      const attributes = attributesOf(input);
+      const { attributes, evidence } = await drafted(deps, ctx, input);
       ownedBy(ctx, attributes);
       return service(deps).create(ctx, {
         kind: 'memory',
         label: labelOf(input.statement),
         attributes,
+        ...(Object.keys(evidence).length ? { evidence } : {}),
         status: 'active',
         reason: reason ?? 'Remembered, as stated',
       });
@@ -161,7 +197,7 @@ export const memoryOperations = [
           'invalid_state',
           `${record.name} is ${record.status === 'draft' ? 'a draft; edit it with memory.update' : 'retired already'}`,
         );
-      const attributes = attributesOf(input.with);
+      const { attributes, evidence } = await drafted(deps, ctx, input.with);
       ownedBy(ctx, attributes);
       // On approval the new memory is the approver's, active as they confirmed it; an agent's
       // preview of the proposal shows it as a draft.
@@ -170,6 +206,7 @@ export const memoryOperations = [
         kind: 'memory',
         label: labelOf(input.with.statement),
         attributes,
+        ...(Object.keys(evidence).length ? { evidence } : {}),
         status: author.actor.type === 'user' ? 'active' : 'draft',
         reason: `Replaces ${record.name}: ${input.why}`,
       });
