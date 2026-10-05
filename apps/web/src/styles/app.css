@@ -3,6 +3,9 @@
 * {
   box-sizing: border-box;
 }
+.chat-question p {
+  margin: 0;
+}
 html,
 body,
 #root {
@@ -1001,6 +1004,24 @@ details.others {
 }
 .composer .error-text {
   margin: 0;
+}
+.chat-question {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.chat-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-question-choice {
+  min-width: 0;
+  flex: 1;
+}
+.chat-question-select {
+  width: 100%;
 }
 
 /* Draft and confirm (plan 004c) */
