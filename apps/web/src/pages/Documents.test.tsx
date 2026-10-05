@@ -170,6 +170,42 @@ describe('document search modes', () => {
     expect(html).not.toContain('No passage');
   });
 
+  it('retries a failed unchanged query and reports loading until the retry finishes', () => {
+    typeWords('wash');
+    submit();
+    const refetch = vi.fn(() => {
+      fixture.search.isFetching = true;
+    });
+    fixture.search = {
+      error: new Error('Search service unavailable'),
+      isPending: false,
+      isFetching: false,
+      refetch,
+    };
+    const passages = pageElements().find(
+      (node) => typeof node.type === 'function' && node.type.name === 'Passages',
+    );
+    if (!passages) throw new Error('Missing search results');
+    const renderPassages = passages.type as (props: Record<string, unknown>) => ReactNode;
+    const retry = () =>
+      descendants(renderPassages(passages.props)).find(
+        (node) => node.type === 'button' && node.props.children === 'Try again',
+      );
+    expect(retry()?.props.disabled).toBe(false);
+    const button = retry();
+    if (!button) throw new Error('Missing retry button');
+    (button.props.onClick as () => void)();
+    expect(refetch).toHaveBeenCalledOnce();
+    expect(retry()?.props.disabled).toBe(true);
+    expect(element('input').props.value).toBe('wash');
+    expect(resultsHtml()).toContain('Searching for “wash”');
+    expect(resultsHtml()).not.toContain('Search failed');
+    expect(resultsHtml()).not.toContain('Search service unavailable');
+    fixture.search = { isPending: false, isFetching: false, data: { hits: [] }, error: null };
+    expect(resultsHtml()).toContain('0 passages with “wash”');
+    expect(resultsHtml()).not.toContain('Try again');
+  });
+
   it('preserves source links, page and highlighted snippets, and explains an empty search', () => {
     typeWords('wash');
     submit();

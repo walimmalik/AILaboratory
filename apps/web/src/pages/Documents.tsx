@@ -208,13 +208,25 @@ function Passages({ query }: { query: string }) {
   return (
     <section className="passages" aria-label="Passages found" aria-live="polite">
       <p className="muted">
-        {hits.error
-          ? `Search failed for “${query}”.`
-          : hits.isPending
-            ? `Searching for “${query}”…`
+        {hits.isFetching || hits.isPending
+          ? `Searching for “${query}”…`
+          : hits.error
+            ? `Search failed for “${query}”.`
             : `${hits.data?.hits.length ?? 0} ${hits.data?.hits.length === 1 ? 'passage' : 'passages'} with “${query}”`}
       </p>
-      {hits.error && <p className="error-text">{hits.error.message}</p>}
+      {hits.error && (
+        <>
+          {!hits.isFetching && <p className="error-text">{hits.error.message}</p>}
+          <button
+            type="button"
+            className="btn small"
+            disabled={hits.isFetching}
+            onClick={() => void hits.refetch()}
+          >
+            Try again
+          </button>
+        </>
+      )}
       {!hits.error && hits.data?.hits.length === 0 && (
         <p className="empty">
           No passage has all those words. Try the words the source would use, or "or" between
