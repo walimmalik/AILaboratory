@@ -9,6 +9,8 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 
 ## Platform
 
+Planning update, 2026-10-05: [004g AI-first scientific reconciliation](../plans/004g-ai-first-scientific-reconciliation.md) specifies interactive SOP reconciliation, scientist-facing content, concise task review and related scientific/lifecycle hardening. Wali selected explicit **Apply decision** controls and one scientific summary with meaningful decisions ([ADR 0068](../decisions/0068-interactive-scientific-decisions.md)). This is planned work, not built behavior; individual work packages state their dependencies and decision gates.
+
 | Plan | Delivers | Status |
 | --- | --- | --- |
 | [000 Foundation](../plans/000-foundation-architecture.md) | Architecture, repo rules, plan sequence; D1 to D7 | Locked |
@@ -55,3 +57,5 @@ The plan sequence comes from [plan 000, section 5](../plans/000-foundation-archi
 ## Build order
 
 007a is built and 007b is finishing; then 008a, then 009a. After 009a, 010 and 011 can proceed; 012 follows 011; 013 follows 012; 014, 016, 017, 018, 019 and 020 follow in the order their rows say. 004e (review v2 and agent context) goes before 013c, 014a, 016a and 017, and 005 lab memory before 017 (Wali, 2026-09-30). The first end-to-end target once 007 to 014 exist is **one ELISA**, from a digitized SOP to a plate map to a worklist, with the agent drafting each step.
+
+Implementation tracking: [004g epic #162](https://github.com/walimmalik/AILaboratory/issues/162) links the reviewed specification and 25 child tickets. No implementation acceptance is implied by ticket publication.

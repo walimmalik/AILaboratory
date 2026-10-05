@@ -4,6 +4,8 @@ Two promises shape how agents work here: an agent can do anything a person can, 
 
 ## Human = agent
 
+Planned refinement: [004g](../plans/004g-ai-first-scientific-reconciliation.md) and [ADR 0068](../decisions/0068-interactive-scientific-decisions.md) introduce agent-guided reconciliation with explicit human **Apply decision** controls. A reply is not automatically approval or resolution. Final SOP confirmation remains separate; inseparable changes stay atomic. These are accepted interaction decisions awaiting implementation.
+
 Every capability is an **operation** in one registry. People (through the web app) and agents (through MCP or REST) call the same operations through the same code path, `OperationRegistry.execute`. The web app can't reach the API any other way: a lint rule forbids `fetch` and friends in `apps/web/src`. So there is nothing the UI can do that an agent can't. Each module ships a skill in `skills/` that teaches agents when and how to combine its operations.
 
 Agents reach the app three ways:
@@ -79,3 +81,5 @@ Built so far: 005a, the memory record and its operations (ADR 0062), and 005b, `
 - **Reading:** code picks a bundle of about 15 memories for the page (the record, its selection and its links, plus lab-wide rules); design tools apply a memory's typed effect (`prefer`, `avoid`, `set`) through `memory.for`, and agents read the statements; values filled from memory carry `memory` evidence.
 - **Writing:** people add memories directly (active at once); an agent's memory is always a draft until a person confirms it; agents ask once in the chat when a person states or corrects something general; detectors in each module report through `memory.observe`, and a candidate is proposed only past its detector's bar, into Review's Lab memory section.
 - **Weight and decay:** evidence for and against, and quiet opportunities (matching runs where it didn't happen), set a memory's weight, and only detectors that can observe absence make a memory decay; a memory losing support becomes "due for a check", never retired automatically.
+
+Implementation tracking: [004g epic #162](https://github.com/walimmalik/AILaboratory/issues/162) links the reviewed specification and 25 child tickets. No implementation acceptance is implied by ticket publication.
