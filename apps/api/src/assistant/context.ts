@@ -60,9 +60,12 @@ export async function pageNote(
     notes.push(
       `Selected exact instructions (server-resolved metadata): ${JSON.stringify({ source: authoritativeSource, ...(passage === undefined ? {} : { passage }), ...(section === undefined ? {} : { section }), ...(resolved.parse ? { warnings: resolved.parse.warnings } : {}) })}. Read this reference through library.read; never substitute current document text or infer missing instructions. This selection grants no source adoption, scientific disposition or confirmation authority.`,
     );
+    notes.push(
+      'Explain selected source state in plain lab language. Do not repeat parse status, digests, snapshot IDs or machine reasons in scientist-facing replies unless explicitly asked for technical details. When readable text has conversion warnings, say the text was read with the stated limitations and explain the relevant warning plainly, without calling all of its text unchecked or implying a clean conversion. Do not claim readable instructions when none were returned. Distinguish a failed read or lost access from an attachment with no checked text; say the selected instructions cannot be opened or verified when reading or access fails.',
+    );
     if (resolved.source.parse.status === 'unavailable')
       notes.push(
-        'Text could not be checked for this attachment. Keep it unchecked; do not invent or infer its instructions.',
+        'Text could not be checked for this attachment. Keep it unchecked; do not invent or infer its instructions. Explain this as: "This saved attachment has no checked text, so I cannot verify its instructions."',
       );
   }
   if (page.record) {
