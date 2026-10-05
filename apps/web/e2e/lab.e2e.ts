@@ -1288,6 +1288,7 @@ test('memory corrections reset when navigating between record pages', async ({ p
   const form = page.getByRole('form', { name: `Change ${second.name}` });
   await expect(form.getByLabel('What the lab should know')).toHaveValue(`Second memory ${stamp}`);
   await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(form).toBeHidden();
   const storedFirst = await asPerson(page, 'records.get', { id: first.id });
   const storedSecond = await asPerson(page, 'records.get', { id: second.id });
   expect(storedFirst.attributes.statement).toBe(`First memory ${stamp}`);
