@@ -183,8 +183,7 @@ function Transcript({
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = conversation?.messages.length ?? 0;
-  const review = useQuery({ ...reviewQuery, enabled: Boolean(conversation) && !running }).data
-    ?.items;
+  const review = useQuery({ ...reviewQuery, enabled: Boolean(conversation) }).data?.items;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages arrive or work starts.
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
@@ -282,20 +281,36 @@ function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
 }
 
 /** Kept separate from live queries so the ordered transcript can also be rendered on its own. */
-export function ConversationMessages({
-  messages,
-  agentName,
-  running,
-  review,
-}: {
+type ConversationMessagesProps = {
   messages: AssistantMessage[];
   agentName: string;
   running: boolean;
   review: ReviewItem[] | undefined;
-}) {
+};
+
+export function ConversationMessages(props: ConversationMessagesProps) {
+  const turns: AssistantMessage[][] = [];
+  for (const message of props.messages) {
+    if (message.role === 'user' || turns.length === 0) turns.push([message]);
+    else turns.at(-1)?.push(message);
+  }
+  return (
+    <>
+      {turns.map((messages, index) => (
+        <ConversationTurn
+          key={messages[0]?.id}
+          {...props}
+          messages={messages}
+          running={props.running && index === turns.length - 1}
+        />
+      ))}
+    </>
+  );
+}
+
+function ConversationTurn({ messages, agentName, running, review }: ConversationMessagesProps) {
   const entries = transcriptEntries(messages);
-  const lastAsk = messages.findLastIndex((m) => m.role === 'user');
-  const finalReply = messages.slice(lastAsk + 1).findLast((m) => m.role === 'assistant');
+  const finalReply = messages.findLast((m) => m.role === 'assistant');
   const handoffBefore =
     !running &&
     finalReply?.role === 'assistant' &&
@@ -347,7 +362,7 @@ export function ConversationMessages({
 }
 
 /**
- * Hands off the latest turn's saved drafts and proposed changes using current Review state.
+ * Hands off one completed turn's saved drafts and proposed changes using current Review state.
  * Navigation opens the draft; confirmation stays on its record page.
  */
 function WaitingLine({
@@ -357,8 +372,7 @@ function WaitingLine({
   messages: AssistantMessage[];
   review: ReviewItem[] | undefined;
 }) {
-  const lastAsk = messages.findLastIndex((m) => m.role === 'user');
-  const steps = messages.slice(lastAsk + 1).filter((m): m is ToolMessage => m.role === 'tool');
+  const steps = messages.filter((m): m is ToolMessage => m.role === 'tool');
   if (!review || steps.length === 0) return null;
   const turn = waitingForYou(steps);
   const waitingIds = new Set(
@@ -389,7 +403,7 @@ function WaitingLine({
           <div className="muted">
             draft ·{' '}
             {item.blockers.length > 0
-              ? `${item.blockers[0]}${item.blockers.length > 1 ? `; ${item.blockers.length - 1} more to resolve` : ''}`
+              ? 'needs attention before confirmation'
               : item.ready
                 ? 'ready for review'
                 : 'needs review'}

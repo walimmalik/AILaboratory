@@ -198,7 +198,9 @@ describe('assistant transcript presentation', () => {
       warnings: 0,
       sectionsToConfirm: ['Steps'],
       missing: ['Select the source protocol'],
-      blockers: ['Select the source protocol'],
+      blockers: [
+        'Before confirming, choose the source protocol, identify the cell line, and specify the incubation conditions. These three scientific questions must be resolved before the protocol can be confirmed.',
+      ],
       ready: false,
       assumed: 0,
       unchecked: 0,
@@ -211,14 +213,64 @@ describe('assistant transcript presentation', () => {
     ];
     const markup = visible(html(messages, [draft]));
     expect(markup).toContain('href="/records/sop_saved">Open SOP draft: Cell preparation');
-    expect(markup).toContain('draft · Select the source protocol');
+    expect(markup).toContain('draft · needs attention before confirmation');
+    expect(markup).not.toContain(draft.blockers[0]);
     expect(markup.indexOf('Open SOP draft')).toBeLessThan(markup.indexOf('Next decision:'));
     expect(markup).not.toContain('confirm SOP');
     expect(markup).not.toContain('ready for review');
     expect(markup).not.toContain('SOP-0099');
     expect(html(messages, undefined)).not.toContain('ready for review');
-    expect(html([...messages, user('new-ask', 'A separate request')], [draft])).not.toContain(
-      'Open SOP draft',
+    const followup = [
+      ...messages,
+      user('new-ask', 'A separate request'),
+      ...action('followup-read'),
+      reply('followup-pending', '', [{ id: 'next-call', operationId: 'records.get', input: {} }]),
+    ];
+    const runningMarkup = visible(html(followup, [draft], true));
+    expect(runningMarkup).toContain('Open SOP draft: Cell preparation');
+    expect(runningMarkup.indexOf('Open SOP draft')).toBeLessThan(
+      runningMarkup.indexOf('Next decision:'),
+    );
+    expect(runningMarkup.indexOf('Next decision:')).toBeLessThan(
+      runningMarkup.indexOf('A separate request'),
+    );
+    expect(runningMarkup.match(/Open SOP draft/g)).toHaveLength(1);
+    const settled = visible(
+      html([...followup, reply('followup-final', 'I checked the source protocol.')], [draft]),
+    );
+    expect(settled).toContain('Open SOP draft: Cell preparation');
+    expect(settled.match(/Open SOP draft/g)).toHaveLength(1);
+    expect(visible(html(followup, [{ ...draft, blockers: [], ready: true }], true))).toContain(
+      'draft · ready for review',
+    );
+    expect(visible(html(followup, [], true))).not.toContain('Open SOP draft');
+    const secondDraft = {
+      ...draft,
+      record: { ...draft.record, id: 'sop_second', name: 'SOP-0002', label: 'Buffer preparation' },
+    };
+    const twoDrafts = visible(
+      html(
+        [
+          ...messages,
+          user('buffer-ask', 'Draft the buffer protocol'),
+          ...action('second-saved', 'records.create', {
+            id: 'sop_second',
+            name: 'SOP-0002',
+            status: 'draft',
+          }),
+          reply('buffer-final', 'Which buffer concentration should we use?'),
+          user('third-ask', 'Check the references'),
+        ],
+        [draft, secondDraft],
+        true,
+      ),
+    );
+    expect(twoDrafts.match(/Open SOP draft/g)).toHaveLength(2);
+    expect(twoDrafts.indexOf('Open SOP draft: Cell preparation')).toBeLessThan(
+      twoDrafts.indexOf('Next decision:'),
+    );
+    expect(twoDrafts.indexOf('Open SOP draft: Buffer preparation')).toBeLessThan(
+      twoDrafts.indexOf('Which buffer concentration'),
     );
   });
 });
