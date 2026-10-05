@@ -107,6 +107,11 @@ describe('memory.propose and memory.remember', () => {
     expect(quirk).toMatchObject({ kind: 'memory', name: 'MEM-0001', status: 'draft' });
     // What a person said in chat is stated, not the agent's guess.
     expect(quirk.evidence.source).toMatchObject({ source: 'stated' });
+    // The default check date is a calculation, so it reads calculated, not unverified.
+    expect(quirk.evidence.checkAgain).toMatchObject({
+      source: 'calculated',
+      note: 'A quirk is checked again 6 months after it is written',
+    });
     expect(attributes(quirk)).toMatchObject({
       strength: 'note',
       appliesTo: { to: 'lab' },

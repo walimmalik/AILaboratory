@@ -179,8 +179,11 @@ export const plateMapOperations = [
       } else {
         throw new OperationError('invalid_input', 'Give a saved layout or layout attributes');
       }
+      // Named for what the layout holds ("Sample 14"), as the plate map names its own.
+      const noun =
+        a.subjectRole.charAt(0).toUpperCase() + a.subjectRole.slice(1).replaceAll('_', ' ');
       const subjects = Array.from({ length: input.subjects }, (_, i) =>
-        subjectOf(a, `subject_${i + 1}`, `Subject ${i + 1}`),
+        subjectOf(a, `subject_${i + 1}`, `${noun} ${i + 1}`),
       );
       try {
         const result = generatePlateMap(layoutSpec(a), subjects, {
