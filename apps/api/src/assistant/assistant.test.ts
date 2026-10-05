@@ -1359,10 +1359,14 @@ describe('tools and history', () => {
     expect(findSkill('runs')).toBeUndefined();
     for (const path of ['/runs', `/records/${newId('run')}`]) {
       const model = new FakeModel([
-        {
-          text: '',
-          toolCalls: [{ id: 'read-skill', name: 'skills_get', input: { name: skill.module } }],
-          stop: 'tool_use',
+        async () => {
+          const input = model.requests[0]?.system.match(/skills_get with (\{[^}]+\})/)?.[1];
+          if (!input) throw new Error('Expected exact owning-skill arguments in model context');
+          return {
+            text: '',
+            toolCalls: [{ id: 'read-skill', name: 'skills_get', input: JSON.parse(input) }],
+            stop: 'tool_use',
+          };
         },
       ]);
       const { assistant, registry } = setup(model);

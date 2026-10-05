@@ -20,7 +20,7 @@ export async function pageNote(
   const relevantSkills = skills.filter((skill) => namespaces.has(skill.module));
   if (relevantSkills.length)
     notes.push(
-      `Skills for this page: ${relevantSkills.map((skill) => `${skill.module} (${skill.name})`).join(', ')}. Read with skills_get by module or name; operation namespaces need not be skill names.`,
+      `Skills for this page: ${relevantSkills.map((skill) => `${skill.module} (${skill.name})`).join(', ')}. To read each relevant owning skill, call ${relevantSkills.map((skill) => `skills_get with ${JSON.stringify({ name: skill.module })}`).join('; ')} unless already read. Use these exact existing skill names, not operation namespaces.`,
     );
   if (page.record) {
     const record = await records.get(ctx, page.record.id);
