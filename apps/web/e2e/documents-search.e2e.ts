@@ -149,7 +149,19 @@ test('document text search separates browsing, recovers from failure and carries
   await page.getByRole('button', { name: 'Clear', exact: true }).click();
   await expect(words).toHaveValue('');
   await expect(passages).toHaveCount(0);
-  await words.fill('absentphrase');
+  // URL state changes must not pull a focused mobile input toward the page header.
+  // No result list changes during this edit, so a jump cannot be attributed to shrinking content.
+  await page.setViewportSize({ width: 390, height: 600 });
+  await words.fill('absent');
+  await words.click();
+  const scrollBeforeEdit = await page.evaluate(() => window.scrollY);
+  expect(scrollBeforeEdit).toBeGreaterThan(0);
+  await words.press('End');
+  await words.pressSequentially('phrase');
+  await expect(page).toHaveURL(/words=absentphrase/);
+  await expect(words).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeEdit);
+  await page.setViewportSize({ width: 1280, height: 720 });
   await words.press('Enter');
   await expect(passages).toContainText('No passage has all those words');
   await words.fill('wavelength');
