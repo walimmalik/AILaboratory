@@ -5,12 +5,14 @@ import './RichText.css';
 
 /**
  * The small part of Markdown models actually write: paragraphs, "-" or "1." lists, **bold** and
- * `code`, and pipe tables. Rendered as React elements, never as HTML, so a reply can't inject markup.
+ * `code`, quoted passages and pipe tables. Rendered as React elements, never as HTML, so a reply
+ * can't inject markup.
  */
 export function RichText({ text, className }: { text: string; className?: string }) {
   const blocks: ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | undefined;
   let paragraph: string[] = [];
+  let quote: string[] = [];
 
   const flushParagraph = () => {
     if (paragraph.length) blocks.push(<p key={blocks.length}>{lines(paragraph)}</p>);
@@ -25,10 +27,27 @@ export function RichText({ text, className }: { text: string; className?: string
     );
     list = undefined;
   };
+  const flushQuote = () => {
+    if (quote.length)
+      blocks.push(
+        <blockquote key={blocks.length} className="rich-text-quote">
+          <p>{lines(quote)}</p>
+        </blockquote>,
+      );
+    quote = [];
+  };
 
   const source = text.split('\n');
   for (let i = 0; i < source.length; i++) {
     const line = source[i] ?? '';
+    const quoted = /^\s*> ?(.*)$/.exec(line);
+    if (quoted) {
+      flushParagraph();
+      flushList();
+      quote.push(quoted[1] ?? '');
+      continue;
+    }
+    flushQuote();
     if (
       line.includes('|') &&
       !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s|>)/.test(line) &&
@@ -97,6 +116,7 @@ export function RichText({ text, className }: { text: string; className?: string
   }
   flushParagraph();
   flushList();
+  flushQuote();
   return <div className={className}>{blocks}</div>;
 }
 

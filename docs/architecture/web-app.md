@@ -61,6 +61,11 @@ A record page leads with what it is (004f-1): the identity line and key facts, t
 
 The assistant's Work details disclosure starts closed and keeps its open state as results arrive. A person's request or any assistant prose separates activity groups; empty assistant exchanges have no repeated model heading. Each completed turn retains its handoff during follow-up work, while current Review state determines whether its drafts or changes still wait. Draft handoffs say Open draft (Open SOP draft for SOPs), with the saved record's title and code. Blocked drafts say "needs attention before confirmation"; the linked record holds the full questions and checks. Readiness is never inferred from assistant text. Confirmation remains on the record page. The desktop panel resizes from its left edge by dragging or with Left/Right arrow keys (Shift for a larger step; Home/End for the limits), remembers its width, and leaves space for the main page. On phones it remains a full-screen overlay.
 
+Assistant prose uses the shared `RichText` renderer for paragraphs, lists, bold, inline code,
+pipe tables and `>` quoted passages. Quotes use inherited typography and a small indent, with
+long references wrapping within narrow panels; they add no side stripe or surrounding card.
+Text remains escaped React content, including raw HTML and link syntax in quoted passages.
+
 ## Sign-in
 
 Email and password (ADR 0019). `POST /auth/login` sets an HttpOnly, SameSite=Strict session cookie for 30 days; `POST /auth/logout` ends it. The API accepts either a bearer token (agents, scripts) or the cookie (the web app); cookie-authenticated writes must be JSON. `bootstrap` sets the first password; `password` resets it.
