@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { OperationErrorBody } from '@ailab/schema';
+import type { OperationErrorBody, Readiness } from '@ailab/schema';
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
 
 const api = 'http://localhost:3001';
@@ -972,15 +972,44 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   await expect(methodBlocker).toContainText('a response alone does not resolve it');
   await expect(readiness).toContainText('1 method decision remains');
 
-  // Section review has an explicit scope; an unanswered scientific issue keeps the SOP in draft.
-  await expect(readiness).toContainText('Reviews overview, materials, values, steps');
+  // The person's saved step edit already reviewed Steps. Partial review must take only the
+  // remaining sections and preserve that earlier review, without resolving the method issue.
+  const beforeReview = await asPerson(page, 'records.get', { id: drafted.output.id });
+  const beforeReadiness: Readiness = await asPerson(page, 'records.readiness', {
+    id: drafted.output.id,
+  });
+  const sectionsToReview = ['overview', 'materials', 'variables', 'layout', 'analysis', 'timing'];
+  expect(
+    beforeReadiness.sections.filter((s) => s.state === 'needs_review').map((s) => s.id),
+  ).toEqual(sectionsToReview);
+  expect(beforeReadiness.sections.find((s) => s.id === 'procedure')?.state).toBe('confirmed');
+  expect(beforeReview.reviews.procedure.version).toBe(2);
+  const scope = 'overview, materials, values, plate layout, analysis, timing';
+  await expect(readiness).toContainText(`Reviews ${scope} as saved.`);
   await expect(readiness).toContainText('The SOP remains a draft');
+  const reviewedResponse = page.waitForResponse('**/api/v1/ops/records.confirm');
   await readiness.getByRole('button', { name: 'Review ready sections', exact: true }).click();
-  await expect(readiness.getByRole('status')).toContainText(
-    'Reviewed overview, materials, values, steps',
-  );
+  const confirmation = await reviewedResponse;
+  expect(confirmation.ok()).toBe(true);
+  const reviewed = (await confirmation.json()).output;
+  expect(reviewed.status).toBe('draft');
+  expect(reviewed.version).toBe(beforeReview.version + 1);
+  expect(reviewed.reviews.procedure).toEqual(beforeReview.reviews.procedure);
+  for (const id of sectionsToReview) {
+    expect(reviewed.reviews[id].version).toBe(beforeReview.version);
+  }
+  expect(reviewed.attributes.questions[0].disposition.status).toBe('open');
+  expect(reviewed.attributes.questions[0].responses.map((r: { text: string }) => r.text)).toEqual([
+    response,
+    secondResponse,
+  ]);
+  await expect(readiness.getByRole('status')).toContainText(`Reviewed ${scope}.`);
   await expect(readiness.getByRole('status')).toContainText('The SOP remains a draft');
   await expect(readiness).toContainText('1 method decision remains');
+  await expect(readiness.getByRole('button', { name: 'Confirm SOP', exact: true })).toHaveCount(0);
+  await expect(
+    readiness.getByRole('button', { name: 'Review ready sections', exact: true }),
+  ).toHaveCount(0);
   await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
   await readiness.getByText('technical details', { exact: true }).click();
   for (const section of ['Materials', 'Values', 'Steps']) {
@@ -995,6 +1024,44 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
     'The SOP remains a draft. Settle the remaining issues before final confirmation.',
   );
   await expect(readiness.getByRole('status')).toHaveCount(0);
+  // Individual discussion preserves the selected scientific issue and exact displayed version.
+  await readiness.getByText('Choose a method decision (1)', { exact: true }).click();
+  const decision = readiness.getByRole('list', { name: 'Method decisions' });
+  await expect(
+    decision.getByRole('link', {
+      name: 'Review question: Overnight at 4 °C or at room temperature?',
+    }),
+  ).toHaveAttribute('href', '#sop-question-q1');
+  const discussionRequest = page.waitForRequest('**/api/v1/ops/assistant.ask');
+  await decision
+    .getByRole('button', {
+      name: 'Discuss with assistant: Overnight at 4 °C or at room temperature?',
+    })
+    .click();
+  const discussion = (await discussionRequest).postDataJSON();
+  expect(discussion.page.record).toEqual({
+    id: drafted.output.id,
+    name: drafted.output.name,
+    version: reviewed.version,
+  });
+  expect(discussion.page.activeQuestion).toEqual({ id: 'q1', stage: 'method' });
+  expect(discussion.message).toContain('Overnight at 4 °C or at room temperature?');
+  await expect(
+    page.getByRole('complementary', { name: 'Assistant' }).getByText(/^You said:/),
+  ).toBeVisible();
+  const afterDiscussion = await asPerson(page, 'records.get', { id: drafted.output.id });
+  expect(afterDiscussion.version).toBe(reviewed.version);
+  expect(afterDiscussion.status).toBe('draft');
+  expect(afterDiscussion.reviews).toEqual(reviewed.reviews);
+  expect(afterDiscussion.attributes.questions[0].disposition.status).toBe('open');
+  const afterReadiness: Readiness = await asPerson(page, 'records.readiness', {
+    id: drafted.output.id,
+  });
+  expect(afterReadiness.ready).toBe(false);
+  expect(afterReadiness.checks.find((c) => c.id === 'questions_answered')).toMatchObject({
+    severity: 'blocker',
+    passed: false,
+  });
 });
 
 /** A person confirms every section of a draft at once, which activates it. */
