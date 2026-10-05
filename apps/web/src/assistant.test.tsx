@@ -1,7 +1,9 @@
 import { assistantAsk, type Conversation, type RecordEnvelope } from '@ailab/schema';
+import { Children, isValidElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from './api.ts';
 import { AssistantProvider, type useAssistant } from './assistant.tsx';
+import { AssistantPanel, Composer } from './pages/AssistantPanel.tsx';
 
 const fixture = vi.hoisted(() => ({
   values: [] as unknown[],
@@ -14,6 +16,7 @@ const fixture = vi.hoisted(() => ({
   refresh: vi.fn(),
   storage: '',
   shownRecord: { id: 'sop_OTHER', name: 'SOP-OTHER', version: 99 },
+  assistant: undefined as ReturnType<typeof useAssistant> | undefined,
 }));
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -34,6 +37,7 @@ vi.mock('react', async (original) => ({
     return fixture.refs[index];
   },
   useMemo: (build: () => unknown) => build(),
+  useContext: () => fixture.assistant,
   useCallback: (callback: unknown) => callback,
   useEffect: (effect: () => void) => {
     fixture.effects.push(effect);
@@ -65,6 +69,14 @@ function ui() {
   fixture.effects = [];
   return AssistantProvider({ children: null }).props.value as ReturnType<typeof useAssistant>;
 }
+function composerKey() {
+  fixture.assistant = ui();
+  const composer = Children.toArray(AssistantPanel().props.children).find(
+    (child) => isValidElement(child) && child.type === Composer,
+  );
+  if (!isValidElement(composer)) throw new Error('Missing panel composer');
+  return composer.key;
+}
 beforeEach(() => {
   fixture.values = [];
   fixture.refs = [];
@@ -73,6 +85,7 @@ beforeEach(() => {
   fixture.effects = [];
   fixture.storage = JSON.stringify({ open: true, conversationId: 'cnv_selected' });
   fixture.contextError = undefined;
+  fixture.assistant = undefined;
   fixture.conversation = {
     id: 'cnv_selected',
     messages: [
@@ -97,6 +110,40 @@ beforeEach(() => {
 });
 
 describe('conversation-scoped question selection', () => {
+  it('keeps the panel composer mounted when the first send gains an ID, but resets it for explicit switches', async () => {
+    fixture.storage = JSON.stringify({ open: true });
+    fixture.conversation = undefined;
+    let finish: (value: { id: string }) => void = () => {};
+    vi.mocked(api.run).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const initialKey = composerKey();
+    const pending = ui().send('First request');
+    expect(composerKey()).toBe(initialKey);
+    finish({ id: 'cnv_created' });
+    await pending;
+    expect(ui().conversationId).toBe('cnv_created');
+    // Same React identity retains newer unsent text/files while Composer clears only submitted ones.
+    expect(composerKey()).toBe(initialKey);
+    ui().show('cnv_other');
+    const switchedKey = composerKey();
+    expect(switchedKey).not.toBe(initialKey);
+    ui().show();
+    const newKey = composerKey();
+    expect(newKey).not.toBe(switchedKey);
+    // New also clears an unsent draft when no conversation has been created yet.
+    ui().show();
+    expect(composerKey()).not.toBe(newKey);
+    const beforeFresh = composerKey();
+    const freshPending = ui().send('Start a different task', { fresh: true });
+    const freshKey = composerKey();
+    expect(freshKey).not.toBe(beforeFresh);
+    await freshPending;
+    expect(composerKey()).toBe(freshKey);
+  });
+
   it('sends the persisted selection after navigation instead of silently selecting the route record', async () => {
     const assistant = ui();
     expect(assistant.questionSelection?.context).toEqual(context);

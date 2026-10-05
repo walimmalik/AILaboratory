@@ -103,7 +103,7 @@ export function AssistantPanel() {
           the repo folder and restart the app.
         </p>
       ) : (
-        <Composer key={assistant.conversationId ?? 'new'} />
+        <Composer key={assistant.composerKey} />
       )}
     </aside>
   );

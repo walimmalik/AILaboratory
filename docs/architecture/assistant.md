@@ -16,6 +16,8 @@ A person can attach up to 5 text files to a message (JSON, CSV, TXT and similar,
 
 Messages are stored provider-neutrally in `conversation_messages.body` (user, assistant with tool calls, tool results with an outcome). The provider's own reply is kept in `provider_raw` and sent back unchanged while the same provider and model continue the conversation (Claude requires its thinking blocks unchanged). A conversation continues on whichever model is set up now. After an API restart, conversations left `running` are marked `failed`.
 
+The composer retains newer unsent text and attachments while a send completes, including when the first request receives its conversation ID. Explicit conversation switches, New and fresh requests reset the composer; automatic ID assignment does not. Successful sends clear only the text and attachments that were submitted.
+
 ## Selected context and request identity
 
 Every new ask gets its own `OriginatingIntent` with the stored conversation and user-message IDs, even when it continues the same conversation. A contextual reply may explicitly name the original user message or a prior contextual reply with `replyTo` and a selected pending proposal or open scientific question. The service verifies ownership, lab, current record version, question stage/state or proposal state, and the stored root request. For a proposal chain it reads the proposal's producing conversation through `sessionRef` and requires the actual producing turn to retain that root intent; it does not search other conversations. An explicitly selected different question is refused even if the turn also read its SOP. It then retains the original intent. Page context and chat text never authorize approval.

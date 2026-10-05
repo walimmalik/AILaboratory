@@ -48,6 +48,8 @@ interface AssistantUi {
   setWidth: (width: number) => void;
   /** The conversation the panel shows; undefined means a new one starts with the next message. */
   conversationId: string | undefined;
+  /** Resets the composer for explicit conversation changes, not the first server-assigned ID. */
+  composerKey: number;
   /** Opens the panel on a conversation, or on a fresh one. */
   show: (conversationId?: string) => void;
   /** Sends a message: to the shown conversation, or to a new one with `fresh`. */
@@ -113,6 +115,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(initial.open);
   const [width, setWidth] = useState(initial.width ?? 400);
   const [conversationId, setConversationId] = useState(initial.conversationId);
+  const [composerKey, setComposerKey] = useState(0);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string>();
   const [running, setRunning] = useState(false);
@@ -218,6 +221,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const show = useCallback((id?: string) => {
     displayedConversation.current = id;
     setConversationId(id);
+    setComposerKey((current) => current + 1);
     setSendError(undefined);
     setOpen(true);
   }, []);
@@ -230,6 +234,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       }
       if (sendLock.current) return false;
       sendLock.current = true;
+      if (options.fresh) setComposerKey((current) => current + 1);
       const displayedAtStart = displayedConversation.current;
       const target = options.fresh ? undefined : conversationId;
       const selected = !options.fresh && !options.context ? questionSelection : undefined;
@@ -284,6 +289,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       width,
       setWidth,
       conversationId,
+      composerKey,
       show,
       send,
       sending,
@@ -300,6 +306,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       open,
       width,
       conversationId,
+      composerKey,
       show,
       send,
       sending,
