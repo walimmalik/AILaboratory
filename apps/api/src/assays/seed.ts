@@ -1,6 +1,12 @@
 import { sameValue } from '@ailab/domain';
-import type { AssayTemplateAttributes, Proposal, RecordEnvelope } from '@ailab/schema';
+import type {
+  AssayTemplateAttributes,
+  Proposal,
+  RecordEnvelope,
+  RecordVersion,
+} from '@ailab/schema';
 import { parse } from 'yaml';
+import { toErrorBody } from '../operations/errors.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
 
@@ -82,7 +88,7 @@ export interface AssayTemplateSeedReport {
   updated: string[];
   /** Confirmed templates it made earlier whose seed changes wait on a person. */
   proposed: string[];
-  /** Templates left out because the lab doesn't have a record they name yet. */
+  /** Templates left unchanged because a dependency is missing, blocked or incompatible. */
   waiting: string[];
 }
 
@@ -100,6 +106,7 @@ export async function loadSeedAssayTemplates(
   ctx: RecordContext,
   templates: SeedAssayTemplate[],
   reason: string,
+  blockedSops: readonly string[] = [],
 ): Promise<AssayTemplateSeedReport> {
   const run = async <T>(operation: string, input: unknown): Promise<T> => {
     const result = await registry.execute(ctx, operation, input);
@@ -125,12 +132,27 @@ export async function loadSeedAssayTemplates(
   );
   for (const t of templates) {
     const earlier = await find('assay_template', t.label);
+    const blocked = t.sops.filter((s) => blockedSops.includes(s.label));
+    if (blocked.length) {
+      report.waiting.push(
+        `${t.label}: seed SOP refresh needs a separate draft (${blocked.map((s) => s.label).join(', ')})`,
+      );
+      continue;
+    }
     const lacking: string[] = [];
     const parts = [];
     for (const s of t.sops) {
       const sop = await find('sop', s.label);
-      if (sop) parts.push({ id: s.part, sop: { id: sop.id, version: sop.version } });
-      else lacking.push(`SOP ${s.label}`);
+      if (sop) {
+        // A pre-existing working draft must not replace a confirmed method pin.
+        const { versions } = await run<{ versions: RecordVersion[] }>('records.history', {
+          id: sop.id,
+        });
+        const confirmed = versions
+          .filter((v) => v.snapshot.status === 'active')
+          .sort((a, b) => b.version - a.version)[0];
+        parts.push({ id: s.part, sop: { id: sop.id, version: confirmed?.version ?? sop.version } });
+      } else lacking.push(`SOP ${s.label}`);
     }
     const layout = t.layout ? await find('layout', t.layout) : undefined;
     if (t.layout && !layout) lacking.push(`layout ${t.layout}`);
@@ -174,7 +196,7 @@ export async function loadSeedAssayTemplates(
         report.existing.push(t.label);
         continue;
       }
-      const result = await registry.execute(ctx, 'records.update', {
+      const result = await save('records.update', {
         id: earlier.id,
         expectedVersion: earlier.version,
         attributes: {
@@ -186,19 +208,36 @@ export async function loadSeedAssayTemplates(
         evidence: Object.fromEntries(changed.map((k) => [k, evidence[k]])),
         reason: `${changed.join(', ')} from the seed file`,
       });
+      if (!result) continue;
       const line = `${earlier.name} ${t.label} (${changed.join(', ')})`;
       if (result.status === 'proposed') report.proposed.push(line);
       else if (result.status === 'done') report.updated.push(line);
       else throw new Error(`records.update was ${result.status}`);
       continue;
     }
-    const record = await run<RecordEnvelope>('assays.draft_template', {
+    const result = await save('assays.draft_template', {
       label: t.label,
       ...attributes,
       evidence,
       reason,
     });
+    if (!result) continue;
+    if (result.status !== 'done') throw new Error(`assays.draft_template was ${result.status}`);
+    const record = result.output as RecordEnvelope;
     report.created.push(`${record.name} ${t.label}`);
+
+    // Related-record validation runs through the operation, including proposal previews. A
+    // template that no longer fits the available method waits; unrelated failures still stop seed.
+    async function save(operation: string, input: unknown) {
+      try {
+        return await registry.execute(ctx, operation, input);
+      } catch (error) {
+        const problem = toErrorBody(error);
+        if (problem.code !== 'invalid_attributes') throw error;
+        report.waiting.push(`${t.label}: ${problem.message}`);
+        return undefined;
+      }
+    }
   }
   return report;
 }

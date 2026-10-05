@@ -40,7 +40,9 @@ function useDesignDocuments(experiment: string) {
 /** The experiment and the documents designed with it, each with what is left before it is confirmed. */
 export function DesignBlock({ record }: { record: RecordEnvelope }) {
   const { maps, plans } = useDesignDocuments(record.id);
-  if (maps.length === 0 && plans.length === 0) return null;
+  const canSave =
+    record.status === 'active' && (record.attributes as ExperimentAttributes).template;
+  if (maps.length === 0 && plans.length === 0 && !canSave) return null;
   const rows: { record: RecordEnvelope; what: string }[] = [
     { record, what: 'Experiment' },
     ...maps.map((m) => ({ record: m, what: 'Plate map' })),

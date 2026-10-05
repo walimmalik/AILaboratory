@@ -310,11 +310,14 @@ async function loadOnce() {
   });
   const sops = await loadSeedSops(registry, ctx, seedSops, 'Imported from the seed lab');
   console.log(
-    `Digital SOPs: ${sops.created.length} drafted, ${sops.updated.length} updated, ${sops.proposed.length} proposed for review, ${sops.existing.length} already there, ${sops.unbound.length} materials without their record in the lab yet (bind them when the record is there).`,
+    `Digital SOPs: ${sops.created.length} drafted, ${sops.updated.length} updated, ${sops.blocked.length} seed refreshes need a separate draft, ${sops.existing.length} already there, ${sops.unbound.length} materials without their record in the lab yet (bind them when the record is there).`,
   );
   for (const line of sops.created) console.log(`  + ${line}`);
   for (const line of sops.updated) console.log(`  ~ ${line}`);
-  for (const line of sops.proposed) console.log(`  ? ${line}`);
+  for (const line of sops.blocked)
+    console.log(
+      `  … ${line}: confirmed history preserved; create a separate draft to adopt the newer seed method.`,
+    );
   await settle();
   const campaigns = await loadSeedCampaigns(
     registry,
@@ -382,9 +385,10 @@ async function loadOnce() {
       instrumentLibrary: await seedFile('instrument-library.yaml'),
     }),
     'Imported from the seed lab',
+    sops.blocked,
   );
   console.log(
-    `Assay templates: ${templates.created.length} drafted, ${templates.updated.length} updated, ${templates.proposed.length} proposed for review, ${templates.existing.length} already there, ${templates.waiting.length} waiting for their records.`,
+    `Assay templates: ${templates.created.length} drafted, ${templates.updated.length} updated, ${templates.proposed.length} proposed for review, ${templates.existing.length} already there, ${templates.waiting.length} waiting for compatible records.`,
   );
   for (const line of templates.created) console.log(`  + ${line}`);
   for (const line of templates.updated) console.log(`  ~ ${line}`);
