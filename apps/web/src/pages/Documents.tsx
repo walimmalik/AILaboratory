@@ -83,7 +83,11 @@ export function DocumentsPage() {
   const query = search.q ?? '';
   const mode = search.mode ?? 'text';
   const updateSearch = (changes: Partial<DocumentsSearch>) =>
-    void navigate({ search: (previous) => ({ ...previous, ...changes }), replace: true });
+    void navigate({
+      search: (previous) => ({ ...previous, ...changes }),
+      replace: true,
+      resetScroll: false,
+    });
   const [adding, setAdding] = useState(false);
   return (
     <>
@@ -620,6 +624,7 @@ export function TextBlock({
                       void navigate({
                         search: (previous) => ({ ...previous, section: s.index }),
                         replace: true,
+                        resetScroll: false,
                       })
                     }
                   >

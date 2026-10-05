@@ -13,7 +13,7 @@ const fixture = vi.hoisted(() => ({
   requests: [] as { queryKey: unknown[]; queryFn: () => Promise<unknown> }[],
   documentSearch: {} as DocumentsSearch,
   recordSearch: {} as Record<string, unknown>,
-  navigation: [] as { replace?: boolean }[],
+  navigation: [] as { replace?: boolean; resetScroll?: boolean }[],
   outline: {} as Record<string, unknown>,
   passages: {} as Record<string, unknown>,
   reads: [] as { queryKey: unknown[]; queryFn: () => Promise<unknown>; enabled?: boolean }[],
@@ -64,6 +64,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
     (options: {
       search: (previous: Record<string, unknown>) => Record<string, unknown>;
       replace?: boolean;
+      resetScroll?: boolean;
     }) => {
       fixture.navigation.push(options);
       if (from === '/documents')
@@ -179,6 +180,7 @@ describe('document search modes', () => {
     expect(fixture.documentSearch.q).toBeUndefined();
     expect(resultsHtml()).toBe('');
     expect(fixture.navigation.every((request) => request.replace)).toBe(true);
+    expect(fixture.navigation.every((request) => request.resetScroll === false)).toBe(true);
   });
   it('defaults to text, submits trimmed words through the form, and clears both input and results', async () => {
     expect(element('fieldset').props.className).toBe('segmented');
@@ -199,6 +201,7 @@ describe('document search modes', () => {
     expect(resultsHtml()).toBe('');
     typeWords('   ');
     expect(element('button', 'Search the text').props.disabled).toBe(true);
+    expect(fixture.navigation.every((request) => request.resetScroll === false)).toBe(true);
   });
 
   it('removes previous results immediately when edited, including an outstanding search', () => {
@@ -389,6 +392,7 @@ describe('matched document sections', () => {
     if (!picker) throw new Error('Missing section picker');
     (picker.props.onClick as () => void)();
     expect(fixture.recordSearch.section).toBe(0);
+    expect(fixture.navigation.at(-1)).toMatchObject({ replace: true, resetScroll: false });
   });
 
   it('explains unavailable or invalid targets without showing section zero or stale passages', () => {
