@@ -1278,7 +1278,12 @@ test('memory corrections reset when navigating between record pages', async ({ p
     source: { from: 'stated' },
     about: [second.id],
   });
-  await page.goto(`/records/${first.id}`);
+  // Prime B's record query, then stay in the SPA so returning to B keeps the editor mounted.
+  await page.goto(`/records/${second.id}`);
+  await expect(page.getByRole('button', { name: 'Change or retire' })).toBeVisible();
+  await page.getByRole('link', { name: /^Connections/ }).click();
+  await page.getByRole('link', { name: new RegExp(`First memory ${stamp}`) }).click();
+  await expect(page).toHaveURL(new RegExp(`/records/${first.id}$`));
   await page.getByRole('button', { name: 'Change or retire' }).click();
   await page.getByLabel('What the lab should know').fill(`Unsaved first correction ${stamp}`);
   // Follow an app link so React reuses the record page across IDs.
