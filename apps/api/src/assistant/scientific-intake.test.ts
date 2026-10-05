@@ -17,7 +17,7 @@ describe('scientific intake content contract (004g SG-04)', () => {
       expect(findSkill(module)?.text, module).toBe(body);
       // Attribute paths and the named memory detector are not callable operations.
       const names = [...body.matchAll(/`([a-z_]+\.[a-z_]+)`/g)]
-        .map((m) => m[1])
+        .flatMap((m) => (m[1] ? [m[1]] : []))
         .filter((name) => !name.startsWith('attributes.') && name !== 'runs.recurring_deviation');
       expect(
         names.filter((name) => !operationContracts.has(name)),
