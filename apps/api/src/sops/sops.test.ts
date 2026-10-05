@@ -778,6 +778,14 @@ describe('scientific question lifecycle', () => {
       registry.execute(person, 'sops.answer_question', { ...input, question: 'missing' }),
     ).rejects.toMatchObject({ code: 'invalid_input' });
     const answered = await run<RecordEnvelope>(person, 'sops.answer_question', input);
+    // A double click or retry after a lost HTTP response must not append another answer
+    // against the version the person originally reviewed.
+    await expect(registry.execute(person, 'sops.answer_question', input)).rejects.toMatchObject({
+      code: 'version_conflict',
+    });
+    const reloaded = await run<RecordEnvelope>(person, 'records.get', { id: sop.id });
+    expect(reloaded.version).toBe(answered.version);
+    expect(reloaded.attributes).toEqual(answered.attributes);
     expect(answered.attributes.questions).toEqual([
       expect.objectContaining({
         id: 'q1',

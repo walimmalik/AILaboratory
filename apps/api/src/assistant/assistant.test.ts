@@ -5,7 +5,9 @@ import type {
   ConversationSummary,
   OperationResult,
   Proposal,
+  Readiness,
   RecordEnvelope,
+  SopAttributes,
 } from '@ailab/schema';
 import { defineKind, ScientificQuestion } from '@ailab/schema';
 import { eq } from 'drizzle-orm';
@@ -25,6 +27,7 @@ import {
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { widget } from '../records/test-kinds.ts';
+import { sop } from '../sops/kinds.ts';
 import {
   Assistant,
   describeAttachment,
@@ -681,6 +684,125 @@ describe('assistant.ask', () => {
     });
     expect(historical.status).toBe('idle');
     expect(model.requests.at(-1)?.system).toContain('unsupported historical questions');
+  });
+
+  it('continues with a human-saved unknown response without granting chat or agents response authority', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    registry.deps.kinds.register(sop);
+    const draft = (await output(
+      registry.execute(person, 'sops.draft', {
+        label: 'Unfinished wash',
+        materials: [],
+        variables: [],
+        steps: [{ id: 'wash', action: 'wash', text: 'Wash the plate.' }],
+        questions: [
+          {
+            id: 'wash-volume',
+            question: 'Which wash volume does the protocol require?',
+            about: { step: 'wash' },
+            stage: { stage: 'method', reason: 'The wash volume is missing' },
+          },
+        ],
+      }),
+    )) as RecordEnvelope<SopAttributes>;
+    const pageFor = (record: RecordEnvelope) => ({
+      path: `/records/${record.id}`,
+      record: { id: record.id, name: record.name, version: record.version },
+      activeQuestion: { id: 'wash-volume', stage: 'method' },
+    });
+    await ask(registry, assistant, "I don't know. Please note that.", { page: pageFor(draft) });
+    const beforeSave = model.requests.at(-1)?.system;
+    expect(beforeSave).toContain('Record response beneath their reply in this chat');
+    expect(beforeSave).toContain('SOP page is an alternative');
+    expect(beforeSave).toContain('Ordinary chat or notes do not save a response');
+    expect(beforeSave).not.toContain('Continue from saved responses');
+    const afterChat = (await output(
+      registry.execute(person, 'records.get', { id: draft.id }),
+    )) as RecordEnvelope<SopAttributes>;
+    expect(afterChat).toEqual(draft);
+    const noted = (await output(
+      registry.execute(person, 'records.update', {
+        id: draft.id,
+        expectedVersion: draft.version,
+        attributes: { ...draft.attributes, notes: "The scientist said: I don't know." },
+      }),
+    )) as RecordEnvelope<SopAttributes>;
+    expect(noted.attributes.questions?.[0]?.responses).toEqual([]);
+    const saved = (await output(
+      registry.execute(person, 'sops.answer_question', {
+        sop: draft.id,
+        expectedVersion: noted.version,
+        question: 'wash-volume',
+        action: { type: 'response', text: "I don't know" },
+      }),
+    )) as RecordEnvelope<SopAttributes>;
+    const continued = await ask(registry, assistant, 'Find the evidence needed next', {
+      page: pageFor(saved),
+    });
+    const request = model.requests.at(-1);
+    // A new chat has no transcript to supply this answer: its context comes from the saved SOP.
+    expect(continued.messages[0]).toMatchObject({
+      role: 'user',
+      page: pageFor(saved),
+    });
+    expect(request?.messages).toHaveLength(1);
+    const contextPrefix = `Current scientific questions for ${saved.name} at version ${saved.version}: `;
+    const questionsLine = request?.system
+      .split('\n')
+      .find((line) => line.startsWith(contextPrefix));
+    expect(questionsLine).toBeDefined();
+    const questionsJson = questionsLine?.slice(contextPrefix.length).split('. Responses are')[0];
+    expect(JSON.parse(questionsJson ?? 'null')).toEqual(saved.attributes.questions);
+    expect(request?.system).toContain('do not ask an identical already-answered question');
+    expect(request?.system).toContain('disputed method settings unchanged');
+    expect(request?.system).toContain('suggest a specific next action to obtain it');
+    expect(request?.system).toContain('ordinary chat or notes do not');
+    expect(request?.tools.map((tool) => tool.name)).not.toContain('sops_answer_question');
+    expect(saved.attributes.questions?.[0]).toMatchObject({
+      id: 'wash-volume',
+      responses: [
+        { text: "I don't know", by: person.actor, version: saved.version, at: expect.any(String) },
+      ],
+      disposition: { status: 'open' },
+    });
+    expect(saved.attributes.steps).toEqual(draft.attributes.steps);
+    model.turns.push({
+      text: '',
+      toolCalls: [
+        {
+          id: 'agent-response',
+          name: 'run_operation',
+          input: {
+            operation: 'sops.answer_question',
+            input: {
+              sop: saved.id,
+              expectedVersion: saved.version,
+              question: 'wash-volume',
+              action: { type: 'response', text: '300 uL' },
+            },
+          },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    const attempted = await ask(registry, assistant, 'Record this for me', {
+      conversationId: continued.id,
+      page: pageFor(saved),
+    });
+    expect(attempted.messages.find((message) => message.role === 'tool')).toMatchObject({
+      operationId: 'sops.answer_question',
+      outcome: 'failed',
+      error: { code: 'unknown_operation' },
+    });
+    expect(await output(registry.execute(person, 'records.get', { id: saved.id }))).toEqual(saved);
+    const readiness = (await output(
+      registry.execute(person, 'records.readiness', { id: saved.id }),
+    )) as Readiness;
+    expect(readiness.checks.find((check) => check.id === 'questions_answered')).toMatchObject({
+      passed: false,
+    });
+    expect(readiness.ready).toBe(false);
   });
 
   it('blocks Apply while an assistant turn runs, allows a lab colleague after idle, and returns an approved receipt during a later turn', async () => {
