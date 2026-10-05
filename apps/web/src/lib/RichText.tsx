@@ -31,7 +31,7 @@ export function RichText({ text, className }: { text: string; className?: string
     const line = source[i] ?? '';
     if (
       line.includes('|') &&
-      !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s)/.test(line) &&
+      !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s|>)/.test(line) &&
       /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(source[i + 1] ?? '')
     ) {
       flushParagraph();
@@ -40,7 +40,7 @@ export function RichText({ text, className }: { text: string; className?: string
       i += 1;
       while (
         source[i + 1]?.includes('|') &&
-        !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s)/.test(source[i + 1] ?? '')
+        !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s|>)/.test(source[i + 1] ?? '')
       ) {
         tableLines.push(source[i + 1] ?? '');
         i += 1;
@@ -52,8 +52,14 @@ export function RichText({ text, className }: { text: string; className?: string
           allowedElements={['p', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'strong', 'code']}
           unwrapDisallowed
           components={{
-            // A candidate with mismatched header/separator columns remains ordinary pipe text.
-            p: () => <p>{lines(tableLines)}</p>,
+            // Keep literal text and line breaks only for this paragraph, even if GFM ended the table.
+            p: ({ node, children }) => (
+              <p>
+                {node?.position
+                  ? lines(tableLines.slice(node.position.start.line - 1, node.position.end.line))
+                  : children}
+              </p>
+            ),
             table: ({ children }) => (
               // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll wide tables
               <section className="rich-text-table-scroll" aria-label="Table" tabIndex={0}>

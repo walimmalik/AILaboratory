@@ -83,4 +83,33 @@ describe('RichText', () => {
       '</table></section><ul><li>choose A | B</li></ul><ol><li>Confirm</li></ol>',
     );
   });
+
+  it('keeps a following pipe-containing quote as literal prose without repeating the table', () => {
+    const result = html(
+      '| A | B |\n| --- | --- |\n| one | two |\n> Note: choose **A** | `B`\nContinue with <b>care</b>',
+    );
+    expect(result).toContain(
+      '</table></section><p>&gt; Note: choose <strong>A</strong> | <code>B</code><br/>Continue with &lt;b&gt;care&lt;/b&gt;</p>',
+    );
+    expect(result).not.toContain('| --- | --- |');
+    expect(result.match(/<table /g)).toHaveLength(1);
+  });
+
+  it('keeps trailing pipe-containing prose, headings and numbered lists intact', () => {
+    const result = html(
+      '| A | B |\n| --- | --- |\n| one | two |\n\nChoose A | B\n# Note A | B\n1. Choose A | B',
+    );
+    expect(result).toContain(
+      '</table></section><p>Choose A | B<br/>Note A | B</p><ol><li>Choose A | B</li></ol>',
+    );
+    expect(result).not.toContain('| --- | --- |');
+  });
+
+  it('renders only the trailing paragraph when GFM ends a candidate table at an HTML comment', () => {
+    const result = html('| A | B |\n| --- | --- |\n| one | two |\n<!-- A | B -->\nChoose A | B');
+    expect(result).toContain('<p>Choose A | B</p>');
+    expect(result).toContain('&lt;!-- A | B --&gt;');
+    expect(result).not.toContain('<p>| A | B |');
+    expect(result).not.toContain('| --- | --- |');
+  });
 });
