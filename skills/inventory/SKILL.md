@@ -15,6 +15,8 @@ A **location** (`location`, `LOC-0001`) is a place that doesn't move: a room, fr
 
 ## Registering and moving
 
+Inventory records describe actual physical things. During SOP/assay intake, use reusable type/product/entity drafts for missing definitions; never invent physical containers, specimens, lots, barcodes, locations, measured concentrations or stock to make feasibility pass. Register/fill only from explicit facts about actual material. A hypothetical sample count is a planning assumption, not an inventory record. Inspect `inventory.overview` and `inventory.where_is` before asking; missing stock stays a preparation blocker, and unknown is not assent. Use calculator operations for every scientific quantity.
+
 All of these are proposals from an agent: a person approves them.
 
 - `locations.create` with `{label, type, parent?, setpoint?, co2?, instrument?, notes?}`. Setpoints carry units: `{"value": "-80", "unit": "degC"}`.

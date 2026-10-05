@@ -5,6 +5,7 @@ import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
 import {
+  QuestionDraft,
   SopAttributes,
   SopExpectation,
   SopId,
@@ -86,6 +87,7 @@ export const sopsDraft = defineContract({
       .min(1)
       .describe('Its title, e.g. "Human IL-6 sandwich ELISA (DuoSet), 96-well"'),
     ...SopAttributes.shape,
+    questions: z.array(QuestionDraft).optional(),
     evidence: z
       .record(z.string(), EvidenceInput)
       .optional()
@@ -135,6 +137,14 @@ export const sopsCalculate = defineContract({
       .optional(),
   }),
   output: z.object({
+    obligations: z.array(
+      z.strictObject({
+        question: z.string(),
+        stage: z.enum(['experiment', 'run']),
+        passed: z.boolean(),
+        problem: z.string().optional(),
+      }),
+    ),
     bindings: z.array(
       z.object({
         role: z.string(),
@@ -166,20 +176,37 @@ export const sopsAnswerQuestion = defineContract({
   id: 'sops.answer_question',
   verbs: { done: 'answered a question on', intent: 'answer a question on' },
   summary:
-    "Answer an SOP's open question, or accept the answer it suggests. People only: an open question blocks confirming until a person settles it",
+    'Record a response or correct the wording of an SOP question. People only. A response never resolves the scientific issue; corrections preserve its identity, stage and history',
   effect: 'write',
-  input: z
-    .strictObject({
-      sop: SopId,
-      expectedVersion: z.number().int().positive(),
-      question: z.string().min(1).describe('The question id'),
-      answer: z.string().min(1).optional(),
-      acceptSuggestion: z.literal(true).optional(),
-      reason: Reason,
-    })
-    .refine((i) => (i.answer === undefined) !== (i.acceptSuggestion === undefined), {
-      message: 'Give an answer or accept the suggestion, not both',
-    }),
+  input: z.strictObject({
+    sop: SopId,
+    expectedVersion: z.number().int().positive(),
+    question: z.string().min(1).describe('The question id'),
+    action: z.discriminatedUnion('type', [
+      z.strictObject({ type: z.literal('response'), text: z.string().trim().min(1) }),
+      z.strictObject({
+        type: z.literal('correct'),
+        text: z.string().trim().min(1),
+        reason: z.string().trim().min(1),
+      }),
+    ]),
+    reason: Reason,
+  }),
+  output: RecordEnvelope,
+});
+
+export const sopsAskQuestion = defineContract({
+  id: 'sops.ask_question',
+  verbs: { done: 'asked a question on', intent: 'ask a question on' },
+  summary:
+    'Append an open, typed scientific question to a draft SOP. The server verifies its stage binding and retains all earlier questions and responses',
+  effect: 'write',
+  input: z.strictObject({
+    sop: SopId,
+    expectedVersion: z.number().int().positive(),
+    question: QuestionDraft,
+    reason: Reason,
+  }),
   output: RecordEnvelope,
 });
 

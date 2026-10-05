@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { RecordId, recordIdOf } from './ids.ts';
 import { DocumentId } from './library.ts';
 import { DecimalString, Quantity } from './quantity.ts';
+import { QuestionDisposition, QuestionResponse, QuestionStage } from './scientific-decisions.ts';
 
 /**
  * Digital SOPs (plan 012): a lab procedure as a structured, versioned design document. Materials are
@@ -222,8 +223,8 @@ export const TimingRule = z
   });
 export type TimingRule = z.infer<typeof TimingRule>;
 
-/** Something the source leaves unclear (G6); an open one blocks confirming. */
-export const OpenQuestion = z.strictObject({
+/** Typed authoring input; the server owns responses and disposition. */
+export const QuestionDraft = z.strictObject({
   id: z.string().regex(/^[a-z0-9_-]+$/),
   about: z
     .strictObject({
@@ -239,10 +240,38 @@ export const OpenQuestion = z.strictObject({
     .optional()
     .describe('The answer the agent would pick, marked assumed'),
   passages: z.array(Citation).optional(),
-  status: z.enum(['open', 'answered', 'accepted_suggestion']),
-  answer: z.string().min(1).optional(),
+  stage: QuestionStage,
 });
-export type OpenQuestion = z.infer<typeof OpenQuestion>;
+export type QuestionDraft = z.infer<typeof QuestionDraft>;
+
+/**
+ * Current question contract. A reply never settles it. Citation references remain the current
+ * library format until SG-18 activates immutable source checking across SOP consumers.
+ */
+export const ScientificQuestion = z
+  .strictObject({
+    ...QuestionDraft.shape,
+    responses: z.array(QuestionResponse),
+    disposition: QuestionDisposition,
+  })
+  .superRefine((question, ctx) => {
+    if (question.disposition.status === 'deferred') {
+      const obligation = question.disposition.action.obligation;
+      if (question.stage.stage !== obligation.stage)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stage'],
+          message: 'A deferred question uses its accepted target stage',
+        });
+      else if (JSON.stringify(question.stage.binding) !== JSON.stringify(obligation.binding))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['stage', 'binding'],
+          message: 'A deferred question retains its accepted downstream binding',
+        });
+    }
+  });
+export type ScientificQuestion = z.infer<typeof ScientificQuestion>;
 
 export const SopAttributes = z.strictObject({
   purpose: z.string().min(1).optional(),
@@ -261,7 +290,7 @@ export const SopAttributes = z.strictObject({
   layout: z.array(LayoutRequirement).optional(),
   analysis: z.string().min(1).optional().describe('How the readout becomes a result'),
   timing: z.array(TimingRule).optional(),
-  questions: z.array(OpenQuestion).optional(),
+  questions: z.array(ScientificQuestion).optional(),
   notes: z.string().min(1).optional(),
 });
 export type SopAttributes = z.infer<typeof SopAttributes>;

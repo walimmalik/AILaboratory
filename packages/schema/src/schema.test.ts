@@ -58,12 +58,17 @@ describe('json schema', () => {
     expect(Object.keys(schemas).sort()).toEqual([
       'ActivityEntry',
       'Actor',
+      'ExactSourceCitation',
+      'ExactSourceReference',
       'OperationErrorBody',
       'Proposal',
+      'ProposalReceipt',
       'Quantity',
       'RecordEnvelope',
       'RecordLink',
       'RecordVersion',
+      'ScientificDecisionMetadata',
+      'ScientificQuestion',
     ]);
   });
 });

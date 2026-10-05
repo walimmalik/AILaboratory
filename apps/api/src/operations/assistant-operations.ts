@@ -5,6 +5,7 @@ import {
   assistantListConversations,
   assistantStatus,
 } from '@ailab/schema';
+import { replyOrigin } from '../assistant/context.ts';
 import {
   appendMessage,
   createConversation,
@@ -60,6 +61,7 @@ export const assistantOperations = [
         provider: model.provider,
         model: model.model,
       };
+      const origin = await replyOrigin(deps, ctx, input.replyTo, input.page);
       let conversation = input.conversationId
         ? await findConversation(db, ctx, input.conversationId, { forUpdate: true })
         : await createConversation(db, ctx, {
@@ -77,6 +79,7 @@ export const assistantOperations = [
       await appendMessage(db, conversation.id, {
         role: 'user',
         text: input.message,
+        ...(origin ? { origin } : {}),
         ...(input.page ? { page: input.page } : {}),
         ...(input.attachments?.length
           ? {

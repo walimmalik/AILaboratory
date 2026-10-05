@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Actor } from './actor.ts';
 import { CalculationId } from './design.ts';
 import { RecordId } from './ids.ts';
+import { ScientificDecisionMetadata } from './scientific-decisions.ts';
 
 /** Reads change nothing and are never logged; writes run in one transaction and are logged in the activity ledger. */
 export const OperationEffect = z.enum(['read', 'write']);
@@ -96,6 +97,15 @@ export type OperationErrorBody = z.infer<typeof OperationErrorBody>;
 
 export const ProposalStatus = z.enum(['pending', 'approved', 'rejected', 'failed']);
 
+/** Durable committed result. Preview-generated IDs are never a receipt. */
+export const ProposalReceipt = z.strictObject({
+  output: z.unknown().describe('Actual result validated against the approved operation output'),
+  recordIds: z.array(RecordId),
+  calculation: CalculationId.optional(),
+  committedAt: z.iso.datetime(),
+});
+export type ProposalReceipt = z.infer<typeof ProposalReceipt>;
+
 /** A change an agent asked for that waits for a person. */
 export const Proposal = z.object({
   id: z.string().regex(/^prp_[0-9A-HJKMNP-TV-Z]{26}$/),
@@ -103,6 +113,8 @@ export const Proposal = z.object({
   input: z.unknown(),
   /** What the operation returned when it was previewed at proposal time. */
   preview: z.unknown(),
+  decision: ScientificDecisionMetadata.optional(),
+  receipt: ProposalReceipt.optional(),
   status: ProposalStatus,
   proposedBy: Actor,
   proposedAt: z.iso.datetime(),

@@ -25,9 +25,9 @@ A formula reads named variables and numbers with units: `n_samples * replicates 
 
 ## The SOP record (012a, ADR 0037)
 
-An SOP (`SOP-0001`) is confirmed in eight sections: overview (purpose, scope, safety, assays, the library document it came from, the SOP it is derived from), materials (roles with requirements and a default record; solutions to prepare), variables (`input`, `default`, `record` read from a material's field, `computed` by formula), procedure (typed steps with the roles they use and produce, parameters, repeats, groups, prerequisite SOPs), plate layout (a spec, not a well map), analysis, timing windows (min, max, target against the end of another step, with source and whether the scheduler enforces it) and open questions. Anything can cite library passages.
+An SOP (`SOP-0001`) is confirmed in seven scientific sections: overview, materials and solutions, variables, procedure, plate layout, analysis and timing windows. Questions are shown separately and gate readiness; their IDs, responses and disposition bookkeeping are not assumed scientific values or an extra confirmation section. Anything can cite library passages.
 
-Writes are refused when names repeat or a step, parameter, layout, timing rule or question refers to something the SOP doesn't have, or a unit or linked record is unknown. Readiness blocks on no steps, broken formulas, timing that isn't a time and open questions, and warns about steps without a citation when the SOP has a source.
+Writes are refused when names repeat or a step, parameter, layout, timing rule or question refers to something the SOP doesn't have, or a unit or linked record is unknown. Readiness blocks on no steps, broken formulas, timing that isn't a time and unresolved method questions, and warns about later-stage obligations and steps without a citation when the SOP has a source.
 
 An SOP links the records it names: its source document (`digitized_from`), role defaults (`uses`), prerequisite SOPs (`requires`), solution recipes (`made_with`, which must be products) and every other document it cites (`cites`, which must be library documents). A draft that an SOP links to can't be deleted.
 
@@ -38,7 +38,8 @@ An SOP links the records it names: its source document (`digitized_from`), role 
 | `sops.evaluate` | Works out formulas over named values (calculator) | read |
 | `sops.draft` | Drafts an SOP | direct (drafts) |
 | `sops.calculate` | Works out an SOP's variables for a run (calculator) | read |
-| `sops.answer_question` | Answers an open question or accepts its suggestion | people only |
+| `sops.ask_question` | Appends a typed open question, with a verified stage binding | direct |
+| `sops.answer_question` | Records a response or corrects wording; neither resolves the issue | people only |
 | `sops.check_citations` | Checks each cited quote against its library document | read |
 | `sops.review` | Runs the AI review cycle on a draft | direct |
 | `sops.reviews` | Lists the review rounds kept with an SOP | read |
@@ -58,7 +59,7 @@ A record variable reads its `readFrom` field from the role's record: a lot's cer
 
 ## Open questions and citations (012c)
 
-An open question (G6) blocks confirming until a person settles it with `sops.answer_question`: an `answer` in their words (status `answered`) or `acceptSuggestion` (status `accepted_suggestion`, the suggestion becomes the answer). Agents can't call it, and the SOP kind refuses any other agent write (an update, a restore, a draft, approved or not) that settles a question or changes its answer. It is an ordinary record update, so the change is in the SOP's history.
+An unresolved method question blocks final acceptance. `sops.answer_question` records a person's response or wording correction through the record service and preserves the issue's disposition and history. A reply or prose suggestion does not settle the science. All actors must use the owning question operations; generic updates, restoration and approved changes cannot remove or rewrite the questions. See the bounded current contract below.
 
 `sops.check_citations` reads each cited document's passages through `library.read` and looks for each quote, ignoring spacing and case: `matches` (in the cited passage, or anywhere when no passage is named), `found_elsewhere` (in another passage, named in `foundIn`), `not_found`, or `unparsed` (the document has no text yet). It is how a digitizer or reviewer checks its own quotes before a person reads the draft. `library.read` takes `passages` (ids) to read cited passages back.
 
@@ -83,10 +84,10 @@ The seed loader drafts one SOP per file in `seed/sops/own/`. Materials come from
 `apps/web/src/pages/Sops.tsx`: the SOPs page (`/sops`, in the Library menu) lists SOPs with their assay, step count and open questions. An SOP's record page (`SopPage.tsx`, ADR 0046) reads top to bottom:
 - **Readiness:** the failing checks with "Fix in …" links, values that are an agent's estimate, **Edit**, and one **Confirm** (`records.confirm`) that confirms every part as it stands; parts held by a failing check are named and wait. Confirming a draft with nothing failing makes it active. Each part's state is under technical details.
 - **At the bench:** the numbered steps in plain words with their parameters, each variable parameter shown with its value from `sops.calculate`. A number that comes from a value keeps the value's color (blue, dotted underline) and a material its own (orange), so what is variable reads at a glance; a Numbers / Names switch shows the values' names instead. Hovering, focusing or tapping one opens a card: its formula and the values it uses as they are now, its value and where it came from (usual, typical until a lot is picked, read from a record), its kind and source passage; a material's type, requirements, usual record and the values it gives. The run values table is folded, and marks typical and missing values in agent ink. Each step's source quote is folded too. Print shows only this block.
-- **Questions to settle:** each open question with the agent's suggestion, "Accept the suggestion" or an answer in the person's words (`sops.answer_question`). Settled questions are folded.
+- **Questions to settle:** each open question with the suggestion, its stage and recorded responses. "Record response" preserves the open issue. Accepted decisions are folded. Unsupported historical question formats show a reconciliation notice and retain raw/history access.
 - **Checks against the source:** "Check the quotes" (`sops.check_citations`) and, on drafts, "Have the reviewer check it" (`sops.review`). The reviewer's changes are listed in agent ink as "Step 2 (Wash), volume: 400 µL → 300 µL", with the reason.
 
-- **Details:** the parts (overview, materials, values, steps, layout, analysis, timing, questions), a line each with who confirmed it, opened in place.
+- **Details:** the scientific parts (overview, materials, values, steps, layout, analysis, timing), a line each with who confirmed it, opened in place. Questions use their dedicated controls and raw technical details.
 
 **Edit** opens the whole SOP as one form with one Save at the bottom of the window (`records.update`, with where the values came from beside it, and the same stale-version check as any editor, `useFieldEdits` and `SaveBar` in `SectionEditor.tsx`). Its blocks: overview; materials, one line each (name, type, what any choice must meet, the usual record from the kinds that fit the type, `MATERIAL_KINDS`), with the values each gives and More (technical name, sources, Remove), then solutions; values; steps, numbered and all open, with move and remove; plate layout, timing and analysis. Questions, the source and what it derives from are not edited here. "Fix in …" opens the form at that part. The assistant fills in on request (`sops.suggest`): "Fill in with the assistant" on an empty or broken value and on each step, "Write it with the assistant" from a sentence under the steps, and "Draft the steps from the source" when there are none and the SOP has a source document (without one the editor says so). What comes back shows in agent ink with its reason until someone changes it; while it is asked, the editor shows the seconds waited, the limit and Cancel.
 
@@ -96,6 +97,31 @@ Values and steps have editors of their own built on one highlighted text box ([A
 - **A step** is one line (action, short name, how many times), then its words in the same box. Values and materials in the words are stored as `` `name` `` and shown by lab name, matched as written. The materials it uses and the settings its words state (one volume, time, temperature, speed, concentration or wavelength, from a value or an amount, or "room temperature") are read from the words and listed under them; what the words never stated is kept. Settings, what it makes, grouping, a prerequisite SOP, the id and sources are under More.
 
 The SOP's parts are titled Values and Steps in readiness (their ids stay `variables` and `procedure`).
+
+## Scientific decisions: contract foundation (004g / SG-01)
+
+`SopAttributes.questions` now uses the single `ScientificQuestion` contract. `sops.draft` and `sops.ask_question` accept `QuestionDraft` authoring input and stamp an open disposition with empty responses. Generic create/update/restore and approved changes cannot add, omit or rewrite question history for any actor. `sops.answer_question` accepts a people-only `action: {type: "response", text}` or `{type: "correct", text, reason}`. Responses append actor/time/resulting version; corrections change wording only and preserve identity, scientific stage, passages, responses and disposition. A suggestion alone is never an accepted resolution. Proposal-backed resolution, deferral and reopening application remain SG-03 work.
+
+The replacement retains each stable question ID and its step/variable/material links. A response records the person's words, identity, time and record version separately from an open/resolved/deferred disposition. Resolution requires the accepted proposal, proposer and human acceptor, exact affected record versions/paths, evidence or a labelled unvalidated scientific rationale, and passing named checks at the rechecked version. An insufficient correction remains open; its writes and failed readiness remain available through existing proposal receipts, record history and checks. A reopening refers to the former version and changed dependencies rather than copying another full snapshot.
+
+For example, an unknown reply remains open (example IDs are illustrative):
+
+```json
+{
+  "id": "wash_volume",
+  "about": {"step": "wash"},
+  "question": "Which compatible wash method should be used?",
+  "stage": {"stage": "method", "reason": "The source instruction conflicts with the plate maximum"},
+  "responses": [{"text": "I don't know", "by": {"type": "user", "userId": "usr_01J9Z3K8Q4ABCDEFGHJKMNPQRS"}, "at": "2026-10-05T12:00:00Z", "version": 3}],
+  "disposition": {"status": "open"}
+}
+```
+
+Supported initial experiment-stage questions bind to a declared input-kind variable with matching `about.variable`, or to a material role with no default and matching `about.material`. A question about a step, constant or formula cannot use this route. Unresolved method questions block SOP acceptance; verified experiment obligations warn on the reusable method and block the pinned experiment's readiness until supplied. `sops.calculate` reports each obligation; experiment calculation/planning and `runs.start` check those results against the actual pinned inputs and material records. Merely having a variable default is not an answer to the obligation. Run-stage bindings are refused until a genuine run-preparation consumer exists; SG-02's run-binding acceptance remains open.
+
+Question passages retain the current `{document, passage?, page?, quote}` format and survive drafting, review and responses unchanged. They are not immutable edition evidence. SG-18 must activate exact citations and immutable source checks together across SOP consumers; exact source and scientific-basis contracts remain available for that work.
+
+**Rollout boundary:** this implementation is restricted to new draft fixtures for the greenfield demonstration. It performs no migration or reset. Raw record/history reads preserve accepted snapshots and pins. Unsupported old question payloads are refused at operational SOP calculation and pin-validation boundaries with a clear reconciliation message. Any SOP that has ever been active, including an existing working draft with accepted history, refuses edits, restoration and reconciliation until SG-10c supplies the revision workflow; create a separate new draft meanwhile. Read-only scientific use of supported accepted versions continues. Populated-lab rollout still requires the SG-10c history and future-use work; this guard is not a substitute for full eligibility/migration acceptance.
 
 ## Not yet
 

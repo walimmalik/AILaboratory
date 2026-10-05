@@ -1,3 +1,4 @@
+import { getUnit, sameDimension } from '@ailab/domain';
 import {
   defineKind,
   type KindCheck,
@@ -138,6 +139,65 @@ export const lot = defineKind({
   namePrefix: 'LOT',
   nameWidth: 4,
   attributes: LotAttributes,
+  related: async (a, { get, list, current }) => {
+    const product = await get(a.product);
+    if (
+      product?.kind !== 'product' ||
+      (product.status === 'archived' && current?.attributes.product !== a.product)
+    ) {
+      return { invalid: [`${a.product} is not a non-archived product in this lab`] };
+    }
+    const attributes = ProductAttributes.parse(product.attributes);
+    const invalid: string[] = [];
+    const fields = new Map((attributes.lotFields ?? []).map((f) => [f.key, f]));
+    for (const { field, value } of a.values ?? []) {
+      const known = fields.get(field);
+      if (!known) {
+        invalid.push(
+          `${product.label} has no lot field "${field}"${fields.size > 0 ? ` (it has ${[...fields.keys()].join(', ')})` : ''}`,
+        );
+      } else if ('unit' in value) {
+        try {
+          getUnit(value.unit);
+          if (known.unit && !sameDimension(value.unit, known.unit)) {
+            invalid.push(`${known.label} is given in ${known.unit}, not ${value.unit}`);
+          }
+        } catch {
+          invalid.push(
+            `The unit for ${known.label} is not supported (${value.unit}${known.unit ? `; expected ${known.unit}` : ''})`,
+          );
+        }
+      } else if (known.unit) {
+        invalid.push(`${known.label} needs a quantity in ${known.unit}, not a dilution ratio`);
+      }
+    }
+    const allowed = new Set(
+      attributes.origin === 'made'
+        ? (attributes.recipe?.components ?? []).map((c) => c.product)
+        : (attributes.components ?? []).map((c) => c.product),
+    );
+    for (const id of a.componentLots ?? []) {
+      const component = await get(id);
+      if (component?.kind !== 'lot') {
+        invalid.push(`${id} is not a lot in this lab`);
+      } else if (!allowed.has(LotAttributes.parse(component.attributes).product)) {
+        invalid.push(
+          `${component.label} is not a lot of one of ${product.label}'s ${attributes.origin === 'made' ? 'recipe components' : 'kit components'}`,
+        );
+      }
+    }
+    if (
+      (await list('lot')).some((record) => {
+        const lot = LotAttributes.parse(record.attributes);
+        return (
+          record.id !== current?.id && lot.product === a.product && lot.lotNumber === a.lotNumber
+        );
+      })
+    ) {
+      invalid.push(`${product.label} already has lot ${a.lotNumber}`);
+    }
+    return { invalid };
+  },
   links: (a) => [
     { toId: a.product, relation: 'lot_of' },
     ...(a.componentLots ?? []).map((l) => ({ toId: l, relation: 'uses_lot' })),

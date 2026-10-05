@@ -13,6 +13,8 @@ Before drafting, check the lab doesn't have it: `reagents.search` with `{text?, 
 
 ## Drafting a product
 
+For SOP/assay intake, draft necessary missing product definitions from real source evidence after searching existing products; don't ask the scientist to enter registry forms. Keep typical product values separate from lot certificate measurements. Unknown is not assent: leave absent facts absent and ask the next consequential question. Never create a lot, made batch or stock quantity merely to make feasibility pass; receiving a lot requires explicit facts about actual material and human approval.
+
 Use `reagents.draft_product` with `{label, attributes, components?, evidence?}`.
 
 - `attributes.category` (antibody, assay_kit, buffer, enzyme, substrate, stop_solution, compound…) and `origin`: `bought` or `made`.
@@ -39,3 +41,4 @@ Say where each value came from in `evidence` (a datasheet URL). Leave out what t
 - `reagents.receive_lot` with `{product, lotNumber, expiry?, received?, made?, values?, componentLots?, certificate?}`. `values` are `[{"field": "workingConcentration", "value": {"value": "2", "unit": "ug/mL"}}]` or `{"ratio": "1:200"}`, for the product's lot fields only. A kit lot lists its component lots; a lab-made batch lists the lots it was made from.
 - `reagents.set_lot_status`: `opened` (with `date`), `quarantined`, `expired`, `used_up`, `unopened`.
 - Both are proposals from you; the person approves them.
+- Generic lot creation, attribute updates and restores use the same checks. Supply only declared certificate fields; a field with a declared unit requires a quantity with that dimension (a dilution ratio cannot replace it). Optional missing certificate values may remain absent. Component lots must be in this lab and belong to the kit or recipe; product/lot-number pairs must differ from other non-archived lots. Approval rechecks against current records. The duplicate check does not reserve a lot number against concurrent creates.

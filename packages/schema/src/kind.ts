@@ -84,6 +84,8 @@ export interface RelatedContext {
    * Absent when the rules run outside a write, e.g. checking a draft in memory.
    */
   actor?: Actor | undefined;
+  /** Server-owned operation making the change; never supplied in record attributes. */
+  via?: string | undefined;
   /** Name prefixes registered by kinds in code (PRD, LOT…). */
   reservedPrefixes: string[];
 }

@@ -4,6 +4,8 @@
 - Date: 2026-09-30
 - Plan: 013 (E5, E8), and every design after it (014, 016, 017, 018, 019, 020)
 
+> Planned refinement (2026-10-05): [ADR 0069](0069-working-methods-and-scientific-uncertainty.md) preserves the last valid accepted method while an incomplete working revision is edited. Historical attribution remains; an active flag alone will not establish future scientific eligibility. This refinement is accepted but not implemented.
+
 ## Context
 
 The architecture review of Codex's PR #62 found that designs point at their inputs by id alone. A confirmed experiment that follows "the ELISA SOP" silently changes when someone edits that SOP from 100 µL to 50 µL of detection antibody, so a design a person signed off on changes under them. Wali agreed on 2026-09-30 that designs pin `{id, version}` of their inputs. He also decided that "active" means a person has signed off (their own edit to an active record counts as confirming it; an agent's edit is a proposal), so there is no separate "confirmed" status to track.

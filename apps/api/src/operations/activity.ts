@@ -31,9 +31,9 @@ export class ActivityBus {
   }
 }
 
+/** Persists the ledger entry; the registry publishes it only after the outer commit. */
 export async function recordActivity(
   db: Db,
-  bus: ActivityBus,
   ctx: RecordContext,
   entry: Omit<ActivityEntry, 'id' | 'at' | 'actor' | 'recordNames'> & {
     actor?: ActivityEntry['actor'];
@@ -72,7 +72,6 @@ export async function recordActivity(
     error: full.error ?? null,
     durationMs: full.durationMs,
   });
-  bus.publish(ctx.labId, full);
   return full;
 }
 

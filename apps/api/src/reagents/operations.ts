@@ -1,12 +1,4 @@
-import {
-  addDays,
-  getUnit,
-  lotSummary,
-  sameDimension,
-  scaleRecipe,
-  storageBand,
-  UnitError,
-} from '@ailab/domain';
+import { addDays, lotSummary, scaleRecipe, storageBand, UnitError } from '@ailab/domain';
 import {
   type KitComponent,
   LotAttributes,
@@ -124,54 +116,7 @@ export const reagentOperations = [
     agentPolicy: 'propose',
     run: async (ctx, { evidence, reason, ...lot }, deps) => {
       const service = new RecordService(deps.db, deps.kinds);
-      const { record: product, attributes } = await productOf(service, ctx, lot.product);
-      const problems: string[] = [];
-
-      const fields = new Map((attributes.lotFields ?? []).map((f) => [f.key, f]));
-      for (const { field, value } of lot.values ?? []) {
-        const known = fields.get(field);
-        if (!known) {
-          problems.push(
-            `${product.label} has no lot field "${field}"${fields.size > 0 ? ` (it has ${[...fields.keys()].join(', ')})` : ''}`,
-          );
-        } else if ('unit' in value) {
-          if (!getUnitSafe(value.unit)) problems.push(`"${value.unit}" is not a unit`);
-          else if (known.unit && !sameDimension(value.unit, known.unit)) {
-            problems.push(`${known.label} is given in ${known.unit}, not ${value.unit}`);
-          }
-        }
-      }
-
-      const allowed = new Set(
-        attributes.origin === 'made'
-          ? (attributes.recipe?.components ?? []).map((c) => c.product)
-          : (attributes.components ?? []).map((c) => c.product),
-      );
-      for (const id of lot.componentLots ?? []) {
-        const { record, attributes: component } = await lotOf(service, ctx, id);
-        if (!allowed.has(component.product)) {
-          problems.push(
-            `${record.label} is not a lot of one of ${product.label}'s ${attributes.origin === 'made' ? 'recipe components' : 'kit components'}`,
-          );
-        }
-      }
-
-      const earlier = await service.list(ctx, { kind: 'lot', limit: 500 });
-      if (
-        earlier.some((r) => {
-          const a = r.attributes as { product?: string; lotNumber?: string };
-          return a.product === lot.product && a.lotNumber === lot.lotNumber;
-        })
-      ) {
-        problems.push(`${product.label} already has lot ${lot.lotNumber}`);
-      }
-      if (problems.length > 0) {
-        throw new OperationError(
-          'invalid_input',
-          `The lot can't be recorded: ${problems.join('; ')}`,
-        );
-      }
-
+      const { record: product } = await productOf(service, ctx, lot.product);
       return service.create(ctx, {
         kind: 'lot',
         label: `${product.label}, lot ${lot.lotNumber}`,
@@ -234,11 +179,3 @@ export const reagentOperations = [
     },
   }),
 ];
-
-function getUnitSafe(code: string) {
-  try {
-    return getUnit(code);
-  } catch {
-    return undefined;
-  }
-}

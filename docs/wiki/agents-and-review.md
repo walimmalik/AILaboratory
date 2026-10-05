@@ -4,6 +4,8 @@ Two promises shape how agents work here: an agent can do anything a person can, 
 
 ## Human = agent
 
+Planned refinement: [004g](../plans/004g-ai-first-scientific-reconciliation.md) and [ADR 0068](../decisions/0068-interactive-scientific-decisions.md) introduce agent-guided reconciliation with explicit human **Apply decision** controls. A reply is not automatically approval or resolution. Final SOP confirmation remains separate; inseparable changes stay atomic. These are accepted interaction decisions awaiting implementation.
+
 Every capability is an **operation** in one registry. People (through the web app) and agents (through MCP or REST) call the same operations through the same code path, `OperationRegistry.execute`. The web app can't reach the API any other way: a lint rule forbids `fetch` and friends in `apps/web/src`. So there is nothing the UI can do that an agent can't. Each module ships a skill in `skills/` that teaches agents when and how to combine its operations.
 
 Agents reach the app three ways:
@@ -27,6 +29,12 @@ Each write operation declares an agent policy: `direct`, `propose`, or a rule de
 
 A **proposal** stores the input and a preview (the operation run and rolled back). A person confirms or rejects it. Confirming runs the change as the proposing agent, so history credits the agent and the ledger records who confirmed. If the record changed since the proposal, the proposal fails and nothing changes.
 
+Applying a proposal stores its actual result and touched records on that proposal in the same transaction as the change and activity entries (004g SG-15a). Retrying the same proposal returns that stored result without applying it twice, including after a reload or lost activity delivery. People-only and lab permissions still apply. The preview can show different IDs or readable names from those created for real; the stored result identifies the committed records. Decision preparation and scoped supporting-record confirmation remain planned under SG-03, with final SOP confirmation separate.
+
+The in-app assistant pauses with a review request as soon as it produces a pending proposal. Later calls in that batch do not run. Applying that pending change waits until the assistant turn has ended; asking about a previously approved proposal still returns its committed result. Preflight failures now leave an explicit failed conversation rather than a stranded running one (004g SG-16a).
+
+Each fresh ask has a distinct originating user-message identity. A reply retains that identity only when it explicitly references an owned original message and a related pending proposal or open scientific question. Reloads read proposal state from the server; selected question context includes the current record version, stage, responses and disposition. Stale, missing or cross-lab selections refuse. Historical questions with an unsupported shape require reconciliation; a past answer is never inferred to be resolution. Dedicated decision cards, supporting-record grouping and broader stop/resume or tool replay remain planned.
+
 **Earned autonomy (010-V7).** Wali wants agents to earn autonomy. The ledger will keep, per scenario ("move requested in the same conversation", "consume recorded by a run log"), how often proposals were confirmed unchanged, edited or rejected. When the record is good enough, a person can switch that scenario to auto-confirm; the switch is itself a recorded, reversible setting. Nothing auto-confirms at launch.
 
 ## Calculators: agents compute, they don't guess
@@ -36,6 +44,8 @@ Numbers agents rely on come from **calculators** ([ADR 0024](../decisions/0024-l
 ## Preview and all-or-nothing
 
 Every write runs in one transaction. `?preview=true` (REST) or `preview: true` (MCP) runs the real code and rolls back, returning exactly what would have happened; nothing is saved or logged. Batches are all-or-nothing.
+
+Nested writes publish activity and start background work only after the outer transaction commits. Rollback publishes no success. Failed stream delivery or background work does not change a committed result; the stored activity and proposal receipt remain available to read.
 
 ## The activity ledger
 
@@ -66,9 +76,13 @@ The **Review** page lists everything waiting for a person, grouped by kind: draf
 ## Assumptions, questions and review loops
 
 - **Mark what is assumed.** Anything an agent guessed stays in agent ink until a person confirms it. Unknown values stay unknown.
-- **Open questions (012-G6).** Where a source is unclear (contradictions, "about 1 µL", missing values), the digitizer records an open question with the passages involved and a suggested answer. Open questions block confirm until a person answers or accepts.
+- **Open questions (012-G6, 004g).** Where a source is unclear, the agent records an open question with its passages. A response such as “I don't know” is preserved without resolving the issue. Unresolved method questions block confirmation; accepting a scientific decision and finally confirming the SOP are separate steps.
 - **AI review loop (012-G11).** Before a person sees a digitized SOP, a reviewer model checks it against the source. It fixes only what the source settles, each fix a tracked change with a reason and a passage, and asks an open question where the source is ambiguous. Two rounds by default. The review never confirms anything.
 - **Downstream changes (P6, plans 014 to 017).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
+
+## Model continuation
+
+The assistant supports explicit Responses configuration for compatible model endpoints. Intermediate progress continues within the existing step limit; refused or truncated replies cannot execute tools. The same boundary applies to SOP review and suggestions. Proposal approval remains a person’s explicit action. Configuration, replay details and current limits are in the [assistant architecture](../architecture/assistant.md#responses-transport-and-continuation) and [ADR 0070](../decisions/0070-responses-agent-continuation.md); this changes no lab operation or scientific approval rule.
 
 ## Lab memory (plan 005, locked)
 
@@ -79,3 +93,5 @@ Built so far: 005a, the memory record and its operations (ADR 0062), and 005b, `
 - **Reading:** code picks a bundle of about 15 memories for the page (the record, its selection and its links, plus lab-wide rules); design tools apply a memory's typed effect (`prefer`, `avoid`, `set`) through `memory.for`, and agents read the statements; values filled from memory carry `memory` evidence.
 - **Writing:** people add memories directly (active at once); an agent's memory is always a draft until a person confirms it; agents ask once in the chat when a person states or corrects something general; detectors in each module report through `memory.observe`, and a candidate is proposed only past its detector's bar, into Review's Lab memory section.
 - **Weight and decay:** evidence for and against, and quiet opportunities (matching runs where it didn't happen), set a memory's weight, and only detectors that can observe absence make a memory decay; a memory losing support becomes "due for a check", never retired automatically.
+
+Implementation tracking: [004g epic #162](https://github.com/walimmalik/AILaboratory/issues/162) links the reviewed specification and 25 child tickets. No implementation acceptance is implied by ticket publication.

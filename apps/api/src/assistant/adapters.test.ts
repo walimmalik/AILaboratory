@@ -133,6 +133,31 @@ describe('OpenAI-compatible (OpenRouter)', () => {
     });
   });
 
+  it.each([
+    { finish_reason: 'length', refusal: undefined, stop: 'max_tokens' },
+    { finish_reason: 'content_filter', refusal: undefined, stop: 'refusal' },
+    { finish_reason: 'tool_calls', refusal: 'Cannot do that.', stop: 'refusal' },
+  ])(
+    'terminal $stop takes precedence over returned tool calls',
+    async ({ finish_reason, refusal, stop }) => {
+      const { fetch } = fakeFetch({
+        choices: [
+          {
+            finish_reason,
+            message: {
+              content: null,
+              refusal,
+              tool_calls: [{ id: 'call_1', function: { name: 'records_get', arguments: '{}' } }],
+            },
+          },
+        ],
+      });
+      const turn = await make(fetch).complete(request);
+      expect(turn.stop).toBe(stop);
+      expect(turn.toolCalls).toHaveLength(1);
+    },
+  );
+
   it("turns the provider's refusal into a message without the key", async () => {
     const { fetch } = fakeFetch({ error: { message: 'Insufficient credits' } }, 402);
     const error = await make(fetch)

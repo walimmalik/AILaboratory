@@ -1,11 +1,10 @@
 import { activityList, proposalsApprove, proposalsList, proposalsReject } from '@ailab/schema';
+import { and, eq } from 'drizzle-orm';
+import { conversations } from '../db/schema.ts';
 import { listActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
 import { decideProposal, findProposal, listProposals, toProposal } from './proposal-store.ts';
 import { implement } from './registry.ts';
-
-/** What each approval's applied run touched, by proposal, until its ledger entry is written. */
-const applied = new Map<string, string[]>();
 
 export const proposalOperations = [
   implement(proposalsList, {
@@ -16,22 +15,53 @@ export const proposalOperations = [
   implement(proposalsApprove, {
     actors: 'people',
     agentPolicy: 'direct',
+    replayed: async (ctx, input, deps) => {
+      const row = await findProposal(deps.db, ctx, input.id, { forUpdate: true });
+      return row.status === 'approved' && row.receipt !== null;
+    },
     // The records the applied run touched, not the proposal's preview, whose new records were
     // rolled back and got other IDs when they were made for real.
-    touches: (_input, output) => {
-      if (!output) return [];
-      const ids = applied.get(output.id) ?? [];
-      applied.delete(output.id);
-      return ids;
-    },
+    touches: (_input, output) => output?.receipt?.recordIds ?? [],
     outcome: (output) => (output.status === 'approved' ? 'approved' : 'failed'),
     run: async (ctx, input, deps) => {
       const row = await findProposal(deps.db, ctx, input.id, { forUpdate: true });
+      if (row.status === 'approved') {
+        if (row.receipt) return toProposal(row);
+        throw new OperationError(
+          'invalid_state',
+          `Proposal ${row.id} was approved without a stored result; its change will not be run again`,
+        );
+      }
       if (row.status !== 'pending') {
         throw new OperationError('invalid_state', `Proposal ${row.id} is already ${row.status}`);
       }
+      if (row.proposedBy.type === 'agent' && row.proposedBy.sessionRef?.startsWith('cnv_')) {
+        const id = row.proposedBy.sessionRef;
+        // Private conversation ownership doesn't restrict another lab member's approval.
+        // This lock is only taken after the proposal lock; context reads never lock proposals.
+        const [conversation] = await deps.db
+          .select({ status: conversations.status })
+          .from(conversations)
+          .where(and(eq(conversations.id, id), eq(conversations.labId, ctx.labId)))
+          .for('update');
+        if (conversation && (conversation.status === 'running' || deps.assistant.isRunning(id)))
+          throw new OperationError(
+            'invalid_state',
+            'The assistant is still working on this change. Wait for its turn to finish before applying it.',
+          );
+      }
+      if (row.decision) {
+        throw new OperationError(
+          'unavailable',
+          'Applying prepared scientific decisions is not available yet; this proposal remains pending',
+        );
+      }
       // The approver reviewed the change, so it confirms the sections it touches (ADR 0021).
-      const agentCtx = { ...ctx, actor: row.proposedBy, approvedBy: ctx.actor };
+      const agentCtx = {
+        ...ctx,
+        actor: row.proposedBy.type === 'agent' ? row.proposedBy : ctx.actor,
+        approvedBy: ctx.actor,
+      };
       let ran: Awaited<ReturnType<typeof deps.registry.execute>>;
       try {
         ran = await deps.registry.execute(
@@ -49,15 +79,19 @@ export const proposalOperations = [
           error: toErrorBody(error),
         });
       }
-      const decided = await decideProposal(deps.db, row.id, {
+      if (ran.status !== 'done')
+        throw new Error('An approved proposal must produce a committed result');
+      return decideProposal(deps.db, row.id, {
         status: 'approved',
         decidedBy: ctx.actor,
         reason: input.reason,
+        receipt: {
+          output: ran.output,
+          recordIds: deps.registry.touchedBy(row.operationId, row.input, ran.output),
+          ...(ran.calculation ? { calculation: ran.calculation } : {}),
+          committedAt: new Date().toISOString(),
+        },
       });
-      if (ran.status === 'done') {
-        applied.set(decided.id, deps.registry.touchedBy(row.operationId, row.input, ran.output));
-      }
-      return decided;
     },
   }),
   implement(proposalsReject, {

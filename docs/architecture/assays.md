@@ -4,6 +4,10 @@ Plan [017](../plans/017-experiment-designer.md). ADR [0066](../decisions/0066-as
 
 ## Assay template (017a-1)
 
+The assistant's default scientific intake (004g SG-04) distinguishes hypothetical planning, reusable methods/templates, experiment design and physical preparation. It reads current sources, confirmed methods, registry definitions and lab memory first, drafts source-settled content and necessary supporting definitions through operations, and asks the next consequential decision rather than a broad questionnaire. It never fabricates physical inventory to satisfy feasibility. Unknown responses retain uncertainty; ordinary pending proposals and people-only question answers/confirmation keep their existing authority boundaries. The dedicated Apply decision flow remains SG-03 work, not a tool supplied by these instructions.
+
+Procedure text contains purpose/applicability, materials and roles, sequential instructions, quantities/units, timing/constraints and acceptance criteria. Scientific uncertainty is separate from procedure; provenance, assumptions and draft state belong in evidence/review. Preparation facts are late-bound where supported; existing server checks remain authoritative. Calculator results supply scientific numbers. The system instructions live in `apps/api/src/assistant/scientific-intake.ts`, with module details in `skills/assays/SKILL.md` and supporting registry skills.
+
 `packages/schema/src/assays.ts`, `AssayTemplateAttributes` (`asy_`, `ASY-0001`):
 
 | Field | Holds |

@@ -6,10 +6,11 @@ import {
   type VariableOutcome,
 } from '@ailab/domain';
 import {
-  type OpenQuestion,
   type Quantity,
+  type ScientificQuestion,
   type SopAttributes,
   sopsAnswerQuestion,
+  sopsAskQuestion,
   sopsCalculate,
   sopsCheckCitations,
   sopsDraft,
@@ -25,6 +26,7 @@ import { RecordService } from '../records/service.ts';
 import { checkCitations } from './citations.ts';
 import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
+import { obligationOf, operationalSop, stageProblem } from './questions.ts';
 import { bindRoles, type ReadValue, readField } from './resolve.ts';
 import { reviewSop, roundsOf } from './review.ts';
 import { suggestSop } from './suggest.ts';
@@ -68,6 +70,18 @@ export const sopOperations = [
         kind: 'sop',
         label,
         attributes,
+        ...(attributes.questions
+          ? {
+              attributes: {
+                ...attributes,
+                questions: attributes.questions.map((q) => ({
+                  ...q,
+                  responses: [],
+                  disposition: { status: 'open' },
+                })),
+              },
+            }
+          : {}),
         ...(evidence ? { evidence } : {}),
         reason: reason ?? `Drafted the SOP ${label}`,
       }),
@@ -88,7 +102,7 @@ export const sopOperations = [
         return found.snapshot;
       };
       const record = input.version ? await atVersion(current.id, input.version) : current;
-      const a = record.attributes as SopAttributes;
+      const a = operationalSop(record.attributes);
       const given = new Map<string, InputValue>();
       for (const { name, value } of input.inputs ?? []) {
         if (given.has(name)) throw new OperationError('invalid_input', `${name} is given twice`);
@@ -137,6 +151,30 @@ export const sopOperations = [
         }),
       );
       return {
+        obligations: (a.questions ?? []).flatMap((q) => {
+          const obligation = obligationOf(q);
+          if (!obligation) return [];
+          const binding = obligation.binding;
+          const passed =
+            !stageProblem(a, q) &&
+            (binding.type === 'input'
+              ? given.has(binding.variable)
+              : binding.type === 'material_role'
+                ? !!byRole.get(binding.role)?.record && !byRole.get(binding.role)?.problem
+                : false);
+          return [
+            {
+              question: q.id,
+              stage: obligation.stage,
+              passed,
+              ...(passed
+                ? {}
+                : {
+                    problem: `${q.question}: supply its declared ${binding.type === 'input' ? 'input' : 'material'}`,
+                  }),
+            },
+          ];
+        }),
         bindings: bindings.map((b) => ({
           role: b.role,
           ...(b.record ? { record: b.record.id, name: b.record.name, label: b.record.label } : {}),
@@ -179,7 +217,8 @@ export const sopOperations = [
       if (record.kind !== 'sop') {
         throw new OperationError('invalid_input', `${record.name} is not an SOP`);
       }
-      const a = record.attributes as SopAttributes;
+      await service.assertSopEditable(ctx, record.id);
+      const a = operationalSop(record.attributes);
       const question = (a.questions ?? []).find((q) => q.id === input.question);
       if (!question) {
         throw new OperationError(
@@ -187,26 +226,54 @@ export const sopOperations = [
           `${record.name} has no question ${input.question}`,
         );
       }
-      if (input.acceptSuggestion && !question.suggestion) {
-        throw new OperationError(
-          'invalid_input',
-          `Question ${question.id} has no suggestion to accept; give an answer`,
-        );
-      }
-      const settled: OpenQuestion = input.acceptSuggestion
-        ? { ...question, status: 'accepted_suggestion', answer: question.suggestion as string }
-        : { ...question, status: 'answered', answer: input.answer as string };
+      const changed: ScientificQuestion =
+        input.action.type === 'correct'
+          ? { ...question, question: input.action.text }
+          : {
+              ...question,
+              responses: [
+                ...question.responses,
+                {
+                  text: input.action.text,
+                  by: ctx.actor as Extract<typeof ctx.actor, { type: 'user' }>,
+                  at: new Date().toISOString(),
+                  version: record.version + 1,
+                },
+              ],
+            };
       return service.update(ctx, record.id, {
         expectedVersion: input.expectedVersion,
         attributes: {
           ...a,
-          questions: (a.questions ?? []).map((q) => (q.id === question.id ? settled : q)),
+          questions: (a.questions ?? []).map((q) => (q.id === question.id ? changed : q)),
         },
         reason:
-          input.reason ??
-          (input.acceptSuggestion
-            ? `Accepted the suggested answer to "${question.question}"`
-            : `Answered "${question.question}"`),
+          input.action.type === 'correct'
+            ? input.action.reason
+            : (input.reason ??
+              `Responded to "${question.question}"; the scientific issue remains open`),
+      });
+    },
+  }),
+  implement(sopsAskQuestion, {
+    agentPolicy: 'direct',
+    run: async (ctx, input, deps) => {
+      const service = new RecordService(deps.db, deps.kinds);
+      const record = await service.get(ctx, input.sop);
+      if (record.kind !== 'sop')
+        throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+      await service.assertSopEditable(ctx, record.id);
+      const a = operationalSop(record.attributes);
+      return service.update(ctx, record.id, {
+        expectedVersion: input.expectedVersion,
+        attributes: {
+          ...a,
+          questions: [
+            ...(a.questions ?? []),
+            { ...input.question, responses: [], disposition: { status: 'open' } },
+          ],
+        },
+        reason: input.reason ?? `Asked "${input.question.question}"`,
       });
     },
   }),

@@ -29,6 +29,8 @@ const noScreen: Record<string, string> = {
   'campaigns.draft': draftedByAsking,
   'experiments.draft': draftedByAsking,
   'sops.draft': draftedByAsking,
+  'sops.ask_question':
+    'A person asks the assistant to add a scientific question, then records their response on the SOP page; direct question-authoring controls belong to 004g SG-05',
   'platemaps.draft': draftedByAsking,
   'layouts.draft': draftedByAsking,
   'workcells.draft': draftedByAsking,

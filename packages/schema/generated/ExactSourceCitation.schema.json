@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "type": "string",
+          "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The sha256 of the bytes, lowercase hex"
+        },
+        "parse": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "parsed"
+            },
+            "snapshot": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "Content digest identifying the immutable converted-text snapshot"
+            }
+          },
+          "required": [
+            "status",
+            "snapshot"
+          ],
+          "additionalProperties": false
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "printedRevision": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "document",
+        "version",
+        "file",
+        "sha256",
+        "parse",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "passage": {
+      "type": "string",
+      "minLength": 1
+    },
+    "page": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "quote": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "source",
+    "passage",
+    "quote"
+  ],
+  "additionalProperties": false
+}

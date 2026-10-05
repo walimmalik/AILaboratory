@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Actor } from './actor.ts';
-import { FileId } from './files.ts';
+import { FileId, Sha256 } from './files.ts';
 import { RecordId, recordIdOf } from './ids.ts';
 import { Quantity } from './quantity.ts';
 
@@ -11,6 +11,36 @@ import { Quantity } from './quantity.ts';
  */
 
 export const DocumentId = recordIdOf('doc');
+
+/** Plan 004g/SG-18 foundation: immutable converted text, not the document's current parse. */
+export const SourceParseIdentity = z.strictObject({
+  status: z.literal('parsed'),
+  snapshot: Sha256.describe('Content digest identifying the immutable converted-text snapshot'),
+});
+
+/** Exact instructions selected for a method; printed edition metadata never selects the bytes. */
+export const ExactSourceReference = z.strictObject({
+  document: DocumentId,
+  version: z.number().int().positive(),
+  file: FileId,
+  sha256: Sha256,
+  parse: z.discriminatedUnion('status', [
+    SourceParseIdentity,
+    z.strictObject({ status: z.literal('unavailable'), reason: z.string().min(1) }),
+  ]),
+  title: z.string().min(1),
+  printedRevision: z.string().min(1).optional(),
+});
+export type ExactSourceReference = z.infer<typeof ExactSourceReference>;
+
+/** A checked quotation must name the immutable parse snapshot that supplied its passage. */
+export const ExactSourceCitation = z.strictObject({
+  source: ExactSourceReference.extend({ parse: SourceParseIdentity }),
+  passage: z.string().min(1),
+  page: z.number().int().positive().optional(),
+  quote: z.string().min(1),
+});
+export type ExactSourceCitation = z.infer<typeof ExactSourceCitation>;
 
 export const DocumentType = z
   .enum(['sop', 'vendor_manual', 'paper', 'protocol_code', 'web_page', 'note'])
