@@ -21,6 +21,7 @@ import {
   versionReviews,
   versionSummary,
 } from '../lib/history.ts';
+import { runCorrectionDiff } from '../lib/run-correction-diff.ts';
 import { kindsQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { sourcePhrase } from './AllFields.tsx';
@@ -108,6 +109,7 @@ export function RecordHistory({
                   : undefined;
                 const comparable = version && (version.operation === 'create' || previous);
                 const changes = comparable ? itemChanges(previous, version.snapshot, items) : [];
+                const correction = record.kind === 'run' ? runCorrectionDiff(changes) : undefined;
                 const labels = Object.fromEntries(
                   changes.map((change) => [
                     change.path,
@@ -128,7 +130,10 @@ export function RecordHistory({
                 const preview = [
                   response
                     ? `Response: “${historyExcerpt(response.text)}”`
-                    : historyChangePreview(changes, labels),
+                    : historyChangePreview(correction?.changes ?? changes, {
+                        ...labels,
+                        ...correction?.labels,
+                      }),
                   !questionComparison.available ? 'Scientific question comparison unavailable' : '',
                 ]
                   .filter(Boolean)
