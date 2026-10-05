@@ -9,6 +9,8 @@ A labware type is a record of kind `labware_type` (readable names like `LWT-0001
 
 ## Drafting a type
 
+When an SOP/assay needs a missing type, find existing types first (`records.list`), then draft the definition with the source evidence already available rather than asking the scientist to enter a form. Leave unsupported geometry/volumes absent and ask only the next consequential missing fact. A labware type is not a physical container; never invent barcodes, stock or locations. Readiness and human confirmation still apply.
+
 - Create it with `records.create`, `kind: "labware_type"`, the product's full name as `label`, and what you know as `attributes`. Only `family` is required: `plate`, `reservoir`, `tube`, `rack`, `tip_rack` or `lid`.
 - `manufacturer` is a vendor record ID (`vnd_…`). Find it with `records.list` (`kind: "vendor"`, `search`), or create one (`kind: "vendor"`, label = the company name, `attributes: {}`).
 - Geometry is in mm (`{"value": "127.76", "unit": "mm"}`), volumes in `uL`, `mL`, `L` or `nL`.

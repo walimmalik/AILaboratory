@@ -13,6 +13,8 @@ Before drafting, check the lab doesn't have it: `reagents.search` with `{text?, 
 
 ## Drafting a product
 
+For SOP/assay intake, draft necessary missing product definitions from real source evidence after searching existing products; don't ask the scientist to enter registry forms. Keep typical product values separate from lot certificate measurements. Unknown is not assent: leave absent facts absent and ask the next consequential question. Never create a lot, made batch or stock quantity merely to make feasibility pass; receiving a lot requires explicit facts about actual material and human approval.
+
 Use `reagents.draft_product` with `{label, attributes, components?, evidence?}`.
 
 - `attributes.category` (antibody, assay_kit, buffer, enzyme, substrate, stop_solution, compound…) and `origin`: `bought` or `made`.

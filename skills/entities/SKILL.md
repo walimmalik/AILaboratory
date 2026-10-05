@@ -13,6 +13,8 @@ An **entity kind** (`entity_kind`, `ENK-0001`) is a kind of thing the lab regist
 
 ## Drafting an entity
 
+During SOP/assay intake, draft necessary missing reusable entity definitions from current sources and explicit facts rather than sending the scientist through registry forms. Search for existing definitions first. An entity describes identity, not an actual specimen or stock: never fabricate samples, containers, measured QC or available volume to satisfy feasibility. Leave unknown facts absent, ask only the next consequential scientific question, and use calculators for scientific numbers. Unknown is not assent; human review and confirmation still apply.
+
 `entities.draft` with `{label, entityKind, fields?, sequence?, structure?, synonyms?, handlingRules?, notes?, evidence?}`.
 
 - `fields` are by key, as the kind defines them: text, a choice from its options, `true`/`false`, a date `"2026-09-30"`, a URL, a record ID for link fields, and for numbers either a quantity `{"value": "2686", "unit": "bp"}` (any unit of the field's dimension) or, for plain numbers, a decimal string `"500"`.
