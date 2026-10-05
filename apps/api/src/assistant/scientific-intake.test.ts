@@ -114,6 +114,9 @@ describe('scientific intake content contract (004g SG-04)', () => {
         'link a wash-volume conflict to wash',
         'a capture-antibody question with no retained coating step',
         'a missing whole procedure must not be linked to wash or read',
+        'Put question citations in',
+        'questions[].passages',
+        'never in scientific field evidence: fieldEvidence.questions, evidence.questions or /questions/... entries',
       ]) {
         expect(text, requirement).toContain(requirement);
       }
