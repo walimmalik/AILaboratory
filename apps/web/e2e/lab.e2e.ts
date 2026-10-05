@@ -901,10 +901,54 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   );
   await expect(questions.getByRole('button', { name: 'Accept the suggestion' })).toHaveCount(0);
   const response = 'I do not know which temperature is correct; the source needs checking.';
-  await questions.getByRole('textbox', { name: 'Your answer' }).fill(response);
-  await questions.getByRole('button', { name: 'Record response' }).click();
+  const answer = questions.getByRole('textbox', { name: 'Your answer' });
+  const recordResponse = questions.getByRole('button', { name: 'Record response' });
+  const responseRoute = '**/api/v1/ops/sops.answer_question';
+  // A failed save keeps the exact draft available for correction or retry.
+  await page.route(
+    responseRoute,
+    (route) =>
+      route.fulfill({ status: 409, json: { code: 'conflict', message: 'Response not saved.' } }),
+    { times: 1 },
+  );
+  await answer.fill(`  ${response}  `);
+  await recordResponse.click();
+  await expect(questions).toContainText('Response not saved.');
+  await expect(answer).toHaveValue(`  ${response}  `);
+  await expect(recordResponse).toBeEnabled();
+
+  await recordResponse.click();
   await expect(questions).toContainText(response);
+  await expect(answer).toHaveValue('');
+  await expect(recordResponse).toBeDisabled();
   await expect(questions).toContainText('Response received; the scientific issue remains open.');
+  await expect(questions).toContainText('1 open');
+
+  // While a save is in flight, the person can start another response without losing it.
+  let releaseSave = () => {};
+  const saveHeld = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  await page.route(
+    responseRoute,
+    async (route) => {
+      await saveHeld;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  const secondResponse = 'Please check the original incubation method.';
+  const nextDraft = 'I will look for the source document.';
+  await answer.fill(secondResponse);
+  const saveStarted = page.waitForRequest(responseRoute);
+  await recordResponse.click();
+  await saveStarted;
+  await expect(recordResponse).toBeDisabled();
+  await answer.fill(nextDraft);
+  releaseSave();
+  await expect(questions).toContainText(secondResponse);
+  await expect(answer).toHaveValue(nextDraft);
+  await expect(recordResponse).toBeEnabled();
   await expect(questions).toContainText('1 open');
 
   await page.reload();
