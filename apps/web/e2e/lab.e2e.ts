@@ -1221,7 +1221,8 @@ test('a person plans an experiment, runs it as a checklist and finishes the run'
   await checklist.getByRole('button', { name: 'Skipped' }).click();
   await checklist.getByPlaceholder('Why').fill('Washer down');
   await checklist.getByRole('button', { name: 'Record' }).click();
-  await expect(checklist).toContainText('Skipped Wash. Why: Washer down');
+  await expect(checklist.getByText('Skipped Wash', { exact: true })).toBeVisible();
+  await expect(checklist.getByText('Why: Washer down', { exact: true })).toBeVisible();
   await checklist.getByRole('button', { name: 'Finish the run' }).click();
   await expect(checklist).toContainText('Done · 2 of 2 steps · 1 went differently');
 });

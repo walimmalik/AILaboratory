@@ -39,6 +39,74 @@ function html(checklist: RunStep[], status = 'in_progress') {
 }
 
 describe('run checklist instructions', () => {
+  it('shows one Planned/Recorded comparison for a corrected step without duplicating generated quantities or punctuation', () => {
+    const text = 'Add the buffer.\nKeep the plate level.';
+    const markup = html(
+      [
+        {
+          ...step,
+          text,
+          status: 'done',
+          actuals: [{ name: 'volume', value: { value: '80', unit: 'uL' } }],
+          deviation: {
+            what: 'volume 80 µL (planned 100 µL)',
+            why: 'Notebook correction.',
+            impact: 'Lower signal.',
+          },
+        },
+      ],
+      'done',
+    );
+    expect(markup).toContain(`class="sop-line run-instruction">${text}</p>`);
+    expect(markup).toContain('Planned: volume 100 µL</p>');
+    expect(markup).toContain('Recorded: volume 80 µL</p>');
+    expect(markup.match(/100 µL/g)).toHaveLength(1);
+    expect(markup.match(/80 µL/g)).toHaveLength(1);
+    expect(markup).toContain('Why: Notebook correction.</p>');
+    expect(markup).toContain('Impact: Lower signal.</p>');
+    expect(markup).not.toContain('. .');
+    expect(markup).not.toContain('Done as planned');
+  });
+
+  it('preserves additional recorded meaning with multiple actuals and an unplanned parameter', () => {
+    const actuals = [
+      { name: 'volume', value: { value: '80', unit: 'uL' } },
+      { name: 'duration', value: { value: '20', unit: 'min' } },
+    ];
+    const generated = 'volume 80 µL (planned 100 µL); duration 20 min (planned nothing)';
+    const done = {
+      ...step,
+      status: 'done' as const,
+      actuals,
+      deviation: { what: generated, why: 'From the notebook' },
+    };
+    const markup = html([done], 'done');
+    expect(markup).toContain('Recorded: volume 80 µL · duration 20 min');
+    expect(markup).not.toContain('(planned');
+    const explanation = `${generated}; the plate was moved to shade.`;
+    expect(
+      html([{ ...done, deviation: { ...done.deviation, what: explanation } }], 'done'),
+    ).toContain(explanation);
+  });
+
+  it('keeps skipped explanations without inventing recorded quantities', () => {
+    const markup = html([
+      {
+        ...step,
+        status: 'skipped',
+        deviation: {
+          what: 'Wash was omitted.',
+          why: 'Plate unavailable.',
+          impact: 'Result cannot be compared.',
+        },
+      },
+    ]);
+    expect(markup).toContain('skipped');
+    expect(markup).toContain('Planned: volume 100 µL');
+    expect(markup).toContain('Wash was omitted.</p>');
+    expect(markup).toContain('Why: Plate unavailable.</p>');
+    expect(markup).not.toContain('Recorded:');
+  });
   it('shows captured paragraphs alongside the planned values and recorded deviation', () => {
     const text =
       'Add the coating solution. Cover the plate.\n\nIncubate overnight.\nKeep it level.';
@@ -53,7 +121,8 @@ describe('run checklist instructions', () => {
     expect(markup).toContain('<b>Coat the plate.</b>');
     expect(markup).toContain(`<p class="sop-line run-instruction">${text}</p>`);
     expect(markup).toContain('Planned: volume 100 µL');
-    expect(markup).toContain('volume was 90 µL. Why: Limited coating solution');
+    expect(markup).toContain('volume was 90 µL</p>');
+    expect(markup).toContain('Why: Limited coating solution</p>');
     expect(markup.indexOf(text)).toBeLessThan(markup.indexOf('Planned:'));
     expect(markup).not.toContain('Instruction text was not captured');
   });

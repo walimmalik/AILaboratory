@@ -104,6 +104,11 @@ The menu has an Experiments group: Campaigns, Experiments, Runs and Sets, each a
 
 Every button calls an operation; the pure rules (which actions a stage allows, run progress) are in `apps/web/src/lib/experiments.ts`.
 
+Changed checklist values appear once as labelled Planned and Recorded lines, using unit-aware
+formatting. Why and Impact follow as separate lines. Only an exact duplicate of the server-generated
+value comparison is omitted; additional deviation explanation remains visible. Captured instructions,
+unchanged steps, pending steps and skipped-step reasons retain their existing meaning.
+
 ## The demo campaigns (013a)
 
 `seed/campaigns.yaml` holds two campaigns: BRD4 degraders (a single-point screen, then a HiBiT dose-response that follows up on it) and the IL-6 reporter panel (Dual-Glo, then an ELISA). Each experiment names an assay template in `seed/assays.yaml`, and its protocol pins that template's SOPs at the version the lab has. Subjects, the campaign's `about` and control compounds are entities found by their seed label. `apps/api/src/campaigns/seed.ts` drafts each campaign the lab doesn't have yet (by title) after the SOPs. It leaves out, and reports, any SOP or entity the lab lacks. The seed SOPs are drafts, so the experiments stay in designing, and `protocol_confirmed` blocks planning until a person confirms the SOPs.
