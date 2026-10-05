@@ -220,6 +220,15 @@ describe('exact selected-source assistant preflight', () => {
       expect(request.tools.map((tool) => tool.name)).toContain('library_read');
       expect(request.tools.map((tool) => tool.name)).toContain('files_get');
       expect(request.system).toContain('library (ailab-library)');
+      expect(request.system).toContain(
+        'When readable text has conversion warnings, say the text was read with the stated limitations and explain the relevant warning plainly',
+      );
+      expect(request.system).toContain(
+        'without calling all of its text unchecked or implying a clean conversion',
+      );
+      expect(request.system).toContain(
+        'Do not repeat parse status, digests, snapshot IDs or machine reasons in scientist-facing replies unless explicitly asked for technical details',
+      );
     }
     const section = await ask({
       path: '/library/instructions',
@@ -273,6 +282,18 @@ describe('exact selected-source assistant preflight', () => {
     await ask(page);
     expect(complete.mock.calls[0]?.[0].system).toContain(
       'Text could not be checked for this attachment. Keep it unchecked',
+    );
+    expect(complete.mock.calls[0]?.[0].system).toContain(
+      'This saved attachment has no checked text, so I cannot verify its instructions.',
+    );
+    expect(complete.mock.calls[0]?.[0].system).toContain(
+      'Distinguish a failed read or lost access from an attachment with no checked text',
+    );
+    expect(complete.mock.calls[0]?.[0].system).toContain(
+      'Do not repeat parse status, digests, snapshot IDs or machine reasons in scientist-facing replies unless explicitly asked for technical details',
+    );
+    expect(complete.mock.calls[0]?.[0].system).toContain(
+      '"status":"unavailable","reason":"No checked text selected"',
     );
     expect(complete.mock.calls[0]?.[0].system).not.toContain('Use the retained buffer.');
     await expect(
