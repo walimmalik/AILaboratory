@@ -751,7 +751,9 @@ test('Library starts a fresh method discussion and keeps specialist browsing ava
   await ask.press('Enter');
   const panel = page.getByRole('complementary', { name: 'Assistant' });
   await expect(panel.getByText('You said: An unrelated existing discussion')).toBeVisible();
-  const oldConversation = await panel.getByLabel('Conversation', { exact: true }).inputValue();
+  const oldConversation = await panel
+    .getByRole('combobox', { name: 'Conversation', exact: true })
+    .inputValue();
   await panel.getByRole('button', { name: 'Close the assistant' }).click();
   await page
     .getByRole('navigation', { name: 'Modules' })
@@ -768,14 +770,20 @@ test('Library starts a fresh method discussion and keeps specialist browsing ava
   expect(request.page).toMatchObject({ path: '/library', title: 'Library' });
   expect(request.page.record).toBeUndefined();
   await expect(panel.getByText(/^You said:/)).toBeVisible();
-  await expect(panel.getByLabel('Conversation', { exact: true })).not.toHaveValue(oldConversation);
-  const newConversation = await panel.getByLabel('Conversation', { exact: true }).inputValue();
+  await expect(panel.getByRole('combobox', { name: 'Conversation', exact: true })).not.toHaveValue(
+    oldConversation,
+  );
+  const newConversation = await panel
+    .getByRole('combobox', { name: 'Conversation', exact: true })
+    .inputValue();
   const conversation = await asPerson(page, 'assistant.get_conversation', { id: newConversation });
   expect(conversation.messages[0].text).toBe(request.message);
   expect(conversation.messages[0].page.path).toBe('/library');
   expect(await asPerson(page, 'records.list', { kind: 'sop' })).toEqual(before);
   await page.reload();
-  await expect(panel.getByLabel('Conversation', { exact: true })).toHaveValue(newConversation);
+  await expect(panel.getByRole('combobox', { name: 'Conversation', exact: true })).toHaveValue(
+    newConversation,
+  );
   await expect(panel.getByText(/^You said:/)).toBeVisible();
   await panel.getByRole('button', { name: 'Close the assistant' }).click();
   await page.getByRole('link', { name: 'Find instructions', exact: true }).click();
