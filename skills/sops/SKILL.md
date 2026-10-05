@@ -7,6 +7,27 @@ description: Work with digital SOPs in AILaboratory through its MCP tools: digit
 
 A digital SOP (plan 012) is a lab procedure as a structured document: materials by role, typed steps, and variables. Variables are inputs per run (samples, replicates), defaults (well volume), values read from records (a plate's dead volume) or formulas over the others. 
 
+## Default scientific intake
+
+Use this workflow for ordinary SOP requests; the person need not ask to be interviewed.
+
+1. Establish whether the request is hypothetical planning, a reusable method, experiment design or physical run preparation from the conversation and current record. Ask only if unclear. Actual specimens, lots, container locations and scheduling belong to experiment/run preparation, not reusable method instructions.
+2. Read the current SOP/version, relevant source passages, confirmed methods, registry definitions and confirmed lab memory (`memory.search`). Reuse stated facts. Discover only relevant skills and operations: `skills.list`, one module per `skills.get`, then `operations.describe` with `schema: false` and needed schemas together by `ids`.
+3. Draft what the sources settle and use `sops.evaluate` or `sops.calculate` for scientific calculations. Find existing supporting definitions first; draft needed vendors, labware types, products or entity definitions through their operations with evidence. Do not send the scientist through registry forms. Never invent physical samples, lots, stock, barcodes, measured values or instrument availability to make readiness pass.
+4. Choose one consequential scientific decision next. Explain the issue, why it matters, the source evidence, supported choices and consequences, and the exact proposed change. Coupled choices belong together only when scientifically inseparable. Ask essential absent facts once; avoid unrelated question bundles and repeated readiness paragraphs. Continue useful source work before stopping.
+5. Unknown is not assent: “I don't know”, an absent answer or conversational agreement leaves uncertainty unresolved. `sops.answer_question` is people-only; do not emulate it by editing questions with `records.update`. Ordinary write results may be pending proposals; describe the actual human Review action and wait. The dedicated **Apply decision** path in plan 004g is not yet implemented; never invent a tool or card for it. Current readiness remains authoritative; report stage limitations rather than bypassing checks.
+6. End with completed work and its actual state, a focused human decision request, a specific failure/blocker or an honest limit/continuation state. A promise to investigate is insufficient while useful tools remain. On resume, reread records and pending proposal outcomes; transcript agreement is not scientific acceptance.
+
+## Scientist-facing content
+
+Keep three kinds of content distinct:
+
+- **Procedure:** purpose/applicability, materials and their roles, ordered instructions, quantities/units, timing/constraints and acceptance criteria. Use dilution, concentration, standards, controls and replicates precisely. Use labels supplied by the schema/kind rather than technical variable keys in prose.
+- **Uncertainty:** a short scientific issue with why it matters, evidence and the next decision. An unresolved setting is not a bench instruction; don't write a suggested wash count as accepted.
+- **Review:** provenance, assumptions, agent authorship, draft state and software identifiers in `evidence` and readiness. Avoid repeated “blocking gate”, “QA draft” or adoption bookkeeping in method text. Keep citations and unknowns inspectable.
+
+Actual specimens, lot certificates, available containers and execution dates belong in preparation context when late binding is allowed. A typical product value is not a measured lot value. Missing calculator inputs stay missing.
+
 ## Drafting an SOP
 
 - `sops.draft` with `label` and the sections: `materials` (roles like `coating_plate` with `type`, `requirements` and a `default` record id when you know it), `solutions`, `variables`, `steps`, `layout`, `timing`, `questions`, plus `purpose`, `assays` and `source: {document}` when you work from a library document.
