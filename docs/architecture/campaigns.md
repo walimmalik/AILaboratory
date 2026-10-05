@@ -62,7 +62,7 @@ The module's lab memory detector (005c-1, `campaigns/detectors.ts`): `runs.finis
 
 `apps/api/src/campaigns/runs.ts` holds the run operations.
 
-### Captured step instructions (004g / SG-09 producer slice)
+### Captured step instructions (004g / SG-09 slice)
 
 `runs.start` also copies each step's complete `text` from the already pinned SOP record snapshot,
 alongside its existing title and resolved planned values. `RunStep.text` is the instruction as
@@ -72,10 +72,13 @@ saved proposal approval cannot change, delete or retrospectively add it. Recordi
 deviations, finishing and later corrections preserves it.
 
 Older runs may lack `text`; that records uncaptured history rather than an empty instruction.
-They remain readable and recordable without backfilling from any later SOP. This producer slice
+They remain readable and recordable without backfilling from any later SOP. This slice
 captures only the instruction already present in the pinned SOP. It does not establish source
 completeness, repair seed instructions, resolve a full run manifest or validate hardware behavior.
-The run-view consumer and complete SG-09/SG-13 acceptance remain separate work.
+The run checklist displays the captured instruction with its line breaks, alongside planned
+values and deviations. Identical title and instruction text appears once. For absent text it
+states “Instruction text was not captured for this run.” The record API exposes the same field
+to agents. Complete SG-09/SG-13 acceptance remains separate work.
 
 ## Conclusions and sets (013c)
 
