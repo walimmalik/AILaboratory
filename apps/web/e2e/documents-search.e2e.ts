@@ -1,4 +1,4 @@
-import type { librarySearch, OperationErrorBody } from '@ailab/schema';
+import type { libraryRead, librarySearch, OperationErrorBody } from '@ailab/schema';
 import { expect, test } from '@playwright/test';
 
 test('document text search separates browsing, recovers from failure and carries source context', async ({
@@ -19,7 +19,7 @@ test('document text search separates browsing, recovers from failure and carries
   });
   expect(added.ok()).toBe(true);
   const source = (await added.json()).output;
-  // CI has no document converter. Only search responses are fixtures here; title browsing,
+  // CI has no document converter. Search and parsed text responses are fixtures here; title browsing,
   // record navigation, assistant requests and persistence use the real API. Live acceptance
   // separately searches a genuinely parsed illustrative document with the actual operation.
   const hit = {
@@ -28,7 +28,7 @@ test('document text search separates browsing, recovers from failure and carries
         document: { id: source.id, name: source.name, label: source.label, type: 'sop' },
         passage: {
           id: 'illustrative-search-passage',
-          section: 0,
+          section: 1,
           heading: ['Readout'],
           page: 1,
           text: 'Read absorbance at 450 nm.',
@@ -38,6 +38,45 @@ test('document text search separates browsing, recovers from failure and carries
       },
     ],
   } satisfies ReturnType<typeof librarySearch.output.parse>;
+  const parsed = {
+    document: source,
+    parse: {
+      file: source.id.replace('doc_', 'fil_'),
+      sha256: 'illustrative-search-fixture',
+      converter: 'test-fixture',
+      sections: 2,
+      passages: 2,
+      warnings: [],
+      parsedAt: new Date().toISOString(),
+    },
+    outline: [
+      { index: 0, heading: ['Introduction'], passages: 1 },
+      { index: 1, heading: ['Readout'], pageFrom: 1, passages: 1 },
+    ],
+  } satisfies ReturnType<typeof libraryRead.output.parse>;
+  await page.route('**/api/v1/ops/library.read', async (route) => {
+    const input = route.request().postDataJSON();
+    if (input.document !== source.id) return route.continue();
+    const output = {
+      ...parsed,
+      ...(input.section === undefined
+        ? {}
+        : {
+            passages:
+              input.section === 1
+                ? hit.hits.map((entry) => entry.passage)
+                : [
+                    {
+                      id: 'intro',
+                      section: 0,
+                      heading: ['Introduction'],
+                      text: 'Illustrative only.',
+                    },
+                  ],
+          }),
+    } satisfies ReturnType<typeof libraryRead.output.parse>;
+    await route.fulfill({ json: { status: 'done', output } });
+  });
   const submitted: string[] = [];
   let releaseFirst: (() => void) | undefined;
   const firstReply = new Promise<void>((resolve) => {
@@ -87,7 +126,7 @@ test('document text search separates browsing, recovers from failure and carries
   await expect(page.getByText('No title has those words.', { exact: true })).toBeHidden();
   await expect(passages.getByRole('link', { name: source.label, exact: true })).toHaveAttribute(
     'href',
-    `/records/${source.id}`,
+    `/records/${source.id}?section=1#document-text`,
   );
 
   await page.getByRole('button', { name: 'Titles', exact: true }).click();
@@ -121,8 +160,45 @@ test('document text search separates browsing, recovers from failure and carries
   await passages.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(passages).toContainText('1 passage with “wavelength”');
   await passages.getByRole('link', { name: source.label, exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/records/${source.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/records/${source.id}\\?section=1#document-text$`));
   await expect(page.getByRole('heading', { level: 1 })).toContainText(source.label);
+  const text = page.getByRole('region', { name: 'Text', exact: true });
+  await expect(text.getByRole('button', { name: 'Readout', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(text).toContainText('Read absorbance at 450 nm.');
+  await expect(text.getByText('Read absorbance at 450 nm.', { exact: true })).toBeInViewport();
+  await expect(text.getByText('Illustrative only.', { exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(text.getByRole('button', { name: 'Readout', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.goBack();
+  await expect(words).toHaveValue('wavelength');
+  await expect(passages).toContainText('1 passage with “wavelength”');
+  await page.reload();
+  await expect(words).toHaveValue('wavelength');
+  await expect(passages).toContainText('1 passage with “wavelength”');
+  await page.getByRole('button', { name: 'Titles', exact: true }).click();
+  await expect(titles).toHaveValue(source.label);
+  await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Drafts', exact: true }).click();
+  await page.getByRole('row', { name: new RegExp(source.name) }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(source.label);
+  await page.goBack();
+  await expect(titles).toHaveValue(source.label);
+  await expect(page.getByRole('button', { name: 'Drafts', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Document text', exact: true }).click();
+  await expect(words).toHaveValue('wavelength');
+  await passages.getByRole('link', { name: source.label, exact: true }).click();
   const started = page.waitForRequest('**/api/v1/ops/assistant.ask');
   await page
     .getByLabel('Ask the assistant')
