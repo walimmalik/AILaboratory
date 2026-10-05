@@ -1,4 +1,4 @@
-import type { RecordEnvelope, RelatedContext } from '@ailab/schema';
+import { type RecordEnvelope, type RelatedContext, SopAttributes } from '@ailab/schema';
 
 /**
  * Pinned design inputs (ADR 0039). A design stores `{id, version}` for each confirmed record it is
@@ -31,6 +31,11 @@ export async function checkPin(
     return { invalid: `${pin.id} is not ${noun} in this lab` };
   const pinned = await context.getVersion(pin.id, pin.version);
   if (!pinned) return { record, invalid: `${record.name} has no version ${pin.version}` };
+  if (pinned.kind === 'sop' && !SopAttributes.safeParse(pinned.attributes).success)
+    return {
+      record,
+      invalid: `${record.name} v${pin.version} uses an unsupported question contract; reconcile its history before scientific use`,
+    };
   const report: PinReport = { record, pinned };
   if (pinned.status !== 'active') {
     report.unconfirmed = `${record.label} (${record.name}) v${pin.version} was not confirmed`;

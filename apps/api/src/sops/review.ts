@@ -3,10 +3,10 @@ import {
   type Actor,
   Citation,
   type EvidenceInput,
-  type OpenQuestion,
   type Readiness,
   type RecordEnvelope,
   type ReviewFinding,
+  type ScientificQuestion,
   SopAttributes,
   SopName,
   type SopReviewRound,
@@ -20,6 +20,7 @@ import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { checkCitations, type Passage, passagesOf } from './citations.ts';
 import { sop as sopKind } from './kinds.ts';
+import { operationalSop } from './questions.ts';
 
 /**
  * The AI review cycle for draft SOPs (plan 012 G11, ADR 0038). A reviewer model reads the draft,
@@ -186,6 +187,8 @@ export async function reviewSop(
   let record = await service.get(ctx, input.sop);
   if (record.kind !== 'sop')
     throw new OperationError('invalid_input', `${record.name} is not an SOP`);
+  await service.assertSopEditable(ctx, record.id);
+  operationalSop(record.attributes);
   if (record.status !== 'draft') {
     throw new OperationError(
       'invalid_state',
@@ -203,7 +206,7 @@ export async function reviewSop(
     agentName: reviewerName,
     onBehalfOf: ctx.actor.type === 'user' ? ctx.actor.userId : ctx.actor.onBehalfOf,
   };
-  const reviewerCtx: RecordContext = { ...ctx, actor: reviewer };
+  const reviewerCtx: RecordContext = { ...ctx, actor: reviewer, via: 'sops.review' };
   const texts = new Map<string, Passage[] | undefined>();
   const earlier = await roundsOf(deps, ctx, record.id);
   const rounds: SopReviewRound[] = [];
@@ -251,10 +254,12 @@ export async function reviewSop(
         const parsed = AskInput.safeParse(call.input);
         if (!parsed.success) throw new Error(issues(parsed.error));
         asked += 1;
-        const question: OpenQuestion = {
+        const question: ScientificQuestion = {
           id: `review-${earlier.length + n}-${asked}`,
           question: parsed.data.question,
-          status: 'open',
+          stage: { stage: 'method', reason: 'The source leaves the method unclear' },
+          responses: [],
+          disposition: { status: 'open' },
           ...(parsed.data.about ? { about: parsed.data.about } : {}),
           ...(parsed.data.suggestion ? { suggestion: parsed.data.suggestion } : {}),
           ...(parsed.data.passages ? { passages: parsed.data.passages } : {}),
@@ -397,6 +402,7 @@ function evidenceOf(findings: ReviewFinding[]): Record<string, EvidenceInput> {
   const out: Record<string, EvidenceInput> = {};
   for (const f of findings) {
     const field = tokensOf(f.path)[0] as string;
+    if (field === 'questions') continue;
     if (out[field]?.source === 'stated') continue;
     out[field] = {
       source: f.cite && f.type === 'fix' ? 'stated' : 'assumed',

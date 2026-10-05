@@ -5,11 +5,13 @@ import {
   type RecordEnvelope,
   SopExpectation,
 } from '@ailab/schema';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Assistant } from '../assistant/assistant.ts';
 import type { ChatModel, ModelRequest, ModelTurn } from '../assistant/model.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
+import { proposals, records, recordVersions } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { fileKinds } from '../files/kinds.ts';
 import { MemoryFileStore } from '../files/store.ts';
@@ -243,7 +245,7 @@ const elisa = {
       about: { step: 'coat' },
       question: 'Overnight at room temperature or at 4 °C?',
       suggestion: 'Room temperature, as the vendor sheet says',
-      status: 'open',
+      stage: { stage: 'method', reason: 'The source leaves the method unclear' },
     },
   ],
 };
@@ -266,7 +268,6 @@ describe('sops.draft', () => {
       'layout',
       'analysis',
       'timing',
-      'questions',
     ]);
   });
 
@@ -574,130 +575,420 @@ describe('binding roles (012b)', () => {
   });
 });
 
-describe('sops.answer_question', () => {
-  it('lets a person answer or accept the suggestion, which clears the blocker; an agent cannot', async () => {
-    const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
-      ...elisa,
-      questions: [
-        ...elisa.questions,
-        { id: 'q2', question: 'Which plate sealer?', status: 'open' },
-      ],
+describe('scientific question lifecycle', () => {
+  it('records unknown responses with actor, time and version without resolving the method', async () => {
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    const input = {
+      sop: sop.id,
+      expectedVersion: sop.version,
+      question: 'q1',
+      action: { type: 'response', text: "I don't know" },
+    };
+    await expect(registry.execute(agent, 'sops.answer_question', input)).rejects.toMatchObject({
+      code: 'forbidden',
     });
-    await expect(
-      registry.execute(agent, 'sops.answer_question', {
-        sop: sop.id,
-        expectedVersion: sop.version,
-        question: 'q1',
-        acceptSuggestion: true,
-      }),
-    ).rejects.toMatchObject({ code: 'forbidden' });
-    await expect(
-      registry.execute(person, 'sops.answer_question', {
-        sop: sop.id,
-        expectedVersion: sop.version,
-        question: 'q2',
-        acceptSuggestion: true,
-      }),
-    ).rejects.toMatchObject({
-      code: 'invalid_input',
-      message: expect.stringContaining('no suggestion'),
+    await expect(registry.execute(otherLab, 'sops.answer_question', input)).rejects.toMatchObject({
+      code: 'not_found',
     });
     await expect(
       registry.execute(person, 'sops.answer_question', {
-        sop: sop.id,
-        expectedVersion: sop.version,
-        question: 'q9',
-        answer: 'Yes',
-      }),
-    ).rejects.toMatchObject({
-      code: 'invalid_input',
-      message: expect.stringContaining('no question q9'),
-    });
-    await expect(
-      registry.execute(person, 'sops.answer_question', {
-        sop: sop.id,
-        expectedVersion: sop.version,
-        question: 'q1',
-        answer: 'Yes',
-        acceptSuggestion: true,
+        ...input,
+        action: { type: 'response', text: '  ' },
       }),
     ).rejects.toMatchObject({ code: 'invalid_input' });
-
-    const first = await run<RecordEnvelope>(person, 'sops.answer_question', {
-      sop: sop.id,
-      expectedVersion: sop.version,
-      question: 'q1',
-      acceptSuggestion: true,
-    });
-    const second = await run<RecordEnvelope>(person, 'sops.answer_question', {
-      sop: sop.id,
-      expectedVersion: first.version,
-      question: 'q2',
-      answer: 'Adhesive film',
-    });
-    expect((second.attributes as { questions: unknown[] }).questions).toEqual([
+    await expect(
+      registry.execute(person, 'sops.answer_question', { ...input, question: 'missing' }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    const answered = await run<RecordEnvelope>(person, 'sops.answer_question', input);
+    expect(answered.attributes.questions).toEqual([
       expect.objectContaining({
         id: 'q1',
-        status: 'accepted_suggestion',
-        answer: 'Room temperature, as the vendor sheet says',
+        disposition: { status: 'open' },
+        responses: [
+          {
+            text: "I don't know",
+            by: person.actor,
+            at: expect.any(String),
+            version: answered.version,
+          },
+        ],
       }),
-      expect.objectContaining({ id: 'q2', status: 'answered', answer: 'Adhesive film' }),
     ]);
-    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
-    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(true);
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(readiness.checks.find((c) => c.id === 'questions_answered')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+    });
+    const partiallyConfirmed = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: sop.id,
+      expectedVersion: answered.version,
+    });
+    expect(partiallyConfirmed.status).toBe('draft');
+    await expect(
+      registry.execute(person, 'records.activate', {
+        id: sop.id,
+        expectedVersion: partiallyConfirmed.version,
+      }),
+    ).rejects.toMatchObject({ code: 'not_ready' });
+    const corrected = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      ...input,
+      expectedVersion: partiallyConfirmed.version,
+      action: {
+        type: 'correct',
+        text: 'Which coating temperature does the method require?',
+        reason: 'Clarify the wording',
+      },
+    });
+    expect(corrected.attributes.questions).toEqual([
+      expect.objectContaining({
+        id: 'q1',
+        disposition: { status: 'open' },
+        responses: [
+          {
+            text: "I don't know",
+            by: person.actor,
+            at: expect.any(String),
+            version: answered.version,
+          },
+        ],
+        stage: elisa.questions[0]?.stage,
+      }),
+    ]);
+    const history = await run<{ versions: { snapshot: RecordEnvelope }[] }>(
+      person,
+      'records.history',
+      { id: sop.id },
+    );
+    expect(
+      history.versions.some(
+        (v) => JSON.stringify(v.snapshot.attributes) === JSON.stringify(answered.attributes),
+      ),
+    ).toBe(true);
+    expect(
+      history.versions.some(
+        (v) =>
+          (v.snapshot.attributes.questions as { question: string }[])[0]?.question ===
+          elisa.questions[0]?.question,
+      ),
+    ).toBe(true);
   });
 
-  it('keeps an agent from settling a question through any other write', async () => {
-    const answered = {
-      id: 'q2',
-      question: 'Which plate sealer?',
-      status: 'answered',
-      answer: 'Film',
-    };
-    await expect(
-      registry.execute(agent, 'sops.draft', { ...elisa, questions: [answered] }),
-    ).rejects.toMatchObject({ code: 'invalid_attributes', message: expect.stringContaining('q2') });
-
+  it('refuses every generic all-actor question rewrite, omission, creation and restore', async () => {
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
-    const questions = (sop.attributes as { questions: { id: string }[] }).questions;
-    const settle = (ctx: RecordContext, target: RecordEnvelope) =>
-      registry.execute(ctx, 'records.update', {
-        id: target.id,
-        expectedVersion: target.version,
-        attributes: {
-          ...target.attributes,
-          questions: questions.map((q) => ({ ...q, status: 'answered', answer: '37 C' })),
+    expect(
+      Object.keys(sop.evidence).some((key) => key === 'questions' || key.startsWith('/questions/')),
+    ).toBe(false);
+    expect(sop.evidence['/variables/well_volume']?.source).toBe('assumed');
+    await expect(
+      registry.execute(agent, 'sops.draft', {
+        ...elisa,
+        evidence: { '/questions/q1': { source: 'assumed' } },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    for (const ctx of [person, agent]) {
+      for (const changed of [
+        { ...sop.attributes, questions: [] },
+        { ...sop.attributes, questions: undefined },
+        {
+          ...sop.attributes,
+          questions: [
+            { ...(sop.attributes.questions as object[])[0], question: 'Nothing to decide' },
+          ],
         },
-      });
-    await expect(settle(agent, sop)).rejects.toMatchObject({
-      code: 'invalid_attributes',
-      message: expect.stringContaining('for a person to answer'),
-    });
-    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
-    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(false);
-
-    // A person's answer stands, and an agent's later edit leaves it alone.
-    const byPerson = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      ])
+        await expect(
+          registry.execute(ctx, 'records.update', {
+            id: sop.id,
+            expectedVersion: sop.version,
+            attributes: changed,
+          }),
+        ).rejects.toMatchObject({
+          code: 'invalid_attributes',
+          message: expect.stringContaining('operation-owned'),
+        });
+      await expect(
+        registry.execute(ctx, 'records.create', {
+          kind: 'sop',
+          label: 'Bypass',
+          attributes: sop.attributes,
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+      await expect(
+        registry.execute(ctx, 'changes.apply', {
+          steps: [
+            {
+              operation: 'records.update',
+              input: {
+                id: sop.id,
+                expectedVersion: sop.version,
+                attributes: { ...sop.attributes, questions: [] },
+              },
+            },
+          ],
+        }),
+      ).rejects.toThrow();
+    }
+    const answered = await run<RecordEnvelope>(person, 'sops.answer_question', {
       sop: sop.id,
       expectedVersion: sop.version,
       question: 'q1',
-      answer: 'Room temperature',
+      action: { type: 'response', text: 'Check the vendor sheet' },
     });
+    const proposal = sop.id.replace('sop_', 'prp_');
+    await db.insert(proposals).values({
+      id: proposal,
+      orgId: person.orgId,
+      labId: person.labId,
+      operationId: 'records.update',
+      input: {
+        id: sop.id,
+        expectedVersion: answered.version,
+        attributes: { ...answered.attributes, questions: [] },
+      },
+      status: 'pending',
+      proposedBy: agent.actor,
+      proposedAt: new Date(),
+    });
+    expect(await run(person, 'proposals.approve', { id: proposal })).toMatchObject({
+      status: 'failed',
+      error: { code: 'invalid_attributes' },
+    });
+    expect(
+      (await run<RecordEnvelope>(person, 'records.get', { id: sop.id })).attributes.questions,
+    ).toEqual(answered.attributes.questions);
+    for (const ctx of [person, agent])
+      await expect(
+        registry.execute(ctx, 'records.restore', {
+          id: sop.id,
+          expectedVersion: answered.version,
+          version: sop.version,
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
     const edited = await run<RecordEnvelope>(agent, 'records.update', {
       id: sop.id,
-      expectedVersion: byPerson.version,
-      attributes: { ...byPerson.attributes, purpose: 'Measure IL-6 in supernatants' },
+      expectedVersion: answered.version,
+      attributes: { ...answered.attributes, purpose: 'Measure IL-6 in supernatants' },
     });
-    expect((edited.attributes as { questions: unknown[] }).questions).toEqual([
-      expect.objectContaining({ id: 'q1', status: 'answered', answer: 'Room temperature' }),
-    ]);
+    expect(edited.attributes.questions).toEqual(answered.attributes.questions);
+  });
+
+  it('appends typed questions for either actor but refuses fabricated dispositions and duplicate identities', async () => {
+    let sop = await run<RecordEnvelope>(agent, 'sops.draft', elisa);
+    for (const [index, ctx] of [person, agent].entries()) {
+      sop = await run<RecordEnvelope>(ctx, 'sops.ask_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: {
+          id: `new-${index}`,
+          question: 'Which sealing instruction?',
+          stage: { stage: 'method', reason: 'The source is incomplete' },
+        },
+      });
+      expect(
+        (sop.attributes.questions as { responses: unknown[]; disposition: object }[]).at(-1),
+      ).toMatchObject({ responses: [], disposition: { status: 'open' } });
+    }
     await expect(
-      registry.execute(agent, 'records.restore', {
-        id: sop.id,
-        expectedVersion: edited.version,
-        version: sop.version,
+      registry.execute(agent, 'sops.ask_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: { ...elisa.questions[0], id: 'q1' },
       }),
     ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    await expect(
+      registry.execute(agent, 'sops.draft', {
+        ...elisa,
+        questions: [{ ...elisa.questions[0], disposition: { status: 'resolved' }, responses: [] }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(
+      registry.execute(otherLab, 'sops.ask_question', {
+        sop: sop.id,
+        expectedVersion: sop.version,
+        question: elisa.questions[0],
+      }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('verifies stage bindings at creation and does not defer a source conflict or invented run check', async () => {
+    const question = {
+      id: 'count',
+      about: { variable: 'n_samples' },
+      question: 'How many samples?',
+      stage: {
+        stage: 'experiment',
+        reason: 'Chosen for each experiment',
+        binding: { type: 'input', variable: 'n_samples' },
+      },
+    };
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', { ...elisa, questions: [question] });
+    const ready = await run<Readiness>(person, 'records.readiness', { id: sop.id });
+    expect(ready.checks.find((c) => c.id === 'questions_answered')?.passed).toBe(true);
+    expect(ready.checks.find((c) => c.id === 'later_stage_questions')?.passed).toBe(false);
+    const missing = await run<{ obligations: { passed: boolean }[] }>(person, 'sops.calculate', {
+      sop: sop.id,
+    });
+    expect(missing.obligations[0]?.passed).toBe(false);
+    const filled = await run<{ obligations: { passed: boolean }[] }>(person, 'sops.calculate', {
+      sop: sop.id,
+      inputs: [{ name: 'n_samples', value: '24' }],
+    });
+    expect(filled.obligations[0]?.passed).toBe(true);
+    const roleSop = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      questions: [
+        {
+          id: 'reagent',
+          question: 'Which capture antibody?',
+          about: { material: 'capture_ab' },
+          stage: {
+            stage: 'experiment',
+            reason: 'Chosen from available material',
+            binding: { type: 'material_role', role: 'capture_ab' },
+          },
+        },
+      ],
+    });
+    expect(
+      (
+        await run<{ obligations: { passed: boolean }[] }>(person, 'sops.calculate', {
+          sop: roleSop.id,
+        })
+      ).obligations[0]?.passed,
+    ).toBe(false);
+    const product = await run<RecordEnvelope>(person, 'records.create', {
+      kind: 'product',
+      label: 'Capture antibody',
+      attributes: { category: 'antibody', origin: 'bought' },
+    });
+    expect(
+      (
+        await run<{ obligations: { passed: boolean }[] }>(person, 'sops.calculate', {
+          sop: roleSop.id,
+          bindings: [{ role: 'capture_ab', record: product.id }],
+        })
+      ).obligations[0]?.passed,
+    ).toBe(true);
+    for (const invalid of [
+      { ...question, about: { step: 'wash', variable: 'n_samples' } },
+      {
+        ...question,
+        stage: { ...question.stage, binding: { type: 'input', variable: 'well_volume' } },
+      },
+      {
+        ...question,
+        stage: {
+          stage: 'run',
+          reason: 'Ask later',
+          binding: { type: 'run_check', check: 'invented' },
+        },
+      },
+      {
+        ...question,
+        stage: {
+          stage: 'run',
+          reason: 'Ask later',
+          binding: { type: 'input', variable: 'n_samples' },
+        },
+      },
+    ])
+      await expect(
+        registry.execute(agent, 'sops.draft', { ...elisa, questions: [invalid] }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    const broken = await run<RecordEnvelope>(agent, 'sops.draft', {
+      ...elisa,
+      variables: [
+        ...elisa.variables,
+        { name: 'broken', label: 'Broken', kind: 'computed', expression: 'missing + 1' },
+      ],
+      questions: [question],
+    });
+    expect(
+      (await run<Readiness>(person, 'records.readiness', { id: broken.id })).checks.find(
+        (c) => c.id === 'formulas_work',
+      )?.passed,
+    ).toBe(false);
+  });
+
+  it('preserves accepted historical snapshots while refusing edits and operational use of unsupported old questions', async () => {
+    const sop = await run<RecordEnvelope>(person, 'sops.draft', { ...elisa, questions: [] });
+    const accepted = await run<RecordEnvelope>(person, 'records.confirm', {
+      id: sop.id,
+      expectedVersion: sop.version,
+    });
+    for (const ctx of [person, agent])
+      await expect(
+        registry.execute(ctx, 'records.update', {
+          id: sop.id,
+          expectedVersion: accepted.version,
+          attributes: { ...accepted.attributes, notes: 'Edit' },
+        }),
+      ).rejects.toMatchObject({
+        code: 'invalid_state',
+        message: expect.stringContaining('revision workflow'),
+      });
+    // A pre-existing working draft must not disguise its accepted history.
+    await db.update(records).set({ status: 'draft' }).where(eq(records.id, sop.id));
+    await expect(
+      registry.execute(person, 'records.restore', {
+        id: sop.id,
+        expectedVersion: accepted.version,
+        version: sop.version,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    await expect(
+      registry.execute(person, 'sops.answer_question', {
+        sop: sop.id,
+        expectedVersion: accepted.version,
+        question: 'q1',
+        action: { type: 'response', text: 'Reply' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    await expect(
+      withReviewer(new PlaybackModel([])).execute(person, 'sops.review', {
+        sop: sop.id,
+        expectedVersion: accepted.version,
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_state',
+      message: expect.stringContaining('revision workflow'),
+    });
+    const legacy = {
+      ...accepted.attributes,
+      questions: [
+        { id: 'legacy', question: 'Which wash?', status: 'answered', answer: "I don't know" },
+      ],
+    };
+    const snapshot = { ...accepted, attributes: legacy };
+    await db.update(records).set({ attributes: legacy }).where(eq(records.id, sop.id));
+    await db
+      .update(recordVersions)
+      .set({ snapshot })
+      .where(
+        and(eq(recordVersions.recordId, sop.id), eq(recordVersions.version, accepted.version)),
+      );
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: sop.id })).attributes).toEqual(
+      legacy,
+    );
+    const history = await run<{ versions: { version: number; snapshot: RecordEnvelope }[] }>(
+      person,
+      'records.history',
+      { id: sop.id },
+    );
+    expect(history.versions.find((v) => v.version === accepted.version)?.snapshot).toEqual(
+      snapshot,
+    );
+    await expect(
+      registry.execute(person, 'sops.calculate', { sop: sop.id, version: accepted.version }),
+    ).rejects.toMatchObject({
+      code: 'invalid_input',
+      message: expect.stringContaining('unsupported question contract'),
+    });
+    expect(
+      (await run<Readiness>(person, 'records.readiness', { id: sop.id })).checks.find(
+        (c) => c.id === 'questions_answered',
+      )?.passed,
+    ).toBe(false);
   });
 });
 

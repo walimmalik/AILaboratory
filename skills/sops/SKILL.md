@@ -34,7 +34,10 @@ Actual specimens, lot certificates, available containers and execution dates bel
 - Steps: `{id: "coat", action: "add", text: "…in plain lab words…", uses: ["coating_plate", "capture_ab"], parameters: [{name: "volume", variable: "well_volume"}], produces: [{role: "coated_plate", label: "Coated plate"}]}`. Use `manual` for anything the other actions don't fit; `repeat: 3` for "wash 3 times".
 - Variables: `input` for what each run chooses (samples, replicates), `default` for the protocol's default values, `record` for values read from a bound material (`readFrom: {role, field}`, with the typical value as `value`), `computed` with an `expression`. Give an amount the run uses (a total volume of a reagent) `drawsFrom: <material role>`, so experiment designs check it against stock.
 - Cite the passage for every step and value (`cite: [{document, passage, page, quote}]`), and put anything the source leaves unclear in `questions` with your suggestion rather than guessing. Mark your own estimates assumed in `evidence`.
-- Check `records.readiness`: open questions, broken formulas and timing that isn't a time block confirming.
+- Questions in `sops.draft` use `{id, question, stage: {stage: "method", reason}, about?, suggestion?, passages?}`. The server starts them open with no responses. Never supply disposition or response history.
+- `sops.ask_question` with `{sop, expectedVersion, question: <the same typed question>, reason?}` appends a question to the current draft. Never add, omit or edit the questions array through `records.update` or restore.
+- An experiment question requires `{stage: "experiment", reason, binding: {type: "input", variable}}` with matching `about.variable` on an input-kind variable, or `{type: "material_role", role}` with matching `about.material` on a role with no default. It cannot concern a step, constant or formula. The pinned experiment must supply that input or material. Run-stage questions are refused until a concrete run-preparation consumer exists.
+- Check `records.readiness`: unresolved method questions, broken formulas and timing that isn't a time block confirming. Later-stage obligations remain visible. A reply, including "I don't know", never improves method readiness.
 - `sops.calculate` with `{sop, bindings: [{role: "capture_ab", record: "lot_…"}], inputs: [{name: "n_samples", value: "24"}]}` gives every variable for a run and where it came from: a picked lot's certificate value, a plate type's `deadVolume`, a product's typical value until a lot is picked. Roles without a binding use their default. Tell the person which values are still typical. Inputs outside a variable's `min`/`max`, in the wrong kind of unit, or given twice are refused; ask the person rather than forcing a value.
 
 ## Digitizing a library document
@@ -44,7 +47,9 @@ Actual specimens, lot certificates, available containers and execution dates bel
 3. Where the source is unclear (it contradicts itself, says "about", leaves a speed or time out), add an open question with the `passages` involved and your `suggestion`. Don't pick silently.
 4. Run `sops.check_citations`. Fix every `not_found` quote (copy the source's words) and every `found_elsewhere` one (cite the passage it names in `foundIn`), then check again.
 5. Run `sops.review` (`{sop, expectedVersion}`) to have the reviewer check the draft against the source, then read what it changed with `sops.reviews` and tell the person.
-6. Check `records.readiness` and tell the person what is open. Only a person answers questions (`sops.answer_question`, with `answer` or `acceptSuggestion: true`) and confirms the draft.
+6. Check `records.readiness` and tell the person what is open. `sops.answer_question` is people-only: `{sop, expectedVersion, question: <id>, action: {type: "response", text}}` records a response; `{type: "correct", text, reason}` corrects wording only while preserving identity, stage, responses and the unresolved obligation. Neither settles the issue. Applying a structured scientific disposition through the common proposal entrypoint is pending SG-03; a suggestion alone cannot be accepted as scientific resolution. Only a person confirms the final draft.
+
+Current question passages retain `{document, passage?, page?, quote}`. These references are not immutable edition evidence; do not invent exact source pins. Until SG-10c provides the revision/history workflow, any SOP that has ever been confirmed refuses editing or reconciliation. Create a separate new draft. Raw historical snapshots remain readable; unsupported old question payloads are refused at scientific-use boundaries.
 
 `library.read` with `passages: [id, …]` reads cited passages back by id.
 
@@ -59,7 +64,7 @@ Actual specimens, lot certificates, available containers and execution dates bel
 | A step uses a material or value the SOP doesn't have (`invalid_attributes`) | Add the material or variable in the same update, or use one that exists |
 | A formula names a value that doesn't exist, or mixes units that don't add (a volume plus a time) | Fix the expression; check it with `sops.evaluate` first |
 | `sops.calculate`: an input outside its `min`/`max`, in the wrong kind of unit, given twice, or given for a computed value | Ask the person for the value; give a computed value's inputs instead |
-| `sops.answer_question` with `acceptSuggestion` on a question without one | Give an `answer` |
+| A question rewrite through generic records operations | Use `sops.ask_question` to append or a person's `sops.answer_question` response/wording correction; retain earlier questions and history |
 | `sops.review` on an SOP that isn't a draft, or at an old `expectedVersion` | Read it again with `records.get` |
 | `invalid_state`: no model is set up for the reviewer or the assistant | Tell the person; the lab's model is set in its `.env` |
 

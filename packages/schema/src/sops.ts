@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { RecordId, recordIdOf } from './ids.ts';
-import { DocumentId, ExactSourceCitation } from './library.ts';
+import { DocumentId } from './library.ts';
 import { DecimalString, Quantity } from './quantity.ts';
 import { QuestionDisposition, QuestionResponse, QuestionStage } from './scientific-decisions.ts';
 
@@ -223,8 +223,8 @@ export const TimingRule = z
   });
 export type TimingRule = z.infer<typeof TimingRule>;
 
-/** Something the source leaves unclear (G6); an open one blocks confirming. */
-export const OpenQuestion = z.strictObject({
+/** Typed authoring input; the server owns responses and disposition. */
+export const QuestionDraft = z.strictObject({
   id: z.string().regex(/^[a-z0-9_-]+$/),
   about: z
     .strictObject({
@@ -240,23 +240,17 @@ export const OpenQuestion = z.strictObject({
     .optional()
     .describe('The answer the agent would pick, marked assumed'),
   passages: z.array(Citation).optional(),
-  status: z.enum(['open', 'answered', 'accepted_suggestion']),
-  answer: z.string().min(1).optional(),
+  stage: QuestionStage,
 });
-export type OpenQuestion = z.infer<typeof OpenQuestion>;
+export type QuestionDraft = z.infer<typeof QuestionDraft>;
 
 /**
- * Plan 004g replacement contract, not yet used by SopAttributes or sops.answer_question.
- * Activate only with SG-02 and the SG-10c accepted-history/future-use gate. A reply never settles it.
+ * Current question contract. A reply never settles it. Citation references remain the current
+ * library format until SG-18 activates immutable source checking across SOP consumers.
  */
 export const ScientificQuestion = z
   .strictObject({
-    id: OpenQuestion.shape.id,
-    about: OpenQuestion.shape.about,
-    question: z.string().min(1),
-    suggestion: OpenQuestion.shape.suggestion,
-    passages: z.array(ExactSourceCitation).optional(),
-    stage: QuestionStage,
+    ...QuestionDraft.shape,
     responses: z.array(QuestionResponse),
     disposition: QuestionDisposition,
   })
@@ -296,7 +290,7 @@ export const SopAttributes = z.strictObject({
   layout: z.array(LayoutRequirement).optional(),
   analysis: z.string().min(1).optional().describe('How the readout becomes a result'),
   timing: z.array(TimingRule).optional(),
-  questions: z.array(OpenQuestion).optional(),
+  questions: z.array(ScientificQuestion).optional(),
   notes: z.string().min(1).optional(),
 });
 export type SopAttributes = z.infer<typeof SopAttributes>;

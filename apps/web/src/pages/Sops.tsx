@@ -2,7 +2,7 @@ import {
   type Citation,
   type RecordEnvelope,
   type ReviewFinding,
-  type SopAttributes,
+  SopAttributes,
   type SopStep,
   type StepParameter,
   sopsAnswerQuestion,
@@ -30,6 +30,10 @@ import { describeSop, TermAnchor, TermCards } from './SopText.tsx';
  */
 
 const of = (r: RecordEnvelope) => r.attributes as SopAttributes;
+const currentQuestions = (record: RecordEnvelope) => {
+  const parsed = SopAttributes.safeParse(record.attributes);
+  return parsed.success ? (parsed.data.questions ?? []) : undefined;
+};
 
 export const actionWords: Record<SopStep['action'], string> = {
   add: 'Add',
@@ -79,8 +83,11 @@ export function SopsPage() {
           { header: 'Steps', cell: (r) => of(r).steps?.length ?? 0, className: 'num' },
           {
             header: 'Open questions',
-            cell: (r) => (of(r).questions ?? []).filter((q) => q.status === 'open').length,
-            filled: (r) => (of(r).questions ?? []).some((q) => q.status === 'open'),
+            cell: (r) =>
+              currentQuestions(r)?.filter((q) => q.disposition.status === 'open').length ??
+              'Needs reconciliation',
+            filled: (r) =>
+              currentQuestions(r)?.some((q) => q.disposition.status === 'open') ?? true,
             className: 'num',
           },
         ]}
@@ -306,34 +313,48 @@ function useRefresh(record: RecordEnvelope) {
 }
 
 function QuestionsBlock({ record }: { record: RecordEnvelope }) {
-  const questions = of(record).questions ?? [];
-  const open = questions.filter((q) => q.status === 'open');
+  const questions = currentQuestions(record);
+  if (!questions)
+    return (
+      <section className="block no-print" aria-label="Historical questions">
+        <header>
+          <h2>Historical questions</h2>
+        </header>
+        <div className="body">
+          <p className="warn-ink">
+            These questions need reconciliation before scientific use. Their original text and
+            answers remain in History and technical details.
+          </p>
+        </div>
+      </section>
+    );
+  const open = questions.filter((q) => q.disposition.status === 'open');
   if (questions.length === 0) return null;
   return (
     <section className="block no-print" aria-label="Questions to settle">
       <header>
         <h2>Questions to settle</h2>
         <span className="state muted num">
-          {open.length === 0 ? 'all settled' : `${open.length} open`}
+          {open.length === 0 ? 'no open questions' : `${open.length} open`}
         </span>
       </header>
       <div className="body">
         {open.length === 0 ? (
-          <p className="muted">Every question has an answer.</p>
+          <p className="muted">Every question has an accepted decision.</p>
         ) : (
           open.map((q) => <Question key={q.id} record={record} id={q.id} />)
         )}
         {questions.length > open.length && (
           <details>
-            <summary>Settled ({questions.length - open.length})</summary>
+            <summary>Accepted decisions ({questions.length - open.length})</summary>
             <ul>
               {questions
-                .filter((q) => q.status !== 'open')
+                .filter((q) => q.disposition.status !== 'open')
                 .map((q) => (
                   <li key={q.id}>
-                    {q.question} <b>{q.answer}</b>
-                    {q.status === 'accepted_suggestion' && (
-                      <span className="muted"> (the suggested answer)</span>
+                    {q.question} <b>{q.disposition.status}</b>
+                    {q.disposition.status !== 'open' && (
+                      <span> — {q.disposition.action.reason}</span>
                     )}
                   </li>
                 ))}
@@ -346,23 +367,23 @@ function QuestionsBlock({ record }: { record: RecordEnvelope }) {
 }
 
 function Question({ record, id }: { record: RecordEnvelope; id: string }) {
-  const q = (of(record).questions ?? []).find((x) => x.id === id);
+  const q = currentQuestions(record)?.find((x) => x.id === id);
   const [answer, setAnswer] = useState('');
   const refresh = useRefresh(record);
   const settle = useMutation({
-    mutationFn: (how: { answer: string } | { acceptSuggestion: true }) =>
+    mutationFn: (text: string) =>
       api.run(sopsAnswerQuestion, {
         sop: record.id,
         expectedVersion: record.version,
         question: id,
-        ...how,
+        action: { type: 'response', text },
       }),
     onSuccess: refresh,
   });
   if (!q) return null;
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (answer.trim()) settle.mutate({ answer: answer.trim() });
+    if (answer.trim()) settle.mutate(answer.trim());
   };
   return (
     <form className="question" onSubmit={submit} aria-label={q.question}>
@@ -372,27 +393,28 @@ function Question({ record, id }: { record: RecordEnvelope; id: string }) {
       </p>
       {q.suggestion && <p className="question-line agent-ink">Suggested: {q.suggestion}</p>}
       <Cites cites={q.passages} />
+      <p className="muted">
+        {q.stage.stage === 'method' ? 'Method question' : 'Experiment input'}: {q.stage.reason}
+      </p>
+      {q.responses.length > 0 && (
+        <div>
+          <p className="warn-ink">Response received; the scientific issue remains open.</p>
+          {q.responses.map((r) => (
+            <p key={r.version}>{r.text}</p>
+          ))}
+        </div>
+      )}
       <div className="actions">
-        {q.suggestion && (
-          <button
-            type="button"
-            className="btn"
-            disabled={settle.isPending}
-            onClick={() => settle.mutate({ acceptSuggestion: true })}
-          >
-            Accept the suggestion
-          </button>
-        )}
         <label>
           <span className="sr-only">Your answer</span>
           <input
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Or answer in your words"
+            placeholder="Respond in your words"
           />
         </label>
         <button type="submit" className="btn" disabled={settle.isPending || !answer.trim()}>
-          Answer
+          Record response
         </button>
       </div>
       {settle.error && <p className="error-text">{settle.error.message}</p>}

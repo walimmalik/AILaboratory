@@ -1,7 +1,9 @@
 import type { Actor, Proposal, Readiness, RecordEnvelope } from '@ailab/schema';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
+import { records, recordVersions } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { entityKinds } from '../entities/kinds.ts';
 import { fileKinds } from '../files/kinds.ts';
@@ -226,9 +228,30 @@ describe('experiments pin the SOP versions they follow (ADR 0039)', () => {
     expect(byId('protocol_current')?.passed).toBe(true);
 
     // A person changes the SOP: the experiment keeps v-pinned values and says a newer one exists.
-    const edited = await run(person, 'records.update', {
-      id: sop.id,
-      expectedVersion: sop.version,
+    await expect(
+      registry.execute(person, 'records.update', {
+        id: sop.id,
+        expectedVersion: sop.version,
+        attributes: {
+          ...sop.attributes,
+          variables: [
+            {
+              name: 'well_volume',
+              label: 'Well volume',
+              kind: 'default',
+              value: { value: '50', unit: 'uL' },
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_state',
+      message: expect.stringContaining('revision workflow'),
+    });
+    // Previously accepted successors remain readable and adoptable; current editing is guarded.
+    const edited = {
+      ...sop,
+      version: sop.version + 1,
       attributes: {
         ...sop.attributes,
         variables: [
@@ -240,6 +263,18 @@ describe('experiments pin the SOP versions they follow (ADR 0039)', () => {
           },
         ],
       },
+    };
+    await db
+      .update(records)
+      .set({ version: edited.version, attributes: edited.attributes })
+      .where(eq(records.id, sop.id));
+    await db.insert(recordVersions).values({
+      recordId: sop.id,
+      version: edited.version,
+      operation: 'update',
+      actor: person.actor,
+      at: new Date(),
+      snapshot: edited,
     });
     expect(edited.status).toBe('active');
     readiness = await run<Readiness>(person, 'records.readiness', { id: experiment.id });
@@ -311,6 +346,78 @@ describe('experiments pin the SOP versions they follow (ADR 0039)', () => {
 });
 
 describe('experiment stages and runs', () => {
+  it('enforces the pinned SOP question obligation at experiment readiness, calculation and run start', async () => {
+    const campaign = await activeCampaign();
+    const sop = await confirm(
+      await run(person, 'sops.draft', {
+        label: 'Late sample count',
+        materials: [],
+        variables: [
+          { name: 'count', label: 'Sample count', kind: 'input', value: '1', min: '1', max: '100' },
+        ],
+        steps: [{ id: 'read', action: 'read', text: 'Read the selected samples' }],
+        questions: [
+          {
+            id: 'count',
+            question: 'How many samples?',
+            about: { variable: 'count' },
+            stage: {
+              stage: 'experiment',
+              reason: 'Chosen per experiment',
+              binding: { type: 'input', variable: 'count' },
+            },
+          },
+        ],
+      }),
+    );
+    const experiment = await run(person, 'experiments.draft', {
+      label: 'Counts',
+      campaign: campaign.id,
+      question: 'Compare samples',
+      subjects: [{ record: (await subject()).id }],
+      protocol: [{ id: 'read', sop: { id: sop.id, version: sop.version } }],
+    });
+    expect(
+      (await run<Readiness>(person, 'records.readiness', { id: experiment.id })).checks.find(
+        (c) => c.id === 'sop_obligations',
+      ),
+    ).toMatchObject({ passed: false, severity: 'blocker' });
+    expect(
+      (
+        await run<{ ready: boolean; parts: { problems: string[] }[] }>(
+          person,
+          'experiments.calculate',
+          { id: experiment.id },
+        )
+      ).parts[0]?.problems.join(),
+    ).toContain('How many samples?');
+    await expect(
+      registry.execute(person, 'runs.start', {
+        experiment: experiment.id,
+        expectedVersion: experiment.version,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_state' });
+    const bound = await run(person, 'experiments.bind_protocol', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      part: 'read',
+      inputs: [{ name: 'count', value: '24' }],
+    });
+    const confirmed = await confirm(bound);
+    const planned = await run(person, 'experiments.set_stage', {
+      id: confirmed.id,
+      expectedVersion: confirmed.version,
+      stage: 'planned',
+    });
+    const started = await run(person, 'runs.start', {
+      experiment: planned.id,
+      expectedVersion: planned.version,
+    });
+    expect(started.kind).toBe('run');
+    expect((await run(person, 'records.get', { id: sop.id })).attributes.questions).toEqual(
+      sop.attributes.questions,
+    );
+  });
   it('plans only a confirmed, ready design; runs pin the design version; where_used finds them', async () => {
     const campaign = await activeCampaign();
     const sop = await confirmedSop();

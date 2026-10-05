@@ -54,6 +54,41 @@ export interface RecordContext {
 }
 
 type RecordRow = typeof records.$inferSelect;
+
+/** Question bookkeeping has its own provenance and is not a scientific value to verify. */
+function sopQuestionEvidence(
+  kind: KindDefinition,
+  named: Record<string, EvidenceInput> | undefined,
+  evidence: Record<string, FieldEvidence>,
+): Record<string, FieldEvidence> {
+  if (kind.kind !== 'sop') return evidence;
+  const questionKey = (key: string) => key === 'questions' || key.startsWith('/questions/');
+  if (Object.keys(named ?? {}).some(questionKey))
+    throw new RecordError(
+      'invalid_attributes',
+      'Question evidence belongs in its passages and response/history, not scientific field evidence',
+    );
+  return Object.fromEntries(Object.entries(evidence).filter(([key]) => !questionKey(key)));
+}
+
+async function assertSopEditable(db: Db, record: RecordRow): Promise<void> {
+  if (record.kind !== 'sop') return;
+  const accepted = await db
+    .select({ version: recordVersions.version })
+    .from(recordVersions)
+    .where(
+      and(
+        eq(recordVersions.recordId, record.id),
+        sql`${recordVersions.snapshot}->>'status' = 'active'`,
+      ),
+    )
+    .limit(1);
+  if (record.status === 'active' || accepted.length)
+    throw new RecordError(
+      'invalid_state',
+      'Editing a confirmed method needs the revision workflow; create a separate new draft for now',
+    );
+}
 type Link = Omit<RecordLink, 'fromId'>;
 
 export interface CreateRecordInput {
@@ -109,14 +144,10 @@ export class RecordService {
     const attributes = parseAttributes(kind, input.attributes);
     const related = await this.#related(this.db, ctx, kind, attributes);
     const at = this.now();
-    const evidence = nextEvidence(
-      ctx.actor,
-      at,
-      undefined,
-      attributes,
-      {},
+    const evidence = sopQuestionEvidence(
+      kind,
       input.evidence,
-      kind.items,
+      nextEvidence(ctx.actor, at, undefined, attributes, {}, input.evidence, kind.items),
     );
     await checkCalculatedEvidence(this.db, ctx, attributes, input.evidence, kind.items);
     await checkCopiedEvidence(this.db, ctx, this.kinds, attributes, input.evidence, kind.items);
@@ -181,6 +212,12 @@ export class RecordService {
     return toEnvelope(await findRecord(this.db, ctx, id));
   }
 
+  /** Until the accepted-method revision workflow lands, no accepted snapshot may be edited. */
+  async assertSopEditable(ctx: RecordContext, id: string): Promise<void> {
+    const record = await findRecord(this.db, ctx, id);
+    await assertSopEditable(this.db, record);
+  }
+
   /** Records in the lab, most recently changed first. Archived records are left out unless asked for. */
   async list(ctx: RecordContext, input: ListRecordsInput = {}): Promise<RecordEnvelope[]> {
     const statuses = input.status
@@ -233,14 +270,18 @@ export class RecordService {
         if (input.attributes !== undefined) await this.#related(tx, ctx, kind, attributes, record);
         await checkCalculatedEvidence(tx, ctx, attributes, input.evidence, kind.items);
         await checkCopiedEvidence(tx, ctx, this.kinds, attributes, input.evidence, kind.items);
-        const evidence = nextEvidence(
-          ctx.actor,
-          this.now(),
-          record.attributes,
-          attributes,
-          record.evidence,
+        const evidence = sopQuestionEvidence(
+          kind,
           input.evidence,
-          kind.items,
+          nextEvidence(
+            ctx.actor,
+            this.now(),
+            record.attributes,
+            attributes,
+            record.evidence,
+            input.evidence,
+            kind.items,
+          ),
         );
         return {
           label: input.label ?? record.label,
@@ -701,6 +742,7 @@ export class RecordService {
       const current = await findRecord(tx, ctx, id, { forUpdate: true });
       assertVersion(current, expectedVersion);
       const kind = this.kinds.get(current.kind);
+      if (operation === 'update' || operation === 'restore') await assertSopEditable(tx, current);
       const changes = await apply(current, kind, tx);
       const [row] = await tx
         .update(records)

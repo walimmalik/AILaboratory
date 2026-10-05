@@ -5,7 +5,6 @@ import {
   DeferredObligation,
   ExactSourceCitation,
   ExactSourceReference,
-  OpenQuestion,
   OriginatingIntent,
   Proposal,
   ProposalReceipt,
@@ -54,6 +53,23 @@ const resolution = {
 };
 
 describe('scientific question contract', () => {
+  it('retains the one current citation format without fabricating immutable source identity', () => {
+    const passage = {
+      document: source.document,
+      passage: 'wash-1',
+      page: 2,
+      quote: 'Wash three times',
+    };
+    expect(ScientificQuestion.parse({ ...question, passages: [passage] }).passages).toEqual([
+      passage,
+    ]);
+    expect(
+      ScientificQuestion.safeParse({
+        ...question,
+        passages: [{ source, passage: 'wash-1', quote: passage.quote }],
+      }).success,
+    ).toBe(false);
+  });
   it('keeps an unknown response open; reply text cannot represent resolution', () => {
     expect(ScientificQuestion.parse(question).disposition.status).toBe('open');
     expect(
@@ -176,18 +192,17 @@ describe('scientific question contract', () => {
     ).toBe(true);
   });
 
-  it('does not activate the replacement on existing persisted answered SOPs', () => {
+  it('rejects historical answered payloads as unsupported operational input', () => {
     const existing = {
       id: 'wash',
       question: 'Which wash?',
       status: 'answered',
       answer: "I don't know",
     };
-    expect(OpenQuestion.safeParse(existing).success).toBe(true);
     expect(
       SopAttributes.safeParse({ materials: [], variables: [], steps: [], questions: [existing] })
         .success,
-    ).toBe(true);
+    ).toBe(false);
     expect(ScientificQuestion.safeParse(existing).success).toBe(false);
   });
 });
