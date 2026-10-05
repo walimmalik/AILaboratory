@@ -230,15 +230,18 @@ test('the assistant runs an operation for you, and the ledger links back to the 
   await expect(created).toBeVisible();
   await expect(panel.getByText(/^Done:/)).toBeVisible();
   const name = (await created.textContent()) ?? '';
-  // The turn ends with what it left for you: the draft to confirm, linked.
-  await expect(panel.getByText('Waiting for you:')).toBeVisible();
-  await expect(panel.locator('.waiting').getByRole('link', { name })).toBeVisible();
+  // Open the saved draft before the final reply; confirmation stays on its record page.
+  const handoff = panel.getByRole('link', { name: `Open draft: ${label} ${name}` });
+  await expect(handoff).toBeVisible();
+  await expect(panel.locator('.waiting + .msg')).toContainText('Done:');
+  await expect(panel.getByText('Waiting for you:')).toBeHidden();
 
   // Replies continue the same conversation.
   const reply = panel.getByLabel('Message the assistant');
   await reply.fill('thanks');
   await reply.press('Enter');
   await expect(panel.getByText('You said: thanks')).toBeVisible();
+  await expect(handoff).toBeVisible();
 
   // The change is in the ledger under the assistant's name, and opens the conversation.
   await panel.getByRole('button', { name: 'New' }).click();
@@ -248,6 +251,7 @@ test('the assistant runs an operation for you, and the ledger links back to the 
     .click();
   await page.getByRole('button', { name: 'open in the assistant' }).click();
   await expect(panel.getByText('You said: thanks')).toBeVisible();
+  await expect(handoff).toBeVisible();
 });
 
 test('an agent drafts a record, a person reviews it, and one Confirm activates it', async ({

@@ -1,8 +1,11 @@
 import { Fragment, type ReactNode } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import './RichText.css';
 
 /**
  * The small part of Markdown models actually write: paragraphs, "-" or "1." lists, **bold** and
- * `code`. Rendered as React elements, never as HTML, so a reply can't inject markup.
+ * `code`, and pipe tables. Rendered as React elements, never as HTML, so a reply can't inject markup.
  */
 export function RichText({ text, className }: { text: string; className?: string }) {
   const blocks: ReactNode[] = [];
@@ -23,7 +26,58 @@ export function RichText({ text, className }: { text: string; className?: string
     list = undefined;
   };
 
-  for (const line of text.split('\n')) {
+  const source = text.split('\n');
+  for (let i = 0; i < source.length; i++) {
+    const line = source[i] ?? '';
+    if (
+      line.includes('|') &&
+      !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s|>)/.test(line) &&
+      /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(source[i + 1] ?? '')
+    ) {
+      flushParagraph();
+      flushList();
+      const tableLines = [line, source[i + 1] ?? ''];
+      i += 1;
+      while (
+        source[i + 1]?.includes('|') &&
+        !/^\s*(?:[-*•]\s|\d+[.)]\s|#{1,6}\s|>)/.test(source[i + 1] ?? '')
+      ) {
+        tableLines.push(source[i + 1] ?? '');
+        i += 1;
+      }
+      blocks.push(
+        <Markdown
+          key={blocks.length}
+          remarkPlugins={[remarkGfm, literalHtml]}
+          allowedElements={['p', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'strong', 'code']}
+          unwrapDisallowed
+          components={{
+            // Keep literal text and line breaks only for this paragraph, even if GFM ended the table.
+            p: ({ node, children }) => (
+              <p>
+                {node?.position
+                  ? lines(tableLines.slice(node.position.start.line - 1, node.position.end.line))
+                  : children}
+              </p>
+            ),
+            table: ({ children }) => (
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll wide tables
+              <section className="rich-text-table-scroll" aria-label="Table" tabIndex={0}>
+                <table className="rich-text-table">{children}</table>
+              </section>
+            ),
+            th: ({ children, style }) => (
+              <th scope="col" style={style}>
+                {children}
+              </th>
+            ),
+          }}
+        >
+          {tableLines.join('\n')}
+        </Markdown>,
+      );
+      continue;
+    }
     const bullet = /^\s*[-*•]\s+(.*)$/.exec(line);
     const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     const item = bullet ?? numbered;
@@ -44,6 +98,14 @@ export function RichText({ text, className }: { text: string; className?: string
   flushParagraph();
   flushList();
   return <div className={className}>{blocks}</div>;
+}
+
+/** Keep raw HTML visible as text, including inside a Markdown table. */
+function literalHtml() {
+  return function visit(node: { type: string; children?: { type: string }[] }) {
+    if (node.type === 'html') node.type = 'text';
+    node.children?.forEach(visit);
+  };
 }
 
 function lines(paragraph: string[]): ReactNode {

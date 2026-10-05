@@ -42,6 +42,12 @@ For unexpected reported movements, preserve the raw observation and its provenan
 
 ## Consequences
 
+### Incomplete draft steps (accepted extension, 2026-10-05)
+
+Wali chose to keep source-described actions visible while their settings need clarification. A draft retains the ordered step, stable identity and citation, with an open method question linked through `about.step`. Disputed settings are omitted from operative parameters, repeats and instruction text; the question carries the uncertainty. The bench view labels the affected step **Needs clarification**, including in print, and offers discussion of the exact question and record version with the assistant.
+
+This uses the existing step and question contracts, without another lifecycle state. An answer or ordinary edit does not settle the question, and the existing open-method-question check blocks final activation. It does not add an automatic scientific completeness detector: an omitted critical setting must still be identified and recorded as an open question. Existing historical drafts are preserved rather than silently rewritten to add missing steps or question links.
+
 - Method authoring can continue without losing a usable accepted version.
 - Experimental research is supported without mislabeling an unvalidated method as validated.
 - Migration requires fixtures for supported and unsupported historical answers and downstream pins; it cannot assume all persisted data is disposable or reset a lab implicitly.

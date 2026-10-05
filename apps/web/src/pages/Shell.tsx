@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { AssistantProvider, useAssistant } from '../assistant.tsx';
 import { areas, kindPage, libraryPages } from '../lib/kinds.ts';
@@ -91,6 +91,7 @@ function ShellLayout() {
   return (
     <div
       className={`shell${assistant.open ? ' with-assistant' : ''}${compact ? ' compact' : ''}${compact && menu ? ' nav-open' : ''}`}
+      style={{ '--assistant-width': `${assistant.width}px` } as CSSProperties}
     >
       <header className="topbar">
         {compact && (

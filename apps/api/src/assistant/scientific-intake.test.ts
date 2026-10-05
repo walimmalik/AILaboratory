@@ -76,4 +76,52 @@ describe('scientific intake content contract (004g SG-04)', () => {
     expect(findSkill('sops')?.text).toContain('do not emulate it by editing questions');
     // These are instruction/contract checks, not proof that a live model follows the instructions.
   });
+
+  it('requires retaining unfinished source actions and their declared method blockers', () => {
+    const sopSkill = findSkill('sops')?.text ?? '';
+    for (const text of [SCIENTIFIC_INTAKE_PROMPT, sopSkill]) {
+      for (const requirement of [
+        'source order',
+        'stable step',
+        'wash stays wash',
+        'settled settings only',
+        'zero, empty strings, textual placeholders or guessed values',
+        'not operative step prose or parameters',
+        'about.step',
+        'atomically',
+        'blocks final confirmation',
+        'do not resolve',
+        'does not automatically detect missing action settings',
+      ]) {
+        expect(text, requirement).toContain(requirement);
+      }
+    }
+    expect(sopSkill).toContain('Needs clarification');
+    // This checks authoring instructions, not live model behavior or automatic completeness.
+  });
+
+  it('links uncertainty only to affected retained steps and keeps broader gaps at SOP level', () => {
+    const sourceSkill = readFileSync(
+      new URL('../../../../skills/sops/SKILL.md', import.meta.url),
+      'utf8',
+    );
+    for (const text of [SCIENTIFIC_INTAKE_PROMPT, sourceSkill]) {
+      for (const requirement of [
+        'only to an actually affected retained step',
+        'method-wide gaps or questions about absent source actions',
+        'open method questions at SOP level by omitting',
+        'never invent source actions or attach unrelated questions',
+        'link a wash-volume conflict to wash',
+        'a capture-antibody question with no retained coating step',
+        'a missing whole procedure must not be linked to wash or read',
+        'Put question citations in',
+        'questions[].passages',
+        'never in scientific field evidence: fieldEvidence.questions, evidence.questions or /questions/... entries',
+      ]) {
+        expect(text, requirement).toContain(requirement);
+      }
+      expect(text).not.toContain('For every known unresolved method setting or conflict');
+    }
+    // Prompt/source contract evidence only; live model output needs separate inspection.
+  });
 });

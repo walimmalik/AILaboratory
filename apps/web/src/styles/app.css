@@ -215,7 +215,10 @@ a {
   grid-template-columns: minmax(0, 1fr);
 }
 .shell.compact.with-assistant {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  grid-template-columns: minmax(0, 1fr) min(
+      var(--assistant-width, 400px),
+      max(320px, calc(100vw - 360px))
+    );
 }
 .shell.compact .page {
   grid-row: 2;
@@ -774,15 +777,34 @@ details.others {
   visibility: hidden;
 }
 .shell.with-assistant {
-  grid-template-columns: 200px minmax(0, 1fr) minmax(320px, 400px);
+  grid-template-columns: 200px minmax(0, 1fr) min(
+      var(--assistant-width, 400px),
+      max(320px, calc(100vw - 360px))
+    );
 }
 .assistant {
+  position: relative;
   border-left: 1px solid var(--rule);
   background: var(--panel);
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+}
+.assistant-resize {
+  position: absolute;
+  left: -5px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin: 0;
+  border: 0;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+.assistant-resize:focus-visible {
+  outline-offset: -2px;
 }
 .assistant > header {
   display: flex;
@@ -863,6 +885,13 @@ details.others {
   gap: 4px;
   font: 12px / 1.45 var(--font-mono);
 }
+.assistant .transcript .work-details > summary {
+  cursor: pointer;
+  font: 12px / 1.45 var(--font-mono);
+}
+.transcript .action > .steps {
+  margin-top: 0;
+}
 .transcript .step details.tech {
   margin-left: 14px;
 }
@@ -898,6 +927,8 @@ details.others {
   padding-top: 8px;
   border-top: 1px solid var(--rule);
   font-size: 13px;
+  display: grid;
+  gap: 6px;
 }
 .assistant .setup {
   margin: 0;
@@ -1015,7 +1046,8 @@ table.checks td.mark {
   .page {
     padding: 16px;
   }
-  .shell.with-assistant {
+  .shell.with-assistant,
+  .shell.compact.with-assistant {
     grid-template-columns: minmax(0, 1fr);
   }
   .topbar {
@@ -1030,6 +1062,9 @@ table.checks td.mark {
     inset: 0;
     z-index: 10;
     border-left: 0;
+  }
+  .assistant-resize {
+    display: none;
   }
 }
 
@@ -2322,6 +2357,20 @@ p.sop-line {
   line-height: 1.55;
 }
 .sop-note {
+  font-size: 0.92em;
+}
+.sop-clarification-badge {
+  display: inline-block;
+  margin-inline-start: 0.7em;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+ul.sop-question-links {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
   font-size: 0.92em;
 }
 .cite-toggle {

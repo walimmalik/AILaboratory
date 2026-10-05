@@ -24,6 +24,12 @@ Evidence baseline: `9624e5324655472bf1b864c4a6830d448b0e7169`. The completed 5 O
 
 ## 1. Outcome and boundaries
 
+### Retain unfinished source-described steps
+
+Authorized by Wali on 2026-10-05 after a live draft omitted washing and showed only the reader step. Preserve source-described actions in order, with stable IDs and citations; omit disputed operative settings and attach an open method question to the affected step. At the bench, show **Needs clarification**, known settings and a question-specific assistant discussion action. Keep the draft/incomplete warning in print. Multiple questions remain individually selectable. Final activation remains blocked by unresolved method questions; recording a response or editing a step does not resolve one.
+
+This bounded slice reuses `SopStep`, `QuestionDraft.about.step` and the current assistant page context. It adds no schema, operation, question-resolution path or automatic detector for missing scientific settings. Authoring guidance must create the step and question together in new drafts. Preserve older drafts rather than rewriting their history. Acceptance covers a cited wash followed by a supported read step, absent disputed wash settings, persisted question links, exact discussion context, print and reload, and blocked final activation after an unknown response or ordinary edit. See the accepted extension in [ADR 0069](../decisions/0069-working-methods-and-scientific-uncertainty.md).
+
 ### Next small runtime batch: Responses and continuation
 
 Authorized by Wali on 2026-10-05 after merging PRs #193–195. [ADR 0070](../decisions/0070-responses-agent-continuation.md) records the implementation choice: explicitly select Responses for a configured compatible endpoint, preserve provider output and continue nonterminal commentary within the existing loop limit. Refused/truncated output cannot execute tools or become accepted SOP review/suggestion content. Existing proposal pause and human confirmation remain intact.
