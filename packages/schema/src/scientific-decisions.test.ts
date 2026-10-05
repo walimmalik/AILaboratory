@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   ConfirmationScope,
@@ -8,6 +9,7 @@ import {
   OriginatingIntent,
   Proposal,
   ProposalReceipt,
+  ScientificBasis,
   ScientificDecisionMetadata,
   ScientificQuestion,
   SopAttributes,
@@ -276,5 +278,72 @@ describe('committed proposal receipt', () => {
         receipt,
       }).receipt,
     ).toEqual(receipt);
+  });
+});
+
+describe('published scientific restrictions', () => {
+  const metadata = JSON.parse(
+    readFileSync(
+      new URL('../generated/ScientificDecisionMetadata.schema.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const questionSchema = JSON.parse(
+    readFileSync(new URL('../generated/ScientificQuestion.schema.json', import.meta.url), 'utf8'),
+  );
+  const proposalSchema = JSON.parse(
+    readFileSync(new URL('../generated/Proposal.schema.json', import.meta.url), 'utf8'),
+  );
+
+  it('publishes the same final-SOP exclusions as Zod for both proposal metadata surfaces', () => {
+    const permitted = { id: `ent_${ulid}`, version: 1, kind: 'entity' };
+    const cases = [permitted, { ...permitted, id: sop }, { ...permitted, kind: 'sop' }];
+    for (const schema of [metadata, proposalSchema.properties.decision]) {
+      const scope = schema.properties.scope.oneOf[2];
+      expect(scope.properties.type.const).toBe('confirmation_scope');
+      const properties = scope.properties.records.items.properties;
+      expect(properties.id.pattern).toBe('^(?!sop_)[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$');
+      expect(properties.kind.pattern).toBe('^(?!sop$)[\\s\\S]+$');
+      for (const record of cases) {
+        const publishedAllows =
+          new RegExp(properties.id.pattern).test(record.id) &&
+          new RegExp(properties.kind.pattern).test(record.kind);
+        expect(publishedAllows).toBe(
+          ConfirmationScope.safeParse({ type: 'confirmation_scope', records: [record] }).success,
+        );
+      }
+    }
+  });
+
+  it('requires actual evidence in both Zod and the published evidence alternatives', () => {
+    const dependency = { id: sop, version: 3, paths: ['/materials/coating_plate'] };
+    const cases = [
+      { type: 'evidence', sources: [], records: [] },
+      { type: 'evidence', sources: [source], records: [] },
+      { type: 'evidence', sources: [], records: [dependency] },
+      { type: 'evidence', sources: [source], records: [dependency] },
+    ];
+    const bases = [
+      questionSchema.properties.disposition.oneOf[1].properties.action.properties.basis,
+      metadata.properties.scope.oneOf[1].properties.disposition.oneOf[0].properties.basis,
+      proposalSchema.properties.decision.properties.scope.oneOf[1].properties.disposition.oneOf[0]
+        .properties.basis,
+    ];
+    for (const basis of bases) {
+      const [sourceEvidence, recordEvidence] = basis.anyOf;
+      expect(sourceEvidence.properties.type.const).toBe('evidence');
+      expect(recordEvidence.properties.type.const).toBe('evidence');
+      expect(sourceEvidence.properties.sources.minItems).toBe(1);
+      expect(recordEvidence.properties.sources.maxItems).toBe(0);
+      expect(recordEvidence.properties.records.minItems).toBe(1);
+      for (const value of cases) {
+        const publishedAllows =
+          value.sources.length >= sourceEvidence.properties.sources.minItems ||
+          (value.sources.length <= recordEvidence.properties.sources.maxItems &&
+            value.records.length >= recordEvidence.properties.records.minItems);
+        expect(publishedAllows).toBe(ScientificBasis.safeParse(value).success);
+      }
+    }
+    expect(ScientificBasis.safeParse(cases[0]).success).toBe(false);
   });
 });
