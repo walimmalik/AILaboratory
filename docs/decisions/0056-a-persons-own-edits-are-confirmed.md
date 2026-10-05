@@ -4,6 +4,8 @@
 - Date: 2026-10-01
 - Plan: 004e (step 004e-6, first part; decision R10, as recommended)
 
+> Planned refinement (2026-10-05): [ADR 0069](0069-working-methods-and-scientific-uncertainty.md) preserves the last valid accepted method while an incomplete working revision is edited. Historical attribution remains; an active flag alone will not establish future scientific eligibility. This refinement is accepted but not implemented.
+
 ## Context
 
 ADR 0021 sends any section whose values change back to review, whoever changed them. A person who corrects a value on a draft then has to press Confirm on what they just typed, and a person who fixes a confirmed record sees their own fix flagged as needing review. Plan 004e R10 calls this the click-heavy pattern to avoid. ADR 0049 made evidence exact per field and per item of a keyed list, which this needs.
