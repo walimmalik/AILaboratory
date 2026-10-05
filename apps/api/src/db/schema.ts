@@ -17,6 +17,7 @@ import type {
   ReviewFinding,
   ScientificDecisionMetadata,
   SectionReview,
+  SourceSnapshotContent,
   WellRef,
   WellState,
 } from '@ailab/schema';
@@ -402,6 +403,7 @@ export const libraryParses = pgTable(
       .notNull()
       .references(() => labs.id),
     sha256: text('sha256').notNull(),
+    snapshot: text('snapshot'),
     converter: text('converter').notNull(),
     sections: integer('sections').notNull(),
     passages: integer('passages').notNull(),
@@ -410,6 +412,33 @@ export const libraryParses = pgTable(
     parsedBy: jsonb('parsed_by').$type<Actor>().notNull(),
   },
   (t) => [primaryKey({ columns: [t.documentId, t.fileId] })],
+);
+
+/** Immutable converted text; current parse rows only point at these lab-scoped snapshots. */
+export const librarySnapshots = pgTable(
+  'library_snapshots',
+  {
+    documentId: text('document_id')
+      .notNull()
+      .references(() => records.id),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => records.id),
+    orgId: text('org_id')
+      .notNull()
+      .references(() => orgs.id),
+    labId: text('lab_id')
+      .notNull()
+      .references(() => labs.id),
+    snapshot: text('snapshot').notNull(),
+    sha256: text('sha256').notNull(),
+    content: jsonb('content').$type<SourceSnapshotContent>().notNull(),
+    converter: text('converter').notNull(),
+    warnings: jsonb('warnings').$type<string[]>().notNull(),
+    parsedAt: timestamp('parsed_at', { withTimezone: true }).notNull(),
+    parsedBy: jsonb('parsed_by').$type<Actor>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.labId, t.documentId, t.fileId, t.snapshot] })],
 );
 
 /** Searchable passages of parsed document files (plan 011b), with their heading path and page. */

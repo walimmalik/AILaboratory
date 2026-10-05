@@ -13,6 +13,14 @@ and reload retain the submitted search, search mode and separate title/status fi
 unavailable section is explained rather than replaced by the first section; choose another
 section or search again. These links do not pin an immutable source edition.
 
+The library API now retains immutable converted-text snapshots. Parse/read/search results carry
+an exact source reference, and `library.read {source}` verifies the historical record version,
+file membership, stored byte digest and snapshot before reading it. New revisions and improved
+conversion leave old snapshots readable; empty sections are retained for new parses. Pre-snapshot
+data preserves only observable retained text/headings, with missing old empty headings labeled.
+The SOP source/citation consumer and scientist selection/adoption UI remain pending; current SOP
+citations and Documents navigation still use current discovery. See [library architecture](../architecture/library.md#exact-instruction-references-library-producer-004g--sg-18).
+
 - **Documents** (built, `DOC-0001`): SOPs, vendor manuals, papers, robot protocol code and web pages, one record per source with its files (original, alternates, supplements); a new revision is a new version and keeps the old file. Folders import from a `manifest.json` or Markdown with front matter (`library:import`); the seed loads `seed/sops/own` and `docs/sop-library`. Each carries its license and a share policy. All Rights Reserved and non-commercial items are lab-private and never go into `seed/` or exports.
 - **File store** (built, [ADR 0033](../decisions/0033-file-store.md)): content-addressed (bytes named by sha256) on a Docker volume, behind an interface that can move to S3-compatible storage on the cluster. Each file is a `fil_` record (`FIL-0001`); the same bytes are stored once; `files.upload` and `files.get` for agents, `/api/v1/files/<id>` for people. A file record is only ever made by `files.upload`, which proves the caller holds the bytes; `records.create` refuses the kind ([library.md](../architecture/library.md)). SDS and CoA files use it too.
 - **Parsing** (Markdown, HTML, code and text built, [ADR 0034](../decisions/0034-library-text-and-search.md); PDF and DOCX next): Docling in the science service keeps headings, page numbers, reading order and tables, with OCR for scans. It runs locally, so private manuals never leave the machine.

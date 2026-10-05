@@ -1,68 +1,39 @@
-import { newId } from '@ailab/domain';
+import { createHash } from 'node:crypto';
 import {
+  Converted,
   type DocumentAttributes,
   type DocumentFile,
-  type DocumentParse,
   type DocumentType,
-  type FileAttributes,
   libraryAdd,
   libraryAddRevision,
   libraryParse,
   libraryRead,
   librarySearch,
-  type PassageText,
-  type RecordEnvelope,
+  type SourceSnapshotContent,
 } from '@ailab/schema';
-import { and, asc, desc, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
-import type { Db } from '../db/client.ts';
-import { libraryMentions, libraryParses, libraryPassages, records } from '../db/schema.ts';
-import { readBytes } from '../files/operations.ts';
+import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+import {
+  libraryMentions,
+  libraryParses,
+  libraryPassages,
+  librarySnapshots,
+  records,
+} from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
-import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
-
-async function documentOf(service: RecordService, ctx: RecordContext, id: string) {
-  const document = await service.get(ctx, id);
-  if (document.kind !== 'document') {
-    throw new OperationError('invalid_input', `${document.name} is not a library document`);
-  }
-  return document;
-}
-
-async function parseOf(db: Db, labId: string, documentId: string, fileId: string) {
-  const [row] = await db
-    .select()
-    .from(libraryParses)
-    .where(
-      and(
-        eq(libraryParses.labId, labId),
-        eq(libraryParses.documentId, documentId),
-        eq(libraryParses.fileId, fileId),
-      ),
-    );
-  if (!row) return undefined;
-  return {
-    file: row.fileId,
-    sha256: row.sha256,
-    converter: row.converter,
-    sections: row.sections,
-    passages: row.passages,
-    warnings: row.warnings,
-    parsedAt: row.parsedAt.toISOString(),
-  } satisfies DocumentParse;
-}
-
-const originalOf = (document: RecordEnvelope) =>
-  (document.attributes as DocumentAttributes).files.find((f) => f.role === 'original')?.file;
-
-const passageText = (row: typeof libraryPassages.$inferSelect): PassageText => ({
-  id: row.id,
-  section: row.section,
-  heading: row.heading,
-  page: row.page,
-  text: row.text,
-});
+import {
+  documentOf,
+  ensureCurrentSnapshot,
+  lockDocument,
+  materializeRetainedParse,
+  originalOf,
+  parseMetadata,
+  resolveSnapshot,
+  snapshotDigest,
+  sourceReference,
+  verifiedFile,
+} from './snapshots.ts';
 
 export const libraryOperations = [
   implement(libraryAdd, {
@@ -121,103 +92,175 @@ export const libraryOperations = [
     touches: (input) => [input.document],
     run: async (ctx, input, deps) => {
       const service = new RecordService(deps.db, deps.kinds);
+      // Capture the selected record version before conversion, which may take a long time.
       const document = await documentOf(service, ctx, input.document);
       const fileId = input.file ?? originalOf(document);
-      if (!fileId) {
+      if (!fileId)
         throw new OperationError('invalid_state', `${document.name} has no original file to parse`);
-      }
       if (!(document.attributes as DocumentAttributes).files.some((f) => f.file === fileId)) {
         throw new OperationError(
           'invalid_input',
           `${fileId} is not one of ${document.name}'s files`,
         );
       }
-      const file = await service.get(ctx, fileId);
-      const attributes = file.attributes as FileAttributes;
-      const converted = await deps.converter.convert({
-        name: attributes.originalName,
-        mediaType: attributes.mediaType,
-        bytes: await readBytes(file, deps.files),
-      });
-      const where = and(
-        eq(libraryPassages.documentId, document.id),
-        eq(libraryPassages.fileId, fileId),
+      const { attributes, bytes } = await verifiedFile(service, ctx, fileId, deps.files);
+      const converted = Converted.parse(
+        await deps.converter.convert({
+          name: attributes.originalName,
+          mediaType: attributes.mediaType,
+          bytes,
+        }),
       );
-      // A passage whose text is unchanged keeps its ID, so citations of it still resolve.
-      const earlier = new Map<string, string[]>();
-      for (const p of await deps.db
-        .select({ id: libraryPassages.id, text: libraryPassages.text })
-        .from(libraryPassages)
-        .where(where)
-        .orderBy(libraryPassages.section, libraryPassages.seq)) {
-        earlier.set(p.text, [...(earlier.get(p.text) ?? []), p.id]);
-      }
-      await deps.db.delete(libraryPassages).where(where);
-      // Proposals point at passages that are about to go; confirmed mentions keep their words.
-      await deps.db
-        .delete(libraryMentions)
-        .where(
-          and(
-            eq(libraryMentions.documentId, document.id),
-            eq(libraryMentions.fileId, fileId),
-            eq(libraryMentions.status, 'proposed'),
-          ),
+      const published = await deps.db.transaction(async (tx) => {
+        await lockDocument(tx, ctx, document.id);
+        const where = and(
+          eq(libraryPassages.labId, ctx.labId),
+          eq(libraryPassages.documentId, document.id),
+          eq(libraryPassages.fileId, fileId),
         );
-      const rows = converted.sections.flatMap((section, index) =>
-        section.passages.map((passage, seq) => ({
-          id: earlier.get(passage.text)?.shift() ?? newId('pas'),
-          orgId: ctx.orgId,
-          labId: ctx.labId,
+        await materializeRetainedParse(tx, ctx, document.id, fileId);
+        const earlier = new Map<string, string[]>();
+        const reservedIds = new Set<string>();
+        for (const p of await tx
+          .select()
+          .from(libraryPassages)
+          .where(where)
+          .orderBy(libraryPassages.section, libraryPassages.seq)) {
+          earlier.set(p.text, [...(earlier.get(p.text) ?? []), p.id]);
+          reservedIds.add(p.id);
+        }
+        const content: SourceSnapshotContent = {
+          converter: converted.converter,
+          warnings: converted.warnings,
+          outline: converted.sections.map((s, index) => ({
+            index,
+            heading: s.heading,
+            pageFrom: s.pageFrom ?? null,
+            pageTo: s.pageTo ?? null,
+            passages: s.passages.length,
+          })),
+          passages: converted.sections.flatMap((section, index) =>
+            section.passages.map((p, seq) => {
+              let id = earlier.get(p.text)?.shift();
+              if (!id) {
+                // A retained repeated passage may already own the ID of a newly added
+                // occurrence at its former position. Reserve all retained IDs first.
+                let salt = 0;
+                do {
+                  id = `pas_${createHash('sha256')
+                    .update(JSON.stringify([document.id, fileId, index, seq, p.text, salt++]))
+                    .digest('hex')
+                    .slice(0, 32)}`;
+                } while (reservedIds.has(id));
+                reservedIds.add(id);
+              }
+              return {
+                id,
+                section: index,
+                heading: section.heading,
+                page: p.page ?? null,
+                text: p.text,
+              };
+            }),
+          ),
+        };
+        const snapshot = snapshotDigest(content);
+        const values = {
           documentId: document.id,
           fileId,
-          section: index,
-          heading: section.heading,
-          headingText: section.heading.join(' › '),
-          sectionPageFrom: section.pageFrom ?? null,
-          sectionPageTo: section.pageTo ?? null,
-          seq,
-          page: passage.page ?? null,
-          text: passage.text,
-        })),
-      );
-      for (let i = 0; i < rows.length; i += 500) {
-        await deps.db.insert(libraryPassages).values(rows.slice(i, i + 500));
-      }
-      const parsedAt = new Date();
-      const values = {
-        documentId: document.id,
-        fileId,
-        orgId: ctx.orgId,
-        labId: ctx.labId,
-        sha256: attributes.sha256,
-        converter: converted.converter,
-        sections: converted.sections.length,
-        passages: rows.length,
-        warnings: converted.warnings,
-        parsedAt,
-        parsedBy: ctx.actor,
-      };
-      await deps.db
-        .insert(libraryParses)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [libraryParses.documentId, libraryParses.fileId],
-          set: values,
+          orgId: ctx.orgId,
+          labId: ctx.labId,
+          sha256: attributes.sha256,
+          snapshot,
+          converter: content.converter,
+          warnings: content.warnings,
+          parsedAt: new Date(),
+          parsedBy: ctx.actor,
+        };
+        // A repeated conversion reuses the immutable content and its original parse metadata.
+        await tx
+          .insert(librarySnapshots)
+          .values({ ...values, content })
+          .onConflictDoNothing();
+        const [stored] = await tx
+          .select()
+          .from(librarySnapshots)
+          .where(
+            and(
+              eq(librarySnapshots.labId, ctx.labId),
+              eq(librarySnapshots.documentId, document.id),
+              eq(librarySnapshots.fileId, fileId),
+              eq(librarySnapshots.snapshot, snapshot),
+            ),
+          );
+        if (!stored) throw new OperationError('internal', 'Converted-text snapshot was not stored');
+        await tx.delete(libraryPassages).where(where);
+        await tx
+          .delete(libraryMentions)
+          .where(
+            and(
+              eq(libraryMentions.labId, ctx.labId),
+              eq(libraryMentions.documentId, document.id),
+              eq(libraryMentions.fileId, fileId),
+              eq(libraryMentions.status, 'proposed'),
+            ),
+          );
+        const sequences = new Map<number, number>();
+        const rows = content.passages.map((p) => {
+          const outline = content.outline[p.section];
+          const seq = sequences.get(p.section) ?? 0;
+          sequences.set(p.section, seq + 1);
+          return {
+            id: p.id,
+            documentId: document.id,
+            fileId,
+            orgId: ctx.orgId,
+            labId: ctx.labId,
+            section: p.section,
+            heading: p.heading,
+            headingText: p.heading.join(' › '),
+            sectionPageFrom: outline?.pageFrom ?? null,
+            sectionPageTo: outline?.pageTo ?? null,
+            seq,
+            page: p.page ?? null,
+            text: p.text,
+          };
         });
+        for (let i = 0; i < rows.length; i += 500)
+          await tx.insert(libraryPassages).values(rows.slice(i, i + 500));
+        await tx
+          .insert(libraryParses)
+          .values({ ...values, sections: content.outline.length, passages: rows.length })
+          .onConflictDoUpdate({
+            target: [libraryParses.documentId, libraryParses.fileId],
+            set: { ...values, sections: content.outline.length, passages: rows.length },
+          });
+        return stored;
+      });
       return {
         document,
-        parse: (await parseOf(deps.db, ctx.labId, document.id, fileId)) as DocumentParse,
+        parse: parseMetadata(published),
+        source: sourceReference(document, fileId, attributes.sha256, {
+          status: 'parsed',
+          snapshot: published.snapshot,
+        }),
       };
     },
   }),
   implement(librarySearch, {
     run: async (ctx, input, deps) => {
+      // Materialize only retained pre-snapshot projections. The subsequent statement chooses
+      // the pointer and matching projection together, even if a reparse commits immediately after.
+      const retained = await deps.db
+        .select()
+        .from(libraryParses)
+        .where(and(eq(libraryParses.labId, ctx.labId), isNull(libraryParses.snapshot)));
+      for (const p of retained) await ensureCurrentSnapshot(deps.db, ctx, p.documentId, p.fileId);
       const query = sql`websearch_to_tsquery('english', ${input.text})`;
       const filters = [
         eq(libraryPassages.labId, ctx.labId),
         ne(records.status, 'archived'),
         sql`${libraryPassages.search} @@ ${query}`,
-        // Only the current original: earlier revisions and alternate forms would repeat hits.
         sql`${records.attributes}->'files' @> jsonb_build_array(jsonb_build_object('file', ${libraryPassages.fileId}, 'role', 'original'))`,
         ...(input.type ? [sql`${records.attributes}->>'type' = ${input.type}`] : []),
         ...(input.document ? [eq(libraryPassages.documentId, input.document)] : []),
@@ -231,103 +274,118 @@ export const libraryOperations = [
       const rows = await deps.db
         .select({
           passage: libraryPassages,
-          name: records.name,
+          version: records.version,
+          sha256: librarySnapshots.sha256,
+          snapshot: librarySnapshots.snapshot,
           label: records.label,
-          type: sql<string>`${records.attributes}->>'type'`,
           snippet: sql<string>`ts_headline('english', ${libraryPassages.text}, ${query}, 'StartSel=[[, StopSel=]], MaxWords=40, MinWords=15, MaxFragments=2, FragmentDelimiter=" … "')`,
           rank,
         })
         .from(libraryPassages)
         .innerJoin(records, eq(records.id, libraryPassages.documentId))
+        .innerJoin(
+          libraryParses,
+          and(
+            eq(libraryParses.labId, libraryPassages.labId),
+            eq(libraryParses.documentId, libraryPassages.documentId),
+            eq(libraryParses.fileId, libraryPassages.fileId),
+          ),
+        )
+        .innerJoin(
+          librarySnapshots,
+          and(
+            eq(librarySnapshots.labId, libraryParses.labId),
+            eq(librarySnapshots.documentId, libraryParses.documentId),
+            eq(librarySnapshots.fileId, libraryParses.fileId),
+            eq(librarySnapshots.snapshot, libraryParses.snapshot),
+          ),
+        )
         .where(and(...filters))
         .orderBy(desc(rank), asc(libraryPassages.documentId), asc(libraryPassages.section))
         .limit(input.limit ?? 10);
+      const service = new RecordService(deps.db, deps.kinds);
       return {
-        hits: rows.map((r) => ({
-          document: {
-            id: r.passage.documentId,
-            name: r.name,
-            label: r.label,
-            type: r.type as DocumentType,
-          },
-          passage: passageText(r.passage),
-          snippet: r.snippet,
-          rank: Number(r.rank),
-        })),
+        hits: await Promise.all(
+          rows.map(async (r) => {
+            const resolved = await resolveSnapshot(deps.db, service, deps.files, ctx, {
+              source: {
+                document: r.passage.documentId,
+                version: r.version,
+                file: r.passage.fileId,
+                sha256: r.sha256,
+                parse: { status: 'parsed', snapshot: r.snapshot },
+                title: r.label,
+              },
+            });
+            const passage = resolved.content?.passages.find((p) => p.id === r.passage.id);
+            if (!passage || !resolved.source || passage.text !== r.passage.text)
+              throw new OperationError(
+                'invalid_state',
+                'Search projection does not match its selected snapshot',
+              );
+            return {
+              document: {
+                id: resolved.document.id,
+                name: resolved.document.name,
+                label: resolved.document.label,
+                type: (resolved.document.attributes as DocumentAttributes).type as DocumentType,
+              },
+              source: resolved.source,
+              passage,
+              snippet: r.snippet,
+              rank: Number(r.rank),
+            };
+          }),
+        ),
       };
     },
   }),
   implement(libraryRead, {
     run: async (ctx, input, deps) => {
-      const document = await documentOf(
+      const resolved = await resolveSnapshot(
+        deps.db,
         new RecordService(deps.db, deps.kinds),
+        deps.files,
         ctx,
-        input.document,
+        input,
       );
-      const fileId = originalOf(document);
-      const parse = fileId ? await parseOf(deps.db, ctx.labId, document.id, fileId) : undefined;
-      if (!fileId || !parse) return { document };
-      const base = and(
-        eq(libraryPassages.labId, ctx.labId),
-        eq(libraryPassages.documentId, document.id),
-        eq(libraryPassages.fileId, fileId),
-      );
-      const order = [asc(libraryPassages.section), asc(libraryPassages.seq)];
+      const exact = 'source' in input;
+      const { content, ...result } = resolved;
+      if (!content) {
+        if (exact && (input.passages || input.section !== undefined || input.pages)) {
+          throw new OperationError(
+            'invalid_state',
+            'Text could not be checked for this exact reference; no parsed passages are available',
+          );
+        }
+        return result;
+      }
       if (input.passages) {
-        const rows = await deps.db
-          .select()
-          .from(libraryPassages)
-          .where(and(base, inArray(libraryPassages.id, input.passages)))
-          .orderBy(...order);
-        return { document, parse, passages: rows.map(passageText) };
+        const requested = new Set(input.passages);
+        const passages = content.passages.filter((p) => requested.has(p.id));
+        if (exact && passages.length !== requested.size)
+          throw new OperationError(
+            'not_found',
+            'A requested passage is missing from the selected snapshot',
+          );
+        return { ...result, passages };
       }
-      if (input.section !== undefined || input.pages) {
-        const rows = await deps.db
-          .select()
-          .from(libraryPassages)
-          .where(
-            and(
-              base,
-              ...(input.section !== undefined ? [eq(libraryPassages.section, input.section)] : []),
-              ...(input.pages
-                ? [
-                    gte(libraryPassages.page, input.pages.from),
-                    lte(libraryPassages.page, input.pages.to),
-                  ]
-                : []),
-            ),
-          )
-          .orderBy(...order);
-        return { document, parse, passages: rows.map(passageText) };
+      if (input.section !== undefined && !content.outline.some((s) => s.index === input.section)) {
+        throw new OperationError('not_found', 'The selected section is missing from this snapshot');
       }
-      const rows = await deps.db
-        .select({
-          section: libraryPassages.section,
-          heading: libraryPassages.heading,
-          pageFrom: libraryPassages.sectionPageFrom,
-          pageTo: libraryPassages.sectionPageTo,
-          passages: sql<number>`count(*)::int`,
-        })
-        .from(libraryPassages)
-        .where(base)
-        .groupBy(
-          libraryPassages.section,
-          libraryPassages.heading,
-          libraryPassages.sectionPageFrom,
-          libraryPassages.sectionPageTo,
-        )
-        .orderBy(asc(libraryPassages.section));
-      return {
-        document,
-        parse,
-        outline: rows.map((r) => ({
-          index: r.section,
-          heading: r.heading,
-          pageFrom: r.pageFrom,
-          pageTo: r.pageTo,
-          passages: Number(r.passages),
-        })),
-      };
+      if (input.pages && input.pages.to < input.pages.from)
+        throw new OperationError('invalid_input', 'The last page must follow the first page');
+      if (input.section !== undefined || input.pages)
+        return {
+          ...result,
+          passages: content.passages.filter(
+            (p) =>
+              (input.section === undefined || p.section === input.section) &&
+              (!input.pages ||
+                (p.page != null && p.page >= input.pages.from && p.page <= input.pages.to)),
+          ),
+        };
+      return { ...result, outline: content.outline };
     },
   }),
 ];
