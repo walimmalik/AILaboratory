@@ -76,9 +76,13 @@ The **Review** page lists everything waiting for a person, grouped by kind: draf
 ## Assumptions, questions and review loops
 
 - **Mark what is assumed.** Anything an agent guessed stays in agent ink until a person confirms it. Unknown values stay unknown.
-- **Open questions (012-G6).** Where a source is unclear (contradictions, "about 1 µL", missing values), the digitizer records an open question with the passages involved and a suggested answer. Open questions block confirm until a person answers or accepts.
+- **Open questions (012-G6, 004g).** Where a source is unclear, the agent records an open question with its passages. A response such as “I don't know” is preserved without resolving the issue. Unresolved method questions block confirmation; accepting a scientific decision and finally confirming the SOP are separate steps.
 - **AI review loop (012-G11).** Before a person sees a digitized SOP, a reviewer model checks it against the source. It fixes only what the source settles, each fix a tracked change with a reason and a passage, and asks an open question where the source is ambiguous. Two rounds by default. The review never confirms anything.
 - **Downstream changes (P6, plans 014 to 017).** When something upstream changes, downstream drafts redraft automatically; confirmed documents are marked "out of date" with a one-click redraft that is confirmed again.
+
+## Model continuation
+
+The assistant supports explicit Responses configuration for compatible model endpoints. Intermediate progress continues within the existing step limit; refused or truncated replies cannot execute tools. The same boundary applies to SOP review and suggestions. Proposal approval remains a person’s explicit action. Configuration, replay details and current limits are in the [assistant architecture](../architecture/assistant.md#responses-transport-and-continuation) and [ADR 0070](../decisions/0070-responses-agent-continuation.md); this changes no lab operation or scientific approval rule.
 
 ## Lab memory (plan 005, locked)
 

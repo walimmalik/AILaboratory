@@ -1,6 +1,7 @@
 import { AnthropicModel } from './anthropic.ts';
 import type { ChatModel } from './model.ts';
 import { OpenAiCompatibleModel } from './openai-compatible.ts';
+import { OpenAiResponsesModel } from './responses.ts';
 import { ScriptedModel } from './scripted.ts';
 
 export type ModelSetup = { model: ChatModel; agentName: string } | { reason: string };
@@ -51,7 +52,19 @@ export function modelFromEnv(env: Env): ModelSetup {
       const baseUrl = env.AGENT_BASE_URL?.trim();
       if (!baseUrl) return { reason: 'AGENT_BASE_URL is empty in .env' };
       if (!model) return { reason: 'AGENT_MODEL is empty in .env' };
-      const chat = new OpenAiCompatibleModel({
+      const format = env.AGENT_API_FORMAT?.trim() || 'chat-completions';
+      if (format !== 'chat-completions' && format !== 'responses') {
+        return { reason: 'AGENT_API_FORMAT must be chat-completions or responses' };
+      }
+      if (format === 'responses') {
+        try {
+          if (!['https:', 'http:'].includes(new URL(baseUrl).protocol)) throw new Error();
+        } catch {
+          return { reason: 'AGENT_BASE_URL must be an absolute HTTP(S) URL for Responses' };
+        }
+      }
+      const Model = format === 'responses' ? OpenAiResponsesModel : OpenAiCompatibleModel;
+      const chat = new Model({
         provider,
         baseUrl,
         apiKey: env.AGENT_API_KEY?.trim() ?? '',

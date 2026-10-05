@@ -37,6 +37,14 @@ Set in the repo-root `.env`; the API reads it at start.
 
 `AGENT_NAME` overrides the name. With OpenRouter, `AGENT_PROVIDER_ORDER` (comma-separated provider tags, e.g. `fireworks,together`) sets which providers to try first; OpenRouter falls back to others if they fail. Without a working setup the app still runs; `assistant.status` and the panel say what is missing. Claude requests use prompt caching and, on models that support it, server-side refusal fallbacks. Model errors are shown to the person; keys never appear in messages or logs.
 
+## Responses transport and continuation
+
+For `openai-compatible`, `AGENT_API_FORMAT=responses` selects the `/responses` endpoint under the configured `AGENT_BASE_URL`; omission selects `chat-completions`. There is no automatic fallback or model substitution. For example, a LiteLLM deployment exposing Sol 6.1 uses the existing base URL and key with `AGENT_MODEL=gpt-6.1-sol` and `AGENT_API_FORMAT=responses`. Restart the API after changing configuration. See [ADR 0070](../decisions/0070-responses-agent-continuation.md).
+
+The Responses adapter stores ordered output with its protocol, endpoint and model identity. It replays original phases, reasoning and call IDs exactly once when that identity matches; otherwise it translates normalized conversation messages. An explicit commentary-only reply continues within the existing step limit. Refused or truncated replies never execute their tool calls; each skipped call receives an explicit result. Pending proposals retain the same pause boundary and do not execute deferred calls on approval. SOP review and suggestions obey the same terminal-output boundary.
+
+Live evaluation establishes observed saved work, not scientific validation or a reliability guarantee. Tool exposure and context-size optimization are a separate measured step in plan 004g.
+
 ## Operations and doors
 
 | Operation | |
