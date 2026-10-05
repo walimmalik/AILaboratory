@@ -270,6 +270,18 @@ export async function suggestSop(
       toolCalls: answer.toolCalls,
       ...(answer.raw === undefined ? {} : { raw: answer.raw }),
     });
+    if (answer.stop === 'refusal' || answer.stop === 'max_tokens') {
+      throw new OperationError(
+        'invalid_state',
+        answer.stop === 'refusal'
+          ? 'The assistant declined the suggestion; fill it in yourself or send a new request'
+          : 'The suggestion was cut off and was not accepted; try again or fill it in yourself',
+      );
+    }
+    if (answer.stop === 'continue' && !answer.toolCalls.length) {
+      problem = `The assistant did not finish within ${MAX_TURNS} turns`;
+      continue;
+    }
     const call = answer.toolCalls[0];
     if (!call) {
       messages.push({ role: 'user', text: `Answer with ${tool.name}.` });
