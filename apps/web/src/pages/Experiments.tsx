@@ -677,6 +677,17 @@ function RunStepRow({
     if (mode !== 'none') tick.mutate(mode);
   };
   const planned = plannedText(step);
+  const recorded = step.actuals
+    ?.map((actual) => `${actual.name} ${formatValue(actual.value)}`)
+    .join(' · ');
+  // Suppress only the exact value-only sentence produced by runs.record_step/runs.correct.
+  // Any additional recorded explanation remains visible, even when actuals are present.
+  const generatedDifference = step.actuals
+    ?.map((actual) => {
+      const expected = step.planned.find((value) => value.name === actual.name)?.value;
+      return `${actual.name} ${formatValue(actual.value)} (planned ${expected === undefined ? 'nothing' : formatValue(expected)})`;
+    })
+    .join('; ');
   const instructionIsTitle = step.text === step.title;
   return (
     <li>
@@ -700,11 +711,17 @@ function RunStepRow({
         <p className="sop-line muted sop-note">Instruction text was not captured for this run.</p>
       )}
       {planned && <p className="sop-line muted sop-note">Planned: {planned}</p>}
+      {recorded && <p className="sop-line warn-ink sop-note">Recorded: {recorded}</p>}
       {step.deviation && (
-        <p className="sop-line warn-ink sop-note">
-          {step.deviation.what}. Why: {step.deviation.why}
-          {step.deviation.impact && `. Impact: ${step.deviation.impact}`}
-        </p>
+        <>
+          {step.deviation.what !== generatedDifference && (
+            <p className="sop-line warn-ink sop-note">{step.deviation.what}</p>
+          )}
+          <p className="sop-line warn-ink sop-note">Why: {step.deviation.why}</p>
+          {step.deviation.impact && (
+            <p className="sop-line warn-ink sop-note">Impact: {step.deviation.impact}</p>
+          )}
+        </>
       )}
       {open && step.status === 'pending' && mode === 'none' && (
         <div className="actions">
