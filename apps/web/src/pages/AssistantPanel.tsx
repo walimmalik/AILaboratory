@@ -11,6 +11,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type FormEvent, Fragment, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
+import {
+  CONTINUE_QUESTION_MESSAGE,
+  isResponseText,
+  type QuestionSelection,
+  selectedQuestion,
+  selectionForMessage,
+} from '../lib/chat-question.ts';
 import { fileOf } from '../lib/files.ts';
 import {
   describeToolStep,
@@ -24,9 +31,11 @@ import {
   assistantSetupQuery,
   conversationQuery,
   conversationsQuery,
+  recordQuery,
   reviewQuery,
 } from '../queries.ts';
 import { RememberCard, UsedMemories } from './AssistantMemory.tsx';
+import { ChatQuestionResponse, SelectedQuestionContext } from './ChatQuestion.tsx';
 import { FileCard } from './FileCard.tsx';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
@@ -94,7 +103,7 @@ export function AssistantPanel() {
           the repo folder and restart the app.
         </p>
       ) : (
-        <Composer />
+        <Composer key={assistant.composerKey} />
       )}
     </aside>
   );
@@ -181,6 +190,7 @@ function Transcript({
   running: boolean;
   notFound: string | undefined;
 }) {
+  const assistant = useAssistant();
   const end = useRef<HTMLDivElement>(null);
   const count = conversation?.messages.length ?? 0;
   const review = useQuery({ ...reviewQuery, enabled: Boolean(conversation) }).data?.items;
@@ -214,6 +224,14 @@ function Transcript({
         agentName={conversation.agentName}
         running={running}
         review={review}
+        conversationId={conversation.id}
+        onContinue={(selection) =>
+          assistant.send(CONTINUE_QUESTION_MESSAGE, {
+            context: selection.context,
+            ...(selection.replyTo ? { replyTo: selection.replyTo } : {}),
+          })
+        }
+        onRecorded={assistant.acknowledgeResponse}
       />
       {running && (
         <li className="working agent-ink">
@@ -283,6 +301,10 @@ type ConversationMessagesProps = {
   agentName: string;
   running: boolean;
   review: ReviewItem[] | undefined;
+  conversationId?: string;
+  onContinue?: (selection: QuestionSelection) => Promise<boolean>;
+  onRecorded?: (previous: QuestionSelection, updated: RecordEnvelope) => void;
+  conversationBusy?: boolean;
 };
 
 export function ConversationMessages(props: ConversationMessagesProps) {
@@ -299,13 +321,23 @@ export function ConversationMessages(props: ConversationMessagesProps) {
           {...props}
           messages={messages}
           running={props.running && index === turns.length - 1}
+          conversationBusy={props.running}
         />
       ))}
     </>
   );
 }
 
-function ConversationTurn({ messages, agentName, running, review }: ConversationMessagesProps) {
+function ConversationTurn({
+  messages,
+  agentName,
+  running,
+  review,
+  conversationId,
+  onContinue,
+  onRecorded,
+  conversationBusy = running,
+}: ConversationMessagesProps) {
   const entries = transcriptEntries(messages);
   const finalReply = messages.findLast((m) => m.role === 'assistant');
   const handoffBefore =
@@ -321,7 +353,14 @@ function ConversationTurn({ messages, agentName, running, review }: Conversation
         <Fragment key={entry.id}>
           {entry.id === handoffBefore && <WaitingLine messages={messages} review={review} />}
           {entry.type === 'message' ? (
-            <Message message={entry.message} agentName={agentName} />
+            <Message
+              message={entry.message}
+              agentName={agentName}
+              running={conversationBusy}
+              conversationId={conversationId}
+              onContinue={onContinue}
+              onRecorded={onRecorded}
+            />
           ) : entry.type === 'step' ? (
             <li className="action">
               <ul className="steps">
@@ -419,11 +458,23 @@ function WaitingLine({
 function Message({
   message,
   agentName,
+  running,
+  conversationId,
+  onContinue,
+  onRecorded,
 }: {
   message: Exclude<AssistantMessage, ToolMessage>;
   agentName: string;
+  running: boolean;
+  conversationId: string | undefined;
+  onContinue: ((selection: QuestionSelection) => Promise<boolean>) | undefined;
+  onRecorded: ((previous: QuestionSelection, updated: RecordEnvelope) => void) | undefined;
 }) {
   if (message.role === 'user') {
+    const selection =
+      conversationId && isResponseText(message)
+        ? selectionForMessage(message, conversationId)
+        : undefined;
     return (
       <li className="msg">
         <div className="who mono muted">you</div>
@@ -433,6 +484,15 @@ function Message({
             attached <span className="mono">{file.name}</span>
           </p>
         ))}
+        {selection && onContinue && (
+          <ChatQuestionResponse
+            selection={selection}
+            text={message.text}
+            busy={running}
+            onContinue={onContinue}
+            onRecorded={onRecorded}
+          />
+        )}
       </li>
     );
   }
@@ -505,14 +565,27 @@ function Step({
 /** Text files the assistant can take: definitions, tables, notes. */
 const ATTACHABLE = /\.(json|csv|tsv|txt|md|xml|yaml|yml)$/i;
 
-function Composer() {
+export function Composer() {
   const assistant = useAssistant();
   const [text, setText] = useState('');
   const [files, setFiles] = useState<AttachmentInput[]>([]);
   const [fileError, setFileError] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  const busy = assistant.sending || assistant.running;
+  const busy = assistant.sending || assistant.running || !assistant.contextReady;
+  const selection = assistant.questionSelection;
+  const selectedRecord = useQuery({
+    ...recordQuery(selection?.context.record.id ?? ''),
+    enabled: Boolean(selection),
+  });
+  const question = selection ? selectedQuestion(selectedRecord.data, selection) : undefined;
+  const contextBlocked = Boolean(
+    selection &&
+      (selectedRecord.isFetching ||
+        selectedRecord.error ||
+        question?.disposition.status !== 'open' ||
+        selectedRecord.data?.version !== selection.context.record.version),
+  );
 
   const attach = async (list: FileList | null) => {
     setFileError(undefined);
@@ -540,10 +613,12 @@ function Composer() {
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     const message = text.trim();
-    if ((!message && files.length === 0) || busy) return;
+    if ((!message && files.length === 0) || busy || contextBlocked) return;
+    const submittedText = text;
+    const submittedFiles = files;
     if (await assistant.send(message, { attachments: files })) {
-      setText('');
-      setFiles([]);
+      setText((current) => (current === submittedText ? '' : current));
+      setFiles((current) => (current === submittedFiles ? [] : current));
     }
   };
 
@@ -569,6 +644,24 @@ function Composer() {
         void attach(e.dataTransfer.files);
       }}
     >
+      {!assistant.contextReady && (
+        <p className="muted">{assistant.contextError ?? 'Loading conversation context…'}</p>
+      )}
+      {assistant.contextError && (
+        <button type="button" className="btn small" onClick={() => void assistant.refreshContext()}>
+          Retry conversation context
+        </button>
+      )}
+      {selection && (
+        <SelectedQuestionContext
+          selection={selection}
+          record={selectedRecord.data}
+          onSelect={assistant.selectQuestion}
+        />
+      )}
+      {selection && selectedRecord.error && (
+        <p className="error-text">{selectedRecord.error.message}</p>
+      )}
       {assistant.sendError && <p className="error-text">{assistant.sendError}</p>}
       {fileError && <p className="error-text">{fileError}</p>}
       <label className="sr-only" htmlFor="assistant-input">
@@ -629,7 +722,7 @@ function Composer() {
         <button
           type="submit"
           className="btn primary small"
-          disabled={busy || (!text.trim() && files.length === 0)}
+          disabled={busy || contextBlocked || (!text.trim() && files.length === 0)}
         >
           Send
         </button>

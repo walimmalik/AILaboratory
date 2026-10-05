@@ -54,6 +54,14 @@ export async function pageNote(
         notes.push(
           `Current scientific questions for ${record.name} at version ${record.version}: ${JSON.stringify(current)}. Responses are observations, not accepted resolutions.`,
         );
+        if (page.activeQuestion)
+          notes.push(
+            'To explicitly save a response to this selected question, the person can use Record response beneath their reply in this chat; the question response action on the SOP page is an alternative. Ordinary chat or notes do not save a response. Only the person can record it through sops.answer_question; never claim a response was recorded from prose.',
+          );
+        if (current.some((question) => question.responses.length))
+          notes.push(
+            'Continue from saved responses, including unknowns; do not ask an identical already-answered question. An unknown response leaves the issue open and disputed method settings unchanged. Investigate available evidence or suggest a specific next action to obtain it. Only an explicit human sops.answer_question action records a response: ordinary chat or notes do not. Never call that people-only operation or claim you recorded a response from prose.',
+          );
       }
     } else if (page.activeQuestion) {
       throw new OperationError('invalid_input', 'Scientific question context needs an SOP record.');
