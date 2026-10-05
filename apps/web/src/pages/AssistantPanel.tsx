@@ -3,11 +3,13 @@ import {
   type AttachmentInput,
   type Conversation,
   MAX_ATTACHMENT_CHARS,
+  operationContracts,
   type RecordEnvelope,
+  type ReviewItem,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type FormEvent, Fragment, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useAssistant } from '../assistant.tsx';
 import { fileOf } from '../lib/files.ts';
 import {
@@ -39,7 +41,8 @@ export function AssistantPanel() {
   const shown = assistant.conversationId ? conversation : undefined;
 
   return (
-    <aside className="assistant" aria-label="Assistant">
+    <aside className="assistant" aria-label="Assistant" id="assistant-panel">
+      <AssistantResize width={assistant.width} onResize={assistant.setWidth} />
       <header>
         <h2>Assistant</h2>
         {setup?.configured && (
@@ -97,6 +100,78 @@ export function AssistantPanel() {
   );
 }
 
+/** Resize from the left edge; arrow keys move the divider just as dragging does. */
+export function AssistantResize({
+  width,
+  onResize,
+}: {
+  width: number;
+  onResize: (width: number) => void;
+}) {
+  const [viewport, setViewport] = useState(() =>
+    typeof window === 'undefined' ? 1280 : window.innerWidth,
+  );
+  const drag = useRef<{ x: number; width: number } | undefined>(undefined);
+  useEffect(() => {
+    const resized = () => setViewport(window.innerWidth);
+    window.addEventListener('resize', resized);
+    return () => window.removeEventListener('resize', resized);
+  }, []);
+  const min = 320;
+  const max = Math.min(840, Math.max(min, viewport - 360));
+  const shown = Math.min(max, Math.max(min, width));
+  const resize = (next: number) => onResize(Math.round(Math.min(max, Math.max(min, next))));
+  return (
+    <hr
+      className="assistant-resize"
+      tabIndex={0}
+      aria-label="Resize assistant panel"
+      aria-controls="assistant-panel"
+      aria-orientation="vertical"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={shown}
+      aria-valuetext={`${shown} pixels wide`}
+      title="Drag to resize; Left and Right arrow keys change the width"
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.focus();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { x: event.clientX, width: shown };
+      }}
+      onPointerMove={(event) => {
+        if (drag.current) resize(drag.current.width + drag.current.x - event.clientX);
+      }}
+      onPointerUp={() => {
+        drag.current = undefined;
+      }}
+      onPointerCancel={() => {
+        drag.current = undefined;
+      }}
+      onLostPointerCapture={() => {
+        drag.current = undefined;
+      }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 80 : 20;
+        const next =
+          event.key === 'ArrowLeft'
+            ? shown + step
+            : event.key === 'ArrowRight'
+              ? shown - step
+              : event.key === 'Home'
+                ? min
+                : event.key === 'End'
+                  ? max
+                  : undefined;
+        if (next === undefined) return;
+        event.preventDefault();
+        resize(next);
+      }}
+    />
+  );
+}
+
 function Transcript({
   conversation,
   running,
@@ -108,6 +183,8 @@ function Transcript({
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = conversation?.messages.length ?? 0;
+  const review = useQuery({ ...reviewQuery, enabled: Boolean(conversation) && !running }).data
+    ?.items;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages arrive or work starts.
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
@@ -130,21 +207,15 @@ function Transcript({
     );
   }
 
-  const results = new Map(
-    conversation.messages.flatMap((m) => (m.role === 'tool' ? [[m.toolCallId, m] as const] : [])),
-  );
   return (
     <ol className="transcript" aria-live="polite">
-      {conversation.messages.map((message) =>
-        message.role === 'tool' ? null : (
-          <Message
-            key={message.id}
-            message={message}
-            agentName={conversation.agentName}
-            results={results}
-          />
-        ),
-      )}
+      <ConversationMessages
+        key={conversation.id}
+        messages={conversation.messages}
+        agentName={conversation.agentName}
+        running={running}
+        review={review}
+      />
       {running && (
         <li className="working agent-ink">
           <span className="lamp busy" aria-hidden="true" />
@@ -154,20 +225,138 @@ function Transcript({
       {!running && conversation.status === 'failed' && conversation.error && (
         <li className="stopped crit-ink">Stopped: {conversation.error}</li>
       )}
-      {!running && <WaitingLine messages={conversation.messages} />}
       <div ref={end} />
     </ol>
   );
 }
 
 type ToolMessage = Extract<AssistantMessage, { role: 'tool' }>;
+type AssistantReply = Extract<AssistantMessage, { role: 'assistant' }>;
+type ToolCall = AssistantReply['toolCalls'][number];
+type WorkEntry =
+  | { type: 'step'; id: string; call: ToolCall; result: ToolMessage | undefined }
+  | { type: 'memory'; id: string; memories: NonNullable<AssistantReply['memory']> };
+type TranscriptEntry =
+  | { type: 'message'; id: string; message: Exclude<AssistantMessage, ToolMessage> }
+  | { type: 'activity'; id: string; entries: WorkEntry[] }
+  | Extract<WorkEntry, { type: 'step' }>;
+
+/** Fold only routine operation activity. Prose is never classified or summarized. */
+function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
+  const results = new Map(
+    messages.flatMap((m) => (m.role === 'tool' ? [[m.toolCallId, m] as const] : [])),
+  );
+  const entries: TranscriptEntry[] = [];
+  const addWork = (entry: WorkEntry) => {
+    const last = entries.at(-1);
+    if (last?.type === 'activity') last.entries.push(entry);
+    else entries.push({ type: 'activity', id: entry.id, entries: [entry] });
+  };
+  for (const message of messages) {
+    if (message.role === 'tool') continue;
+    if (message.role === 'user' || message.text.trim()) {
+      entries.push({ type: 'message', id: message.id, message });
+    }
+    if (message.role !== 'assistant') continue;
+    for (const call of message.toolCalls) {
+      const result = results.get(call.id);
+      const entry = { type: 'step', id: call.id, call, result } as const;
+      const output = (result?.result as { output?: unknown } | undefined)?.output;
+      const needsAttention =
+        result &&
+        (result.outcome === 'failed' ||
+          result.outcome === 'proposed' ||
+          (describeToolStep(result).record &&
+            operationContracts.get(call.operationId)?.effect !== 'read') ||
+          (result.outcome === 'done' &&
+            (fileOf(call.operationId, output) || call.operationId === 'memory.propose')) ||
+          waitingForYou([result]).drafts.length > 0);
+      if (needsAttention) entries.push(entry);
+      else addWork(entry);
+    }
+    if (!message.text.trim() && message.memory?.length) {
+      addWork({ type: 'memory', id: `${message.id}-memory`, memories: message.memory });
+    }
+  }
+  return entries;
+}
+
+/** Kept separate from live queries so the ordered transcript can also be rendered on its own. */
+export function ConversationMessages({
+  messages,
+  agentName,
+  running,
+  review,
+}: {
+  messages: AssistantMessage[];
+  agentName: string;
+  running: boolean;
+  review: ReviewItem[] | undefined;
+}) {
+  const entries = transcriptEntries(messages);
+  const lastAsk = messages.findLastIndex((m) => m.role === 'user');
+  const finalReply = messages.slice(lastAsk + 1).findLast((m) => m.role === 'assistant');
+  const handoffBefore =
+    !running &&
+    finalReply?.role === 'assistant' &&
+    finalReply.text.trim() &&
+    !finalReply.toolCalls.length
+      ? finalReply.id
+      : undefined;
+  return (
+    <>
+      {entries.map((entry) => (
+        <Fragment key={entry.id}>
+          {entry.id === handoffBefore && <WaitingLine messages={messages} review={review} />}
+          {entry.type === 'message' ? (
+            <Message message={entry.message} agentName={agentName} />
+          ) : entry.type === 'step' ? (
+            <li className="action">
+              <ul className="steps">
+                <Step call={entry.call} result={entry.result} />
+              </ul>
+            </li>
+          ) : (
+            <li className="work">
+              <details className="work-details">
+                <summary className="muted">
+                  Work details
+                  {entry.entries.some((e) => e.type === 'step') &&
+                    ` · ${entry.entries.filter((e) => e.type === 'step').length} ${entry.entries.filter((e) => e.type === 'step').length === 1 ? 'action' : 'actions'}`}
+                  {entry.entries.some((e) => e.type === 'step' && !e.result) && ' · in progress'}
+                </summary>
+                <ul className="steps">
+                  {entry.entries.map((work) =>
+                    work.type === 'step' ? (
+                      <Step key={work.id} call={work.call} result={work.result} />
+                    ) : (
+                      <li key={work.id}>
+                        <UsedMemories memories={work.memories} />
+                      </li>
+                    ),
+                  )}
+                </ul>
+              </details>
+            </li>
+          )}
+        </Fragment>
+      ))}
+      {!running && !handoffBefore && <WaitingLine messages={messages} review={review} />}
+    </>
+  );
+}
 
 /**
- * Ends the latest turn with what it left for you (plan 004d, R4): drafts it wrote and changes it
- * proposed that still wait on the Review page, each linked to where you act on it.
+ * Hands off the latest turn's saved drafts and proposed changes using current Review state.
+ * Navigation opens the draft; confirmation stays on its record page.
  */
-function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
-  const review = useQuery(reviewQuery).data?.items;
+function WaitingLine({
+  messages,
+  review,
+}: {
+  messages: AssistantMessage[];
+  review: ReviewItem[] | undefined;
+}) {
   const lastAsk = messages.findLastIndex((m) => m.role === 'user');
   const steps = messages.slice(lastAsk + 1).filter((m): m is ToolMessage => m.role === 'tool');
   if (!review || steps.length === 0) return null;
@@ -183,28 +372,35 @@ function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
             : item.about.id,
     ),
   );
-  const drafts = turn.drafts.filter((d) => waitingIds.has(d.id));
+  const drafts = turn.drafts.flatMap((d) => {
+    const item = review.find((item) => item.type === 'draft' && item.record.id === d.id);
+    return item?.type === 'draft' ? [item] : [];
+  });
   const changes = turn.changes.filter((id) => waitingIds.has(id)).length;
   if (drafts.length === 0 && changes === 0) return null;
   return (
     <li className="waiting">
-      <b>Waiting for you:</b>{' '}
-      {drafts.map((d, i) => (
-        <span key={d.id}>
-          {i > 0 && ', '}
-          confirm{' '}
-          <Link to="/records/$id" params={{ id: d.id }} className="mono">
-            {d.name}
+      {drafts.map((item) => (
+        <div key={item.record.id} className="draft-handoff">
+          <Link to="/records/$id" params={{ id: item.record.id }}>
+            Open {item.record.kind === 'sop' ? 'SOP draft' : 'draft'}: {item.record.label}{' '}
+            <span className="mono">{item.record.name}</span>
           </Link>
-        </span>
+          <div className="muted">
+            draft ·{' '}
+            {item.blockers.length > 0
+              ? `${item.blockers[0]}${item.blockers.length > 1 ? `; ${item.blockers.length - 1} more to resolve` : ''}`
+              : item.ready
+                ? 'ready for review'
+                : 'needs review'}
+          </div>
+        </div>
       ))}
-      {drafts.length > 0 && changes > 0 && '; '}
       {changes > 0 && (
         <Link to="/review">
-          {changes === 1 ? 'confirm 1 proposed change' : `confirm ${changes} proposed changes`}
+          {changes === 1 ? 'Review 1 proposed change' : `Review ${changes} proposed changes`}
         </Link>
       )}
-      .
     </li>
   );
 }
@@ -212,11 +408,9 @@ function WaitingLine({ messages }: { messages: AssistantMessage[] }) {
 function Message({
   message,
   agentName,
-  results,
 }: {
   message: Exclude<AssistantMessage, ToolMessage>;
   agentName: string;
-  results: Map<string, ToolMessage>;
 }) {
   if (message.role === 'user') {
     return (
@@ -235,14 +429,6 @@ function Message({
     <li className="msg">
       <div className="who mono agent-ink">{agentName}</div>
       {message.text && <RichText className="text rich" text={message.text} />}
-      {message.toolCalls.length > 0 && (
-        <ul className="steps">
-          {message.toolCalls.map((call) => {
-            const result = results.get(call.id);
-            return <Step key={call.id} call={call} result={result} />;
-          })}
-        </ul>
-      )}
       {message.memory && message.memory.length > 0 && <UsedMemories memories={message.memory} />}
     </li>
   );
