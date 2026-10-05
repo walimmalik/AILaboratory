@@ -26,6 +26,8 @@ Evidence baseline: `9624e5324655472bf1b864c4a6830d448b0e7169`. The completed 5 O
 
 A scientist asks for a reusable SOP or an experiment in lab language. The agent checks sources, methods, registries and calculators, creates necessary drafts, and asks the next coherent question that needs scientific judgment. The scientist sees a concise issue, supported choices and their consequences. After a selection, the assistant presents the precise proposed change. **Apply decision** applies it through a people-authorized operation and reruns checks. The page shows what changed, whether the issue is resolved, and what remains. Confirming the SOP is a later, separate action.
 
+Implementation scope clarification, Wali 2026-10-05: this greenfield app is a technology demonstration of AI-first lab operations. Prefer the smallest coherent implementation that proves the scientific journey. Reuse existing records, proposals, operations and identifiers; do not build generic workflow, compatibility, replay or migration frameworks for speculative use. Keep scientific correctness, explicit authority and existing-data preservation, but implement broader capabilities only when a demonstrated path requires them.
+
 The scientist should not need to know record kinds, operation names or variable identifiers to complete this journey. They can inspect and edit scientific values directly. Supporting records, evidence and full history remain accessible.
 
 In scope:

@@ -25,6 +25,10 @@ import {
   roleText,
   shade,
   subjectCount,
+  subjectRoleOf,
+  subjectsText,
+  subjectWells,
+  wellsText,
 } from '../lib/platemaps.ts';
 import { recordQuery } from '../queries.ts';
 import { Head, page } from './AreaHead.tsx';
@@ -111,11 +115,14 @@ export function PlateView({
   title,
   selected,
   onToggle,
+  notes,
 }: {
   plates: PlatePlan[];
   title: string;
   selected?: ReadonlySet<string>;
   onToggle?: (keys: string[]) => void;
+  /** Why a well was changed by hand, by `wellKey`. */
+  notes?: ReadonlyMap<string, string>;
 }) {
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<WellPlan>();
@@ -126,6 +133,9 @@ export function PlateView({
   const byWell = new Map(plate.wells.map((w) => [w.well, w]));
   const points = pointsBySubject(plate);
   const text = (w: WellPlan) => describeWell(w, w.subject ? points.get(w.subject) : undefined);
+  const role = subjectRoleOf(plates);
+  const placed = subjectWells(plate);
+  const edited = plate.wells.filter((w) => w.override).length;
   return (
     <div className="plate-wrap">
       {plates.length > 1 && (
@@ -142,7 +152,7 @@ export function PlateView({
               }}
             >
               Plate {p.plate}
-              <span className="muted num"> · {subjectCount(p)}</span>
+              <span className="muted num"> · {subjectsText(subjectCount(p), role)}</span>
             </button>
           ))}
         </nav>
@@ -151,10 +161,31 @@ export function PlateView({
         {roleCounts(plate).map(({ role, count }) => (
           <li key={role}>
             <i className={roleClass(role)} />
-            {roleText(role)} <span className="muted num">{count}</span>
+            {roleText(role)} <span className="muted num">{wellsText(count)}</span>
           </li>
         ))}
+        {edited > 0 && (
+          <li>
+            <i className="changed-by-hand" />
+            Changed by hand <span className="muted num">{wellsText(edited)}</span>
+          </li>
+        )}
       </ul>
+      {/* Which subject sits where, without pointing at every well (UX review 2026-10-02, #11). */}
+      {placed.length > 0 && (
+        <details className="others" open={placed.length <= 8}>
+          <summary className="others-summary">
+            Where each {roleText(role).toLowerCase()} is ({placed.length})
+          </summary>
+          <ul className="plain subject-wells">
+            {placed.map((p) => (
+              <li key={p.subject}>
+                {p.label} <span className="muted mono">{p.wells.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {/* On a phone a 96-well grid fits; a denser one scrolls on its own and says so (UX review 2026-10-02, #5). */}
       {grid.columns > 12 && (
         <p className="scroll-cue muted">Scroll sideways for all {grid.columns} columns.</p>
@@ -243,13 +274,22 @@ export function PlateView({
         <WellDetail
           well={picked}
           points={picked.subject ? points.get(picked.subject) : undefined}
+          note={notes?.get(wellKey(plate.plate, picked.well))}
         />
       )}
     </div>
   );
 }
 
-function WellDetail({ well, points }: { well: WellPlan; points: number | undefined }) {
+function WellDetail({
+  well,
+  points,
+  note,
+}: {
+  well: WellPlan;
+  points: number | undefined;
+  note: string | undefined;
+}) {
   const linked = well.subject && /^[a-z]+_[0-9A-Z]{26}$/.test(well.subject);
   return (
     <div className="well-detail">
@@ -267,7 +307,11 @@ function WellDetail({ well, points }: { well: WellPlan; points: number | undefin
         {well.point && `, point ${well.point}${points ? ` of ${points}` : ''}`}
         {well.replicate && `, replicate ${well.replicate}`}
       </p>
-      {well.override && <p className="muted">Changed by hand; it stays when the map is rebuilt.</p>}
+      {well.override && (
+        <p className="muted">
+          Changed by hand{note ? `: ${note}` : ''}. It stays when the map is rebuilt.
+        </p>
+      )}
     </div>
   );
 }
@@ -349,6 +393,9 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
   });
   const file = exported.data ? fileOf(platemapsExport.id, exported.data) : undefined;
   const plates = wells.data?.plates ?? [];
+  const notes = new Map(
+    (a.overrides ?? []).flatMap((o) => (o.note ? [[wellKey(o.plate, o.well), o.note]] : [])),
+  );
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   // A row or column label adds all its wells, or takes them all out when all are chosen.
@@ -368,7 +415,7 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
         <h2>Plates</h2>
         <span className="state muted num">
           {wells.data &&
-            `${a.subjects.length} placed on ${plates.length} plate${plates.length === 1 ? '' : 's'}`}
+            `${subjectsText(a.subjects.length, subjectRoleOf(plates))} on ${plates.length} plate${plates.length === 1 ? '' : 's'}`}
         </span>
       </header>
       <div className="body">
@@ -385,6 +432,7 @@ export function PlateMapBlocks({ record }: { record: RecordEnvelope }) {
           <PlateView
             plates={plates}
             title={record.label}
+            notes={notes}
             {...(editing ? { selected, onToggle: toggle } : {})}
           />
         )}
