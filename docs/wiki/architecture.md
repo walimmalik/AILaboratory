@@ -53,6 +53,8 @@ Our own tool loop in `apps/api/src/assistant/` with adapters for `openrouter`, `
 
 Exact instructions context retains the selected document version, file digest and parse snapshot, plus an optional passage or section. The API checks this selection before model work and keeps unparsed attachments unchecked. It remains separate from SOP question/proposal context and grants no approval authority; see [selected context](../architecture/assistant.md#selected-context-and-request-identity).
 
+Chat from the exact instructions reader uses its current validated URL selection for panel replies and fresh asks. The composer and saved human messages expose that source association. Remembered SOP question context is suspended on the reader and restored afterward; explicit decision-context actions there are refused rather than mixed with the source.
+
 ## Auth and tenancy
 
 Email and password sign-in with an HttpOnly session cookie for the web app; hashed bearer tokens for agents and scripts, issued with `pnpm --filter @ailab/api token --agent "<name>"`. Every call runs in a context of actor, org and lab. SSO can replace the password step later.
