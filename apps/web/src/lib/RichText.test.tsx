@@ -15,6 +15,43 @@ describe('RichText', () => {
     expect(html('one\n<b>two</b>')).toBe('<div><p>one<br/>&lt;b&gt;two&lt;/b&gt;</p></div>');
   });
 
+  it('renders single and multiline quoted passages apart from adjacent prose', () => {
+    expect(
+      html(
+        'Ask the protocol owner:\n> Confirm **wash volume**.\n> Use `uL`.\nThen record their answer.',
+      ),
+    ).toBe(
+      '<div><p>Ask the protocol owner:</p><blockquote class="rich-text-quote"><p>Confirm <strong>wash volume</strong>.<br/>Use <code>uL</code>.</p></blockquote><p>Then record their answer.</p></div>',
+    );
+    expect(html('> One question.')).toBe(
+      '<div><blockquote class="rich-text-quote"><p>One question.</p></blockquote></div>',
+    );
+    expect(html('> First paragraph\n>\n> Second paragraph')).toContain(
+      '<p>First paragraph<br/><br/>Second paragraph</p>',
+    );
+  });
+
+  it('keeps quoted markup and unsafe links inert, with long source references intact', () => {
+    const reference = `https://example.org/${'protocol-owner-request'.repeat(20)}`;
+    const result = html(
+      `> <img src=x onerror=alert(1)> [Open](javascript:alert(1))\n> ${reference}`,
+    );
+    expect(result).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(result).toContain('[Open](javascript:alert(1))');
+    expect(result).toContain(reference);
+    expect(result).not.toContain('<img');
+    expect(result).not.toContain('href=');
+    expect(result).toContain('class="rich-text-quote"');
+  });
+
+  it('renders Windows-line-ending quotes identically to LF quotes beside prose and lists', () => {
+    const text = 'Before\n> First cited line\n> Second cited line\nAfter\n\n- Follow up';
+    expect(html(text.replaceAll('\n', '\r\n'))).toBe(html(text));
+    expect(html(text.replaceAll('\n', '\r\n'))).toContain(
+      '<p>Before</p><blockquote class="rich-text-quote"><p>First cited line<br/>Second cited line</p></blockquote><p>After</p><ul><li>Follow up</li></ul>',
+    );
+  });
+
   it('renders pipe tables with semantic headers, cells and a keyboard-accessible scroll region', () => {
     const result = html('| Reagent | Amount |\n| --- | --- |\n| Buffer | 200 uL |');
     expect(result).toContain(
@@ -84,12 +121,12 @@ describe('RichText', () => {
     );
   });
 
-  it('keeps a following pipe-containing quote as literal prose without repeating the table', () => {
+  it('keeps a following pipe-containing quote separate without repeating the table', () => {
     const result = html(
       '| A | B |\n| --- | --- |\n| one | two |\n> Note: choose **A** | `B`\nContinue with <b>care</b>',
     );
     expect(result).toContain(
-      '</table></section><p>&gt; Note: choose <strong>A</strong> | <code>B</code><br/>Continue with &lt;b&gt;care&lt;/b&gt;</p>',
+      '</table></section><blockquote class="rich-text-quote"><p>Note: choose <strong>A</strong> | <code>B</code></p></blockquote><p>Continue with &lt;b&gt;care&lt;/b&gt;</p>',
     );
     expect(result).not.toContain('| --- | --- |');
     expect(result.match(/<table /g)).toHaveLength(1);
