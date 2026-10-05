@@ -240,7 +240,7 @@ type TranscriptEntry =
   | { type: 'activity'; id: string; entries: WorkEntry[] }
   | Extract<WorkEntry, { type: 'step' }>;
 
-/** Fold only routine operation activity. Prose is never classified or summarized. */
+/** Fold only known routine reads. Prose is never classified or summarized. */
 function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
   const results = new Map(
     messages.flatMap((m) => (m.role === 'tool' ? [[m.toolCallId, m] as const] : [])),
@@ -262,14 +262,11 @@ function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
       const entry = { type: 'step', id: call.id, call, result } as const;
       const output = (result?.result as { output?: unknown } | undefined)?.output;
       const needsAttention =
-        result &&
-        (result.outcome === 'failed' ||
-          result.outcome === 'proposed' ||
-          (describeToolStep(result).record &&
-            operationContracts.get(call.operationId)?.effect !== 'read') ||
-          (result.outcome === 'done' &&
-            (fileOf(call.operationId, output) || call.operationId === 'memory.propose')) ||
-          waitingForYou([result]).drafts.length > 0);
+        operationContracts.get(call.operationId)?.effect !== 'read' ||
+        (result &&
+          (result.outcome === 'failed' ||
+            result.outcome === 'proposed' ||
+            (result.outcome === 'done' && fileOf(call.operationId, output))));
       if (needsAttention) entries.push(entry);
       else addWork(entry);
     }

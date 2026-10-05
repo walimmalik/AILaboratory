@@ -179,6 +179,28 @@ describe('assistant transcript presentation', () => {
     expect(shown).toContain('SOP-0001');
   });
 
+  it('keeps writes without record outputs and unrecognized operations visible', () => {
+    const markup = visible(
+      html(
+        [
+          user('ask', 'Apply the changes'),
+          ...action('read'),
+          ...action('seen', 'records.mark_seen', {}),
+          ...action('unknown', 'unknown.operation', {}),
+          reply('pending-write', '', [
+            { id: 'pending-write-call', operationId: 'records.update', input: {} },
+          ]),
+        ],
+        undefined,
+        true,
+      ),
+    );
+    expect(markup).toContain('looked at');
+    expect(markup).toContain('did something');
+    expect(markup).toContain('edit…');
+    expect(markup).not.toContain('SOP-read');
+  });
+
   it('opens a blocked SOP draft before the final reply without asking to confirm it', () => {
     const draft: Extract<ReviewItem, { type: 'draft' }> = {
       type: 'draft',
@@ -211,6 +233,50 @@ describe('assistant transcript presentation', () => {
       ...action('saved', 'records.create', { id: 'sop_saved', name: 'SOP-0001', status: 'draft' }),
       reply('final', 'Next decision: which cell line will you use?'),
     ];
+    const changeSet = visible(
+      html(
+        [
+          user('set-ask', 'Save the protocol with its calculated volumes'),
+          ...action('set', 'changes.apply', {
+            results: [
+              {
+                operation: 'records.get',
+                input: { id: 'sop_other' },
+                output: { id: 'sop_other', name: 'SOP-0099', status: 'draft' },
+              },
+              {
+                operation: 'calc.dilution',
+                input: {},
+                output: { dilution: { value: '2', unit: '1' } },
+                calculation: 'calc_1',
+              },
+              {
+                operation: 'records.create',
+                input: { kind: 'sop', label: draft.record.label },
+                output: {
+                  ...draft.record,
+                  orgId: 'org_1',
+                  labId: 'lab_1',
+                  attributes: {},
+                  evidence: {},
+                  reviews: {},
+                  createdAt: at,
+                  updatedAt: at,
+                  createdBy: draft.record.updatedBy,
+                },
+              },
+            ],
+          }),
+          reply('set-final', 'Which cell line should we use?'),
+        ],
+        [draft],
+      ),
+    );
+    expect(changeSet).toContain('made a set of changes');
+    expect(changeSet).toContain('href="/records/sop_saved">Open SOP draft: Cell preparation');
+    expect(changeSet.indexOf('Open SOP draft')).toBeLessThan(changeSet.indexOf('Which cell line'));
+    expect(changeSet).not.toContain('href="/records/sop_other"');
+    expect(changeSet).not.toContain('class="work-details"');
     const markup = visible(html(messages, [draft]));
     expect(markup).toContain('href="/records/sop_saved">Open SOP draft: Cell preparation');
     expect(markup).toContain('draft · needs attention before confirmation');

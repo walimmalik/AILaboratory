@@ -2,6 +2,7 @@ import { formatQuantity, isUnit, keyOf } from '@ailab/domain';
 import {
   type ActivityEntry,
   type Actor,
+  changesApply,
   type Me,
   operationContracts,
   type Proposal,
@@ -215,6 +216,16 @@ function recordsIn(value: unknown): { record: { id: string; name: string }; enve
   );
 }
 
+/** A change set's known wrapper holds outputs of its writes; reads do not become saved records. */
+function operationRecords(operationId: string, output: unknown) {
+  if (operationId !== changesApply.id) return recordsIn(output);
+  const parsed = changesApply.output.safeParse(output);
+  if (!parsed.success) return [];
+  return parsed.data.results.flatMap((step) =>
+    operationContracts.get(step.operation)?.effect === 'write' ? recordsIn(step.output) : [],
+  );
+}
+
 /**
  * A refusal in plain words: input the operation doesn't take names the fields, without the
  * validator's glyphs and the operation ID; the full message stays under technical details.
@@ -262,7 +273,7 @@ export function describeToolStep(step: {
       ...(record ? { record } : {}),
     };
   }
-  const found = recordsIn(result.output);
+  const found = operationRecords(step.operationId, result.output);
   const verb = operationVerb(step.operationId);
   // A read that found several records names how many, not the first (review 2026-10-02, item 14).
   if (isRead(step.operationId) && found.length > 1)
@@ -300,7 +311,7 @@ export function waitingForYou(
     if (step.outcome === 'proposed' && typeof proposal?.id === 'string') changes.push(proposal.id);
     if (step.outcome !== 'done' || isRead(step.operationId)) continue;
     const output = (step.result as { output?: unknown } | undefined)?.output;
-    for (const { record, envelope } of recordsIn(output)) {
+    for (const { record, envelope } of operationRecords(step.operationId, output)) {
       const { status } = envelope as { status?: unknown };
       drafts.delete(record.id);
       drafts.set(record.id, status === 'draft' ? record : undefined);
