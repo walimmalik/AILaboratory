@@ -18,6 +18,7 @@ import {
   type FieldEvidence,
   type KindDefinition,
   type KindSection,
+  type OriginatingIntent,
   type Readiness,
   type RecordEnvelope,
   RecordLink,
@@ -48,6 +49,8 @@ export interface RecordContext {
   approvedBy?: Actor;
   /** The operation making the change, kept on each version it writes (ADR 0053). */
   via?: string;
+  /** Original user request, stamped by the assistant after validating its persisted context. */
+  origin?: OriginatingIntent;
 }
 
 type RecordRow = typeof records.$inferSelect;
@@ -635,6 +638,7 @@ export class RecordService {
       },
       current: current ? toEnvelope(current) : undefined,
       actor: ctx.actor,
+      via: ctx.via,
       reservedPrefixes: this.kinds.list().flatMap(namePrefixesOf),
     });
     if (refuse && result.invalid?.length) {
