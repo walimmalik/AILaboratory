@@ -1,12 +1,14 @@
 import {
+  assaysSaveFromExperiment,
   designerFeasibility,
   type ExperimentAttributes,
   type PlateMapAttributes,
   type RecordEnvelope,
   type TransferPlanAttributes,
 } from '@ailab/schema';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue } from '../lib/format.ts';
 import { readinessQuery, recordsQuery } from '../queries.ts';
@@ -67,6 +69,7 @@ export function DesignBlock({ record }: { record: RecordEnvelope }) {
           ))}
         </ul>
         <p className="muted">Work downstream uses confirmed versions only.</p>
+        <SaveAsTemplate record={record} />
       </div>
     </section>
   );
@@ -289,5 +292,58 @@ export function ExperimentTransfers({ record }: { record: RecordEnvelope }) {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * "Save as a template" on a confirmed experiment designed from a template (017b-3): its SOP
+ * versions, the values it set and the records it bound become a new draft template, the rest is
+ * copied from the template it came from. An experiment drafted another way is saved by asking the
+ * assistant, which can supply the essential inputs, replicates and readouts it lacks.
+ */
+function SaveAsTemplate({ record }: { record: RecordEnvelope }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState(record.label);
+  const save = useMutation({
+    mutationFn: () =>
+      api.run(assaysSaveFromExperiment, { experiment: record.id, label: label.trim() }),
+    onSuccess: ({ template }) => navigate({ to: '/records/$id', params: { id: template.id } }),
+  });
+  const a = record.attributes as ExperimentAttributes;
+  if (record.status !== 'active' || !a.template) return null;
+  if (!open)
+    return (
+      <div className="actions">
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          Save as a template
+        </button>
+      </div>
+    );
+  return (
+    <form
+      className="edit-fields"
+      aria-label="Save as a template"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <label>
+        Template name
+        <input className="field" value={label} onChange={(e) => setLabel(e.target.value)} />
+      </label>
+      <button type="submit" className="btn primary" disabled={save.isPending || !label.trim()}>
+        Save
+      </button>
+      <button type="button" className="btn" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {save.error && <p className="error-text">{save.error.message}</p>}
+      <p className="muted">
+        A new draft template with this experiment's SOP versions, values and records; you confirm it
+        on its page.
+      </p>
+    </form>
   );
 }

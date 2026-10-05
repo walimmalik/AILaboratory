@@ -89,7 +89,7 @@ Values copied from the template, and the `template` pin itself, carry `template`
 - **Roles.** Each record the experiment bound becomes the role's default record (and version). An instrument it bound goes first in that role's preferred list instead.
 - **Everything else.** When the experiment was designed from a template, the layout, essentials, factors, design, controls, replicates, readouts, quality, analysis, hit rule and notes are copied from that template version, with `template` evidence. Otherwise the caller gives at least the essentials, replicates and readouts. Anything given replaces the copy.
 
-The parts (and roles, when bound) carry `record` evidence from the experiment version. A draft experiment is refused, because copied evidence must come from a confirmed version. `designer.start` puts a part's inputs into the experiment's protocol before the answers to the essential inputs.
+The parts (and roles, when bound) carry `record` evidence from the experiment version. A draft experiment is refused, because copied evidence must come from a confirmed version. `designer.start` puts a part's inputs into the experiment's protocol before the answers to the essential inputs. On screen, the Design block of a confirmed experiment designed from a template offers **Save as a template** (a name, then the new draft template's page); an experiment drafted another way is saved by asking the assistant, which can give what the call needs.
 
 ## The design page (017b-3)
 

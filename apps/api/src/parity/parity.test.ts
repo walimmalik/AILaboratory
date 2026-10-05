@@ -23,9 +23,6 @@ const noScreen: Record<string, string> = {
   'library.propose_mentions': notYet(
     'a person confirms or rejects the mentions an agent proposed in Review, but cannot add one',
   ),
-  'assays.save_from_experiment': notYet(
-    "saving an experiment as a template comes with the experiment's design page (017b)",
-  ),
   'assays.draft_template': notYet(
     'assay template screens come with the experiment designer (017b)',
   ),
