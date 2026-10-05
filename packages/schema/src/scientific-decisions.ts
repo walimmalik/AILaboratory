@@ -77,17 +77,17 @@ export const RecordVersionDependency = z.strictObject({
 export type RecordVersionDependency = z.infer<typeof RecordVersionDependency>;
 
 /** Scientific basis cannot be reduced to an arbitrary answer string. Hard checks still apply. */
-export const ScientificBasis = z.discriminatedUnion('type', [
-  z
-    .strictObject({
-      type: z.literal('evidence'),
-      sources: z.array(ExactSourceReference.extend({ parse: SourceParseIdentity })),
-      records: z.array(RecordVersionDependency),
-    })
-    .refine(
-      (basis) => basis.sources.length + basis.records.length > 0,
-      'Name the evidence behind the decision',
-    ),
+const SourceEvidence = z.strictObject({
+  type: z.literal('evidence'),
+  sources: z.array(ExactSourceReference.extend({ parse: SourceParseIdentity })).min(1),
+  records: z.array(RecordVersionDependency),
+});
+export const ScientificBasis = z.union([
+  SourceEvidence,
+  SourceEvidence.extend({
+    sources: z.array(ExactSourceReference.extend({ parse: SourceParseIdentity })).max(0),
+    records: z.array(RecordVersionDependency).min(1),
+  }),
   z.strictObject({
     type: z.literal('scientific_rationale'),
     rationale: z.string().min(1),
@@ -163,12 +163,17 @@ export const ConfirmationScope = z
     records: z
       .array(
         z.strictObject({
-          id: RecordId.refine((id) => !id.startsWith('sop_'), 'Final SOP confirmation is separate'),
+          id: z
+            .string()
+            .regex(
+              /^(?!sop_)[a-z]{2,5}_[0-9A-HJKMNP-TV-Z]{26}$/,
+              'Final SOP confirmation is separate',
+            ),
           version: Version,
           kind: z
             .string()
             .min(1)
-            .refine((kind) => kind !== 'sop', 'Final SOP confirmation is separate'),
+            .regex(/^(?!sop$)[\s\S]+$/, 'Final SOP confirmation is separate'),
         }),
       )
       .min(1)
