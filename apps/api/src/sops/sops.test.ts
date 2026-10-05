@@ -1345,7 +1345,7 @@ function withReviewer(model: ChatModel | undefined) {
     kinds,
     new ActivityBus(),
     new Assistant(model ? { model, agentName: 'Test' } : { reason: 'No model' }),
-    { files: new MemoryFileStore(), converter },
+    { files: registry.deps.files, converter },
   );
 }
 
