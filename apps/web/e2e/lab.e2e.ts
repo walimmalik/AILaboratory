@@ -1264,6 +1264,36 @@ test('a record carries its lab notes, and a memory shows where it came from', as
   await expect(page.getByText('No record has a value filled from this memory yet.')).toBeVisible();
 });
 
+test('memory corrections reset when navigating between record pages', async ({ page }) => {
+  await signIn(page);
+  const stamp = Date.now();
+  const second = await asPerson(page, 'memory.remember', {
+    statement: `Second memory ${stamp}`,
+    kind: 'fact',
+    source: { from: 'stated' },
+  });
+  const first = await asPerson(page, 'memory.remember', {
+    statement: `First memory ${stamp}`,
+    kind: 'fact',
+    source: { from: 'stated' },
+    about: [second.id],
+  });
+  await page.goto(`/records/${first.id}`);
+  await page.getByRole('button', { name: 'Change or retire' }).click();
+  await page.getByLabel('What the lab should know').fill(`Unsaved first correction ${stamp}`);
+  // Follow an app link so React reuses the record page across IDs.
+  await page.getByRole('link', { name: /^Connections/ }).click();
+  await page.getByRole('link', { name: new RegExp(`Second memory ${stamp}`) }).click();
+  await expect(page).toHaveURL(new RegExp(`/records/${second.id}$`));
+  const form = page.getByRole('form', { name: `Change ${second.name}` });
+  await expect(form.getByLabel('What the lab should know')).toHaveValue(`Second memory ${stamp}`);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  const storedFirst = await asPerson(page, 'records.get', { id: first.id });
+  const storedSecond = await asPerson(page, 'records.get', { id: second.id });
+  expect(storedFirst.attributes.statement).toBe(`First memory ${stamp}`);
+  expect(storedSecond.attributes.statement).toBe(`Second memory ${stamp}`);
+});
+
 test("an experiment's Overview rolls up its design, and its Transfers tab lists its plans", async ({
   page,
   request,

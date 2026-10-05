@@ -27,7 +27,11 @@ function MemoryActions({ record }: { record: RecordEnvelope }) {
   const [changing, setChanging] = useState(false);
   if (record.status !== 'active') return null;
   return changing ? (
-    <ChangeMemory memory={record} onClose={() => setChanging(false)} />
+    <ChangeMemory
+      key={`${record.id}:${record.version}`}
+      memory={record}
+      onClose={() => setChanging(false)}
+    />
   ) : (
     <div className="actions record-actions">
       <button type="button" className="link-btn" onClick={() => setChanging(true)}>
