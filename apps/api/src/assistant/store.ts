@@ -104,6 +104,9 @@ export async function appendMessage(
 ): Promise<AssistantMessage> {
   const at = new Date();
   const body = { id: newId('msg'), at: at.toISOString(), ...message } as AssistantMessage;
+  if (body.role === 'user' && !body.origin) {
+    body.origin = { type: 'user_message', conversation: conversationId, message: body.id };
+  }
   await db.insert(conversationMessages).values({
     id: body.id,
     conversationId,

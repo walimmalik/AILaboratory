@@ -18,7 +18,9 @@ import type { OperationDeps, OperationRegistry } from '../operations/registry.ts
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { findSkill } from '../skills/skills.ts';
 import type { ModelSetup } from './config.ts';
+import { pageNote, pendingNote } from './context.ts';
 import { type ChatModel, ModelError, type ModelMessage } from './model.ts';
+import { SCIENTIFIC_INTAKE_PROMPT } from './scientific-intake.ts';
 import {
   appendMessage,
   type MessageRow,
@@ -111,32 +113,40 @@ export class Assistant {
   }
 
   async #run(deps: OperationDeps, ctx: RecordContext, conversationId: string): Promise<void> {
-    const model = this.model;
-    if (!model) throw new Error('The assistant has no model');
     const { db, registry } = deps;
-    const agent: Actor = {
-      type: 'agent',
-      agentName: this.agentName,
-      onBehalfOf: personOf(ctx),
-      sessionRef: conversationId,
-    };
-    const agentCtx: RecordContext = { ...ctx, actor: agent };
-    const memory = await memoryNote(
-      deps,
-      ctx,
-      (await messageRows(db, conversationId)).findLast((row) => row.body.role === 'user')?.body,
-    );
-    const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(
-      deps,
-      ctx,
-      conversationId,
-    )}${memory.text}`;
     const finish = async (status: 'idle' | 'failed', error?: string) => {
       const row = await updateConversation(db, conversationId, { status, error: error ?? null });
       this.publish(conversationId, { type: 'status', conversation: toSummary(row) });
     };
 
     try {
+      const model = this.model;
+      if (!model) throw new Error('The assistant has no model');
+      const ask = (await messageRows(db, conversationId)).findLast(
+        (row) => row.body.role === 'user',
+      )?.body;
+      const agent: Actor = {
+        type: 'agent',
+        agentName: this.agentName,
+        onBehalfOf: personOf(ctx),
+        sessionRef: conversationId,
+      };
+      const agentCtx: RecordContext = {
+        ...ctx,
+        actor: agent,
+        origin: ask?.role === 'user' ? (ask.origin ?? { type: 'unknown' }) : { type: 'unknown' },
+      };
+      const memory = await memoryNote(deps, ctx, ask);
+      const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(deps, ctx, conversationId)}${memory.text}${await pageNote(deps, ctx, ask?.role === 'user' ? ask.page : undefined)}${await pendingNote(deps, ctx, conversationId)}`;
+      const terminal = async (text: string) => {
+        const message = await appendMessage(db, conversationId, {
+          role: 'assistant',
+          text,
+          toolCalls: [],
+          model: model.model,
+        });
+        this.publish(conversationId, { type: 'message', message });
+      };
       for (let step = 0; step < MAX_STEPS; step++) {
         const rows = await messageRows(db, conversationId);
         const tools = toolsFor(registry, namespacesOf(rows, deps));
@@ -153,7 +163,9 @@ export class Assistant {
             ? 'The model declined to answer this.'
             : turn.stop === 'max_tokens' && !turn.toolCalls.length
               ? 'The reply was cut off because it ran too long.'
-              : '');
+              : !turn.toolCalls.length
+                ? 'The assistant returned no usable reply. Send a new request with the next step you need.'
+                : '');
         const message = await appendMessage(
           db,
           conversationId,
@@ -173,11 +185,26 @@ export class Assistant {
         if (!turn.toolCalls.length) return await finish('idle');
 
         const files = attachmentsOf(await messageRows(db, conversationId));
+        let pending = false;
         for (const call of turn.toolCalls) {
           const { operationId, input, known } = resolveCall(tools.operationOf, call);
-          const outcome = await runTool(registry, agentCtx, operationId, input, files, {
-            known: known && callable(registry, operationId),
-          });
+          const outcome: ToolOutcome = pending
+            ? {
+                outcome: 'failed',
+                result: {
+                  code: 'invalid_state',
+                  message:
+                    'This call was not executed because a proposed change is waiting for your decision.',
+                },
+                error: {
+                  code: 'invalid_state',
+                  message:
+                    'This call was not executed because a proposed change is waiting for your decision.',
+                },
+              }
+            : await runTool(registry, agentCtx, operationId, input, files, {
+                known: known && callable(registry, operationId),
+              });
           const result = await appendMessage(db, conversationId, {
             role: 'tool',
             toolCallId: call.id,
@@ -185,8 +212,18 @@ export class Assistant {
             ...outcome,
           });
           this.publish(conversationId, { type: 'message', message: result });
+          pending ||= outcome.outcome === 'proposed';
+        }
+        if (pending) {
+          await terminal(
+            'A proposed change is ready for your review. Review and explicitly approve or reject it before I continue this change; a chat reply does not apply it.',
+          );
+          return await finish('idle');
         }
       }
+      await terminal(
+        `I reached the limit of ${MAX_STEPS} steps. Review the work so far and tell me the next step to take.`,
+      );
       await finish(
         'failed',
         `The assistant stopped after ${MAX_STEPS} steps without finishing. Tell it how to continue.`,
@@ -513,7 +550,9 @@ async function systemPrompt(db: Db, ctx: RecordContext, conversationId: string):
     .from(users)
     .where(eq(users.id, personOf(ctx)));
   const [lab] = await db.select({ name: labs.name }).from(labs).where(eq(labs.id, ctx.labId));
-  return `You are the lab assistant in AILaboratory, a lab management system. You work for ${user?.name ?? 'a lab member'} in ${lab?.name ?? 'their lab'}.
+  return `For a request to create or edit a draft, carry the request through to saved work in this turn. After reading the relevant source and checking for an existing target, perform the smallest supported draft operation before optional catalogue exploration. Missing scientific details belong in open questions; keep unsupported settings out of the procedure and let readiness block use. The request already authorizes draft creation, but never confirmation or invented physical inventory. Do not end with a promise to draft or investigate. End with actual saved or proposed work and its next scientific decision, or state specifically why no draft could be saved.
+
+You are the lab assistant in AILaboratory, a lab management system. You work for ${user?.name ?? 'a lab member'} in ${lab?.name ?? 'their lab'}.
 
 You act only through the lab's operations, which are your tools. Everything you change is recorded in the lab's activity ledger under your name, on behalf of that person.
 
@@ -537,7 +576,7 @@ You act only through the lab's operations, which are your tools. Everything you 
 
 The calculators skill, which you always follow:
 
-${findSkill('calculators')?.text ?? ''}${await decidedProposals(db, ctx, conversationId)}`;
+${findSkill('calculators')?.text ?? ''}${SCIENTIFIC_INTAKE_PROMPT}${await decidedProposals(db, ctx, conversationId)}`;
 }
 
 export { toolName, toolsFor } from './toolset.ts';
