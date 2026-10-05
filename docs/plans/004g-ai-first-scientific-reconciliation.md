@@ -191,6 +191,8 @@ After a choice the chat shows the server's exact change in lab language and **Ap
 
 When all method blockers are resolved, show **Confirm SOP** with its review scope. While blocked, the action is **Review ready sections**, naming what remains unresolved and that the SOP will remain a draft. Preserve ADR 0046's partial confirmation behavior but make the result explicit before and after the action.
 
+First bounded SG-05 presentation slice: the current structured SOP question IDs supply the open method-decision count and individual discussion links. Only the known aggregate method-question check is folded into that summary; all actual checks remain accessible, and other blockers or unsupported history stay visible. Partial review and final confirmation keep the existing operation and readiness guards, with explicit scope and result wording. This slice does not implement Apply decision, ranked-option fallback, immutable source selection or full SG-05 acceptance.
+
 ### 4.2 Concrete wash-conflict example
 
 This example uses the reviewed conflict, not a proposed validated wash setting:
