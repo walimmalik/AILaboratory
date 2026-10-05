@@ -105,12 +105,14 @@ export function ChatQuestionResponse({
   busy,
   onContinue,
   onRecorded,
+  historical = false,
 }: {
   selection: QuestionSelection;
   text: string;
   busy: boolean;
   onContinue: (selection: QuestionSelection) => Promise<boolean>;
   onRecorded?: ((previous: QuestionSelection, updated: RecordEnvelope) => void) | undefined;
+  historical?: boolean;
 }) {
   const queryClient = useQueryClient();
   const record = useQuery(recordQuery(selection.context.record.id));
@@ -194,31 +196,8 @@ export function ChatQuestionResponse({
       setWorking(false);
     }
   };
-  return (
-    <section className="chat-question" aria-label="Record a response to the SOP question">
-      <p>
-        <b>{question?.question ?? 'Selected question unavailable'}</b>
-      </p>
-      <p className="muted">
-        <Link to="/records/$id" params={{ id: selection.context.record.id }}>
-          {record.data?.label ?? selection.context.record.name}
-        </Link>{' '}
-        ·{' '}
-        {question?.disposition.status === 'open'
-          ? 'The scientific issue remains open.'
-          : 'This question is unavailable or no longer open.'}
-      </p>
-      {saved ? <p>Response recorded.</p> : matching && <p>This answer is already recorded.</p>}
-      {matching && (
-        <details className="tech">
-          <summary>Recorded response details</summary>
-          <p>
-            {matching.text} · {formatWhen(matching.at)} · version {matching.version} · by{' '}
-            {matching.by.userId}
-          </p>
-          <p>This saved answer does not identify which chat message recorded it.</p>
-        </details>
-      )}
+  const controls = (
+    <>
       {stale && (
         <p className="warn-ink">Review the current question before recording or continuing.</p>
       )}
@@ -280,6 +259,43 @@ export function ChatQuestionResponse({
           or confirm the SOP.
         </p>
       </details>
+    </>
+  );
+  return (
+    <section className="chat-question" aria-label="Record a response to the SOP question">
+      <p>
+        <b>{question?.question ?? 'Selected question unavailable'}</b>
+      </p>
+      <p className="muted">
+        <Link to="/records/$id" params={{ id: selection.context.record.id }}>
+          {record.data?.label ?? selection.context.record.name}
+        </Link>{' '}
+        ·{' '}
+        {open
+          ? 'The scientific issue remains open.'
+          : question
+            ? `This question is ${question.disposition.status}.`
+            : 'This question is unavailable.'}
+      </p>
+      {saved ? <p>Response recorded.</p> : matching && <p>This answer is already recorded.</p>}
+      {matching && (
+        <details className="tech">
+          <summary>Recorded response details</summary>
+          <p>
+            {matching.text} · {formatWhen(matching.at)} · version {matching.version} · by{' '}
+            {matching.by.userId}
+          </p>
+          <p>This saved answer does not identify which chat message recorded it.</p>
+        </details>
+      )}
+      {historical && (saved || matching) ? (
+        <details>
+          <summary>Revisit response</summary>
+          {controls}
+        </details>
+      ) : (
+        controls
+      )}
     </section>
   );
 }

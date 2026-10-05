@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { CONTINUE_QUESTION_MESSAGE } from '../lib/chat-question.ts';
 import { AssistantResize, ConversationMessages } from './AssistantPanel.tsx';
 
 vi.mock('@tanstack/react-router', async (original) => ({
@@ -25,7 +26,12 @@ vi.mock('@tanstack/react-router', async (original) => ({
 }));
 
 const at = '2026-10-05T12:00:00Z';
-const user = (id: string, text: string): AssistantMessage => ({ id, at, role: 'user', text });
+const user = (id: string, text: string): Extract<AssistantMessage, { role: 'user' }> => ({
+  id,
+  at,
+  role: 'user',
+  text,
+});
 const reply = (
   id: string,
   text: string,
@@ -87,6 +93,72 @@ function visible(markup: string) {
 }
 
 describe('assistant transcript presentation', () => {
+  it('uses turn grouping to compact older saved responses while keeping the latest unsaved response actionable', () => {
+    const client = new QueryClient();
+    const record = {
+      id: 'sop_selected',
+      kind: 'sop',
+      name: 'SOP-0001',
+      label: 'Plate wash',
+      version: 8,
+      attributes: {
+        materials: [],
+        variables: [],
+        steps: [],
+        questions: [
+          {
+            id: 'wash',
+            question: 'What wash volume?',
+            stage: { stage: 'method', reason: 'Missing' },
+            responses: [
+              {
+                text: "I don't know",
+                by: { type: 'user', userId: `usr_${'0'.repeat(26)}` },
+                at,
+                version: 8,
+              },
+            ],
+            disposition: { status: 'open' },
+          },
+        ],
+      },
+    } as unknown as RecordEnvelope;
+    client.setQueryData(['record', record.id], record);
+    const answer = (id: string, text: string, version: number): AssistantMessage => ({
+      ...user(id, text),
+      role: 'user',
+      page: {
+        path: '/library',
+        record: { id: record.id, name: record.name, version },
+        activeQuestion: { id: 'wash', stage: 'method' },
+      },
+    });
+    const render = (messages: AssistantMessage[]) =>
+      renderToStaticMarkup(
+        <QueryClientProvider client={client}>
+          <ConversationMessages
+            messages={messages}
+            agentName="GPT 6.1"
+            running={false}
+            review={undefined}
+            conversationId="cnv_selected"
+            onContinue={async () => true}
+          />
+        </QueryClientProvider>,
+      );
+    const saved = answer('saved', "I don't know", 7);
+    const current = render([
+      saved,
+      reply('help', 'We can check the source.'),
+      answer('latest', 'Use 100 microliters', 8),
+    ]);
+    expect(current.match(/Revisit response/g)).toHaveLength(1);
+    expect(current.match(/Record a response to the SOP question/g)).toHaveLength(2);
+    expect(current).toContain('Record response');
+    const continued = render([saved, answer('continue', CONTINUE_QUESTION_MESSAGE, 8)]);
+    expect(continued.match(/Revisit response/g)).toHaveLength(1);
+    expect(continued.match(/Record a response to the SOP question/g)).toHaveLength(1);
+  });
   it('keeps a long tool-only exchange in one closed disclosure with its full ordered trace', () => {
     const markup = html([
       user('ask', 'Compare source protocols'),

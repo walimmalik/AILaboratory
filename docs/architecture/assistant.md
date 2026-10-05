@@ -28,6 +28,8 @@ When a current SOP has saved question responses, its selected context includes s
 
 Selected-question chat offers **Record response** beneath the person's message, using `sops.answer_question`; **Continue with assistant** then uses the saved question and current SOP version. The selected question survives navigation and reload through persisted human-message context, with explicit change/clear controls. Sending waits for conversation context to load. Changed versions require reviewing the current question; a failed save reads the SOP before offering a retry. An identical saved response is displayed as an existing answer, not claimed as a receipt for a particular chat message. Generated discussion prompts and attached files are not offered as response text. Validated context points to the chat action even before the first response is saved; the SOP question form remains an alternative. This path adds no decision approval or final confirmation authority.
 
+Earlier recorded chat answers keep their SOP, question and current issue status visible, with old controls under **Revisit response**. Unsaved answers stay actionable; revisiting a changed SOP still requires reviewing the current question before continuing.
+
 This slice exposes originating intent to downstream decision operations; persisting it on ordinary proposals, supporting records and review groups belongs to SG-03. It adds no task store or synthetic intent classification. Safe replay of missing tool messages, stop/resume controls and dedicated Apply decision cards remain separate packages.
 
 ## Models
