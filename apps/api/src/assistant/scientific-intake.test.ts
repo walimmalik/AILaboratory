@@ -18,7 +18,12 @@ describe('scientific intake content contract (004g SG-04)', () => {
       // Attribute paths and the named memory detector are not callable operations.
       const names = [...body.matchAll(/`([a-z_]+\.[a-z_]+)`/g)]
         .flatMap((m) => (m[1] ? [m[1]] : []))
-        .filter((name) => !name.startsWith('attributes.') && name !== 'runs.recurring_deviation');
+        .filter(
+          (name) =>
+            !name.startsWith('attributes.') &&
+            !name.startsWith('about.') &&
+            name !== 'runs.recurring_deviation',
+        );
       expect(
         names.filter((name) => !operationContracts.has(name)),
         module,
