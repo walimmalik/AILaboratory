@@ -1,4 +1,4 @@
-import { librarySearch, type OperationErrorBody } from '@ailab/schema';
+import type { librarySearch, OperationErrorBody } from '@ailab/schema';
 import { expect, test } from '@playwright/test';
 
 test('document text search separates browsing, recovers from failure and carries source context', async ({
@@ -22,7 +22,7 @@ test('document text search separates browsing, recovers from failure and carries
   // CI has no document converter. Only search responses are fixtures here; title browsing,
   // record navigation, assistant requests and persistence use the real API. Live acceptance
   // separately searches a genuinely parsed illustrative document with the actual operation.
-  const hit = librarySearch.output.parse({
+  const hit = {
     hits: [
       {
         document: { id: source.id, name: source.name, label: source.label, type: 'sop' },
@@ -37,7 +37,7 @@ test('document text search separates browsing, recovers from failure and carries
         rank: 1,
       },
     ],
-  });
+  } satisfies ReturnType<typeof librarySearch.output.parse>;
   const submitted: string[] = [];
   let releaseFirst: (() => void) | undefined;
   const firstReply = new Promise<void>((resolve) => {
