@@ -51,6 +51,8 @@ Adding a capability: a contract, an implementation registered in `createRegistry
 
 Our own tool loop in `apps/api/src/assistant/` with adapters for `openrouter`, `anthropic` and `openai-compatible` (for example Ollama), chosen in `.env` with `AGENT_PROVIDER`. Wali runs it on an OpenRouter key; Claude replies are stored and sent back unchanged. Each ask is an operation; the loop runs in the background up to 16 steps and 180 s per model call, and conversations are saved and linked from the ledger. Details: [assistant.md](../architecture/assistant.md).
 
+Exact instructions context retains the selected document version, file digest and parse snapshot, plus an optional passage or section. The API checks this selection before model work and keeps unparsed attachments unchecked. It remains separate from SOP question/proposal context and grants no approval authority; see [selected context](../architecture/assistant.md#selected-context-and-request-identity).
+
 ## Auth and tenancy
 
 Email and password sign-in with an HttpOnly session cookie for the web app; hashed bearer tokens for agents and scripts, issued with `pnpm --filter @ailab/api token --agent "<name>"`. Every call runs in a context of actor, org and lab. SSO can replace the password step later.

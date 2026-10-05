@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ExactSourceReference } from './library.ts';
 import { OperationErrorBody } from './operation.ts';
 import { OriginatingIntent } from './scientific-decisions.ts';
 
@@ -27,11 +28,29 @@ export const PageContext = z
       .optional(),
     /** A persisted proposal, whose current state is always read from the server. */
     proposal: z.strictObject({ id: z.string().regex(/^prp_[0-9A-HJKMNP-TV-Z]{26}$/) }).optional(),
+    /** Instructions selected in the exact Library reader, not today's document or an approval. */
+    selectedSource: z
+      .strictObject({
+        source: ExactSourceReference,
+        passage: z.string().min(1).optional(),
+        section: z.number().int().min(0).optional(),
+      })
+      .refine((selection) => selection.passage === undefined || selection.section === undefined, {
+        message: 'Select a passage or a section, not both',
+      })
+      .optional(),
   })
   .refine((page) => !page.activeQuestion || Boolean(page.record), {
     message: 'A selected question needs its record and version',
     path: ['activeQuestion'],
-  });
+  })
+  .refine(
+    (page) => !page.selectedSource || !(page.record || page.activeQuestion || page.proposal),
+    {
+      message: 'Selected instructions cannot be combined with record, question or proposal context',
+      path: ['selectedSource'],
+    },
+  );
 export type PageContext = z.infer<typeof PageContext>;
 
 /** idle: waiting for the person. running: the model is working. failed: the last run stopped with an error. */
