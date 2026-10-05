@@ -214,6 +214,47 @@ describe('waitingForYou', () => {
       ]),
     ).toEqual({ drafts: [], changes: [] });
   });
+
+  it('finds saved change-set drafts in step order without treating its reads as writes', () => {
+    const results = [
+      {
+        operation: 'records.get',
+        input: {},
+        output: { id: 'sop_read', name: 'SOP-0099', status: 'draft' },
+      },
+      {
+        operation: 'records.create',
+        input: {},
+        output: { id: 'sop_saved', name: 'SOP-0001', status: 'draft' },
+      },
+      {
+        operation: 'records.create',
+        input: {},
+        output: { id: 'sop_settled', name: 'SOP-0002', status: 'draft' },
+      },
+      {
+        operation: 'records.confirm',
+        input: {},
+        output: { id: 'sop_settled', name: 'SOP-0002', status: 'active' },
+      },
+    ];
+    expect(waitingForYou([done('changes.apply', { results })])).toEqual({
+      drafts: [{ id: 'sop_saved', name: 'SOP-0001' }],
+      changes: [],
+    });
+    expect(describeToolStep(done('changes.apply', { results })).record).toEqual({
+      id: 'sop_saved',
+      name: 'SOP-0001',
+    });
+    expect(waitingForYou([done('changes.apply', { results: 'unsupported' })])).toEqual({
+      drafts: [],
+      changes: [],
+    });
+    expect(waitingForYou([done('records.update', { unrelated: { results } })])).toEqual({
+      drafts: [],
+      changes: [],
+    });
+  });
 });
 
 describe('foldRepeats', () => {
