@@ -79,6 +79,16 @@ Email and password (ADR 0019). `POST /auth/login` sets an HttpOnly, SameSite=Str
 
 `GET /v1/activity/stream` sends `Cache-Control: no-transform` and `X-Accel-Buffering: no`, and the container's nginx turns buffering off for it, so entries arrive as they happen in dev (Vite proxy) and in containers.
 
+## Run correction comparisons (004g / SG-06)
+
+Finished-run actual-value corrections use a bounded display projection of the existing `/steps`
+diff in Review and History. Changed steps show before/after actuals with units, the original plan
+separately, recorded differences, reasons, impact and correction sources. A prior actual is never
+labelled as the plan. Unchanged steps and raw correction provenance remain under **Full checklist
+and correction details**. Unsupported historical shapes or other checklist edits retain the
+generic diff. This changes presentation only; proposal authority and atomic approval stay with
+the existing operations. The broader scientific Review work in 004g / SG-06 remains pending.
+
 ## Tests
 
 - Unit tests for the plain-language and diff helpers: `pnpm --filter @ailab/web test`.

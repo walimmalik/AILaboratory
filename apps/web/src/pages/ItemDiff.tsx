@@ -3,6 +3,7 @@ import { type FieldEvidence, SopStep, type SopVariable } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { fieldLabel, formatValue, itemName, partLabel } from '../lib/format.ts';
+import { runCorrectionDiff } from '../lib/run-correction-diff.ts';
 import {
   kindWords,
   type SopDoc,
@@ -85,6 +86,7 @@ export function ItemDiff({
   caption = 'What would change',
   adjacent = false,
   labels,
+  fullRunSteps = false,
 }: {
   kind: string;
   before: DiffSide | undefined;
@@ -95,10 +97,14 @@ export function ItemDiff({
   caption?: string;
   adjacent?: boolean;
   labels?: Record<string, string>;
+  /** The supplied checklist diff inside the expandable correction details. */
+  fullRunSteps?: boolean;
 }) {
   const kinds = useQuery(kindsQuery).data;
   const items = kinds?.find((k) => k.kind === kind)?.items ?? {};
-  const changes = given ?? itemChanges(before, after, items);
+  const rawChanges = given ?? itemChanges(before, after, items);
+  const correction = kind === 'run' && !fullRunSteps ? runCorrectionDiff(rawChanges) : undefined;
+  const changes = correction?.changes ?? rawChanges;
   const [all, setAll] = useState(false);
   if (changes.length === 0) return null;
   const shown = all ? changes : changes.slice(0, SHOWN);
@@ -151,7 +157,13 @@ export function ItemDiff({
                 <tr key={c.path} className={said ? 'agent-said' : undefined}>
                   <th scope="row" title={adjacent ? undefined : c.path}>
                     {labels?.[c.path] ??
+                      correction?.labels[c.path] ??
                       partLabel(c.path, after?.attributes, items, before?.attributes)}
+                    {correction && c.path in correction.planned && (
+                      <div className="muted">
+                        Original plan: {formatValue(correction.planned[c.path])}
+                      </div>
+                    )}
                   </th>
                   {adjacent ? (
                     <td>
@@ -216,6 +228,24 @@ export function ItemDiff({
             </button>
           )}
         </p>
+      )}
+      {correction && (
+        <details className="tech">
+          <summary>
+            Full checklist and correction details
+            {correction.unchanged > 0 &&
+              ` · ${correction.unchanged} other ${correction.unchanged === 1 ? 'step' : 'steps'} unchanged`}
+          </summary>
+          <ItemDiff
+            kind={kind}
+            before={before}
+            after={after}
+            changes={[correction.raw]}
+            adjacent={adjacent}
+            caption="Full checklist change"
+            fullRunSteps
+          />
+        </details>
       )}
     </>
   );

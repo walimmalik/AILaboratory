@@ -88,6 +88,11 @@ Added 2026-10-01 with [plan 004f](../plans/004f-navigation-and-record-pages.md),
 
 ## Interaction
 
+- Finished-run actual corrections show the changed step, before/after actual values, original
+  plan, reason and impact in Review and History. Full checklist/provenance details stay expandable;
+  unsupported edits keep the generic comparison. Approval authority and transaction grouping stay
+  unchanged. This is a bounded SG-06 diff slice, not the complete scientific Review workflow.
+
 - Shared record lists link each name and code to its record page. Tab reaches that named link,
   and Enter opens it. A pointer click on a noninteractive cell still opens the record; nested
   links, controls and selecting text keep their own behavior.
