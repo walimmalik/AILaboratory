@@ -10,7 +10,7 @@ import {
 } from '@ailab/schema';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue, formatWhen } from '../lib/format.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
@@ -86,6 +86,38 @@ export async function decideSupported(proposal: Proposal, approve: boolean, note
   return api.run(proposalsReject, input);
 }
 
+type PreviewNotice = { id: string; digest: string };
+export function previewNotice(
+  returned: Proposal & { previewStatus?: 'stale' | 'refreshed' },
+): PreviewNotice | undefined {
+  return returned.status === 'pending' &&
+    returned.decision &&
+    'previewStatus' in returned &&
+    (returned.previewStatus === 'stale' || returned.previewStatus === 'refreshed')
+    ? { id: returned.id, digest: returned.decision.previewIdentity.digest }
+    : undefined;
+}
+export function retainedPreviewNotice(notice: PreviewNotice | undefined, current: Proposal) {
+  return current.status === 'pending' &&
+    notice?.id === current.id &&
+    notice.digest === current.decision?.previewIdentity.digest
+    ? notice
+    : undefined;
+}
+export function DecisionPreviewNotice({
+  notice,
+  proposal,
+}: {
+  notice: PreviewNotice | undefined;
+  proposal: Proposal;
+}) {
+  return retainedPreviewNotice(notice, proposal) ? (
+    <p className="warn-ink" role="status">
+      Nothing was applied. The preview changed; review these values and click Apply decision again.
+    </p>
+  ) : null;
+}
+
 export function ProposalDecisionCard({
   proposal,
   busy = false,
@@ -95,6 +127,7 @@ export function ProposalDecisionCard({
 }) {
   const client = useQueryClient();
   const [note, setNote] = useState('');
+  const [notice, setNotice] = useState<PreviewNotice>();
   const lock = useRef(false);
   const latest = useRef(proposal);
   const waiting = useQuery({ ...reviewQuery, enabled: false }).data?.items;
@@ -109,6 +142,7 @@ export function ProposalDecisionCard({
   const decide = useMutation({
     mutationFn: (approve: boolean) => decideSupported(latest.current, approve, note),
     onSuccess: async (returned) => {
+      setNotice(previewNotice(returned));
       publishDecision(client, returned);
       await Promise.all([
         client.invalidateQueries({ queryKey: ['proposals'] }),
@@ -137,6 +171,9 @@ export function ProposalDecisionCard({
     decide.data ??
     proposal;
   latest.current = shown;
+  useEffect(() => {
+    setNotice((current) => retainedPreviewNotice(current, shown));
+  }, [shown]);
   const preview = supportedDecision(shown);
   if (!preview) return null;
   const saved = RecordEnvelope.safeParse(shown.receipt?.output);
@@ -153,6 +190,7 @@ export function ProposalDecisionCard({
   const apply = (approve: boolean) => {
     if (blocked || lock.current) return;
     lock.current = true;
+    setNotice(undefined);
     decide.mutate(approve);
   };
   const pending = shown.status === 'pending';
@@ -256,11 +294,8 @@ export function ProposalDecisionCard({
           ))}
         </ul>
       </details>
-      {pending && 'previewStatus' in shown && (
-        <p className="warn-ink" role="status">
-          Nothing was applied. The preview changed; review these values and click Apply decision
-          again.
-        </p>
+      {!decide.isPending && (
+        <DecisionPreviewNotice notice={notice ?? previewNotice(shown)} proposal={shown} />
       )}
       {pending && (
         <div className="decide">

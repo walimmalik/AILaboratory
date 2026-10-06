@@ -11,7 +11,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
 import { ConversationMessages } from './AssistantPanel.tsx';
-import { decideSupported, ProposalDecisionCard, publishDecision } from './ProposalDecisionCard.tsx';
+import {
+  DecisionPreviewNotice,
+  decideSupported,
+  ProposalDecisionCard,
+  previewNotice,
+  publishDecision,
+  retainedPreviewNotice,
+} from './ProposalDecisionCard.tsx';
 import { PendingProposal } from './ReviewInbox.tsx';
 
 vi.mock('@tanstack/react-router', () => ({
@@ -20,6 +27,53 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 const at = '2026-10-06T00:00:00Z';
+
+it('retains refreshed/stale response feedback through same-digest automatic refetch without retaining old proposal facts', async () => {
+  const p = proposal();
+  if (!p.decision) throw new Error('Fixture requires metadata');
+  const returned = {
+    ...p,
+    previewStatus: 'refreshed' as const,
+    decision: { ...p.decision, previewIdentity: { digest: 'b'.repeat(64), preparedAt: at } },
+  };
+  const notice = previewNotice(returned);
+  const { previewStatus: _responseOnly, ...refetched } = returned;
+  const client = new QueryClient();
+  const counts = { total: 1, changes: 1, mentions: 0, notices: 0, needsYou: 1, drafts: {} };
+  client.setQueryData(reviewQuery.queryKey, {
+    items: [{ type: 'change', proposal: returned, tier: 'needs_you', at }],
+    counts,
+  });
+  client.setQueryData(reviewQuery.queryKey, {
+    items: [{ type: 'change', proposal: refetched, tier: 'needs_you', at }],
+    counts,
+  });
+  const item = client.getQueryData(reviewQuery.queryKey)?.items[0];
+  if (item?.type !== 'change') throw new Error('Expected the refetched pending decision');
+  expect('previewStatus' in item.proposal).toBe(false);
+  expect(retainedPreviewNotice(notice, item.proposal)).toEqual(notice);
+  expect(render(<DecisionPreviewNotice notice={notice} proposal={item.proposal} />)).toContain(
+    'click Apply decision again',
+  );
+  const run = vi.spyOn(api, 'run').mockResolvedValueOnce({ ...refetched, status: 'approved' });
+  await decideSupported(item.proposal, true, '');
+  expect(run).toHaveBeenCalledExactlyOnceWith(proposalsApprove, {
+    id: p.id,
+    expectedPreview: 'b'.repeat(64),
+  });
+  const changed = {
+    ...refetched,
+    decision: {
+      ...refetched.decision,
+      previewIdentity: { digest: 'c'.repeat(64), preparedAt: at },
+    },
+  };
+  expect(retainedPreviewNotice(notice, changed)).toBeUndefined();
+  expect(render(<DecisionPreviewNotice notice={notice} proposal={changed} />)).toBe('');
+  expect(retainedPreviewNotice(notice, { ...refetched, status: 'approved' })).toBeUndefined();
+  expect(previewNotice({ ...returned, status: 'approved' })).toBeUndefined();
+  expect(previewNotice({ ...returned, previewStatus: 'stale' })).toEqual(notice);
+});
 const id = 'sop_00000000000000000000000000';
 const quantity = (value: string) => ({ value, unit: 'uL' });
 const readiness = {
