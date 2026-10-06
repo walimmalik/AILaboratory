@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type {
   Actor,
+  InstrumentKindAttributes,
   Quantity,
   Readiness,
   RecordEnvelope,
@@ -529,6 +530,46 @@ describe('transfer plans', () => {
     };
     return { echo, flex, pp, assay, src, other, draft };
   }
+
+  it('checks saved instrument limits by quantity and warns when a limit really changes', async () => {
+    const { echo, draft } = await setup();
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', draft);
+    const instrumentCheck = async () =>
+      (await run<Checked>(agent, 'transfers.check', { id: plan.id })).checks.find(
+        (check) => check.id === 'instruments_now',
+      );
+
+    expect(await instrumentCheck()).toMatchObject({ passed: true, problems: [] });
+
+    const kindId = (echo.attributes as { kind: string }).kind;
+    const setMaximum = async (max: Quantity) => {
+      const kind = await run<RecordEnvelope>(person, 'records.get', { id: kindId });
+      const attributes = kind.attributes as InstrumentKindAttributes;
+      await run(person, 'records.update', {
+        id: kind.id,
+        expectedVersion: kind.version,
+        attributes: {
+          ...attributes,
+          capabilities: attributes.capabilities?.map((capability) => ({
+            ...capability,
+            limits: {
+              ...capability.limits,
+              volume: { ...capability.limits?.volume, max },
+            },
+          })),
+        },
+      });
+    };
+
+    await setMaximum(nL('10000'));
+    expect(await instrumentCheck()).toMatchObject({ passed: true, problems: [] });
+
+    await setMaximum(nL('1000'));
+    expect((await instrumentCheck())?.problems).toEqual([
+      "Echo: compound into the assay plate: Echo 1's limits changed since the plan was worked out",
+      'Echo: compound into the assay plate: 4 transfers no longer fit',
+    ]);
+  });
 
   it('drafts a plan with its instrument limits, checks it, and reserves its sources once confirmed', async () => {
     const { echo, pp, assay, src, draft } = await setup();
@@ -1074,7 +1115,7 @@ describe('Echo pick list', () => {
 });
 
 describe('transfers.draft_from_plate_map', () => {
-  async function setup() {
+  async function setup(incompleteControl = false) {
     const { echo, pp } = await lab();
     const plate96 = await create('Assay 96', 'labware_type', {
       family: 'plate',
@@ -1088,7 +1129,19 @@ describe('transfers.draft_from_plate_map', () => {
         subjectRole: 'compound',
         subjectRegion: ['rows A-B'],
         subjectSeries: { top: { value: '10', unit: 'uM' }, factor: '10', points: 4 },
-        fixed: [{ id: 'dmso', role: 'neutral_control', label: 'DMSO', region: ['H1:H2'] }],
+        fixed: [
+          { id: 'dmso', role: 'neutral_control', label: 'DMSO', region: ['H1:H2'] },
+          ...(incompleteControl
+            ? [
+                {
+                  id: 'positive',
+                  role: 'positive_control',
+                  label: 'Positive control',
+                  region: ['H3'],
+                },
+              ]
+            : []),
+        ],
       }),
     );
     const kind = await run<RecordEnvelope>(agent, 'entities.draft_kind', {
@@ -1137,6 +1190,18 @@ describe('transfers.draft_from_plate_map', () => {
       backfilled: number;
     };
   };
+
+  it('refuses a positive control without a dose instead of exporting it as solvent only', async () => {
+    const { input } = await setup(true);
+    const error = await refused(run(agent, 'transfers.draft_from_plate_map', input));
+    expect(error).toMatchObject({ code: 'invalid_input' });
+    expect(error.message).toContain('Set the material and target concentration');
+    expect(error.message).toContain('plate 1 H3 (Positive control)');
+    const saved = await run<{ records: RecordEnvelope[] }>(person, 'records.list', {
+      kind: 'transfer_plan',
+    });
+    expect(saved.records).toHaveLength(0);
+  });
 
   it('dispenses from the source or intermediates, and backfills every well to the same solvent', async () => {
     const { input } = await setup();

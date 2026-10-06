@@ -79,6 +79,21 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
     const wells = plates.flatMap((p) =>
       p.wells.filter((w) => w.role !== 'empty').map((w) => ({ ...w, plate: p.plate })),
     );
+    // Solvent-only wells need no dose, even when their solvent is named. Every other occupied well must
+    // say both; otherwise a missing control silently becomes solvent in the backfill below.
+    const solventOnly = new Set(['neutral_control', 'blank', 'buffer']);
+    const incomplete = wells.filter(
+      (w) => (!w.subject || !w.concentration) && (!!w.concentration || !solventOnly.has(w.role)),
+    );
+    if (incomplete.length)
+      throw new OperationError(
+        'invalid_input',
+        `Set the material and target concentration for ${incomplete
+          .map((w) => `plate ${w.plate} ${w.well} (${w.label ?? w.role})`)
+          .join(
+            ', ',
+          )} before planning compound transfers. For transfers without concentration targets, use transfers.draft`,
+      );
     const missing = new Set<string>();
     const compounds = new Map<string, { points: Quantity[]; count: Map<string, number> }>();
     for (const w of wells) {
@@ -256,7 +271,7 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
 
     const instrument = input.instrument;
     const out = deviceOut(device);
-    const code = 'Worked out by transfers.draft_from_plate_map';
+    const code = 'Calculated from the plate map';
     const groups: TransferGroup[] = [];
     if (optimized.intermediates.length) {
       groups.push(

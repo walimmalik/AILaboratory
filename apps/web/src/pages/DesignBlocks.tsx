@@ -10,8 +10,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { api } from '../api.ts';
+import { useAssistant } from '../assistant.tsx';
 import { formatValue } from '../lib/format.ts';
-import { readinessQuery, recordsQuery } from '../queries.ts';
+import { assistantSetupQuery, readinessQuery, recordsQuery } from '../queries.ts';
 
 /**
  * The experiment's design on its own page (plan 017b-3, P1): the experiment, its plate maps and
@@ -23,7 +24,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** The plate maps and transfer plans drafted for an experiment, not archived. */
 function useDesignDocuments(experiment: string) {
-  const maps = useQuery(recordsQuery({ kind: 'plate_map' })).data ?? [];
+  const mapQuery = useQuery(recordsQuery({ kind: 'plate_map' }));
+  const maps = mapQuery.data ?? [];
   const plans = useQuery(recordsQuery({ kind: 'transfer_plan' })).data ?? [];
   const mine = <T,>(records: RecordEnvelope[]) =>
     records.filter(
@@ -34,6 +36,8 @@ function useDesignDocuments(experiment: string) {
   return {
     maps: mine<PlateMapAttributes>(maps),
     plans: mine<TransferPlanAttributes>(plans),
+    mapsPending: mapQuery.isPending,
+    mapsError: mapQuery.error,
   };
 }
 
@@ -244,8 +248,39 @@ export function FeasibilityBlock({ record }: { record: RecordEnvelope }) {
 }
 
 /** The Transfers tab: the transfer plans drafted for the experiment, each with its groups. */
+function isCurrentConfirmed(record: RecordEnvelope) {
+  return (
+    record.status === 'active' &&
+    record.readiness?.blockers === 0 &&
+    record.readiness.sectionsLeft.length === 0 &&
+    record.readiness.changed.length === 0
+  );
+}
+
 export function ExperimentTransfers({ record }: { record: RecordEnvelope }) {
-  const { plans } = useDesignDocuments(record.id);
+  const { maps, plans, mapsPending, mapsError } = useDesignDocuments(record.id);
+  const assistant = useAssistant();
+  const setup = useQuery(assistantSetupQuery);
+  const [selectedMap, setSelectedMap] = useState('');
+  const [failed, setFailed] = useState(false);
+  const confirmedMaps = maps.filter(isCurrentConfirmed);
+  const map =
+    confirmedMaps.length === 1
+      ? confirmedMaps[0]
+      : confirmedMaps.find((candidate) => candidate.id === selectedMap);
+  const canStart =
+    isCurrentConfirmed(record) &&
+    !!map &&
+    !mapsPending &&
+    !mapsError &&
+    setup.data?.configured === true &&
+    !assistant.sending &&
+    !assistant.running;
+  const start = async () => {
+    if (!canStart || !map) return;
+    setFailed(false);
+    setFailed(!(await startTransferPlanning(assistant.send, record, map)));
+  };
   return (
     <section className="block" aria-label="Transfers">
       <header>
@@ -253,11 +288,58 @@ export function ExperimentTransfers({ record }: { record: RecordEnvelope }) {
         <span className="state muted num">{plans.length}</span>
       </header>
       <div className="body">
-        {plans.length === 0 ? (
-          <p className="empty">
-            No transfer plans for this experiment yet. Ask the assistant to plan how its plates are
-            filled, once the plate maps are confirmed.
+        <p>Plan the liquid transfers for a plate map in this experiment.</p>
+        {confirmedMaps.length > 1 && (
+          <label>
+            Plate map
+            <select
+              className="field"
+              value={selectedMap}
+              onChange={(e) => setSelectedMap(e.target.value)}
+            >
+              <option value="">Choose a plate map</option>
+              {confirmedMaps.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!canStart}
+            onClick={() => void start()}
+          >
+            Plan transfers
+          </button>
+        </div>
+        {mapsPending ? (
+          <p className="muted">Checking plate maps…</p>
+        ) : mapsError ? (
+          <p className="error-text">Could not load plate maps: {mapsError.message}</p>
+        ) : !isCurrentConfirmed(record) ? (
+          <p className="muted">Finish reviewing the experiment before planning transfers.</p>
+        ) : confirmedMaps.length === 0 ? (
+          <p className="muted">Confirm a plate map on the Plates tab before planning transfers.</p>
+        ) : confirmedMaps.length > 1 && !map ? (
+          <p className="muted">Choose the plate map whose wells you want to fill.</p>
+        ) : null}
+        {setup.isPending && <p className="muted">Checking assistant availability…</p>}
+        {setup.isError && (
+          <p className="error-text">
+            Could not check assistant availability: {setup.error.message}
           </p>
+        )}
+        {setup.data?.configured === false && <p className="muted">The assistant is unavailable.</p>}
+        {(assistant.sending || assistant.running) && (
+          <p className="muted">The assistant is working.</p>
+        )}
+        {failed && <p className="error-text">Could not start transfer planning. Try again.</p>}
+        {plans.length === 0 ? (
+          <p className="empty">No transfer plans for this experiment yet.</p>
         ) : (
           <ul className="plain design-rows">
             {plans.map((p) => {
@@ -295,6 +377,26 @@ export function ExperimentTransfers({ record }: { record: RecordEnvelope }) {
       </div>
     </section>
   );
+}
+
+/** Send an exact design handoff; the assistant checks live records and chooses supported operations. */
+export function startTransferPlanning(
+  send: ReturnType<typeof useAssistant>['send'],
+  experiment: RecordEnvelope,
+  map: RecordEnvelope,
+) {
+  const message =
+    `Plan liquid transfers for ${map.label} in ${experiment.label}. ` +
+    'Read both designs and check any existing transfer plans before drafting; if a design has changed or a plan already covers these wells, explain what remains. ' +
+    'Check the actual source containers and wells, stock concentrations, final well volume, solvent limits and suitable instrument. ' +
+    'Ask me about missing facts instead of guessing. Use the lab calculators to work out feasible volumes and show any uncertainty. ' +
+    'Draft only the liquid transfers supported by this plate map and leave the plan for my review.';
+  return send(message, {
+    fresh: true,
+    context: {
+      record: { id: map.id, name: map.name, version: map.version },
+    },
+  });
 }
 
 /**

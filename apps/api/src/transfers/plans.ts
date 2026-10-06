@@ -1,4 +1,12 @@
-import { add, compare, convert, formatQuantity, subtract, TransferError } from '@ailab/domain';
+import {
+  add,
+  compare,
+  convert,
+  formatQuantity,
+  subtract,
+  TransferError,
+  UnitError,
+} from '@ailab/domain';
 import {
   type InstrumentAttributes,
   type LabwareTypeAttributes,
@@ -57,8 +65,18 @@ async function wellsHeld(deps: OperationDeps, ctx: RecordContext, container: str
   return new Map(held.wells.map((w) => [w.well, w.state.volume]));
 }
 
+const sameQuantity = (a: Quantity | undefined, b: Quantity | undefined) => {
+  if (a === undefined || b === undefined) return a === b;
+  try {
+    return compare(a, b) === 0;
+  } catch (error) {
+    if (error instanceof UnitError) return false;
+    throw error;
+  }
+};
+
 const sameLimits = (a: TransferGroup['device'], b: TransferGroup['device']) =>
-  JSON.stringify([a?.min, a?.max, a?.step]) === JSON.stringify([b?.min, b?.max, b?.step]);
+  sameQuantity(a?.min, b?.min) && sameQuantity(a?.max, b?.max) && sameQuantity(a?.step, b?.step);
 
 /** Transfer plan operations (plan 016a-3). */
 export const transferPlanOperations = [
