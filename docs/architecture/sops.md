@@ -137,7 +137,7 @@ Preparation accepts only the strict `SopDefaultEdit` selector and returns the ex
 
 Apply requires the displayed `decision.previewIdentity.digest` as `expectedPreview` for a pending decision. Under the existing proposal/person/lab/running-assistant guards, stale tokens return the same pending proposal with `previewStatus: "stale"`; changed meaning commits only its refreshed pending facts with `previewStatus: "refreshed"`. Both log proposed, never approved or failed, and require another click. Identical meaning executes the rebuilt ordinary update under held locks as the original proposing agent plus actual approver, or actual applying person for a human-prepared proposal; original trusted origin is retained. Mutation, activity, approval and durable receipt commit atomically. Approved retries return that receipt without another write even after later edits or lost delivery. Other scientific decision shapes/scopes are refused.
 
-The paired backend is on an unreleased PR; the shared chat/Review card and primary live end-to-end acceptance remain integration work. Do not deploy preparation separately from the paired UI. No question disposition, source adoption, accepted-history edit or supporting-record confirmation scope is enabled.
+People ask the assistant to prepare this bounded decision, then inspect the same persisted preview and Apply or Reject it in the shared chat/Review card. There is no standalone preparation form; this assistant request and explicit person decision are the current people-facing path (ADR 0057). The paired feature remains on an unreleased PR pending final gates and integration review. No question disposition, source adoption, accepted-history edit or supporting-record confirmation scope is enabled.
 
 ## Not yet
 
