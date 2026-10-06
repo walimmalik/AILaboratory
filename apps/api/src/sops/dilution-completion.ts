@@ -8,7 +8,7 @@ import {
   LabDecimal,
   multiply,
 } from '@ailab/domain';
-import type { Quantity, SopAttributes, SopDilutionDecision } from '@ailab/schema';
+import type { FieldEvidence, Quantity, SopAttributes, SopDilutionDecision } from '@ailab/schema';
 import { OperationError } from '../operations/errors.ts';
 import { stable } from '../records/pins.ts';
 import { whitespace } from './exact-source.ts';
@@ -108,13 +108,17 @@ export function dilutionAssociation(a: SopAttributes, question: string) {
     diluent.kind !== 'computed' ||
     sample.value !== undefined ||
     diluent.value !== undefined ||
+    sample.min !== undefined ||
+    sample.max !== undefined ||
+    diluent.min !== undefined ||
+    diluent.max !== undefined ||
     !volumeUnit(sample.unit) ||
     !volumeUnit(diluent.unit) ||
     expression(sample.expression) !== `${names.final}/${names.factor}` ||
     expression(diluent.expression) !== `${names.final}-${names.sample}`
   )
     refuse(
-      'The supported component formulas must be final volume / factor and final volume - sample volume',
+      'The supported components must be unbounded formulas final volume / factor and final volume - sample volume',
     );
   return { question: q, step, final, factor, sample, diluent };
 }
@@ -242,6 +246,22 @@ export function assertDilutionCompletionFacts(a: SopAttributes) {
       !new LabDecimal(calculation.factor).equals(quote.factor)
     )
       refuse('The accepted dilution no longer calculates its source-backed values');
+  }
+}
+
+/** A later write cannot replace the accepted target's source claim or its actual attribution. */
+export function assertDilutionCompletionEvidence(
+  before: Partial<SopAttributes>,
+  prior: Readonly<Record<string, FieldEvidence>>,
+  candidate: Readonly<Record<string, FieldEvidence>>,
+) {
+  for (const q of before.questions ?? []) {
+    if (q.disposition?.status !== 'resolved' || !q.disposition.action.completion) continue;
+    const path = `/variables/${q.disposition.action.completion.variable}`;
+    if (!prior[path] || stable(prior[path]) !== stable(candidate[path]))
+      refuse(
+        'The accepted dilution source evidence cannot be replaced; reconsideration is not supported',
+      );
   }
 }
 export function assertDilutionInputs(a: SopAttributes, inputs: ReadonlyMap<string, InputValue>) {

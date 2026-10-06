@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { newId } from '@ailab/domain';
 import { type Proposal, type SopAttributes, SopDilutionDecisionPreview } from '@ailab/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
@@ -39,6 +39,151 @@ async function checked(f: Fixture, p: Proposal, tx: Db, person = f.person) {
 }
 
 describe('private source-backed dilution completion', () => {
+  it('rejects either bound on both component formulas before preparation and after acceptance', async () => {
+    const f = await dilutionDecisionFixture(db);
+    const bounded = (attributes: SopAttributes, name: string, bound: 'min' | 'max') => ({
+      ...attributes,
+      variables: attributes.variables.map((v) =>
+        v.name === name ? { ...v, [bound]: { value: '0.1', unit: 'mL' } } : v,
+      ),
+    });
+    for (const name of ['culture_volume', 'lb_volume'])
+      for (const bound of ['min', 'max'] as const) {
+        await expect(
+          f.registry.transaction(db, async (tx) => {
+            const changed = await new RecordService(tx, f.kinds).update(f.agent, f.target.id, {
+              expectedVersion: f.target.version,
+              attributes: bounded(f.target.attributes, name, bound),
+            });
+            await prepareSopDilutionDecision({ ...f, db: tx }, f.agent, {
+              ...f.input,
+              expectedVersion: changed.version,
+            });
+          }),
+        ).rejects.toThrow('unbounded');
+        expect((await f.service.get(f.person, f.target.id)).version).toBe(f.target.version);
+      }
+    const p = await prepareSopDilutionDecision(f, f.agent, f.input);
+    const accepted = await f.registry.transaction(db, async (tx) =>
+      executeSopDilutionDecision({ ...f, db: tx }, (await checked(f, p, tx)).authorization),
+    );
+    const before = await tables();
+    for (const name of ['culture_volume', 'lb_volume'])
+      for (const bound of ['min', 'max'] as const)
+        await expect(
+          f.service.update(f.person, accepted.id, {
+            expectedVersion: accepted.version,
+            attributes: bounded(accepted.attributes as SopAttributes, name, bound),
+          }),
+        ).rejects.toThrow();
+    expect(await tables()).toEqual(before);
+  });
+
+  it('protects accepted source evidence on evidence-only, same-value, approved and restore writes while unrelated evidence remains editable', async () => {
+    const f = await dilutionDecisionFixture(db),
+      p = await prepareSopDilutionDecision(f, f.agent, f.input);
+    const accepted = await f.registry.transaction(db, async (tx) =>
+      executeSopDilutionDecision({ ...f, db: tx }, (await checked(f, p, tx)).authorization),
+    );
+    const path = '/variables/final_volume';
+    const acceptedEvidence = accepted.evidence[path];
+    if (!acceptedEvidence) throw new Error('Expected accepted source evidence');
+    const replacement = {
+      [path]: {
+        source: 'imported' as const,
+        reference: 'unrelated-document',
+        note: 'Replacement unrelated claim',
+      },
+    };
+    const before = await tables();
+    for (const attributes of [undefined, accepted.attributes]) {
+      const input = {
+        id: accepted.id,
+        expectedVersion: accepted.version,
+        ...(attributes ? { attributes } : {}),
+        evidence: replacement,
+      };
+      await expect(f.run(f.agent, 'records.update', input)).rejects.toThrow('source evidence');
+      await expect(
+        f.service.update(
+          { ...f.agent, via: 'records.update', approvedBy: f.person.actor },
+          accepted.id,
+          input,
+        ),
+      ).rejects.toThrow('source evidence');
+      expect((await tables()).records).toEqual(before.records);
+      expect((await tables()).history).toEqual(before.history);
+      expect((await tables()).activity.at(-1)).toMatchObject({
+        operationId: 'records.update',
+        outcome: 'failed',
+        error: { code: 'invalid_input' },
+      });
+      const ordinary = await createProposal(db, f.agent, {
+        operationId: 'records.update',
+        input,
+        preview: null,
+      });
+      expect(
+        await f.registry.execute(f.person, 'proposals.approve', { id: ordinary.id }),
+      ).toMatchObject({
+        status: 'done',
+        output: { status: 'failed', error: { code: 'invalid_input' } },
+      });
+      expect((await tables()).records).toEqual(before.records);
+      expect((await tables()).history).toEqual(before.history);
+    }
+    const unrelated = await f.run<{ version: number }>(f.agent, 'records.update', {
+      id: accepted.id,
+      expectedVersion: accepted.version,
+      evidence: { notes: { source: 'assumed', note: 'Unrelated note evidence' } },
+    });
+    expect((await f.service.get(f.person, accepted.id)).evidence[path]).toEqual(
+      accepted.evidence[path],
+    );
+    const current = await f.service.update(f.agent, accepted.id, {
+      expectedVersion: unrelated.version,
+      attributes: {
+        ...accepted.attributes,
+        variables: [
+          ...(accepted.attributes.variables as SopAttributes['variables']),
+          { name: 'other', label: 'Other', kind: 'default', value: '1' },
+        ],
+      },
+    });
+    const historical = (await f.service.history(f.person, accepted.id)).find(
+      (v) => v.version === accepted.version,
+    );
+    if (!historical) throw new Error('Expected accepted history');
+    const beforeRestore = await tables();
+    // Disposable corrupted historical evidence must not be adopted by restore; the test setup rolls back too.
+    await expect(
+      f.registry.transaction(db, async (tx) => {
+        await tx
+          .update(recordVersions)
+          .set({
+            snapshot: {
+              ...historical.snapshot,
+              evidence: {
+                ...historical.snapshot.evidence,
+                [path]: { ...acceptedEvidence, ...replacement[path] },
+              },
+            },
+          })
+          .where(
+            and(
+              eq(recordVersions.recordId, accepted.id),
+              eq(recordVersions.version, accepted.version),
+            ),
+          );
+        await new RecordService(tx, f.kinds).restore(f.person, accepted.id, {
+          expectedVersion: current.version,
+          version: accepted.version,
+        });
+      }),
+    ).rejects.toThrow('source evidence');
+    expect(await tables()).toEqual(beforeRestore);
+  });
+
   it('uses actual retained iGEM assertions, evaluator waits/values and rollback-only Values effects with no scientific leakage or public scope', async () => {
     const f = await dilutionDecisionFixture(db),
       before = await tables(),
