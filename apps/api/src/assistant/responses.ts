@@ -70,9 +70,13 @@ export class OpenAiResponsesModel implements ChatModel {
       });
     } catch {
       // Transport and provider diagnostics may echo credentials or request content.
+      throwIfTimedOut(request.signal);
       throw new ModelError(`Could not reach ${this.provider} (Responses request)`);
     }
-    const json: unknown = await response.json().catch(() => undefined);
+    const json: unknown = await response.json().catch(() => {
+      throwIfTimedOut(request.signal);
+      return undefined;
+    });
     if (!response.ok || (isRecord(json) && json.error)) {
       throw new ModelError(
         `${this.provider} refused the Responses request (HTTP ${response.status})`,
@@ -212,4 +216,11 @@ export class OpenAiResponsesModel implements ChatModel {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function throwIfTimedOut(signal?: AbortSignal): void {
+  if (signal?.aborted && signal.reason instanceof Error && signal.reason.name === 'TimeoutError') {
+    // Never propagate a transport diagnostic or even the signal's reason text.
+    throw new DOMException('The Responses request timed out.', 'TimeoutError');
+  }
 }
