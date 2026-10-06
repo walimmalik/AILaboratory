@@ -852,6 +852,156 @@ describe('private exact SOP source producer', () => {
     expect(await counts()).toMatchObject({ records: after.records, versions: after.versions });
   });
 
+  it('attributes cited and uncited appends to their own stable steps', async () => {
+    const f = await fixture();
+    const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    const cite = firstCitation(saved.attributes as SopAttributes);
+    respond = () => ({
+      text: 'Review',
+      stop: 'tool_use',
+      toolCalls: [
+        {
+          id: 'cited',
+          name: 'sop_fix',
+          input: {
+            path: '/steps/-',
+            value: { id: 'cited_append', action: 'manual', text: method, cite: [cite] },
+            reason: 'Retained source instruction',
+            cite,
+          },
+        },
+        {
+          id: 'uncited',
+          name: 'sop_fix',
+          input: {
+            path: '/steps/-',
+            value: {
+              id: 'uncited_append',
+              action: 'manual',
+              text: 'An uncertain additional instruction',
+            },
+            reason: 'Still needs assessment',
+          },
+        },
+        { id: 'end', name: 'sop_finish', input: { summary: 'Two distinct draft additions' } },
+      ],
+    });
+    const result = await run<{
+      sop: RecordEnvelope;
+      rounds: { refused: unknown[]; findings: unknown[] }[];
+    }>(person, 'sops.review', { sop: saved.id, expectedVersion: 1, rounds: 1 });
+    expect(result.rounds[0]?.refused).toEqual([]);
+    expect(result.rounds[0]?.findings).toHaveLength(2);
+    expect(result.sop.evidence['/steps/cited_append']).toMatchObject({
+      source: 'stated',
+      reference: f.document.id,
+    });
+    expect(result.sop.evidence['/steps/uncited_append']).toMatchObject({ source: 'assumed' });
+    expect(result.sop.evidence['/steps/uncited_append']?.reference).toBeUndefined();
+    expect(result.sop.evidence.steps?.source).toBe('assumed');
+    expect(result.sop.status).toBe('draft');
+  });
+
+  it.each([false, true])(
+    'keeps evidence at the accepted stable identity after index shifts (remove cited=%s)',
+    async (removeCited) => {
+      const f = await fixture();
+      const a = attributes(f.source, f.passages[0]?.id);
+      a.steps.push({ id: 'remaining', action: 'manual', text: 'An uncertain wash' });
+      const saved = await publicDraft(a);
+      const cite = firstCitation(saved.attributes as SopAttributes);
+      const index = removeCited ? 0 : 1;
+      respond = () => ({
+        text: 'Review',
+        stop: 'tool_use',
+        toolCalls: [
+          {
+            id: 'fix',
+            name: 'sop_fix',
+            input: {
+              path: `/steps/${index}/text`,
+              value: 'Source-backed draft wording',
+              reason: 'Selected instruction',
+              cite,
+            },
+          },
+          {
+            id: 'remove',
+            name: 'sop_fix',
+            input: { path: '/steps/0', remove: true, reason: 'Remove the first draft action' },
+          },
+          {
+            id: 'end',
+            name: 'sop_finish',
+            input: { summary: 'Retained stable step after removal' },
+          },
+        ],
+      });
+      const result = await run<{ sop: RecordEnvelope; rounds: { refused: unknown[] }[] }>(
+        person,
+        'sops.review',
+        { sop: saved.id, expectedVersion: 1, rounds: 1 },
+      );
+      expect(result.rounds[0]?.refused).toEqual([]);
+      expect((result.sop.attributes as SopAttributes).steps.map((step) => step.id)).toEqual([
+        'remaining',
+      ]);
+      expect(result.sop.evidence['/steps/add']).toBeUndefined();
+      expect(result.sop.evidence['/steps/remaining']?.source).toBe(
+        removeCited ? 'assumed' : 'stated',
+      );
+      expect(result.sop.evidence['/steps/remaining']?.reference).toBe(
+        removeCited ? undefined : f.document.id,
+      );
+    },
+  );
+
+  it('does not retain earlier stated evidence after a later uncited replacement of the same step', async () => {
+    const f = await fixture();
+    const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    const cite = firstCitation(saved.attributes as SopAttributes);
+    respond = () => ({
+      text: 'Review',
+      stop: 'tool_use',
+      toolCalls: [
+        {
+          id: 'cited',
+          name: 'sop_fix',
+          input: {
+            path: '/steps/0/text',
+            value: 'Source-backed draft wording',
+            reason: 'Selected instruction',
+            cite,
+          },
+        },
+        {
+          id: 'uncited',
+          name: 'sop_fix',
+          input: {
+            path: '/steps/0/text',
+            value: 'A later unchecked estimate',
+            reason: 'Still needs assessment',
+          },
+        },
+        { id: 'end', name: 'sop_finish', input: { summary: 'Later estimate remains unchecked' } },
+      ],
+    });
+    const result = await run<{ sop: RecordEnvelope; rounds: { refused: unknown[] }[] }>(
+      person,
+      'sops.review',
+      { sop: saved.id, expectedVersion: 1, rounds: 1 },
+    );
+    expect(result.rounds[0]?.refused).toEqual([]);
+    expect((result.sop.attributes as SopAttributes).steps[0]?.text).toBe(
+      'A later unchecked estimate',
+    );
+    expect(result.sop.evidence['/steps/add']).toMatchObject({
+      source: 'assumed',
+      note: 'Reviewer: Still needs assessment',
+    });
+    expect(result.sop.evidence['/steps/add']?.reference).toBeUndefined();
+  });
+
   it('validates every model citation, preserves source/question ownership and never confirms a section', async () => {
     const f = await fixture();
     const a = attributes(f.source, f.passages[0]?.id);

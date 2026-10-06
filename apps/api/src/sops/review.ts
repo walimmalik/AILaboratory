@@ -1,4 +1,4 @@
-import { newId } from '@ailab/domain';
+import { itemPath, keyedItems, keyOf, newId } from '@ailab/domain';
 import {
   type Actor,
   Citation,
@@ -242,6 +242,7 @@ export async function reviewSop(
 
     let working: SopAttributes = a;
     const findings: ReviewFinding[] = [];
+    const fixes: AcceptedFix[] = [];
     const refused: SopReviewRound['refused'] = [];
     let summary: string | undefined;
     let asked = 0;
@@ -308,6 +309,8 @@ export async function reviewSop(
         }
         const before = at(working, tokens);
         await accept(changed(working, tokens, value, remove === true));
+        const attribution = captureFix(working, tokens, remove === true, reason, cite);
+        if (attribution) fixes.push(attribution);
         findings.push({
           type: 'fix',
           path,
@@ -407,7 +410,7 @@ export async function reviewSop(
         sop: record.id,
         expectedVersion: record.version,
         attributes: working,
-        evidence: evidenceOf(findings, working),
+        evidence: evidenceOf(fixes, working),
         reason:
           input.reason ??
           `Review round ${earlier.length + n}: ${count(findings, 'fix')} fixes, ${count(findings, 'question')} questions`,
@@ -438,32 +441,54 @@ export async function reviewSop(
 const count = (findings: ReviewFinding[], type: ReviewFinding['type']) =>
   findings.filter((f) => f.type === type).length;
 
-/** Only the changed stable item receives citation-backed attribution; other section values remain unchecked. */
-function evidenceOf(
-  findings: ReviewFinding[],
+type AcceptedFix = {
+  field: string;
+  target: string;
+  key?: string;
+  facts: string;
+  reason: string;
+  cite?: ReviewFinding['cite'];
+};
+
+/** Capture the canonical item now: later appends and removals can change pointer indices. */
+function captureFix(
   after: SopAttributes,
-): Record<string, EvidenceInput> {
+  tokens: Tokens,
+  removed: boolean,
+  reason: string,
+  cite: ReviewFinding['cite'],
+): AcceptedFix | undefined {
+  const field = tokens[0] as string;
+  const value = (after as unknown as Record<string, unknown>)[field];
+  if (value === undefined) return undefined;
+  const spec = sopKind.items?.[field];
+  if (spec && tokens.length > 1) {
+    // A removed item no longer has facts to attribute; do not select its shifted successor.
+    if (removed && tokens.length === 2) return undefined;
+    const index = tokens[1] === '-' && Array.isArray(value) ? value.length - 1 : Number(tokens[1]);
+    const item = Array.isArray(value) ? value[index] : undefined;
+    const key = keyOf(item, spec);
+    if (key === undefined) return undefined;
+    return { field, target: itemPath(field, key), key, facts: stable(item), reason, cite };
+  }
+  // Whole keyed sections cannot establish citation-backed evidence for every item.
+  return { field, target: field, facts: stable(value), reason, ...(spec ? {} : { cite }) };
+}
+
+/** Only surviving canonical facts receive attribution, and mixed changes remain unchecked. */
+function evidenceOf(fixes: AcceptedFix[], after: SopAttributes): Record<string, EvidenceInput> {
   const out: Record<string, EvidenceInput> = {};
-  for (const f of findings) {
-    const tokens = tokensOf(f.path);
-    const field = tokens[0] as string;
-    if (field === 'questions') continue;
-    const key = sopKind.items?.[field];
-    const list = (after as unknown as Record<string, unknown>)[field];
-    const index = tokens[1] === '-' && Array.isArray(list) ? list.length - 1 : Number(tokens[1]);
-    const item =
-      f.after === undefined && tokens.length === 2
-        ? undefined
-        : Array.isArray(list)
-          ? list[index]
-          : undefined;
-    const id = key && item && typeof item === 'object' ? item[key] : undefined;
-    const target = typeof id === 'string' ? `/${field}/${id}` : field;
-    if (out[target]?.source === 'stated') continue;
-    out[target] = {
-      source: f.cite && f.type === 'fix' && (!key || typeof id === 'string') ? 'stated' : 'assumed',
+  const unchecked = new Set(fixes.filter((f) => !f.cite).map((f) => f.target));
+  for (const f of fixes) {
+    const value = (after as unknown as Record<string, unknown>)[f.field];
+    const spec = sopKind.items?.[f.field];
+    const current = f.key !== undefined && spec ? keyedItems(value, spec).get(f.key) : value;
+    if (current === undefined || stable(current) !== f.facts) continue;
+    const stated = f.cite !== undefined && !unchecked.has(f.target);
+    out[f.target] = {
+      source: stated ? 'stated' : 'assumed',
       note: `Reviewer: ${f.reason}`.slice(0, 500),
-      ...(f.cite ? { reference: f.cite.document } : {}),
+      ...(stated && f.cite ? { reference: f.cite.document } : {}),
     };
   }
   return out;
