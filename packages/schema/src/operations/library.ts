@@ -32,7 +32,9 @@ export const libraryAdd = defineContract({
     evidence: z
       .record(z.string(), EvidenceInput)
       .optional()
-      .describe('Where values came from, by attribute name; unsourced values are marked assumed'),
+      .describe(
+        'Where supplied document attribute values came from, keyed by attribute name (e.g. doi when doi has a value). Keys must name present document attributes with values. The top-level label is the document title, not an attribute; label and title are not valid evidence keys. Unsourced values are marked assumed',
+      ),
     reason: Reason,
   }),
   output: RecordEnvelope,
