@@ -29,6 +29,7 @@ import {
   type SectionReview,
 } from '@ailab/schema';
 import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
+import { PgTransaction } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
@@ -36,6 +37,11 @@ import { checkCalculated } from './calculations.ts';
 import { RecordError } from './errors.ts';
 import { type KindRegistry, namePrefixesOf } from './kinds.ts';
 import { markSeenBy, writtenBySeer } from './seen.ts';
+import {
+  SopReadCapture,
+  type SopReadinessCapture,
+  UnsupportedSopRead,
+} from './sop-read-capture.ts';
 
 /** Who is acting, and in which lab. Every record operation runs in one. */
 export interface RecordContext {
@@ -54,6 +60,8 @@ export interface RecordContext {
 }
 
 type RecordRow = typeof records.$inferSelect;
+
+const isTransaction = (db: Db): boolean => db instanceof PgTransaction;
 
 /** Question bookkeeping has its own provenance and is not a scientific value to verify. */
 function sopQuestionEvidence(
@@ -435,6 +443,37 @@ export class RecordService {
     return readiness(toEnvelope(row), kind, related.checks);
   }
 
+  /** Private preparation prerequisite: one real SOP readiness phase in the caller's transaction. */
+  async captureSopReadiness(ctx: RecordContext, id: string): Promise<SopReadinessCapture> {
+    if (!isTransaction(this.db))
+      return { status: 'incomplete', reads: [], issues: [{ code: 'transaction_required' }] };
+    let row: RecordRow;
+    try {
+      row = await findRecord(this.db, ctx, id);
+    } catch (error) {
+      if (error instanceof RecordError && error.code === 'not_found')
+        return { status: 'incomplete', reads: [], issues: [{ code: 'unavailable_record', id }] };
+      throw error;
+    }
+    const target = { id: row.id, version: row.version };
+    const kind = this.kinds.get(row.kind);
+    if (kind.kind !== 'sop' || !kind.related)
+      return {
+        status: 'incomplete',
+        target,
+        reads: [],
+        issues: [{ code: 'unsupported_target', id }],
+      };
+    const capture = new SopReadCapture();
+    try {
+      const related = await this.#related(this.db, ctx, kind, row.attributes, row, false, capture);
+      return capture.result(target, readiness(toEnvelope(row), kind, related.checks));
+    } catch (error) {
+      if (error instanceof UnsupportedSopRead) return capture.result(target);
+      throw error;
+    }
+  }
+
   /** Draft → active. */
   async activate(ctx: RecordContext, id: string, input: TransitionInput): Promise<RecordEnvelope> {
     return this.#change(
@@ -646,18 +685,25 @@ export class RecordService {
     attributes: Record<string, unknown>,
     current?: RecordRow,
     refuse = true,
+    capture?: SopReadCapture,
   ): Promise<RelatedResult> {
     if (!kind.related) return {};
     const result = await kind.related(attributes, {
       get: async (id) => {
         try {
-          return toEnvelope(await findRecord(db, ctx, id));
+          const record = toEnvelope(await findRecord(db, ctx, id));
+          capture?.observe(id, record);
+          return record;
         } catch (error) {
-          if (error instanceof RecordError && error.code === 'not_found') return undefined;
+          if (error instanceof RecordError && error.code === 'not_found') {
+            capture?.observe(id, undefined);
+            return undefined;
+          }
           throw error;
         }
       },
       getVersion: async (id, version) => {
+        if (capture) capture.unsupported('getVersion');
         try {
           const record = await findRecord(db, ctx, id);
           return (await findVersion(db, record.id, version)).snapshot;
@@ -667,6 +713,7 @@ export class RecordService {
         }
       },
       list: async (listKind) => {
+        if (capture) capture.unsupported('list');
         const rows = await db
           .select()
           .from(records)
