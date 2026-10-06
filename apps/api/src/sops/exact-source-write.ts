@@ -1,11 +1,11 @@
-import { SopAttributes } from '@ailab/schema';
+import { type EvidenceInput, SopAttributes } from '@ailab/schema';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { Db } from '../db/client.ts';
 import { OperationError } from '../operations/errors.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import { stable } from '../records/pins.ts';
-import { type RecordContext, RecordService } from '../records/service.ts';
+import { type RecordContext, RecordService, type UpdateRecordInput } from '../records/service.ts';
 import { citationsOf } from './citations.ts';
 import { canonicalizeSopExactSource } from './exact-source.ts';
 
@@ -22,6 +22,11 @@ export function assertSopExactSourceWrite(
 ) {
   const prior = before as SopAttributes | undefined;
   const next = after as SopAttributes;
+  if (!before && !next.source?.exact && (next.source || citationsOf(next).length))
+    throw new OperationError(
+      'invalid_input',
+      'A new source-linked SOP requires one explicitly selected exact edition through sops.draft; source-free authored drafts remain valid',
+    );
   if (!prior?.source?.exact && !next.source?.exact) return;
   const scope = scopes.get(ctx);
   if (
@@ -66,11 +71,16 @@ async function withWrite<T>(
   }
 }
 
-/** Private stage1 producer. No operation registration until the producer checkpoint clears. */
+/** Owning draft creation validates the selected edition inside the caller transaction. */
 export async function createExactSopDraft(
   deps: Deps,
   ctx: RecordContext,
-  input: { label: string; attributes: SopAttributes; reason?: string },
+  input: {
+    label: string;
+    attributes: SopAttributes;
+    reason?: string;
+    evidence?: Record<string, EvidenceInput>;
+  },
 ) {
   const transactionBound: boolean = deps.db instanceof PgTransaction;
   if (!transactionBound)
@@ -95,6 +105,7 @@ export async function createExactSopDraft(
         kind: 'sop',
         label: input.label,
         attributes,
+        ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
       }),
   );
@@ -153,11 +164,79 @@ export async function updateExactSopCitations(
   return { record, source: result };
 }
 
-/** Until paired integration, existing current-source consumers must not read private exact SOPs. */
-export function refuseUnintegratedExactSource(a: SopAttributes) {
-  if (a.source?.exact)
+/** Owning review/question writes validate all citations while preserving the established source. */
+export async function updateSourceCheckedSop(
+  deps: Deps,
+  ctx: RecordContext,
+  input: {
+    sop: string;
+    expectedVersion: number;
+    attributes: SopAttributes;
+    evidence?: Record<string, EvidenceInput>;
+    reason?: string;
+  },
+) {
+  if (!['sops.review', 'sops.ask_question'].includes(ctx.via ?? ''))
+    throw new OperationError(
+      'forbidden',
+      'Source-checked changes belong to SOP review/question operations',
+    );
+  const transactionBound: boolean = deps.db instanceof PgTransaction;
+  if (!transactionBound)
+    throw new OperationError(
+      'invalid_state',
+      'Source-checked writes require their caller transaction',
+    );
+  const service = new RecordService(deps.db, deps.kinds);
+  const current = await service.get(ctx, input.sop);
+  await service.assertSopEditable(ctx, current.id);
+  const before = SopAttributes.parse(current.attributes);
+  if (stable(before.source) !== stable(input.attributes.source))
+    throw new OperationError(
+      'forbidden',
+      'Preserve the saved instructions; source adoption is a separate decision',
+    );
+  const { attributes } = await canonicalizeSopExactSource(deps, ctx, input.attributes);
+  if (!before.source?.exact && stable(citationsOf(before)) !== stable(citationsOf(attributes)))
     throw new OperationError(
       'invalid_input',
-      'Exact SOP source checking is not yet available through this operation',
+      'Edition not established; new source claims cannot be checked',
     );
+  // An AI source review is never a section confirmation, including ordinary approved proposals.
+  const { approvedBy: _approval, ...unconfirmed } = ctx;
+  const write = (scoped: RecordContext) =>
+    service.update(scoped, current.id, {
+      expectedVersion: input.expectedVersion,
+      attributes,
+      ...(input.evidence ? { evidence: input.evidence } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    });
+  return before.source?.exact
+    ? withWrite(deps, unconfirmed, current.id, before, attributes, write)
+    : write(unconfirmed);
+}
+
+/** Existing generic operation delegates exact citation validation, never root/question authority. */
+export async function updateExactSopRecord(
+  deps: Deps,
+  ctx: RecordContext,
+  current: Awaited<ReturnType<RecordService['get']>>,
+  input: UpdateRecordInput,
+) {
+  if (ctx.via !== 'records.update')
+    throw new OperationError('forbidden', 'Exact edited citations belong to records.update');
+  const before = SopAttributes.parse(current.attributes);
+  const candidate = SopAttributes.parse(input.attributes);
+  if (!before.source?.exact || stable(before.source) !== stable(candidate.source))
+    throw new OperationError(
+      'forbidden',
+      'Preserve the saved exact instructions; source adoption is a separate decision',
+    );
+  if (stable(citationsOf(before)) === stable(citationsOf(candidate)))
+    return new RecordService(deps.db, deps.kinds).update(ctx, current.id, input);
+  // This witness grants no question-write scope. Existing question guards still own all history.
+  const { attributes } = await canonicalizeSopExactSource(deps, ctx, candidate);
+  return withWrite(deps, ctx, current.id, before, attributes, (scoped) =>
+    new RecordService(deps.db, deps.kinds).update(scoped, current.id, { ...input, attributes }),
+  );
 }

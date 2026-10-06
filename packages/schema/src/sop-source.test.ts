@@ -19,6 +19,8 @@ describe('SOP source identity contract', () => {
     expect(SopAttributes.parse(a)).toEqual(a);
     const unbound = { ...a, source: { document: source.document, revision: 'Printed edition' } };
     expect(SopAttributes.parse(unbound)).toEqual(unbound);
+    expect(sopsDraft.input.safeParse({ label: 'Authored', ...a }).success).toBe(true);
+    expect(sopsDraft.input.safeParse({ label: 'Unbound', ...unbound }).success).toBe(false);
     const exact = {
       ...a,
       source: { document: source.document, revision: 'Printed edition', exact: source },

@@ -1,6 +1,7 @@
 import {
   type Actor,
   type Converted,
+  type ExactSourceReference,
   type Readiness,
   type RecordEnvelope,
   type SopAttributes,
@@ -267,7 +268,7 @@ describe('sops.draft', () => {
       files: [{ file: file.id, role: 'original' }],
     });
     await run(person, 'library.parse', { document: doc.id });
-    const { passages } = await run<{ passages: { id: string; text: string }[] }>(
+    const { passages } = await run<{ passages: { id: string; text: string; page?: number }[] }>(
       person,
       'library.read',
       { document: doc.id, section: 0 },
@@ -275,11 +276,17 @@ describe('sops.draft', () => {
     const cite = (index: number, quote: string) => ({
       document: doc.id,
       passage: passages[index]?.id,
+      page: passages[index]?.page,
       quote,
     });
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
       label: 'Wash and read, working volume unresolved',
-      source: { document: doc.id },
+      source: {
+        document: doc.id,
+        exact: (
+          await run<{ source: ExactSourceReference }>(person, 'library.read', { document: doc.id })
+        ).source,
+      },
       materials: [
         { role: 'plate', label: 'Plate', type: 'labware' },
         { role: 'wash_buffer', label: 'Wash buffer', type: 'reagent' },
@@ -1183,11 +1190,11 @@ describe('scientific question lifecycle', () => {
 });
 
 describe('sops.check_citations', () => {
-  it('finds each quote in its passage, elsewhere in the document, or nowhere', async () => {
+  it('checks an explicitly selected edition and refuses wrong passage, case changes and missing passages', async () => {
     const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
       name: 'elisa.md',
       mediaType: 'text/markdown',
-      text: '# Coating\nCoat the plate overnight at room temperature.\n\n# Reading\nRead within 30 minutes.',
+      text: '# Coating\nCoat the plate overnight.\n\n# Reading\nRead within 30 minutes.',
     });
     const doc = await run<RecordEnvelope>(person, 'library.add', {
       label: 'Vendor ELISA sheet',
@@ -1195,67 +1202,41 @@ describe('sops.check_citations', () => {
       license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
       files: [{ file: file.id, role: 'original' }],
     });
-    const cite = (passage: string | undefined, quote: string) => ({
-      document: doc.id,
-      ...(passage ? { passage } : {}),
-      quote,
-    });
-    const draft = async (passages: { id: string }[]) =>
-      run<RecordEnvelope>(agent, 'sops.draft', {
-        ...elisa,
-        source: { document: doc.id },
-        steps: elisa.steps.map((s, i) =>
-          i === 0
-            ? { ...s, cite: [cite(passages[0]?.id, 'coat the plate  OVERNIGHT')] }
-            : i === 1
-              ? { ...s, cite: [cite(passages[0]?.id, 'Read within 30 minutes')] }
-              : { ...s, cite: [cite(undefined, 'Shake at 500 rpm')] },
-        ),
-      });
-    const unparsed = await draft([]);
-    const before = await run<{ citations: { result: string }[] }>(person, 'sops.check_citations', {
-      sop: unparsed.id,
-    });
-    expect(before.citations.every((c) => c.result === 'unparsed')).toBe(true);
-
     await run(person, 'library.parse', { document: doc.id });
-    const outline = await run<{ outline: { index: number }[] }>(person, 'library.read', {
+    const { source } = await run<{ source: ExactSourceReference }>(person, 'library.read', {
       document: doc.id,
     });
-    const coating = await run<{ passages: { id: string }[] }>(person, 'library.read', {
-      document: doc.id,
-      section: outline.outline[0]?.index,
+    const { passages } = await run<{ passages: { id: string }[] }>(person, 'library.read', {
+      source,
+      section: 0,
     });
-    const byId = await run<{ passages: { id: string; text: string }[] }>(person, 'library.read', {
-      document: doc.id,
-      passages: coating.passages.map((p) => p.id),
+    const cite = { document: doc.id, passage: passages[0]?.id, quote: 'Coat the plate overnight.' };
+    const input = {
+      ...elisa,
+      source: { document: doc.id, exact: source },
+      steps: elisa.steps.map((s, i) => (i === 0 ? { ...s, cite: [cite] } : s)),
+    };
+    const sop = await run<RecordEnvelope>(agent, 'sops.draft', input);
+    expect(await run(agent, 'sops.check_citations', { sop: sop.id })).toMatchObject({
+      sourceStatus: 'checked',
+      matches: 1,
+      problems: 0,
+      citations: [{ result: 'matches', exact: { source, passage: cite.passage } }],
     });
-    expect(byId.passages[0]?.text).toContain('overnight');
-
-    const sop = await draft(coating.passages);
-    const checked = await run<{
-      citations: { where: string; result: string; foundIn?: string }[];
-      matches: number;
-      problems: number;
-    }>(agent, 'sops.check_citations', { sop: sop.id });
-    const steps = elisa.steps.map((s) => s.id);
-    expect(checked.citations.map((c) => [c.where, c.result])).toEqual(
-      steps.map((id, i) => [
-        `step ${id}`,
-        i === 0 ? 'matches' : i === 1 ? 'found_elsewhere' : 'not_found',
-      ]),
-    );
-    expect(checked.citations[1]?.foundIn).toBeDefined();
-    expect(checked).toMatchObject({ matches: 1, problems: steps.length - 1 });
-
-    // A reparse keeps the passage IDs of text that didn't change, so citations still resolve.
+    for (const bad of [
+      { ...cite, quote: 'coat the plate overnight.' },
+      { ...cite, quote: 'Read within 30 minutes.' },
+      { ...cite, passage: 'missing' },
+    ]) {
+      await expect(
+        run(agent, 'sops.draft', { ...input, steps: [{ ...elisa.steps[0], cite: [bad] }] }),
+      ).rejects.toThrow();
+    }
     await run(person, 'library.parse', { document: doc.id });
-    const again = await run<{ citations: { result: string }[] }>(agent, 'sops.check_citations', {
-      sop: sop.id,
+    expect(await run(agent, 'sops.check_citations', { sop: sop.id })).toMatchObject({
+      sourceStatus: 'checked',
+      matches: 1,
     });
-    expect(again.citations[0]?.result).toBe('matches');
-
-    // The SOP links the documents it cites; a citation must name a library document.
     const links = await run<{ links: { toId: string; relation: string }[] }>(
       person,
       'records.links',
@@ -1264,16 +1245,9 @@ describe('sops.check_citations', () => {
     expect(links.links).toContainEqual(
       expect.objectContaining({ toId: doc.id, relation: 'digitized_from' }),
     );
-    const notADocument = await refused(
-      run(agent, 'sops.draft', {
-        ...elisa,
-        steps: elisa.steps.map((s) => ({
-          ...s,
-          cite: [{ document: sop.id.replace('sop_', 'doc_'), quote: 'x' }],
-        })),
-      }),
-    );
-    expect(notADocument.message).toContain('is cited but is not a library document');
+    await expect(run(otherLab, 'sops.check_citations', { sop: sop.id })).rejects.toMatchObject({
+      code: 'not_found',
+    });
   });
 });
 
@@ -1429,8 +1403,18 @@ describe('sops.review', () => {
     await run(person, 'library.parse', { document: doc.id });
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
       ...elisa,
-      source: { document: doc.id },
+      source: {
+        document: doc.id,
+        exact: (
+          await run<{ source: ExactSourceReference }>(person, 'library.read', { document: doc.id })
+        ).source,
+      },
     });
+    const { passages: washing } = await run<{ passages: { id: string }[] }>(
+      person,
+      'library.read',
+      { document: doc.id, section: 0 },
+    );
     const model = new PlaybackModel([
       {
         text: 'Checking the wash.',
@@ -1442,7 +1426,11 @@ describe('sops.review', () => {
               path: '/steps/1/parameters/0/quantity',
               value: q('300', 'uL'),
               reason: 'The source says 300 uL per wash',
-              cite: { document: doc.id, quote: 'Wash 3 times with 300 uL wash buffer per well.' },
+              cite: {
+                document: doc.id,
+                passage: washing[0]?.id,
+                quote: 'Wash 3 times with 300 uL wash buffer per well.',
+              },
             },
           },
           {
@@ -1507,7 +1495,8 @@ describe('sops.review', () => {
     const a = out.sop.attributes as typeof elisa;
     expect(a.steps[1]?.parameters[0]).toEqual({ name: 'volume', quantity: q('300', 'uL') });
     expect(out.sop.version).toBe(sop.version + 1);
-    expect(out.sop.evidence?.steps).toMatchObject({
+    expect(out.sop.evidence?.steps?.source).toBe('assumed');
+    expect(out.sop.evidence?.['/steps/wash']).toMatchObject({
       source: 'stated',
       by: { type: 'agent', agentName: 'Test (reviewer)' },
     });
@@ -1785,7 +1774,12 @@ describe('the digitizing benchmark (sops.score)', () => {
     });
     const sop = await run<RecordEnvelope>(agent, 'sops.draft', {
       ...elisa,
-      source: { document: doc.id },
+      source: {
+        document: doc.id,
+        exact: (
+          await run<{ source: ExactSourceReference }>(person, 'library.read', { document: doc.id })
+        ).source,
+      },
       questions: [],
     });
     await run<RecordEnvelope>(agent, 'sops.draft', elisa);

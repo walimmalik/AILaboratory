@@ -17,9 +17,15 @@ import type { ChatModel, ModelMessage, ModelTool, ModelToolCall } from '../assis
 import { sopReviews } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
 import type { OperationDeps } from '../operations/registry.ts';
+import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { checkCitations, type Passage, passagesOf } from './citations.ts';
-import { refuseUnintegratedExactSource } from './exact-source-write.ts';
+import { checkCitations, type Passage } from './citations.ts';
+import {
+  canonicalizeSopExactSource,
+  readSopExactSource,
+  SopExactSourceCache,
+} from './exact-source.ts';
+import { updateSourceCheckedSop } from './exact-source-write.ts';
 import { sop as sopKind } from './kinds.ts';
 import { operationalSop } from './questions.ts';
 
@@ -156,11 +162,11 @@ function brief(
       ? `Readiness checks failing:\n- ${failing.join('\n- ')}`
       : 'All readiness checks pass.',
     problems.length
-      ? `Citations whose quote is not in the cited passage:\n- ${problems.map((c) => `${c.where}: "${c.quote}" ${c.result.replace('_', ' ')}${c.foundIn ? ` (in ${c.foundIn})` : ''}`).join('\n- ')}`
+      ? `Citations whose text could not be checked:\n- ${problems.map((c) => `${c.where}: "${c.quote}"; ${c.uncheckedReason === 'edition_not_established' ? 'Edition not established' : 'Text could not be checked'}`).join('\n- ')}`
       : 'Every cited quote is in its passage.',
     text
       ? `Source document ${a.source?.document}, passage ids in brackets:\n${text}`
-      : 'The source document has no text; check the draft against its own citations only.',
+      : 'Instructions could not be checked. No exact checked text is available; do not use current text or treat stored quotations as verified evidence.',
   ].join('\n\n');
 }
 
@@ -190,7 +196,6 @@ export async function reviewSop(
     throw new OperationError('invalid_input', `${record.name} is not an SOP`);
   await service.assertSopEditable(ctx, record.id);
   operationalSop(record.attributes);
-  refuseUnintegratedExactSource(record.attributes as SopAttributes);
   if (record.status !== 'draft') {
     throw new OperationError(
       'invalid_state',
@@ -208,8 +213,9 @@ export async function reviewSop(
     agentName: reviewerName,
     onBehalfOf: ctx.actor.type === 'user' ? ctx.actor.userId : ctx.actor.onBehalfOf,
   };
-  const reviewerCtx: RecordContext = { ...ctx, actor: reviewer, via: 'sops.review' };
-  const texts = new Map<string, Passage[] | undefined>();
+  const { approvedBy: _approval, ...unconfirmed } = ctx;
+  const reviewerCtx: RecordContext = { ...unconfirmed, actor: reviewer, via: 'sops.review' };
+  const cache = new SopExactSourceCache();
   const earlier = await roundsOf(deps, ctx, record.id);
   const rounds: SopReviewRound[] = [];
   const limit = input.rounds ?? 2;
@@ -231,11 +237,8 @@ export async function reviewSop(
             .filter((c) => !c.passed)
             .map((c) => `${c.label} (${c.severity}): ${c.message ?? ''}`)
         : [];
-    const { citations } = await checkCitations(deps, ctx, a, texts);
-    if (a.source && !texts.has(a.source.document)) {
-      texts.set(a.source.document, await passagesOf(deps, ctx, a.source.document));
-    }
-    const source = a.source ? texts.get(a.source.document) : undefined;
+    const { citations, source: checkedSource } = await checkCitations(deps, ctx, a, cache);
+    const source = checkedSource.status === 'checked' ? checkedSource.passages : undefined;
 
     let working: SopAttributes = a;
     const findings: ReviewFinding[] = [];
@@ -245,6 +248,11 @@ export async function reviewSop(
     const messages: ModelMessage[] = [
       { role: 'user', text: brief(record, a, failing, citations, source) },
     ];
+    if (checkedSource.status !== 'unbound' && checkedSource.warnings.length)
+      messages.push({
+        role: 'user',
+        text: `Conversion limitations for these selected instructions: ${checkedSource.warnings.join('; ')}. Text occurrence does not establish scientific validity or human confirmation.`,
+      });
 
     const handle = async (call: ModelToolCall): Promise<string> => {
       if (call.name === 'sop_finish') {
@@ -268,19 +276,29 @@ export async function reviewSop(
         };
         const next = { ...working, questions: [...(working.questions ?? []), question] };
         await accept(next);
+        const savedQuestion = working.questions?.at(-1) ?? question;
         findings.push({
           type: 'question',
           path: `/questions/${(next.questions?.length ?? 1) - 1}`,
-          after: question,
+          after: savedQuestion,
           reason: parsed.data.suggestion ? `Suggests: ${parsed.data.suggestion}` : 'Needs a person',
-          ...(parsed.data.passages?.[0] ? { cite: parsed.data.passages[0] } : {}),
+          ...(savedQuestion.passages?.[0] ? { cite: savedQuestion.passages[0] } : {}),
         });
         return `Asked as question ${question.id}.`;
       }
       if (call.name === 'sop_fix') {
         const parsed = FixInput.safeParse(call.input);
         if (!parsed.success) throw new Error(issues(parsed.error));
-        const { path, value, remove, reason, cite } = parsed.data;
+        const { path, value, remove, reason } = parsed.data;
+        let cite = parsed.data.cite;
+        if (cite) {
+          const checked = await readSopExactSource(deps, ctx, working, cache, [
+            { where: 'review fix', cite },
+          ]);
+          if (checked.status !== 'checked')
+            throw new Error('No established checked edition supports this citation');
+          cite = checked.citations.at(-1)?.cite;
+        }
         if (!remove && value === undefined) throw new Error('Give a value, or remove: true');
         const tokens = tokensOf(path);
         if (tokens[0] === 'questions')
@@ -314,7 +332,15 @@ export async function reviewSop(
         reservedPrefixes: [],
       });
       if (related?.invalid?.length) throw new Error(related.invalid.join('; '));
-      working = parsed.data;
+      if (stable(parsed.data.source) !== stable(a.source))
+        throw new Error('Preserve the saved source; adoption is a separate decision');
+      const canonical = await canonicalizeSopExactSource(deps, ctx, parsed.data);
+      if (
+        canonical.result.status !== 'checked' &&
+        stable(canonical.result.citations) !== stable(checkedSource.citations)
+      )
+        throw new Error('Edition not established; new source claims cannot be checked');
+      working = canonical.attributes;
     };
 
     let continuing = false;
@@ -377,10 +403,11 @@ export async function reviewSop(
 
     const fromVersion = record.version;
     if (findings.length > 0) {
-      record = await service.update(reviewerCtx, record.id, {
+      record = await updateSourceCheckedSop(deps, reviewerCtx, {
+        sop: record.id,
         expectedVersion: record.version,
         attributes: working,
-        evidence: evidenceOf(findings),
+        evidence: evidenceOf(findings, working),
         reason:
           input.reason ??
           `Review round ${earlier.length + n}: ${count(findings, 'fix')} fixes, ${count(findings, 'question')} questions`,
@@ -411,15 +438,30 @@ export async function reviewSop(
 const count = (findings: ReviewFinding[], type: ReviewFinding['type']) =>
   findings.filter((f) => f.type === type).length;
 
-/** Each changed field credited to the reviewer: stated when a fix cites the source, assumed otherwise. */
-function evidenceOf(findings: ReviewFinding[]): Record<string, EvidenceInput> {
+/** Only the changed stable item receives citation-backed attribution; other section values remain unchecked. */
+function evidenceOf(
+  findings: ReviewFinding[],
+  after: SopAttributes,
+): Record<string, EvidenceInput> {
   const out: Record<string, EvidenceInput> = {};
   for (const f of findings) {
-    const field = tokensOf(f.path)[0] as string;
+    const tokens = tokensOf(f.path);
+    const field = tokens[0] as string;
     if (field === 'questions') continue;
-    if (out[field]?.source === 'stated') continue;
-    out[field] = {
-      source: f.cite && f.type === 'fix' ? 'stated' : 'assumed',
+    const key = sopKind.items?.[field];
+    const list = (after as unknown as Record<string, unknown>)[field];
+    const index = tokens[1] === '-' && Array.isArray(list) ? list.length - 1 : Number(tokens[1]);
+    const item =
+      f.after === undefined && tokens.length === 2
+        ? undefined
+        : Array.isArray(list)
+          ? list[index]
+          : undefined;
+    const id = key && item && typeof item === 'object' ? item[key] : undefined;
+    const target = typeof id === 'string' ? `/${field}/${id}` : field;
+    if (out[target]?.source === 'stated') continue;
+    out[target] = {
+      source: f.cite && f.type === 'fix' && (!key || typeof id === 'string') ? 'stated' : 'assumed',
       note: `Reviewer: ${f.reason}`.slice(0, 500),
       ...(f.cite ? { reference: f.cite.document } : {}),
     };

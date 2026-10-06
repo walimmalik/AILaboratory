@@ -9,7 +9,7 @@ import type {
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Assistant } from '../assistant/assistant.ts';
-import type { ChatModel } from '../assistant/model.ts';
+import type { ChatModel, ModelRequest, ModelTurn } from '../assistant/model.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { activity, librarySnapshots, records, recordVersions } from '../db/schema.ts';
@@ -21,7 +21,6 @@ import { ActivityBus, createRegistry, type OperationRegistry } from '../operatio
 import { createProposal } from '../operations/proposal-store.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { checkCitations } from './citations.ts';
 import { exactSopSourceKey, readSopExactSource, SopExactSourceCache } from './exact-source.ts';
 import { createExactSopDraft, updateExactSopCitations } from './exact-source-write.ts';
 import { sopKinds } from './kinds.ts';
@@ -37,12 +36,14 @@ let files: MemoryFileStore;
 let conversion: Converted;
 let fileFailure: 'missing' | 'corrupt' | undefined;
 let modelCalls: number;
+let respond: ((request: ModelRequest) => ModelTurn | Promise<ModelTurn>) | undefined;
 
 const model: ChatModel = {
   provider: 'scripted',
   model: 'never-called',
-  complete: async () => {
+  complete: async (request) => {
     modelCalls++;
+    if (respond) return respond(request);
     throw new Error('Unsupported scope reached the model');
   },
 };
@@ -63,6 +64,7 @@ beforeEach(async () => {
   files = new MemoryFileStore();
   fileFailure = undefined;
   modelCalls = 0;
+  respond = undefined;
   conversion = {
     converter: 'fixture',
     warnings: ['Figure lettering was not converted'],
@@ -157,6 +159,26 @@ async function create(a: SopAttributes, ctx = agent) {
   return db.transaction((tx) =>
     createExactSopDraft({ registry, kinds, db: tx }, ctx, { label: 'Draft', attributes: a }),
   );
+}
+async function publicDraft(a: SopAttributes, ctx = agent) {
+  return run<RecordEnvelope>(ctx, 'sops.draft', {
+    label: 'Public draft',
+    ...a,
+    questions: a.questions?.map(({ responses: _r, disposition: _d, ...q }) => q),
+  });
+}
+// Explicit disposable pre-contract setup: never exposed as a public create path.
+async function oldRecord(a: SopAttributes, status: 'draft' | 'active' = 'draft') {
+  const record = await new RecordService(db, kinds).create(person, {
+    kind: 'sop',
+    label: 'Old draft',
+    attributes: attributes(),
+    status,
+  });
+  const snapshot = { ...record, attributes: a };
+  await db.update(records).set({ attributes: a }).where(eq(records.id, record.id));
+  await db.update(recordVersions).set({ snapshot }).where(eq(recordVersions.recordId, record.id));
+  return snapshot;
 }
 async function counts() {
   return {
@@ -396,11 +418,7 @@ describe('private exact SOP source producer', () => {
     const a = attributes();
     a.source = { document: f.document.id, revision: 'Old printed label' };
     required(a.steps[0]).cite = [{ document: f.document.id, quote: method }];
-    const record = await new RecordService(db, kinds).create(person, {
-      kind: 'sop',
-      label: 'Old draft',
-      attributes: a,
-    });
+    const record = await oldRecord(a);
     const historical = await new RecordService(db, kinds).getVersion(person, record.id, 1);
     expect(await readSopExactSource(deps(), person, a)).toMatchObject({
       status: 'unbound',
@@ -427,12 +445,7 @@ describe('private exact SOP source producer', () => {
         (c) => c.id === 'has_steps',
       )?.passed,
     ).toBe(true);
-    const confirmed = await new RecordService(db, kinds).create(person, {
-      kind: 'sop',
-      label: 'Historical confirmed unbound method',
-      attributes: a,
-      status: 'active',
-    });
+    const confirmed = await oldRecord(a, 'active');
     const confirmedVersion = await new RecordService(db, kinds).getVersion(person, confirmed.id, 1);
     expect(
       (
@@ -446,7 +459,7 @@ describe('private exact SOP source producer', () => {
     expect(confirmedVersion.snapshot.attributes).toEqual(a);
   });
 
-  it('refuses all public/direct/approved create and root/citation mutations while unrelated edits remain usable', async () => {
+  it('refuses generic creation and root/direct citation bypass while unrelated edits remain usable', async () => {
     const f = await fixture();
     const a = attributes(f.source, f.passages[0]?.id);
     for (const ctx of [person, agent, { ...agent, via: 'sops.draft', approvedBy: person.actor }])
@@ -456,7 +469,7 @@ describe('private exact SOP source producer', () => {
     await expect(
       run(person, 'records.create', { kind: 'sop', label: 'Forged', attributes: a }),
     ).rejects.toThrow('owning');
-    await expect(run(agent, 'sops.draft', { label: 'Forged', ...a })).rejects.toThrow('owning');
+    expect((await publicDraft(a)).attributes.source).toMatchObject({ exact: f.source });
     const record = (await create(a)).record;
     const saved = record.attributes as SopAttributes;
     const initialHistory = await new RecordService(db, kinds).getVersion(person, record.id, 1);
@@ -483,9 +496,10 @@ describe('private exact SOP source producer', () => {
           { expectedVersion: 1, attributes: altered },
         ),
       ).rejects.toThrow('owning');
-      await expect(
-        run(person, 'records.update', { id: record.id, expectedVersion: 1, attributes: altered }),
-      ).rejects.toThrow('owning');
+      if (altered.source && altered.steps[0]?.cite)
+        await expect(
+          run(person, 'records.update', { id: record.id, expectedVersion: 1, attributes: altered }),
+        ).rejects.toThrow();
     }
     // Preview-time validation already refuses this; a retained ordinary row cannot bypass Apply.
     await expect(
@@ -494,7 +508,7 @@ describe('private exact SOP source producer', () => {
         expectedVersion: 1,
         attributes: { ...saved, source: undefined },
       }),
-    ).rejects.toThrow('owning');
+    ).rejects.toThrow('Preserve');
     for (const [operationId, input] of [
       [
         'records.update',
@@ -506,11 +520,12 @@ describe('private exact SOP source producer', () => {
       const rejected = await run<Proposal>(person, 'proposals.approve', { id: proposed.id });
       expect(rejected).toMatchObject({
         status: 'failed',
-        error: { code: 'forbidden', message: expect.stringContaining('owning') },
+        error: { code: 'forbidden' },
       });
       expect(rejected.receipt).toBeUndefined();
       expect((await new RecordService(db, kinds).get(person, record.id)).version).toBe(1);
     }
+    fileFailure = 'missing'; // Unrelated editing is not evidence use and must remain usable.
     const updated = await run<RecordEnvelope>(person, 'records.update', {
       id: record.id,
       expectedVersion: 1,
@@ -527,6 +542,7 @@ describe('private exact SOP source producer', () => {
       version: 1,
     });
     expect(restored.attributes).toEqual(saved);
+    fileFailure = undefined;
   });
 
   it('owns validated citation changes, refuses root adoption/scientific changes and blocks restoring old citation claims', async () => {
@@ -612,27 +628,500 @@ describe('private exact SOP source producer', () => {
     ).rejects.toThrow('owning');
   });
 
-  it('does not expose private exact records to current check/review/suggest consumers or working-source substitution', async () => {
+  it('saves edited exact citations through records.update with ordinary attribution and guards', async () => {
     const f = await fixture();
-    const saved = (await create(attributes(f.source, f.passages[0]?.id))).record;
-    await expect(checkCitations(deps(), person, saved.attributes as SopAttributes)).rejects.toThrow(
-      'not yet',
-    );
-    for (const [id, input] of [
-      ['sops.check_citations', { sop: saved.id }],
-      ['sops.review', { sop: saved.id, expectedVersion: 1 }],
-      ['sops.suggest', { sop: saved.id, steps: true }],
-      ['sops.suggest', { sop: saved.id, attributes: attributes(), steps: true }],
-    ] as const)
-      await expect(run(person, id, input)).rejects.toThrow('not yet');
-    const free = await new RecordService(db, kinds).create(person, {
-      kind: 'sop',
-      label: 'Free',
-      attributes: attributes(),
+    for (const mode of ['person', 'agent', 'approved'] as const) {
+      const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+      const before = saved.attributes as SopAttributes;
+      const next = structuredClone(before);
+      required(next.steps[0]).text = 'Use wash from the selected source.';
+      required(next.steps[0]).cite = [
+        {
+          document: f.document.id,
+          passage: required(f.passages[1]).id,
+          quote: 'Use 200 \u00b5L wash.',
+        },
+      ];
+      const input = {
+        id: saved.id,
+        expectedVersion: 1,
+        label: 'Edited draft',
+        attributes: next,
+        evidence: {
+          '/steps/add': { source: 'assumed', note: 'Person still must assess the science' },
+        },
+        reason: 'Saved edited instructions',
+      };
+      const previewed = await registry.execute(agent, 'records.update', input, { preview: true });
+      if (previewed.status !== 'preview') throw new Error('Expected preview');
+      const preview = previewed.output;
+      expect((preview as RecordEnvelope).attributes.steps).toMatchObject([{ cite: [{ page: 3 }] }]);
+      let result: RecordEnvelope;
+      if (mode === 'approved') {
+        const proposal = await createProposal(db, agent, {
+          operationId: 'records.update',
+          input,
+          preview,
+        });
+        const applied = await run<Proposal>(person, 'proposals.approve', { id: proposal.id });
+        expect(applied.status).toBe('approved');
+        result = required(applied.receipt).output as RecordEnvelope;
+      } else result = await run(mode === 'person' ? person : agent, 'records.update', input);
+      expect(result).toMatchObject({
+        version: 2,
+        status: 'draft',
+        label: 'Edited draft',
+        updatedBy: mode === 'person' ? person.actor : agent.actor,
+      });
+      expect((result.attributes as SopAttributes).steps[0]?.cite?.[0]).toMatchObject({
+        page: 3,
+        quote: 'Use 200 \u00b5L wash.',
+      });
+      expect(result.attributes.source).toEqual(before.source);
+      expect(result.evidence['/steps/add']).toMatchObject({
+        source: 'assumed',
+        note: 'Person still must assess the science',
+      });
+      const history = await new RecordService(db, kinds).getVersion(person, saved.id, 1);
+      expect(history.snapshot.attributes).toEqual(before);
+      const now = await counts();
+      const invalid = structuredClone(next);
+      firstCitation(invalid).quote = 'Not in this passage';
+      await expect(
+        run(person, 'records.update', { ...input, expectedVersion: 2, attributes: invalid }),
+      ).rejects.toThrow('quotation');
+      await expect(
+        run(person, 'records.update', { ...input, expectedVersion: 1 }),
+      ).rejects.toMatchObject({ code: 'version_conflict' });
+      await expect(
+        run(person, 'records.update', {
+          ...input,
+          expectedVersion: 2,
+          attributes: {
+            ...result.attributes,
+            questions: [
+              {
+                id: 'forged',
+                question: 'Closed?',
+                stage: { stage: 'method', reason: 'No' },
+                responses: [],
+                disposition: { status: 'open' },
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow();
+      expect(await counts()).toMatchObject({ records: now.records, versions: now.versions });
+      await expect(
+        new RecordService(db, kinds).update(
+          { ...agent, via: 'records.update', approvedBy: person.actor },
+          saved.id,
+          { expectedVersion: 2, attributes: before },
+        ),
+      ).rejects.toThrow('owning');
+    }
+  });
+
+  it('drafts/checks/reviews/suggests from A after B and a reparse of original file A', async () => {
+    const f = await fixture();
+    const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    const { file: newFile } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'b.txt',
+      mediaType: 'text/plain',
+      text: 'New B bytes',
     });
+    const b = await run<RecordEnvelope>(person, 'library.add_revision', {
+      document: f.document.id,
+      expectedVersion: 1,
+      version: 'Edition B',
+      file: newFile.id,
+    });
+    conversion = {
+      converter: 'different',
+      warnings: ['B warning'],
+      sections: [{ heading: ['Changed'], passages: [{ text: 'Add 80 µL buffer.', page: 7 }] }],
+    };
+    await run(person, 'library.parse', { document: b.id });
+    await run(person, 'library.parse', { document: b.id, file: f.file.id });
+    const laterDraft = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    expect(laterDraft.attributes.source).toEqual(saved.attributes.source);
+    expect(await run(person, 'sops.check_citations', { sop: saved.id })).toMatchObject({
+      sourceStatus: 'checked',
+      matches: 1,
+      problems: 0,
+      citations: [{ exact: { source: f.source, page: 2 }, quote: 'Add 100 µL buffer.' }],
+    });
+    respond = (request) => {
+      const prompt = request.messages.map((m) => ('text' in m ? m.text : '')).join('\n');
+      expect(prompt).toContain(method);
+      expect(prompt).not.toContain('Add 80 µL buffer.');
+      expect(prompt).toContain('Figure lettering was not converted');
+      return {
+        text: 'Checked selected instructions',
+        stop: 'tool_use',
+        toolCalls: [
+          { id: 'finish', name: 'sop_finish', input: { summary: 'Selected A text read' } },
+        ],
+      };
+    };
+    const reviewed = await run<{ sop: RecordEnvelope; stopped: string }>(person, 'sops.review', {
+      sop: saved.id,
+      expectedVersion: 1,
+    });
+    expect(reviewed).toMatchObject({ stopped: 'clean', sop: { version: 1, status: 'draft' } });
+    respond = (request) => {
+      const prompt = request.messages.map((m) => ('text' in m ? m.text : '')).join('\n');
+      expect(prompt).toContain(method);
+      expect(prompt).not.toContain('Add 80 µL buffer.');
+      return {
+        text: 'Use selected instructions',
+        stop: 'tool_use',
+        toolCalls: [
+          {
+            id: 'steps',
+            name: 'sop_steps',
+            input: {
+              steps: [
+                {
+                  id: 'add',
+                  action: 'manual',
+                  text: method,
+                  cite: [firstCitation(saved.attributes as SopAttributes)],
+                },
+              ],
+              reason: 'Selected A',
+            },
+          },
+        ],
+      };
+    };
+    const suggestion = await run<{ steps: SopAttributes['steps'] }>(person, 'sops.suggest', {
+      sop: saved.id,
+      steps: true,
+    });
+    expect(suggestion.steps[0]?.cite?.[0]).toEqual(
+      firstCitation(saved.attributes as SopAttributes),
+    );
+    expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(1);
+    const after = await counts();
+    for (const ctx of [foreign])
+      for (const operation of ['sops.check_citations', 'sops.review', 'sops.suggest'])
+        await expect(
+          run(ctx, operation, {
+            sop: saved.id,
+            ...(operation === 'sops.review'
+              ? { expectedVersion: 1 }
+              : operation === 'sops.suggest'
+                ? { steps: true }
+                : {}),
+          }),
+        ).rejects.toThrow();
+    expect(await counts()).toMatchObject({ records: after.records, versions: after.versions });
+  });
+
+  it('validates every model citation, preserves source/question ownership and never confirms a section', async () => {
+    const f = await fixture();
+    const a = attributes(f.source, f.passages[0]?.id);
+    a.steps.push({ id: 'wash', action: 'manual', text: 'An unrelated uncertain wash' });
+    a.questions = [
+      {
+        id: 'open',
+        question: 'Which buffer?',
+        stage: { stage: 'method', reason: 'Unclear' },
+        responses: [],
+        disposition: { status: 'open' },
+      },
+    ];
+    const saved = await publicDraft(a);
+    const originalQuestion = (saved.attributes as SopAttributes).questions?.[0];
+    let n = 0;
+    respond = () => ({
+      text: 'Review',
+      stop: 'tool_use',
+      toolCalls:
+        n++ === 0
+          ? [
+              {
+                id: 'badquote',
+                name: 'sop_fix',
+                input: {
+                  path: '/steps/0/text',
+                  value: 'Forged',
+                  reason: 'Claim',
+                  cite: {
+                    document: f.document.id,
+                    passage: f.passages[0]?.id,
+                    quote: 'add 100 µL buffer.',
+                  },
+                },
+              },
+              {
+                id: 'badroot',
+                name: 'sop_fix',
+                input: { path: '/source/revision', value: 'B', reason: 'Adopt' },
+              },
+              {
+                id: 'badquestion',
+                name: 'sop_fix',
+                input: {
+                  path: '/questions/0/disposition',
+                  value: { status: 'deferred' },
+                  reason: 'Resolve',
+                },
+              },
+              {
+                id: 'good',
+                name: 'sop_fix',
+                input: {
+                  path: '/steps/0/text',
+                  value: 'Add the stated buffer.',
+                  reason: 'A states buffer addition',
+                  cite: firstCitation(saved.attributes as SopAttributes),
+                },
+              },
+              {
+                id: 'ask',
+                name: 'sop_ask',
+                input: {
+                  question: 'How to mix?',
+                  passages: [firstCitation(saved.attributes as SopAttributes)],
+                },
+              },
+            ]
+          : [
+              {
+                id: 'finish',
+                name: 'sop_finish',
+                input: { summary: 'One fix and an open question' },
+              },
+            ],
+    });
+    const result = await run<{
+      sop: RecordEnvelope;
+      rounds: { refused: unknown[]; findings: { cite?: unknown }[] }[];
+    }>(person, 'sops.review', { sop: saved.id, expectedVersion: 1, rounds: 1 });
+    expect(result.rounds[0]?.refused).toHaveLength(3);
+    expect(result.sop).toMatchObject({ version: 2, status: 'draft' });
+    const now = result.sop.attributes as SopAttributes;
+    expect(now.source).toEqual(saved.attributes.source);
+    expect(now.questions?.[0]).toEqual(originalQuestion);
+    expect(now.questions?.[1]).toMatchObject({
+      disposition: { status: 'open' },
+      responses: [],
+      passages: [{ page: 2 }],
+    });
+    expect(result.rounds[0]?.findings[1]?.cite).toMatchObject({ page: 2 });
+    expect(result.sop.evidence['/steps/add']).toMatchObject({ source: 'stated' });
+    expect(result.sop.evidence.steps?.source).toBe('assumed');
+    expect(result.sop.evidence['/steps/wash']).toEqual(saved.evidence['/steps/wash']);
+    expect(result.sop.reviews).toEqual(saved.reviews);
+    const bad = { ...firstCitation(now), quote: 'Use 200 µL wash.' };
     await expect(
-      run(person, 'sops.suggest', { sop: free.id, attributes: attributes(f.source), steps: true }),
+      run(person, 'sops.ask_question', {
+        sop: saved.id,
+        expectedVersion: 2,
+        question: {
+          id: 'bad',
+          question: 'Which?',
+          stage: { stage: 'method', reason: 'Unclear' },
+          passages: [bad],
+        },
+      }),
+    ).rejects.toThrow();
+    expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(2);
+    await run(person, 'sops.ask_question', {
+      sop: saved.id,
+      expectedVersion: 2,
+      question: {
+        id: 'valid',
+        question: 'Which?',
+        stage: { stage: 'method', reason: 'Unclear' },
+        passages: [firstCitation(now)],
+      },
+    });
+  });
+
+  it('refuses unsaved source substitution and invalid model suggestions with no scientific writes', async () => {
+    const f = await fixture();
+    const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    await expect(
+      run(person, 'sops.suggest', { sop: saved.id, attributes: attributes(), steps: true }),
     ).rejects.toThrow('substitution');
     expect(modelCalls).toBe(0);
+    respond = () => ({
+      text: 'Forged',
+      stop: 'tool_use',
+      toolCalls: [
+        {
+          id: 'bad',
+          name: 'sop_steps',
+          input: {
+            steps: [
+              {
+                id: 'add',
+                action: 'manual',
+                text: method,
+                cite: [
+                  {
+                    document: f.document.id,
+                    passage: f.passages[1]?.id,
+                    quote: 'Add 100 µL buffer.',
+                  },
+                ],
+              },
+            ],
+            reason: 'Elsewhere',
+          },
+        },
+      ],
+    });
+    await expect(run(person, 'sops.suggest', { sop: saved.id, steps: true })).rejects.toThrow(
+      'No usable suggestion',
+    );
+    expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(1);
+    let turn = 0;
+    respond = () => {
+      if (turn++ > 0) fileFailure = 'missing';
+      return {
+        text: 'Fix',
+        stop: 'tool_use',
+        toolCalls:
+          turn === 1
+            ? [
+                {
+                  id: 'fix',
+                  name: 'sop_fix',
+                  input: { path: '/notes', value: 'should not save', reason: 'Test' },
+                },
+              ]
+            : [{ id: 'end', name: 'sop_finish', input: { summary: 'Done' } }],
+      };
+    };
+    await expect(
+      run(person, 'sops.review', { sop: saved.id, expectedVersion: 1, rounds: 1 }),
+    ).rejects.toThrow();
+    expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(1);
+  });
+
+  it('keeps old unbound checks honest and unrelated review usable without consulting current text', async () => {
+    const f = await fixture();
+    const a = attributes();
+    a.source = { document: f.document.id, revision: 'Old label' };
+    required(a.steps[0]).cite = [{ document: f.document.id, quote: method }];
+    const saved = await oldRecord(a);
+    fileFailure = 'missing';
+    expect(await run(person, 'sops.check_citations', { sop: saved.id })).toMatchObject({
+      sourceStatus: 'unbound',
+      matches: 0,
+      problems: 1,
+      citations: [{ result: 'unchecked', uncheckedReason: 'edition_not_established' }],
+    });
+    let n = 0;
+    respond = (request) => {
+      expect(
+        request.messages[0] && 'text' in request.messages[0] ? request.messages[0].text : '',
+      ).toContain('Edition not established');
+      return {
+        text: 'Review',
+        stop: 'tool_use',
+        toolCalls:
+          n++ === 0
+            ? [
+                {
+                  id: 'fix',
+                  name: 'sop_fix',
+                  input: { path: '/notes', value: 'Unrelated note', reason: 'Organize draft' },
+                },
+              ]
+            : [
+                {
+                  id: 'end',
+                  name: 'sop_finish',
+                  input: { summary: 'No historical proof claimed' },
+                },
+              ],
+      };
+    };
+    const result = await run<{ sop: RecordEnvelope }>(person, 'sops.review', {
+      sop: saved.id,
+      expectedVersion: 1,
+      rounds: 1,
+    });
+    expect(result.sop.attributes.source).toEqual(a.source);
+    expect(result.sop.attributes.steps).toEqual(a.steps);
+    expect(result.sop.attributes.notes).toBe('Unrelated note');
+    await expect(run(person, 'sops.suggest', { sop: saved.id, steps: true })).rejects.toThrow();
+    expect(
+      (await new RecordService(db, kinds).getVersion(person, saved.id, 1)).snapshot.attributes,
+    ).toEqual(a);
+  });
+
+  it('returns canonical variable citations from edited working values without writing', async () => {
+    const f = await fixture();
+    const a = attributes(f.source, f.passages[0]?.id);
+    a.variables = [
+      {
+        name: 'well_volume',
+        label: 'Well volume',
+        kind: 'default',
+        value: { value: '100', unit: 'uL' },
+        cite: [firstCitation(a)],
+      },
+    ];
+    const saved = await publicDraft(a);
+    const working = structuredClone(saved.attributes) as SopAttributes;
+    const cite = required(required(working.variables[0]).cite?.[0]);
+    delete cite.page;
+    cite.quote = 'Add 100 \u00b5L\n buffer.';
+    respond = () => ({
+      text: 'Selected instructions',
+      stop: 'tool_use',
+      toolCalls: [
+        {
+          id: 'value',
+          name: 'sop_value',
+          input: {
+            kind: 'default',
+            value: { value: '100', unit: 'uL' },
+            reason: 'Exact selected text',
+          },
+        },
+      ],
+    });
+    const result = await run<{ variable: SopAttributes['variables'][number] }>(
+      person,
+      'sops.suggest',
+      { sop: saved.id, attributes: working, value: 'well_volume' },
+    );
+    expect(result.variable.cite).toEqual((saved.attributes as SopAttributes).variables[0]?.cite);
+    expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(1);
+  });
+
+  it('publicly refuses new unbound roots/citations and keeps selected unavailable files unchecked after conversion', async () => {
+    const f = await fixture(false);
+    const unbound = attributes();
+    unbound.source = { document: f.document.id };
+    for (const ctx of [person, agent]) {
+      await expect(publicDraft(unbound, ctx)).rejects.toMatchObject({ code: 'invalid_input' });
+      await expect(
+        run(ctx, 'records.create', { kind: 'sop', label: 'Bypass', attributes: unbound }),
+      ).rejects.toThrow('explicitly selected exact');
+    }
+    const proposal = await createProposal(db, agent, {
+      operationId: 'records.create',
+      preview: undefined,
+      input: { kind: 'sop', label: 'Retained bypass', attributes: unbound },
+    });
+    const applied = await run<Proposal>(person, 'proposals.approve', { id: proposal.id });
+    expect(applied.status).toBe('failed');
+    const unavailable = await publicDraft(attributes(f.source));
+    await run(person, 'library.parse', { document: f.document.id });
+    expect(await run(person, 'sops.check_citations', { sop: unavailable.id })).toEqual({
+      sourceStatus: 'unavailable',
+      citations: [],
+      matches: 0,
+      problems: 0,
+    });
+    await expect(publicDraft(attributes(f.source, 'claimed'))).rejects.toThrow('Unchecked');
   });
 });

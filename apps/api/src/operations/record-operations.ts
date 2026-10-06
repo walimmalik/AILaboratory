@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { markSeen, seenVersion } from '../records/seen.ts';
 import type { RecordContext } from '../records/service.ts';
 import { RecordService } from '../records/service.ts';
+import { updateExactSopRecord } from '../sops/exact-source-write.ts';
 import { OperationError } from './errors.ts';
 import { type AgentPolicy, implement, type OperationDeps } from './registry.ts';
 
@@ -123,14 +124,24 @@ export const recordOperations = [
   }),
   implement(recordsUpdate, {
     agentPolicy: proposeIfActive,
-    run: (ctx, { id, ...input }, deps) =>
-      service(deps).update(ctx, id, {
+    run: async (ctx, { id, ...input }, deps) => {
+      const update = {
         expectedVersion: input.expectedVersion,
         ...(input.label === undefined ? {} : { label: input.label }),
         ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
         ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
-      }),
+      };
+      if (input.attributes !== undefined) {
+        const current = await service(deps).get(ctx, id);
+        if (
+          current.kind === 'sop' &&
+          (current.attributes.source as { exact?: unknown } | undefined)?.exact
+        )
+          return updateExactSopRecord(deps, ctx, current, update);
+      }
+      return service(deps).update(ctx, id, update);
+    },
   }),
   implement(recordsActivate, {
     // An agent may ask for the final confirm, but only once a person has confirmed every section.

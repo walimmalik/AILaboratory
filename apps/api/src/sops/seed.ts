@@ -1,6 +1,7 @@
 import { isUnit, sameValue } from '@ailab/domain';
 import {
   type EvidenceInput,
+  type ExactSourceReference,
   type Quantity,
   type RecordEnvelope,
   type RecordVersion,
@@ -328,11 +329,16 @@ export async function loadSeedSops(
     }
     for (const m of materials) if (!m.default) report.unbound.push(`${s.key}: ${m.label}`);
     const document = await find('document', s.label);
+    const selected = document
+      ? await run<{ source: ExactSourceReference }>('library.read', { document: document.id })
+      : undefined;
     const created = await run<RecordEnvelope>('sops.draft', {
       label: s.label,
       ...s.attributes,
       materials,
-      ...(document ? { source: { document: document.id } } : {}),
+      ...(selected
+        ? { source: { document: selected.source.document, exact: selected.source } }
+        : {}),
       evidence: s.evidence,
       reason,
     });

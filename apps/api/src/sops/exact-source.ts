@@ -59,8 +59,9 @@ export async function readSopExactSource(
   ctx: RecordContext,
   attributes: SopAttributes,
   cache: SopExactSourceCache = new SopExactSourceCache(),
+  additional: { where: string; cite: Citation }[] = [],
 ): Promise<SopExactSourceRead> {
-  const citations = citationsOf(attributes);
+  const citations = [...citationsOf(attributes), ...additional];
   const unchecked = citations.map(({ where, cite }) => ({
     where,
     cite,
