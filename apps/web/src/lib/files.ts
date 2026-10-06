@@ -38,20 +38,16 @@ export function filesOf(operationId: string, output: unknown): (OutputFile | Sto
   if (operationId !== transfersExport.id) return [];
   const parsed = transfersExport.output.safeParse(output);
   if (!parsed.success) return [];
-  return parsed.data.files.flatMap(({ file, filename, group }) => {
+  return parsed.data.files.flatMap(({ file, group }) => {
     const attributes = FileAttributes.safeParse(file.attributes);
     if (
       file.kind !== 'file' ||
       file.status !== 'active' ||
       !FileId.safeParse(file.id).success ||
-      !attributes.success ||
-      attributes.data.originalName !== filename ||
-      attributes.data.source.from !== 'export' ||
-      attributes.data.source.record !== parsed.data.plan.id ||
-      attributes.data.source.version !== parsed.data.plan.version
+      !attributes.success
     )
       return [];
-    return [{ id: file.id, name: filename, size: attributes.data.size, group }];
+    return [{ id: file.id, name: attributes.data.originalName, size: attributes.data.size, group }];
   });
 }
 

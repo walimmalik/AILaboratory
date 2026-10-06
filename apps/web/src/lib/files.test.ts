@@ -82,20 +82,52 @@ describe('filesOf', () => {
     expect(first && fileSize(first)).toBe('2 KB');
   });
 
-  it('rejects malformed or mismatched stored output and retains inline exports', () => {
+  it('keeps deduplicated files from an earlier version or upload, using the stored download name', () => {
+    const priorExport = {
+      ...exported.files[0],
+      filename: 'TFP-0001 v3 dose.csv',
+      file: {
+        ...exported.files[0]?.file,
+        attributes: {
+          ...exported.files[0]?.file.attributes,
+          originalName: 'TFP-0001 v2 dose.csv',
+          source: { from: 'export', record: plan.id, version: 2 },
+        },
+      },
+    };
+    const prior = filesOf('transfers.export', { ...exported, files: [priorExport] });
+    expect(prior).toEqual([
+      { id: exported.files[0]?.file.id, name: 'TFP-0001 v2 dose.csv', size: 2450, group: 'dose' },
+    ]);
+    const uploaded = filesOf('transfers.export', {
+      ...exported,
+      files: [
+        {
+          ...priorExport,
+          file: {
+            ...priorExport.file,
+            attributes: { ...priorExport.file.attributes, source: { from: 'upload' } },
+          },
+        },
+      ],
+    });
+    expect(uploaded).toEqual(prior);
+  });
+
+  it('rejects malformed stored output and retains inline exports', () => {
     expect(filesOf('transfers.export', { ...exported, plan: { ...plan, version: 'bad' } })).toEqual(
       [],
     );
     expect(
       filesOf('transfers.export', {
         ...exported,
-        files: [{ ...exported.files[0], filename: 'wrong.csv' }],
+        files: [{ ...exported.files[0], file: { ...exported.files[0]?.file, kind: 'sop' } }],
       }),
     ).toEqual([]);
     expect(
       filesOf('transfers.export', {
         ...exported,
-        files: [{ ...exported.files[0], file: { ...exported.files[0]?.file, kind: 'sop' } }],
+        files: [{ ...exported.files[0], file: { ...exported.files[0]?.file, id: 'tfp_wrong' } }],
       }),
     ).toEqual([]);
     expect(

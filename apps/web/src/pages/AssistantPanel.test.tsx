@@ -160,6 +160,35 @@ describe('assistant transcript presentation', () => {
     expect(markup).not.toContain('>Copy</');
   });
 
+  it('shows the stored name for a reused export file so the card matches its download', () => {
+    const output = storedExport();
+    const first = output.files[0];
+    if (!first) throw new Error('Missing export fixture');
+    const reused = {
+      ...output,
+      files: [
+        {
+          ...first,
+          filename: 'TFP-0001 v3 dose.csv',
+          file: {
+            ...first.file,
+            attributes: {
+              ...first.file.attributes,
+              originalName: 'previously uploaded.csv',
+              source: { from: 'upload' },
+            },
+          },
+        },
+      ],
+    };
+    const markup = visible(
+      html([user('ask', 'Export it again'), ...action('reused', 'transfers.export', reused)]),
+    );
+    expect(markup).toContain('previously uploaded.csv');
+    expect(markup).not.toContain('TFP-0001 v3 dose.csv</span>');
+    expect(markup).toContain(`href="/api/v1/files/${first.file.id}?download=1"`);
+  });
+
   it('uses turn grouping to compact older saved responses while keeping the latest unsaved response actionable', () => {
     const client = new QueryClient();
     const record = {
