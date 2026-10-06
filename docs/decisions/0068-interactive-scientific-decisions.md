@@ -35,6 +35,10 @@ This refines the presentation of "one intent, one confirm" in plan 004e: a broad
 
 ## Consequences
 
+### Presentation clarification, Wali 2026-10-06
+
+The scientist uses a tool to plan lab work, not a governance workflow. Present the scientific question, evidence, uncertainty and meaningful proposed change; handle versions, provenance bookkeeping and workflow mechanics internally or in optional details. Ask about methodological differences and missing evidence rather than a "governing source". The SOP's unresolved-question entry point leads with an actual saved question and its reason, and keeps routine partial-review controls subordinate. This clarifies presentation while preserving explicit application of consequential decisions and separate final confirmation.
+
 - The person can resolve issues in context without manually reconstructing the agent's chain of records.
 - Review and the assistant need a common decision presentation and result rather than separate approval behavior.
 - Response capture, application and final confirmation must remain distinguishable in the contract and history.

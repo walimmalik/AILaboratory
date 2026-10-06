@@ -21,7 +21,7 @@ AILaboratory is an AI-driven lab management system for wet and dry labs: registr
 6. **Mark what is assumed.** Agent-filled values, estimates and unknowns are labeled as such in data and in the UI.
 7. **Constraints come from the science.** Handling rules (time out of incubator, temperature, light, stability) live on entity kinds and products, flow into containers through inventory, and bind the scheduler. Every constraint shows its source.
 8. **Lab memory is reviewed.** Agents may propose lab memories (conventions, quirks, lessons); a person confirms them. Derived memories link to their evidence.
-9. **Plain lab language in the UI.** IDs, schema names and internals go in expandable technical details.
+9. **Plain lab language in the UI.** Lead with the scientist's task, scientific questions, evidence and meaningful changes. Governance, version tracking, provenance bookkeeping and workflow mechanics stay behind the scenes or in optional details; never turn them into an administrative task for the scientist. Keep consequential uncertainty, assumptions and scientific constraints visible. IDs, schema names and internals go in expandable technical details.
 10. **Simulation and hardware share one interface.** Digital twins and the device gateway implement the same capability contracts. Never claim physical accuracy or hardware behavior that hasn't been validated.
 
 ## Engineering rules

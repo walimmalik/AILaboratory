@@ -2,6 +2,8 @@
 
 The assistant panel in the web app talks to a model of your choice, which works through the lab's operations. Plan 004b; decision in ADR 0020.
 
+Scientific intake leads with the scientist's task, actual methodological differences, evidence and consequential questions. Version tracking, source references and provenance bookkeeping are handled behind the scenes, not presented as a governance task. Assumptions and uncertainty stay visible. This guidance does not change the operations or who may adopt sources, apply decisions or confirm methods (Wali's presentation clarification, 2026-10-06; ADR 0068).
+
 ## How it works
 
 1. A person sends a message with `assistant.ask` (people only). It saves the message, marks the conversation `running`, and starts the loop in the background once the write is committed.

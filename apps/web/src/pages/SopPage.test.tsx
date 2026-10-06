@@ -73,15 +73,26 @@ function html(sop = record(), ready = readiness()) {
   );
 }
 
-describe('concise SOP readiness', () => {
-  it('counts four method decisions from stable IDs rather than one aggregate checker', () => {
+describe('scientist-first SOP readiness', () => {
+  it('opens with the saved scientific question and consequence ahead of estimates', () => {
     const review = sopReadiness(record(), readiness());
     expect(review.methodQuestions?.map((q) => q.id)).toEqual(questions.map((q) => q.id));
     expect(review.failing).toHaveLength(1);
     expect(review.visibleChecks).toEqual([]);
     const markup = html();
-    expect(markup).toContain('4 method decisions remain');
-    expect(markup).toContain('Choose a method decision (4)');
+    expect(markup).toContain('4 questions to clarify');
+    expect(markup).toContain('Other questions (3)');
+    expect(markup).toContain('Help answer this');
+    expect(markup.indexOf(question('wash_volume').question)).toBeLessThan(
+      markup.indexOf('Why this matters: The source needs checking.'),
+    );
+    expect(markup.indexOf('Why this matters: The source needs checking.')).toBeLessThan(
+      markup.indexOf('<summary>Other questions (3)</summary>'),
+    );
+    const withEstimate = html(record(), { ...readiness(), assumed: ['purpose'] });
+    expect(withEstimate.indexOf('Why this matters: The source needs checking.')).toBeLessThan(
+      withEstimate.indexOf('One value remains unverified'),
+    );
     expect(markup).not.toContain('1 to fix');
     const compact = markup.slice(0, markup.indexOf('sop-readiness-checks'));
     expect(compact).not.toContain('Full checker question bundle');
@@ -89,22 +100,42 @@ describe('concise SOP readiness', () => {
     expect(markup).toContain('Full checker question bundle');
   });
 
-  it('keeps every decision selectable with exact current discussion context', () => {
+  it('keeps every saved question selectable with exact current discussion context', () => {
     const markup = html();
     for (const q of questions) {
       expect(markup).toContain(`href="#sop-question-${q.id}"`);
-      expect(markup).toContain(`aria-label="Discuss with assistant: ${q.question}"`);
+      expect(markup).toContain(q.question);
+      if (q.id !== questions[0]?.id)
+        expect(markup).toContain(`aria-label="Discuss with assistant: ${q.question}"`);
       expect(questionDiscussion(record(), q.id)?.context).toEqual({
         record: { id: record().id, name: 'SOP-0001', version: 7 },
         activeQuestion: { id: q.id, stage: 'method' },
       });
     }
-    expect(markup).toContain('Resolve with assistant');
-    expect(markup).toContain('class="btn primary">Resolve with assistant</button>');
+    expect(markup).toContain('class="btn primary">Help answer this</button>');
+    expect(markup).toMatch(
+      /<details class="sop-readiness-decisions"><summary>Other questions \(3\)<\/summary>.*wash_count.*temperature.*duration.*<\/details>/,
+    );
+    expect(questionDiscussion(record(), 'wash_volume')?.message).toBe(
+      `Help me clarify this question in Plate assay: ${question('wash_volume').question}`,
+    );
+    expect(markup).toContain('<summary>Review details</summary>');
     expect(markup).toContain('class="btn">Review ready sections</button>');
     expect(
       questionDiscussion({ ...record(), version: 8 }, 'wash_count')?.context.record.version,
     ).toBe(8);
+  });
+
+  it('renders saved question text and reason as text', () => {
+    const unsafe = {
+      ...question('html'),
+      question: 'Does <sample> need 4 °C?',
+      stage: { stage: 'method' as const, reason: 'Check source A & source B.' },
+    };
+    const markup = html(record([unsafe]));
+    expect(markup).toContain('Does &lt;sample&gt; need 4 °C?');
+    expect(markup).toContain('Why this matters: Check source A &amp; source B.');
+    expect(markup).not.toContain('<sample>');
   });
 
   it('retains unrelated, unbound and unsupported blockers in the visible checks', () => {
@@ -121,10 +152,13 @@ describe('concise SOP readiness', () => {
       'unsupported_requirement',
     ]);
     expect(review.confirmable.map((s) => s.id)).toEqual(['overview']);
-    const compact = html(record(), readiness(checks)).split('sop-readiness-checks')[0];
-    expect(compact).toContain('4 method decisions remain · 3 other blockers');
+    const compact = html(record(), readiness(checks)).split('sop-readiness-checks')[0] ?? '';
+    expect(compact).toContain('4 questions to clarify · 3 other blockers');
     expect(compact?.match(/Unknown critical setting/g)).toHaveLength(3);
     expect(compact).toContain('Still blocked: steps.');
+    expect(compact.indexOf('Unknown critical setting')).toBeLessThan(
+      compact.indexOf('<summary>Review details</summary>'),
+    );
   });
 
   it('does not summarize historical unsupported question data or unmatched versions', () => {
@@ -136,11 +170,15 @@ describe('concise SOP readiness', () => {
     expect(sopReadiness(old, ready).visibleChecks).toEqual(ready.checks);
     const compact = html(old, ready).split('sop-readiness-checks')[0];
     expect(compact).toContain('History needs reconciliation');
-    expect(compact).not.toContain('Resolve with assistant');
-    expect(compact).not.toContain('method decisions remain');
+    expect(compact).not.toContain('Help answer this');
+    expect(compact).not.toContain('questions to clarify');
     const stale = sopReadiness(record(), { ...readiness(), version: 6 });
     expect(stale.summarized).toBe(false);
     expect(stale.visibleChecks).toEqual(readiness().checks);
+    const staleMarkup = html(record(), { ...readiness(), version: 6 });
+    expect(staleMarkup).toContain('Full checker question bundle');
+    expect(staleMarkup).not.toContain('Help answer this');
+    expect(staleMarkup).not.toContain('Other questions (');
   });
 
   it('keeps unknown responses open and excludes later-stage questions from the method count', () => {
@@ -159,7 +197,8 @@ describe('concise SOP readiness', () => {
     expect(
       sopReadiness(record([replied, later]), readiness()).methodQuestions?.map((q) => q.id),
     ).toEqual(['wash_volume']);
-    expect(html(record([replied, later]))).toContain('1 method decision remains');
+    expect(html(record([replied, later]))).toContain('1 question to clarify');
+    expect(html(record([replied, later]))).not.toContain('Other questions (');
     expect(
       sopReadiness(record([question('wash_volume'), question('wash_volume')]), readiness())
         .methodQuestions,
@@ -172,6 +211,9 @@ describe('concise SOP readiness', () => {
     expect(review.before).toContain('Reviews overview, steps as saved.');
     expect(review.before).toContain('The SOP remains a draft');
     expect(html()).not.toContain('>Confirm SOP</button>');
+    expect(html()).toMatch(
+      /<details><summary>Review details<\/summary>.*Review ready sections<\/button><\/details>/,
+    );
     const saved = {
       ...record(),
       version: 8,
