@@ -1027,7 +1027,7 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   await expect(questions).toContainText(response);
   await expect(questions).toContainText('Response received; the scientific issue remains open.');
   await expect(questions).toContainText('1 open');
-  await expect(readiness).toContainText('1 method decision remains');
+  await expect(readiness).toContainText('1 question to clarify');
   await expect(readiness.getByRole('button', { name: 'Confirm SOP', exact: true })).toHaveCount(0);
   await readiness.getByText('All readiness checks', { exact: true }).click();
   const methodBlocker = readiness.getByRole('row').filter({
@@ -1035,7 +1035,7 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   });
   await expect(methodBlocker.getByRole('cell', { name: 'blocks', exact: true })).toHaveCount(1);
   await expect(methodBlocker).toContainText('a response alone does not resolve it');
-  await expect(readiness).toContainText('1 method decision remains');
+  await expect(readiness).toContainText('1 question to clarify');
 
   // The person's saved step edit already reviewed Steps. Partial review must take only the
   // remaining sections and preserve that earlier review, without resolving the method issue.
@@ -1052,6 +1052,7 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   const scope = 'overview, materials, values, plate layout, analysis, timing';
   await expect(readiness).toContainText(`Reviews ${scope} as saved.`);
   await expect(readiness).toContainText('The SOP remains a draft');
+  await readiness.getByText('Review details', { exact: true }).click();
   const reviewedResponse = page.waitForResponse('**/api/v1/ops/records.confirm');
   await readiness.getByRole('button', { name: 'Review ready sections', exact: true }).click();
   const confirmation = await reviewedResponse;
@@ -1070,7 +1071,7 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
   ]);
   await expect(readiness.getByRole('status')).toContainText(`Reviewed ${scope}.`);
   await expect(readiness.getByRole('status')).toContainText('The SOP remains a draft');
-  await expect(readiness).toContainText('1 method decision remains');
+  await expect(readiness).toContainText('1 question to clarify');
   await expect(readiness.getByRole('button', { name: 'Confirm SOP', exact: true })).toHaveCount(0);
   await expect(
     readiness.getByRole('button', { name: 'Review ready sections', exact: true }),
@@ -1089,20 +1090,17 @@ test('an SOP reads as a procedure with its run values, and a response keeps its 
     'The SOP remains a draft. Settle the remaining issues before final confirmation.',
   );
   await expect(readiness.getByRole('status')).toHaveCount(0);
-  // Individual discussion preserves the selected scientific issue and exact displayed version.
-  await readiness.getByText('Choose a method decision (1)', { exact: true }).click();
-  const decision = readiness.getByRole('list', { name: 'Method decisions' });
+  // The opening question starts discussion with the exact saved issue and displayed version.
   await expect(
-    decision.getByRole('link', {
+    readiness.getByRole('link', {
       name: 'Review question: Overnight at 4 °C or at room temperature?',
     }),
   ).toHaveAttribute('href', '#sop-question-q1');
+  await expect(readiness).toContainText(
+    'Why this matters: The incubation temperature changes the method.',
+  );
   const discussionRequest = page.waitForRequest('**/api/v1/ops/assistant.ask');
-  await decision
-    .getByRole('button', {
-      name: 'Discuss with assistant: Overnight at 4 °C or at room temperature?',
-    })
-    .click();
+  await readiness.getByRole('button', { name: 'Help answer this' }).click();
   const discussion = (await discussionRequest).postDataJSON();
   expect(discussion.page.record).toEqual({
     id: drafted.output.id,

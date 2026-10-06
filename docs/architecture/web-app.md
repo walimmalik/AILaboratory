@@ -85,6 +85,10 @@ pipe tables and `>` quoted passages. Quotes use inherited typography and a small
 long references wrapping within narrow panels; they add no side stripe or surrounding card.
 Text remains escaped React content, including raw HTML and link syntax in quoted passages.
 
+## SOP questions before review mechanics
+
+While a current SOP has open method questions, its Overview leads with one saved question and its scientific reason, plus **Help answer this**. The first question in saved order is an entry point, not a priority recommendation. **Other questions** keeps the remaining questions individually accessible, each with its exact saved question/version context. Estimates and unrelated scientific blockers or warnings remain visible. Routine partial-section review and its scope are under closed **Review details**; outcomes and errors remain visible. Final **Confirm SOP** remains prominent when eligible. Unsupported historical question data or mismatched readiness versions retain the full checks rather than a misleading focused question. These are presentation changes, not new response, resolution or source-adoption authority.
+
 ## Sign-in
 
 Email and password (ADR 0019). `POST /auth/login` sets an HttpOnly, SameSite=Strict session cookie for 30 days; `POST /auth/logout` ends it. The API accepts either a bearer token (agents, scripts) or the cookie (the web app); cookie-authenticated writes must be JSON. `bootstrap` sets the first password; `password` resets it.

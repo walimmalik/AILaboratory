@@ -24,6 +24,12 @@ Evidence baseline: `9624e5324655472bf1b864c4a6830d448b0e7169`. The completed 5 O
 
 ## 1. Outcome and boundaries
 
+### Scientist-facing questions, internal mechanics (Wali, 2026-10-06)
+
+Governance and workflow mechanics are implementation responsibilities, not a separate task for the scientist. Lead with the experiment, the concrete scientific question, why it matters and the evidence-supported choices. Keep source/version tracking and provenance behind the scenes or available on demand. Ask about a meaningful methodological difference or missing evidence, not which source should "govern". Assumptions, scientific uncertainty and physical constraints remain visible; this clarification changes presentation, not the existing authority to apply decisions or confirm methods.
+
+The next bounded presentation slice makes an unresolved SOP open on one saved question and its scientific reason, with direct question-specific assistance and the other questions still selectable. Stored question order is an entry point, not an inferred scientific ranking. Assumptions and other failing scientific checks remain visible. Partial-section review and its scope move into optional Review details while the question is open; final confirmation stays prominent when eligible. Preserve exact question/version context and the existing saved response and decision contracts. This does not implement broader question resolution, source adoption, calibration ingestion or automatic response recording.
+
 ### Retain unfinished source-described steps
 
 Authorized by Wali on 2026-10-05 after a live draft omitted washing and showed only the reader step. Preserve source-described actions in order, with stable IDs and citations; omit disputed operative settings and attach an open method question to the affected step. At the bench, show **Needs clarification**, known settings and a question-specific assistant discussion action. Keep the draft/incomplete warning in print. Multiple questions remain individually selectable. Final activation remains blocked by unresolved method questions; recording a response or editing a step does not resolve one.

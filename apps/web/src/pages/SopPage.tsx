@@ -67,6 +67,11 @@ function SopStatus({
   const draft = record.status === 'draft';
   const review = sopReadiness(record, readiness);
   const { failing, toReview, confirmable, activates, canConfirm, methodQuestions } = review;
+  const currentMethodQuestions = record.version === readiness.version ? methodQuestions : undefined;
+  const firstQuestion = currentMethodQuestions?.[0];
+  const otherQuestions = currentMethodQuestions?.slice(1) ?? [];
+  const partialReview =
+    !!firstQuestion && failing.length > 0 && canConfirm && record.status !== 'archived';
   const confirm = useMutation({
     mutationFn: (_review: { sections: { id: string; title: string }[]; partial: boolean }) =>
       confirmable.length === 0 && activates
@@ -80,7 +85,7 @@ function SopStatus({
       ),
   });
   const remaining = review.summarized
-    ? `${methodQuestions?.length} method ${methodQuestions?.length === 1 ? 'decision remains' : 'decisions remain'}${
+    ? `${methodQuestions?.length} ${methodQuestions?.length === 1 ? 'question' : 'questions'} to clarify${
         review.otherBlockers.length
           ? ` · ${review.otherBlockers.length} other ${review.otherBlockers.length === 1 ? 'blocker' : 'blockers'}`
           : ''
@@ -109,49 +114,57 @@ function SopStatus({
         <span className={`state ${state.tone}`}>{state.text}</span>
       </header>
       <div className="body">
-        <Estimates record={record} readiness={readiness} onOpen={(path) => onEdit(partFor(path))} />
-        {!!methodQuestions?.length && (
+        {firstQuestion && (
           <>
+            <p className="question-line">
+              <a
+                href={`#sop-question-${firstQuestion.id}`}
+                aria-label={`Review question: ${firstQuestion.question}`}
+              >
+                {firstQuestion.question}
+              </a>
+            </p>
+            <p className="muted">Why this matters: {firstQuestion.stage.reason}</p>
             <p className="actions">
               <button
                 type="button"
                 className="btn primary"
                 disabled={assistant.sending || assistant.running}
-                onClick={() => {
-                  const first = methodQuestions[0];
-                  if (first) discuss(first.id);
-                }}
+                onClick={() => discuss(firstQuestion.id)}
               >
-                Resolve with assistant
+                Help answer this
               </button>
-              <span className="muted">
-                Settle method decisions; choose samples and run details later.
-              </span>
             </p>
-            <details className="sop-readiness-decisions">
-              <summary>Choose a method decision ({methodQuestions.length})</summary>
-              <ul className="sop-question-links" aria-label="Method decisions">
-                {methodQuestions.map((q) => (
-                  <li key={q.id}>
-                    <a href={`#sop-question-${q.id}`} aria-label={`Review question: ${q.question}`}>
-                      {q.question}
-                    </a>
-                    {' · '}
-                    <button
-                      type="button"
-                      className="link-btn"
-                      aria-label={`Discuss with assistant: ${q.question}`}
-                      disabled={assistant.sending || assistant.running}
-                      onClick={() => discuss(q.id)}
-                    >
-                      Discuss with assistant
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            {otherQuestions.length > 0 && (
+              <details className="sop-readiness-decisions">
+                <summary>Other questions ({otherQuestions.length})</summary>
+                <ul className="sop-question-links" aria-label="Other questions">
+                  {otherQuestions.map((q) => (
+                    <li key={q.id}>
+                      <a
+                        href={`#sop-question-${q.id}`}
+                        aria-label={`Review question: ${q.question}`}
+                      >
+                        {q.question}
+                      </a>
+                      {' · '}
+                      <button
+                        type="button"
+                        className="link-btn"
+                        aria-label={`Discuss with assistant: ${q.question}`}
+                        disabled={assistant.sending || assistant.running}
+                        onClick={() => discuss(q.id)}
+                      >
+                        Discuss with assistant
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </>
         )}
+        <Estimates record={record} readiness={readiness} onOpen={(path) => onEdit(partFor(path))} />
         {review.visibleChecks.some((c) => !c.passed) && (
           <Checks
             checks={review.visibleChecks.filter((c) => !c.passed)}
@@ -161,7 +174,7 @@ function SopStatus({
           />
         )}
         <div className="actions">
-          {canConfirm && record.status !== 'archived' && (
+          {canConfirm && record.status !== 'archived' && !partialReview && (
             <button
               type="button"
               className={failing.length ? 'btn' : 'btn primary'}
@@ -176,8 +189,22 @@ function SopStatus({
               Edit
             </button>
           )}
-          {!outcome && <span className="muted">{review.before}</span>}
+          {!outcome && !partialReview && <span className="muted">{review.before}</span>}
         </div>
+        {partialReview && (
+          <details>
+            <summary>Review details</summary>
+            <p className="muted">{review.before}</p>
+            <button
+              type="button"
+              className="btn"
+              disabled={confirm.isPending}
+              onClick={() => confirm.mutate({ sections: confirmable, partial: true })}
+            >
+              {review.actionLabel}
+            </button>
+          </details>
+        )}
         {outcome && <p role="status">{outcome}</p>}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
         {readiness.checks.length > 0 && (

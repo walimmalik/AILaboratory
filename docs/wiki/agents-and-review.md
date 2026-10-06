@@ -4,6 +4,8 @@ Two promises shape how agents work here: an agent can do anything a person can, 
 
 ## Human = agent
 
+The scientist-facing experience starts with the experiment, the scientific question and what the evidence supports. Version tracking, provenance and workflow mechanics are handled behind the scenes or available in optional details. A draft SOP with unresolved questions opens on one actual question and why it matters, with **Help answer this** and access to the other questions. Assumptions and scientific warnings stay visible; partial-review controls sit under **Review details**. Applying a meaningful change and confirming the finished SOP still use the existing explicit controls. See [the presentation clarification in ADR 0068](../decisions/0068-interactive-scientific-decisions.md#presentation-clarification-wali-2026-10-06).
+
 Planned refinement: [004g](../plans/004g-ai-first-scientific-reconciliation.md) and [ADR 0068](../decisions/0068-interactive-scientific-decisions.md) introduce agent-guided reconciliation with explicit human **Apply decision** controls. A reply is not automatically approval or resolution. Final SOP confirmation remains separate; inseparable changes stay atomic. These are accepted interaction decisions awaiting implementation.
 
 Every capability is an **operation** in one registry. People (through the web app) and agents (through MCP or REST) call the same operations through the same code path, `OperationRegistry.execute`. The web app can't reach the API any other way: a lint rule forbids `fetch` and friends in `apps/web/src`. So there is nothing the UI can do that an agent can't. Each module ships a skill in `skills/` that teaches agents when and how to combine its operations.
