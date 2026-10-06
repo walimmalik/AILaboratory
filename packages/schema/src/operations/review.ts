@@ -3,6 +3,21 @@ import { Actor } from '../actor.ts';
 import { RecordId, RecordName } from '../ids.ts';
 import { defineContract, Proposal } from '../operation.ts';
 import { RecordStatus } from '../record.ts';
+import { ScientificDecisionMetadata } from '../scientific-decisions.ts';
+import { SopDefaultDecisionPreview, SopDefaultEdit } from '../sop-default-decision.ts';
+
+export const reviewPrepareDecision = defineContract({
+  id: 'review.prepare_decision',
+  verbs: { done: 'prepared a draft volume decision', intent: 'prepare a draft volume decision' },
+  summary:
+    'Prepare one existing uncited positive scalar volume default on a never-confirmed draft SOP, in exactly the same unit, without bounds or a linked open method question. Returns a pending proposal and pauses assistant work. A person reviews the full affected Values section and applies through proposals.approve; SOP remains draft and final confirmation is separate',
+  effect: 'write',
+  input: SopDefaultEdit,
+  output: Proposal.extend({
+    preview: SopDefaultDecisionPreview,
+    decision: ScientificDecisionMetadata,
+  }),
+});
 
 /**
  * How urgent an item is (plan 004e R1, ADR 0050): "needs_you" blocks someone (an agent waiting on a
