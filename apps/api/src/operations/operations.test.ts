@@ -95,10 +95,18 @@ describe('calculation handles (ADR 0049)', () => {
       /not a record in this lab/,
     );
     expect((await refused(update(from({ version: 4 })))).message).toMatch(/doesn't have/);
-    expect(
-      (await refused(update({ color: { source: 'record', from: { id: draft.id, version: 1 } } })))
-        .message,
-    ).toMatch(/was draft, not confirmed/);
+    const draftRefusal = await refused(
+      update({ color: { source: 'record', from: { id: draft.id, version: 1 } } }),
+    );
+    expect(draftRefusal.code).toBe('invalid_input');
+    expect(draftRefusal.message).toContain('was draft, not confirmed');
+    expect(draftRefusal.message).toContain(
+      'assumed/unverified, with the actual draft source noted',
+    );
+    expect(draftRefusal.message).toContain(
+      'A request to reuse a draft is not the person stating its literal values',
+    );
+    expect(draftRefusal.message).toContain('do not relabel them as stated');
     expect((await refused(update(from({ path: '/color' }), 'red'))).message).toMatch(
       /the value there is different/,
     );
@@ -1111,6 +1119,61 @@ describe('change sets (ADR 0051)', () => {
     expect(error.message).toMatch(/^Step 2 \(records.update\).*Nothing in the set was changed/);
     const listed = await run<{ records: unknown[] }>(person, 'records.list', { kind: 'widget' });
     expect(listed.records).toHaveLength(0);
+  });
+
+  it('keeps copied-draft refusal atomic and permits truthful assumed drafts without confirming their source', async () => {
+    const source = await create(agent, { label: 'Unconfirmed source' });
+    const target = await create(agent, { label: 'Existing draft' });
+    const beforeRecords = await db.select().from(records);
+    const beforeVersions = await db.select().from(recordVersions);
+    const error = await refused(
+      registry.execute(agent, 'changes.apply', {
+        steps: [
+          {
+            operation: 'records.create',
+            input: { kind: 'widget', label: 'Rolled back', attributes },
+          },
+          {
+            operation: 'records.update',
+            input: {
+              id: target.id,
+              expectedVersion: target.version,
+              attributes,
+              evidence: {
+                color: { source: 'record', from: { id: source.id, version: 1, path: '/color' } },
+              },
+            },
+          },
+        ],
+      }),
+    );
+    expect(error.code).toBe('invalid_input');
+    expect(error.message).toMatch(/^Step 2 \(records.update\).*was draft, not confirmed/);
+    expect(error.message).toContain('do not relabel them as stated');
+    expect(error.message).toContain('Nothing in the set was changed');
+    expect(await db.select().from(records)).toEqual(beforeRecords);
+    expect(await db.select().from(recordVersions)).toEqual(beforeVersions);
+
+    const note = `Read from unconfirmed ${source.name} version 1; not verified`;
+    const reused = await create(agent, {
+      label: 'Unverified reuse',
+      evidence: {
+        color: { source: 'assumed', note },
+        volume: { source: 'assumed', note },
+      },
+    });
+    expect(reused.status).toBe('draft');
+    expect(reused.evidence.color).toMatchObject({ source: 'assumed', note });
+    expect(reused.evidence.volume).toMatchObject({ source: 'assumed', note });
+    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(
+      items.find((item) => item.type === 'draft' && item.record.id === reused.id),
+    ).toMatchObject({
+      batchable: false,
+      assumed: 2,
+    });
+    expect(await run<RecordEnvelope>(person, 'records.get', { id: source.id })).toEqual(source);
+    expect(await run<RecordEnvelope>(person, 'records.get', { id: target.id })).toEqual(target);
   });
 
   it('keep a calculator step result, so a later step marks a value calculated from it', async () => {
