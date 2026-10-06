@@ -72,19 +72,24 @@ const evidenceIdentity = (evidence: FieldEvidence, applyingPerson = false): Deci
     by: applyingPerson && evidence.by.type === 'user' ? 'applying_person' : evidence.by,
   };
 };
-const decisionReadiness = (state: Readiness, changedPath?: string): DecisionReadiness => ({
+const decisionReadiness = (
+  state: Readiness,
+  simulatedEvidence: ReadonlySet<string> = new Set(),
+): DecisionReadiness => ({
   ...state,
   sections: state.sections.map(({ review: _review, ...section }) => ({
     ...section,
     fields: section.fields.map(({ evidence, items, ...field }) => ({
       ...field,
-      ...(evidence ? { evidence: evidenceIdentity(evidence, changedPath === field.field) } : {}),
+      ...(evidence
+        ? { evidence: evidenceIdentity(evidence, simulatedEvidence.has(field.field)) }
+        : {}),
       ...(items
         ? {
             items: items.map(({ evidence: itemEvidence, ...item }) => ({
               ...item,
               ...(itemEvidence
-                ? { evidence: evidenceIdentity(itemEvidence, changedPath === item.path) }
+                ? { evidence: evidenceIdentity(itemEvidence, simulatedEvidence.has(item.path)) }
                 : {}),
             })),
           }
@@ -245,6 +250,17 @@ async function previewPhase(
       const afterEvidence = updated.evidence[evidencePath];
       if (!afterEvidence)
         throw new OperationError('internal', 'The changed default has no ordinary evidence');
+      // The supported update rewrites both the parent array and selected item. Keep exact
+      // historical facts (including inherited item evidence); replace every new human stamp.
+      const historicalEvidence = new Set(Object.values(record.evidence).map(stable));
+      const simulatedEvidence = new Set(
+        Object.entries(updated.evidence)
+          .filter(
+            ([p, e]) =>
+              p === 'variables' || p === evidencePath || !historicalEvidence.has(stable(e)),
+          )
+          .map(([p]) => p),
+      );
       const sectionPath = (p: string) => p === 'variables' || p.startsWith('/variables/');
       const assumed = before.readiness.assumed.filter((p) => sectionPath(p) && p !== evidencePath);
       if (afterEvidence.source === 'assumed') assumed.push(evidencePath);
@@ -268,7 +284,7 @@ async function previewPhase(
         after: {
           target: after.target,
           reads: after.reads,
-          readiness: decisionReadiness(after.readiness, evidencePath),
+          readiness: decisionReadiness(after.readiness, simulatedEvidence),
         },
         evidence: {
           path: evidencePath,
@@ -288,7 +304,7 @@ async function previewPhase(
           evidence: Object.fromEntries(
             Object.entries(updated.evidence)
               .filter(([p]) => sectionPath(p))
-              .map(([p, e]) => [p, evidenceIdentity(e, p === evidencePath)]),
+              .map(([p, e]) => [p, evidenceIdentity(e, simulatedEvidence.has(p))]),
           ),
           assumed: [...new Set(assumed)].sort(),
           unchecked: before.readiness.unchecked

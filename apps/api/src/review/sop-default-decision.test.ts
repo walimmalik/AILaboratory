@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { activity, proposals, records, recordVersions } from '../db/schema.ts';
+import { activity, proposals, records, recordVersions, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { listProposals } from '../operations/proposal-store.ts';
 import { sop } from '../sops/kinds.ts';
@@ -109,19 +109,75 @@ describe('staged SOP volume-default decision producer', () => {
     ).rejects.toMatchObject({ code: 'unknown_operation' });
   });
 
-  it('uses an honest applying-person placeholder for human changed-value evidence and explicit unknown origin', async () => {
+  it('normalizes all new human evidence while retaining history and unchanged meaning for a different applying person', async () => {
     const f = await defaultDecisionFixture(db);
-    const proposal = await prepareSopDefaultDecision(f, f.person, f.edit);
+    const historical = await f.service.update(f.person, f.target.id, {
+      expectedVersion: f.target.version,
+      evidence: {
+        variables: { source: 'measured' },
+        [path]: { source: 'measured' },
+        '/variables/wash_volume': { source: 'measured' },
+      },
+    });
+    const applyingId = newId('usr');
+    await db.insert(users).values({ id: applyingId, orgId: f.person.orgId, displayName: 'Sam' });
+    const applying = { ...f.person, actor: { type: 'user' as const, userId: applyingId } };
+    const beforeRecords = await db.select().from(records);
+    const beforeHistory = await db.select().from(recordVersions);
+    const beforeActivity = await db.select().from(activity);
+    const proposal = await prepareSopDefaultDecision(f, f.person, {
+      ...f.edit,
+      expectedVersion: historical.version,
+    });
     const preview = SopDefaultDecisionPreview.parse(proposal.preview);
-    expect(preview.evidence.after).toEqual({ source: 'person', by: 'applying_person' });
-    expect(preview.confirmation.evidence[path]).toEqual(preview.evidence.after);
-    expect(
-      preview.after.readiness.sections
-        .find((s) => s.id === 'variables')
-        ?.fields[0]?.items?.find((i) => i.path === path)?.evidence,
-    ).toEqual(preview.evidence.after);
+    const newEvidence = { source: 'person', by: 'applying_person' };
+    const historicalEvidence = { source: 'measured', by: f.person.actor };
+    const field = (state: typeof preview.before) =>
+      state.readiness.sections.find((s) => s.id === 'variables')?.fields[0];
+    const assertEvidence = (value: typeof preview) => {
+      expect(value.evidence.after).toEqual(newEvidence);
+      expect(value.confirmation.evidence.variables).toEqual(newEvidence);
+      expect(value.confirmation.evidence[path]).toEqual(newEvidence);
+      expect(field(value.after)?.evidence).toEqual(newEvidence);
+      expect(field(value.after)?.items?.find((i) => i.path === path)?.evidence).toEqual(
+        newEvidence,
+      );
+      expect(value.evidence.before).toEqual(historicalEvidence);
+      expect(field(value.before)?.evidence).toEqual(historicalEvidence);
+      expect(field(value.before)?.items?.find((i) => i.path === path)?.evidence).toEqual(
+        historicalEvidence,
+      );
+      expect(value.confirmation.evidence['/variables/wash_volume']).toEqual(historicalEvidence);
+      expect(
+        field(value.after)?.items?.find((i) => i.path === '/variables/wash_volume')?.evidence,
+      ).toEqual(historicalEvidence);
+    };
+    assertEvidence(preview);
     expect(proposal.decision?.origin).toEqual({ type: 'unknown' });
     expect(proposal.proposedBy).toEqual(f.person.actor);
+    await f.registry.transaction(db, async (tx) => {
+      const result = await revalidateSopDefaultDecision(
+        { ...f, db: tx },
+        applying,
+        proposal.id,
+        proposal.decision?.previewIdentity.digest ?? '',
+      );
+      expect(result.status).toBe('unchanged');
+      if (result.status !== 'unchanged') throw new Error('Expected identical decision meaning');
+      expect(result.prepared.decision.previewIdentity.digest).toBe(
+        proposal.decision?.previewIdentity.digest,
+      );
+      assertEvidence(result.prepared.preview);
+      expect(result.executionContext).toMatchObject({
+        actor: applying.actor,
+        approvedBy: applying.actor,
+        origin: { type: 'unknown' },
+      });
+      expect(result.proposal.proposedBy).toEqual(f.person.actor);
+    });
+    expect(await db.select().from(records)).toEqual(beforeRecords);
+    expect(await db.select().from(recordVersions)).toEqual(beforeHistory);
+    expect(await db.select().from(activity)).toEqual(beforeActivity);
   });
 
   it('refuses unsupported input claims, stale versions and out-of-scope defaults without proposals', async () => {
