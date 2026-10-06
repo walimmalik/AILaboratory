@@ -380,7 +380,7 @@ export function KeyFacts({
                   f.value
                 )}
                 {f.field && marked.has(f.field) && (
-                  <span className="unsourced" title="entered by an agent, no source given">
+                  <span className="unsourced" title="entered as an assumption">
                     ◦
                   </span>
                 )}

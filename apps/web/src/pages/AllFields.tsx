@@ -203,7 +203,7 @@ function Part({
                     {unsourced(f) && (
                       <span
                         className="unsourced"
-                        title={`${f.assumed ? 'unverified · ' : ''}entered by ${who(f.evidence?.by, me)}, no source given`}
+                        title={`${f.assumed ? 'unverified' : 'originally assumed'} · entered by ${who(f.evidence?.by, me)}`}
                       >
                         ◦
                       </span>
@@ -245,7 +245,7 @@ function Part({
   );
 }
 
-/** An agent's value with no source, confirmed or not: marked where it shows (N7). */
+/** An agent's assumed value, confirmed or not: marked where it shows (N7). */
 const unsourced = (f: Field) =>
   !fromSeed(f) &&
   (f.assumed || (f.evidence?.source === 'assumed' && f.evidence.by.type === 'agent'));
@@ -264,7 +264,7 @@ const isEmpty = (value: unknown) =>
 
 /**
  * Where a part's values came from, said once (N7): "Confirmed by you on 1 Oct. Manufacturer from
- * the lab's instrument list; 5 values entered by an agent with no source given (marked ◦)."
+ * the lab's instrument list; 5 values entered by an agent, unverified (marked ◦)."
  * Values with the same source are named together, or counted past three.
  */
 function Sources({
@@ -285,7 +285,7 @@ function Sources({
   for (const f of fields) {
     const e = f.evidence;
     const key = unsourced(f)
-      ? `none ${f.assumed}`
+      ? ['assumed', f.assumed, e ? by(e, me) : '', e?.note].join('|')
       : e
         ? [e.source, by(e, me), e.from?.id, e.from?.version, e.reference, e.note].join('|')
         : 'unknown';
@@ -307,9 +307,13 @@ function Sources({
       if (g.fields.some(unsourced)) {
         const unverified = g.fields.some((f) => f.assumed);
         return (
-          <span key="none" className="agent-ink">
-            {subject} entered by {who(e?.by, me)} with no source given
-            {unverified && ', unverified'} (marked ◦)
+          <span
+            key={[subject, e?.note, e ? by(e, me) : '', unverified].join('|')}
+            className="agent-ink"
+          >
+            {subject} entered by {who(e?.by, me)},{' '}
+            {unverified ? 'unverified' : 'originally assumed'} (marked ◦)
+            {e?.note && e.note.length <= INLINE_NOTE_LENGTH && ` (${e.note})`}
           </span>
         );
       }
@@ -332,7 +336,7 @@ function Sources({
               {e.source === 'template' && ' (protocol default)'}
             </>
           )}
-          {e.note && ` (${e.note})`}
+          {e.note && e.note.length <= INLINE_NOTE_LENGTH && ` (${e.note})`}
           {e.reference &&
             (/^https?:\/\//.test(e.reference) ? (
               <>
@@ -366,22 +370,35 @@ function Sources({
     .filter((p) => p !== null);
   if (!confirmedLine && pieces.length === 0) return null;
   return (
-    <p className="sources muted">
-      {confirmedLine}
-      {confirmedLine && pieces.length > 0 && ' '}
-      {pieces.map((p, i) => (
-        <Fragment key={(p as { key?: string }).key ?? i}>
-          {i > 0 && '; '}
-          {p}
-        </Fragment>
-      ))}
-      {pieces.length > 0 && '.'}
-    </p>
+    <>
+      <p className="sources muted">
+        {confirmedLine}
+        {confirmedLine && pieces.length > 0 && ' '}
+        {pieces.map((p, i) => (
+          <Fragment key={(p as { key?: string }).key ?? i}>
+            {i > 0 && '; '}
+            {p}
+          </Fragment>
+        ))}
+        {pieces.length > 0 && '.'}
+      </p>
+      {[...groups.entries()]
+        .filter(([, g]) => g.evidence?.note && g.evidence.note.length > INLINE_NOTE_LENGTH)
+        .map(([key, g]) => (
+          <details className="sources muted" key={key}>
+            <summary>
+              Note about {list(g.fields.map((f) => kindFieldWords(kind, f.field))).toLowerCase()}
+            </summary>
+            <p className="source-note">{g.evidence?.note}</p>
+          </details>
+        ))}
+    </>
   );
 }
 
 /** Who gave a value, as part of the grouping key: the same source from two people stays two. */
 const by = (e: FieldEvidence, me: Me | undefined) => who(e.by, me);
+const INLINE_NOTE_LENGTH = 160;
 
 /** The source in lab words (plan 004f, state words): only beside values. */
 export function sourcePhrase(e: FieldEvidence, me: Me | undefined): string {
@@ -405,6 +422,8 @@ export function sourcePhrase(e: FieldEvidence, me: Me | undefined): string {
       return 'copied from';
     case 'memory':
       return 'from lab memory';
+    case 'assumed':
+      return 'entered as an assumption';
     default:
       return 'entered with no source given';
   }

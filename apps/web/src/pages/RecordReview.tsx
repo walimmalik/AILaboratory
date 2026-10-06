@@ -204,8 +204,7 @@ export function Estimates({
   const shown = all ? paths : paths.slice(0, SHOWN_ESTIMATES);
   return (
     <p className="agent-ink estimates">
-      {paths.length === 1 ? 'One value was' : `${paths.length} values were`} entered by an agent
-      without a source:{' '}
+      {paths.length === 1 ? 'One value remains' : `${paths.length} values remain`} unverified:{' '}
       {shown.map((path, i) => (
         <span key={path}>
           {i > 0 && ', '}
