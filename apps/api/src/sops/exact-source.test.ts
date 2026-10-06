@@ -1097,6 +1097,70 @@ describe('private exact SOP source producer', () => {
     expect((await new RecordService(db, kinds).get(person, saved.id)).version).toBe(1);
   });
 
+  it('refuses direct/generic/approved unbound attachment to source-free drafts while existing unbound edits stay honest', async () => {
+    const f = await fixture();
+    const free = await publicDraft(attributes());
+    const base = free.attributes as SopAttributes;
+    const service = new RecordService(db, kinds);
+    for (const candidate of [
+      { ...base, source: { document: f.document.id } },
+      {
+        ...base,
+        steps: base.steps.map((step) => ({
+          ...step,
+          cite: [{ document: f.document.id, quote: method }],
+        })),
+      },
+    ]) {
+      const input = { id: free.id, expectedVersion: 1, attributes: candidate };
+      for (const ctx of [person, agent]) {
+        await expect(run(ctx, 'records.update', input)).rejects.toThrow('unbound association');
+        await expect(
+          service.update(
+            { ...ctx, via: 'records.update', approvedBy: person.actor },
+            free.id,
+            input,
+          ),
+        ).rejects.toThrow('unbound association');
+      }
+      const proposal = await createProposal(db, agent, {
+        operationId: 'records.update',
+        input,
+        preview: null,
+      });
+      const rejected = await run<Proposal>(person, 'proposals.approve', { id: proposal.id });
+      expect(rejected).toMatchObject({
+        status: 'failed',
+        error: { code: 'invalid_input', message: expect.stringContaining('unbound association') },
+      });
+      expect(rejected.receipt).toBeUndefined();
+      expect((await service.get(person, free.id)).attributes).toEqual(base);
+      expect(await service.history(person, free.id)).toHaveLength(1);
+    }
+    const old = { ...base, source: { document: f.document.id, revision: 'Old label' } };
+    const existing = await oldRecord(old);
+    const changed = {
+      ...old,
+      notes: 'Still editable',
+      steps: old.steps.map((step) => ({
+        ...step,
+        cite: [{ document: f.document.id, quote: 'A historical unverified claim' }],
+      })),
+    };
+    fileFailure = 'missing';
+    await run(person, 'records.update', {
+      id: existing.id,
+      expectedVersion: 1,
+      attributes: changed,
+    });
+    expect(await run(person, 'sops.check_citations', { sop: existing.id })).toMatchObject({
+      sourceStatus: 'unbound',
+      matches: 0,
+      citations: [{ result: 'unchecked', uncheckedReason: 'edition_not_established' }],
+    });
+    expect((await service.getVersion(person, existing.id, 1)).snapshot.attributes).toEqual(old);
+  });
+
   it('publicly refuses new unbound roots/citations and keeps selected unavailable files unchecked after conversion', async () => {
     const f = await fixture(false);
     const unbound = attributes();

@@ -22,10 +22,11 @@ export function assertSopExactSourceWrite(
 ) {
   const prior = before as SopAttributes | undefined;
   const next = after as SopAttributes;
-  if (!before && !next.source?.exact && (next.source || citationsOf(next).length))
+  const sourceFree = !prior || (!prior.source && citationsOf(prior).length === 0);
+  if (sourceFree && !next.source?.exact && (next.source || citationsOf(next).length))
     throw new OperationError(
       'invalid_input',
-      'A new source-linked SOP requires one explicitly selected exact edition through sops.draft; source-free authored drafts remain valid',
+      'A new source-linked SOP requires one explicitly selected exact edition through sops.draft; a source-free draft cannot add an unbound association',
     );
   if (!prior?.source?.exact && !next.source?.exact) return;
   const scope = scopes.get(ctx);
