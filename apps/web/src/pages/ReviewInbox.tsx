@@ -30,6 +30,7 @@ import {
 } from '../queries.ts';
 import { useMe } from '../session.ts';
 import { estimatesIn, ItemDiff, itemChanges } from './ItemDiff.tsx';
+import { ProposalDecisionCard, supportedDecision } from './ProposalDecisionCard.tsx';
 
 /**
  * Everything waiting for you (plan 004d): drafts to review and confirm, and changes agents proposed
@@ -325,39 +326,46 @@ function DecidedChanges({
 }
 
 function DecidedTable({ proposals, me }: { proposals: Proposal[]; me: ReturnType<typeof useMe> }) {
+  const decisions = proposals.filter((p) => supportedDecision(p));
+  const ordinary = proposals.filter((p) => !supportedDecision(p));
   return (
     <div className="table-wrap">
-      <table className="decided-table">
-        <thead>
-          <tr>
-            <th>Proposed</th>
-            <th>By</th>
-            <th>Change</th>
-            <th>Decision</th>
-          </tr>
-        </thead>
-        <tbody>
-          {proposals.map((p) => (
-            <tr key={p.id}>
-              <td className="when">{formatWhen(p.proposedAt)}</td>
-              <td className="agent-ink">{actorLabel(p.proposedBy, me)}</td>
-              <td>
-                {operationVerb(p.operationId)}{' '}
-                {p.operationId === 'changes.apply' ? (
-                  `(${stepsOf(p).length} changes)`
-                ) : (
-                  <ChangeObject step={stepsOf(p)[0] as Step} applied={p.status === 'approved'} />
-                )}
-              </td>
-              <td>
-                <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
-                {p.error && <span className="crit-ink"> {p.error.message}</span>}
-                {p.decisionReason && <span className="muted"> · {p.decisionReason}</span>}
-              </td>
+      {decisions.map((p) => (
+        <ProposalDecisionCard key={p.id} proposal={p} />
+      ))}
+      {ordinary.length > 0 && (
+        <table className="decided-table">
+          <thead>
+            <tr>
+              <th>Proposed</th>
+              <th>By</th>
+              <th>Change</th>
+              <th>Decision</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ordinary.map((p) => (
+              <tr key={p.id}>
+                <td className="when">{formatWhen(p.proposedAt)}</td>
+                <td className="agent-ink">{actorLabel(p.proposedBy, me)}</td>
+                <td>
+                  {operationVerb(p.operationId)}{' '}
+                  {p.operationId === 'changes.apply' ? (
+                    `(${stepsOf(p).length} changes)`
+                  ) : (
+                    <ChangeObject step={stepsOf(p)[0] as Step} applied={p.status === 'approved'} />
+                  )}
+                </td>
+                <td>
+                  <span className={`chip ${p.status}`}>{decisionWords[p.status]}</span>
+                  {p.error && <span className="crit-ink"> {p.error.message}</span>}
+                  {p.decisionReason && <span className="muted"> · {p.decisionReason}</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -792,7 +800,15 @@ function StepChanges({ step, created }: { step: Step; created: Set<string> }) {
   );
 }
 
-function PendingProposal({ proposal }: { proposal: Proposal }) {
+export function PendingProposal({ proposal }: { proposal: Proposal }) {
+  return supportedDecision(proposal) ? (
+    <ProposalDecisionCard proposal={proposal} />
+  ) : (
+    <OrdinaryProposal proposal={proposal} />
+  );
+}
+
+function OrdinaryProposal({ proposal }: { proposal: Proposal }) {
   const me = useMe();
   const queryClient = useQueryClient();
   const steps = stepsOf(proposal);

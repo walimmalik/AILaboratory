@@ -744,6 +744,17 @@ details.others {
   gap: 8px;
   align-items: center;
 }
+.decision-card p {
+  margin: 0;
+}
+.decision-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.decision-card pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Sign-in */
 .signin {
