@@ -35,6 +35,9 @@ import { callable, pageNamespaces, RUN_OPERATION, toolName, toolsFor } from './t
 export const MAX_STEPS = 16;
 /** Longest tool result sent back to the model, in characters. */
 const MAX_RESULT_CHARS = 30_000;
+/** Reserve a small part of a truncated result for authoritative saved-write metadata. */
+const MAX_WRITE_RECEIPT_CHARS = 6_000;
+const MAX_RECEIPT_FIELD_CHARS = 120;
 /** Lab memory lines the assistant gets for a page (M7). */
 const MEMORY_LINES = 15;
 const MODEL_TIMEOUT_MS = 180_000;
@@ -418,10 +421,7 @@ export function toModelMessages(
         });
       }
     } else {
-      let content = JSON.stringify(body.result);
-      if (content.length > MAX_RESULT_CHARS) {
-        content = `${content.slice(0, MAX_RESULT_CHARS)}… [cut off at ${MAX_RESULT_CHARS} characters; ask for less, e.g. with a limit]`;
-      }
+      const content = modelToolResult(body);
       messages.push({
         role: 'tool',
         toolCallId: body.toolCallId,
@@ -432,6 +432,107 @@ export function toModelMessages(
     }
   }
   return messages;
+}
+
+/** Only these operations return the record envelope written by the completed call. */
+const RECORD_WRITES = new Set([
+  'records.create',
+  'records.update',
+  'records.restore',
+  'records.activate',
+  'records.archive',
+  'records.unarchive',
+  'records.confirm_section',
+  'records.confirm',
+]);
+
+function object(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/** A receipt is derived from a successful write output, never an input, read, or proposal. */
+function writeReceipts(
+  body: Extract<AssistantMessage, { role: 'tool' }>,
+): Record<string, unknown>[] {
+  if (body.outcome !== 'done') return [];
+  const result = object(body.result);
+  if (result?.status !== 'done') return [];
+  const receipt = (operation: string, output: unknown, step?: number) => {
+    if (!RECORD_WRITES.has(operation)) return undefined;
+    const record = object(output);
+    if (
+      !record ||
+      typeof record.id !== 'string' ||
+      typeof record.kind !== 'string' ||
+      typeof record.name !== 'string' ||
+      typeof record.label !== 'string' ||
+      typeof record.version !== 'number' ||
+      !Number.isInteger(record.version) ||
+      record.version < 1 ||
+      !['draft', 'active', 'archived'].includes(String(record.status))
+    )
+      return undefined;
+    return {
+      operation,
+      ...(step === undefined ? {} : { step }),
+      id: record.id,
+      kind: record.kind,
+      name: record.name,
+      label: record.label,
+      version: record.version,
+      status: record.status,
+    };
+  };
+  if (body.operationId !== 'changes.apply') {
+    const found = receipt(body.operationId, result.output);
+    return found ? [found] : [];
+  }
+  const results = object(result.output)?.results;
+  if (!Array.isArray(results)) return [];
+  return results.flatMap((value, index) => {
+    const step = object(value);
+    const found =
+      typeof step?.operation === 'string'
+        ? receipt(step.operation, step.output, index + 1)
+        : undefined;
+    return found ? [found] : [];
+  });
+}
+
+/** Preserve the full stored result while making late committed writes visible in bounded replay. */
+function modelToolResult(body: Extract<AssistantMessage, { role: 'tool' }>): string {
+  const raw = JSON.stringify(body.result);
+  if (raw.length <= MAX_RESULT_CHARS) return raw;
+  const writes = writeReceipts(body);
+  const marker = (omitted: number) =>
+    `… [${omitted} characters omitted from stored result; ask for less, e.g. with a limit]`;
+  if (!writes.length) {
+    const cut = MAX_RESULT_CHARS - marker(raw.length).length;
+    return `${raw.slice(0, cut)}${marker(raw.length - cut)}`;
+  }
+
+  let shortenedFields = 0;
+  const bounded = writes.map((write) =>
+    Object.fromEntries(
+      Object.entries(write).map(([key, value]) => {
+        if (typeof value !== 'string' || value.length <= MAX_RECEIPT_FIELD_CHARS)
+          return [key, value];
+        shortenedFields++;
+        return [key, `${value.slice(0, MAX_RECEIPT_FIELD_CHARS)}…`];
+      }),
+    ),
+  );
+  const prefix = (included: number) =>
+    `[Historical completed record writes in this saved result (metadata only; record contents and readiness not verified): ${JSON.stringify({ writes: bounded.slice(0, included), omittedWrites: bounded.length - included, shortenedFields })}]\n`;
+  let included = bounded.length;
+  while (included > 0 && prefix(included).length > MAX_WRITE_RECEIPT_CHARS) included--;
+  const receipt = prefix(included);
+  // The marker length depends on the omitted count, so settle it before slicing the raw result.
+  let cut = MAX_RESULT_CHARS - receipt.length - marker(raw.length).length;
+  while (cut + receipt.length + marker(raw.length - cut).length > MAX_RESULT_CHARS) cut--;
+  return `${receipt}${raw.slice(0, cut)}${marker(raw.length - cut)}`;
 }
 
 /** A model's tool call as the operation it runs: a named tool, or run_operation's operation. */

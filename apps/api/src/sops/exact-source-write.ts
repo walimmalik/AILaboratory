@@ -1,8 +1,10 @@
 import { type EvidenceInput, SopAttributes } from '@ailab/schema';
 import { PgTransaction } from 'drizzle-orm/pg-core';
+import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { OperationError } from '../operations/errors.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
+import { RecordError } from '../records/errors.ts';
 import type { KindRegistry } from '../records/kinds.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService, type UpdateRecordInput } from '../records/service.ts';
@@ -252,7 +254,14 @@ export async function updateExactSopRecord(
   if (ctx.via !== 'records.update')
     throw new OperationError('forbidden', 'Exact edited citations belong to records.update');
   const before = SopAttributes.parse(current.attributes);
-  const candidate = SopAttributes.parse(input.attributes);
+  const parsed = SopAttributes.safeParse(input.attributes);
+  if (!parsed.success)
+    throw new RecordError(
+      'invalid_attributes',
+      `Invalid sop attributes:\n${z.prettifyError(parsed.error)}`,
+      parsed.error.issues,
+    );
+  const candidate = parsed.data;
   if (!before.source?.exact || stable(before.source) !== stable(candidate.source))
     throw new OperationError(
       'forbidden',

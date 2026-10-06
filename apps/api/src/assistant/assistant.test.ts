@@ -41,7 +41,13 @@ import { type ChatModel, ModelError, type ModelRequest, type ModelTurn } from '.
 import { OpenAiResponsesModel } from './responses.ts';
 import { SCIENTIFIC_INTAKE_PROMPT } from './scientific-intake.ts';
 import { ScriptedModel } from './scripted.ts';
-import { createConversation, getConversation, messageRows, updateConversation } from './store.ts';
+import {
+  appendMessage,
+  createConversation,
+  getConversation,
+  messageRows,
+  updateConversation,
+} from './store.ts';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -1436,6 +1442,82 @@ describe('assistant.ask', () => {
     });
   });
 
+  it('shows the committed late write in an action-limit summary after a long earlier read', async () => {
+    const model = new FakeModel(
+      Array.from(
+        { length: MAX_STEPS - 1 },
+        (): ModelTurn => ({ text: '', toolCalls: [], stop: 'continue' }),
+      ),
+    );
+    const { assistant, registry } = setup(model);
+    let record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'widget',
+        label: 'Earlier',
+        attributes,
+      }),
+    )) as RecordEnvelope;
+    for (let version = 1; version < 6; version++) {
+      record = (await output(
+        registry.execute(person, 'records.update', {
+          id: record.id,
+          expectedVersion: version,
+          label: `Earlier ${'x'.repeat(32_000)}`,
+        }),
+      )) as RecordEnvelope;
+    }
+    expect(record.version).toBe(6);
+    model.turns.push({
+      text: '',
+      toolCalls: [
+        {
+          id: 'batch67',
+          name: 'changes_apply',
+          input: {
+            steps: [
+              { operation: 'records.get', input: { id: record.id } },
+              {
+                operation: 'records.update',
+                input: { id: record.id, expectedVersion: 6, label: 'Saved at v7' },
+              },
+            ],
+          },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    model.turns.push({
+      text: 'Saved the v7 edit; inspect its contents before scientific use.',
+      toolCalls: [],
+      stop: 'end',
+    });
+    const conversation = await ask(registry, assistant, 'Read and edit the widget');
+    const stored = conversation.messages.find(
+      (message) => message.role === 'tool' && message.toolCallId === 'batch67',
+    );
+    expect(stored).toMatchObject({ outcome: 'done', result: { status: 'done' } });
+    if (stored?.role !== 'tool') throw new Error('Missing stored result');
+    const results = (stored.result as { output: { results: { output: RecordEnvelope }[] } }).output
+      .results;
+    expect(results[0]?.output).toMatchObject({ id: record.id, version: 6 });
+    expect(results[0]?.output.label.length).toBeGreaterThan(32_000);
+    expect(results[1]?.output).toMatchObject({ id: record.id, version: 7, label: 'Saved at v7' });
+    const summary = model.requests.at(-1);
+    expect(summary?.tools).toEqual([]);
+    const replay = summary?.messages.find(
+      (message) => message.role === 'tool' && message.toolCallId === 'batch67',
+    );
+    if (replay?.role !== 'tool') throw new Error('Missing model replay');
+    expect(replay.content.length).toBeLessThanOrEqual(30_000);
+    expect(replay.content).toContain('"operation":"records.update","step":2');
+    expect(replay.content).toContain('"version":7,"status":"draft"');
+    expect(replay.content).not.toContain('"operation":"records.get","step":1');
+    expect(replay.content).toContain('record contents and readiness not verified');
+    expect(await output(registry.execute(person, 'records.get', { id: record.id }))).toMatchObject({
+      version: 7,
+    });
+  });
+
   it('pauses for a proposal on the last action turn without requesting a summary', async () => {
     const model = new FakeModel(
       Array.from(
@@ -1681,6 +1763,99 @@ describe('assistant.ask', () => {
 });
 
 describe('tools and history', () => {
+  it('keeps receipts limited to completed record writes and bounds crowded receipts', async () => {
+    const conversation = await createConversation(db, person, {
+      title: 'Receipt replay',
+      agentName: 'Test assistant',
+      provider: 'fake',
+      model: 'fake-1',
+    });
+    const record = (version: number, label = 'x'.repeat(40_000)) => ({
+      id: 'wdg_123',
+      kind: 'widget',
+      name: 'W-001',
+      label,
+      version,
+      status: 'draft',
+    });
+    const cases = [
+      {
+        operationId: 'records.get',
+        outcome: 'done' as const,
+        result: { status: 'done', output: record(6) },
+      },
+      {
+        operationId: 'records.update',
+        outcome: 'proposed' as const,
+        result: { status: 'proposed', output: record(7) },
+      },
+      {
+        operationId: 'records.update',
+        outcome: 'failed' as const,
+        result: { status: 'done', output: record(7) },
+      },
+      {
+        operationId: 'records.update',
+        outcome: 'preview' as const,
+        result: { status: 'preview', output: record(7) },
+      },
+      {
+        operationId: 'changes.apply',
+        outcome: 'done' as const,
+        result: {
+          status: 'done',
+          output: {
+            results: [
+              { operation: 'records.get', output: record(6) },
+              ...Array.from({ length: 49 }, (_, index) => ({
+                operation: 'records.update',
+                output: record(index + 7, `${index}-${'L'.repeat(40_000)}`),
+              })),
+            ],
+          },
+        },
+      },
+    ];
+    for (const [index, item] of cases.entries())
+      await appendMessage(db, conversation.id, {
+        role: 'tool',
+        toolCallId: `case-${index}`,
+        ...item,
+      });
+    const rows = await messageRows(db, conversation.id);
+    const replay = toModelMessages(rows, new FakeModel([])).filter(
+      (message) => message.role === 'tool',
+    );
+    for (const item of replay.slice(0, 4)) {
+      expect(item.content.length).toBeLessThanOrEqual(30_000);
+      expect(item.content).not.toContain('Historical completed record writes');
+    }
+    const crowded = replay[4];
+    if (crowded?.role !== 'tool') throw new Error('Missing batch replay');
+    expect(crowded.content.length).toBeLessThanOrEqual(30_000);
+    expect(crowded.content).toContain('"operation":"records.update","step":2');
+    expect(crowded.content).not.toContain('"operation":"records.get","step":1');
+    const metadata = crowded.content.match(
+      /^\[Historical completed record writes.*?: (\{.*\})\]\n/,
+    )?.[1];
+    if (!metadata) throw new Error('Missing bounded receipt metadata');
+    const receipt = JSON.parse(metadata) as {
+      writes: unknown[];
+      omittedWrites: number;
+      shortenedFields: number;
+    };
+    expect(receipt.writes.length).toBeGreaterThan(0);
+    expect(receipt.omittedWrites).toBeGreaterThan(0);
+    expect(receipt.writes.length + receipt.omittedWrites).toBe(49);
+    expect(receipt.shortenedFields).toBe(49);
+    const saved = rows[4]?.body;
+    if (saved?.role !== 'tool') throw new Error('Missing stored batch');
+    expect(
+      (saved.result as { output: { results: { output: { label: string } }[] } }).output.results[49]
+        ?.output.label.length,
+    ).toBeGreaterThan(40_000);
+  });
+
   it('identifies the existing campaigns skill in run-list and run-record model context', async () => {
     const skill = findSkill('campaigns');
     if (!skill) throw new Error('Expected the owning campaigns skill');

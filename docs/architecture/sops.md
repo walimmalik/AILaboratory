@@ -23,11 +23,15 @@ A formula reads named variables and numbers with units: `n_samples * replicates 
 
 `sops.evaluate` takes a set of variables, each with a value (a decimal string, a quantity or a list) or a formula, and an optional unit for a formula's result. It evaluates them in dependency order and returns each value, or why it has none: an error, the variables it waits for, or the circle it is in.
 
+Calculated evidence checks equality with the entire saved field or keyed item. For an SOP, `/variables/<name>` identifies the variable definition, not its evaluated quantity. A calculator's quantity output cannot attest that whole definition, including a default containing the same quantity. Keep computed formulas as formulas; evaluation checks their results without marking their definitions calculated. Cite the actual source of the definition when available, otherwise retain its assumed status for review. The SOP skill explains this distinction; neither nested evidence paths nor relaxed equality are introduced.
+
 ## The SOP record (012a, ADR 0037)
 
 An SOP (`SOP-0001`) is confirmed in seven scientific sections: overview, materials and solutions, variables, procedure, plate layout, analysis and timing windows. Questions are shown separately and gate readiness; their IDs, responses and disposition bookkeeping are not assumed scientific values or an extra confirmation section. Anything can cite library passages.
 
 Writes are refused when names repeat or a step, parameter, layout, timing rule or question refers to something the SOP doesn't have, or a unit or linked record is unknown. Readiness blocks on no steps, broken formulas, timing that isn't a time and unresolved method questions, and warns about later-stage obligations and steps without a citation when the SOP has a source.
+
+Generic updates to an exact-source SOP validate the candidate attributes with the same actionable `invalid_attributes` refusal as ordinary records, including unsupported fields and malformed known fields. Invalid input leaves the saved version and question history unchanged, and rolls back earlier writes in the same change set. This error classification grants no source-adoption or question-resolution authority.
 
 An SOP links the records it names: its source document (`digitized_from`), role defaults (`uses`), prerequisite SOPs (`requires`), solution recipes (`made_with`, which must be products) and every other document it cites (`cites`, which must be library documents). A draft that an SOP links to can't be deleted.
 

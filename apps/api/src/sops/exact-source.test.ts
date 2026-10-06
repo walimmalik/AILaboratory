@@ -755,6 +755,61 @@ describe('private exact SOP source producer', () => {
     }
   });
 
+  it('reports malformed exact SOP attributes and rolls back an atomic change set', async () => {
+    const f = await fixture();
+    const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
+    const original = saved.attributes as SopAttributes;
+    const service = new RecordService(db, kinds);
+    const before = await counts();
+    const succeededBefore = (await db.select().from(activity)).filter(
+      (entry) => entry.outcome === 'succeeded',
+    ).length;
+    for (const [candidate, field] of [
+      [{ ...original, evidence_unused: null }, 'evidence_unused'],
+      [{ ...original, notes: null }, 'notes'],
+    ] as const) {
+      const input = { id: saved.id, expectedVersion: 1, attributes: candidate };
+      await expect(run(person, 'records.update', input)).rejects.toMatchObject({
+        code: 'invalid_attributes',
+        message: expect.stringContaining(field),
+        details: expect.arrayContaining([expect.objectContaining({ code: expect.any(String) })]),
+      });
+      await expect(
+        run(person, 'changes.apply', {
+          steps: [
+            {
+              operation: 'records.update',
+              input: { id: saved.id, expectedVersion: 1, label: 'Partial write' },
+            },
+            { operation: 'records.update', input: { ...input, expectedVersion: 2 } },
+          ],
+        }),
+      ).rejects.toMatchObject({
+        code: 'invalid_attributes',
+        message: expect.stringContaining(`Step 2 (records.update): Invalid sop attributes:`),
+        details: expect.arrayContaining([expect.objectContaining({ code: expect.any(String) })]),
+      });
+      // Refusals can add failed ledger entries, but no partial write or success is committed.
+      expect(await counts()).toMatchObject({ records: before.records, versions: before.versions });
+      expect(
+        (await db.select().from(activity)).filter((entry) => entry.outcome === 'succeeded'),
+      ).toHaveLength(succeededBefore);
+      expect(await service.get(person, saved.id)).toMatchObject({
+        version: 1,
+        label: saved.label,
+        attributes: original,
+      });
+      expect(await service.history(person, saved.id)).toHaveLength(1);
+    }
+    const corrected = await run<RecordEnvelope>(person, 'records.update', {
+      id: saved.id,
+      expectedVersion: 1,
+      attributes: { ...original, notes: 'Evidence checked against the selected edition' },
+    });
+    expect(corrected.version).toBe(2);
+    expect(corrected.attributes.source).toEqual(original.source);
+  });
+
   it('drafts/checks/reviews/suggests from A after B and a reparse of original file A', async () => {
     const f = await fixture();
     const saved = await publicDraft(attributes(f.source, f.passages[0]?.id));
