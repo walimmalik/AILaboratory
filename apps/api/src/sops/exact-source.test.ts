@@ -22,7 +22,11 @@ import { createProposal } from '../operations/proposal-store.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { exactSopSourceKey, readSopExactSource, SopExactSourceCache } from './exact-source.ts';
-import { createExactSopDraft, updateExactSopCitations } from './exact-source-write.ts';
+import {
+  assertSopExactSourceWrite,
+  createExactSopDraft,
+  updateExactSopCitations,
+} from './exact-source-write.ts';
 import { sopKinds } from './kinds.ts';
 
 let db: Db;
@@ -194,6 +198,35 @@ function required<T>(value: T | undefined): T {
 const firstCitation = (a: SopAttributes) => required(required(a.steps[0]).cite?.[0]);
 
 describe('private exact SOP source producer', () => {
+  it('inspects sparse registered-kind attributes without bypassing unbound or exact protections', async () => {
+    const f = await fixture();
+    const sparse = { questions: [] };
+    const guard = (before: Record<string, unknown> | undefined, after: Record<string, unknown>) =>
+      assertSopExactSourceWrite(
+        db,
+        { ...agent, via: 'records.update', approvedBy: person.actor },
+        'sop_sparse',
+        before,
+        after,
+      );
+    expect(() => guard(undefined, sparse)).not.toThrow();
+    expect(() => guard(sparse, { ...sparse, notes: 'Unrelated' })).not.toThrow();
+    const unbound = { ...sparse, source: { document: f.document.id } };
+    const cited = {
+      ...sparse,
+      steps: [{ id: 'add', cite: [{ document: f.document.id, quote: method }] }],
+    };
+    for (const before of [undefined, sparse])
+      for (const next of [unbound, cited])
+        expect(() => guard(before, next)).toThrow('unbound association');
+    expect(() => guard(unbound, { ...unbound, notes: 'Existing unknown edition' })).not.toThrow();
+    const exact = { ...sparse, source: { document: f.document.id, exact: f.source } };
+    expect(() => guard(undefined, exact)).toThrow('owning');
+    expect(() => guard(sparse, exact)).toThrow('owning');
+    expect(() => guard(exact, { ...exact, ...cited })).toThrow('owning');
+    expect(() => guard(exact, unbound)).toThrow('owning');
+  });
+
   it('canonicalizes only authenticated historical metadata, page and whitespace and composes exact citations', async () => {
     const f = await fixture();
     const a = attributes(f.source, f.passages[0]?.id);

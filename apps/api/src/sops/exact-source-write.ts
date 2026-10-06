@@ -20,8 +20,8 @@ export function assertSopExactSourceWrite(
   before: Record<string, unknown> | undefined,
   after: Record<string, unknown>,
 ) {
-  const prior = before as SopAttributes | undefined;
-  const next = after as SopAttributes;
+  const prior = before as Partial<SopAttributes> | undefined;
+  const next = after as Partial<SopAttributes>;
   const sourceFree = !prior || (!prior.source && citationsOf(prior).length === 0);
   if (sourceFree && !next.source?.exact && (next.source || citationsOf(next).length))
     throw new OperationError(
@@ -42,7 +42,7 @@ export function assertSopExactSourceWrite(
       'forbidden',
       'Exact SOP instructions require the owning validated draft operation; generic writes cannot attach, replace or remove them',
     );
-  if (stable(citationsOf(prior as SopAttributes)) !== stable(citationsOf(next)))
+  if (stable(citationsOf(prior as Partial<SopAttributes>)) !== stable(citationsOf(next)))
     throw new OperationError(
       'forbidden',
       'Exact SOP citations require the owning validated source operation',
