@@ -6,6 +6,7 @@ import { Quantity } from './quantity.ts';
 import { RecordEnvelope, RecordLink, RecordVersion } from './record.ts';
 import { ScientificDecisionMetadata } from './scientific-decisions.ts';
 import { SopDefaultDecisionPreview, SopDefaultEdit } from './sop-default-decision.ts';
+import { SopInputDecision, SopInputDecisionPreview } from './sop-input-decision.ts';
 import { ScientificQuestion } from './sops.ts';
 
 /** Schemas published as JSON Schema for MCP tools, agents and the Python service. */
@@ -25,6 +26,8 @@ export const publishedSchemas = {
   ScientificQuestion,
   SopDefaultDecisionPreview,
   SopDefaultEdit,
+  SopInputDecision,
+  SopInputDecisionPreview,
 } as const;
 
 export function toJsonSchemas(): Record<string, unknown> {

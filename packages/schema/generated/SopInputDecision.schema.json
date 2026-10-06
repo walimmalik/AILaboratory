@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "sop": {
+      "type": "string",
+      "pattern": "^sop_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "expectedVersion": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "question": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "sop",
+    "expectedVersion",
+    "question",
+    "reason"
+  ],
+  "additionalProperties": false
+}

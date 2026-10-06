@@ -226,6 +226,11 @@ export const sopOperations = [
           `${record.name} has no question ${input.question}`,
         );
       }
+      if (input.action.type === 'correct' && question.disposition.status === 'deferred')
+        throw new OperationError(
+          'invalid_input',
+          'This accepted experiment input needs reconsideration before correcting its question wording; responses may still be added.',
+        );
       const changed: ScientificQuestion =
         input.action.type === 'correct'
           ? { ...question, question: input.action.text }
