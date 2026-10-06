@@ -129,6 +129,91 @@ beforeEach(() => {
   vi.mocked(api.run).mockReset().mockResolvedValue(record(8, "I don't know"));
 });
 describe('explicit human chat responses', () => {
+  it('keeps long selected questions compact with their complete text available and stale actions outside the disclosure', () => {
+    const original = record(8, "I don't know");
+    const longQuestion =
+      'Which IL-6 kit and manufacturer protocol will define this reusable method? The preparation and assay procedure, applicable species and sample matrices, standards, controls, replicates, volumes, washes, incubation conditions, analysis and acceptance criteria are not yet established.';
+    const questions = original.attributes.questions as Array<Record<string, unknown>>;
+    const longRecord = {
+      ...original,
+      attributes: {
+        ...original.attributes,
+        questions: questions.map((question) => ({ ...question, question: longQuestion })),
+      },
+    };
+    const onSelect = vi.fn();
+    const context = SelectedQuestionContext({ selection, record: longRecord, onSelect });
+    const full = nodes(context).find(
+      (node) =>
+        node.type === 'details' &&
+        nodes(node).some(
+          (child) => child.type === 'summary' && child.props.children === 'Full question',
+        ),
+    );
+    expect(full).toBeDefined();
+    expect(full?.props.open).toBeUndefined();
+    expect(
+      nodes(full).find((node) => node.props.className === 'chat-question-full')?.props.children,
+    ).toBe(longQuestion);
+    expect(nodes(context).some((node) => node.props.className === 'chat-question-preview')).toBe(
+      true,
+    );
+    const markup = renderToStaticMarkup(context);
+    expect(markup).toContain('Plate wash');
+    expect(markup).toContain('· open');
+    expect(markup).toContain('Recorded responses');
+    expect(markup).toContain('Change question');
+    expect(markup).toContain('This SOP changed. Review the current question');
+    expect(nodes(full).some((node) => node.props.children === 'Use current question')).toBe(false);
+    const useCurrent = nodes(context).find(
+      (node) => node.props.children === 'Use current question',
+    );
+    expect(useCurrent).toBeDefined();
+    if (!useCurrent) throw new Error('Missing stale-question action');
+    (useCurrent.props.onClick as () => void)();
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ record: expect.objectContaining({ version: 8 }) }),
+      }),
+    );
+    const changed = SelectedQuestionContext({
+      selection,
+      record: {
+        ...longRecord,
+        attributes: {
+          ...longRecord.attributes,
+          questions: questions.map((question) => ({
+            ...question,
+            question: `${longQuestion} Check the kit leaflet.`,
+          })),
+        },
+      },
+      onSelect,
+    });
+    const changedFull = nodes(changed).find(
+      (node) =>
+        node.type === 'details' &&
+        nodes(node).some(
+          (child) => child.type === 'summary' && child.props.children === 'Full question',
+        ),
+    );
+    expect(changedFull?.key).not.toBe(full?.key);
+    expect((longRecord.attributes.questions as Array<{ question: string }>)[0]?.question).toBe(
+      longQuestion,
+    );
+  });
+  it('leaves short selected questions simple without a preview clamp or full-text disclosure', () => {
+    const context = SelectedQuestionContext({ selection, record: record(), onSelect: vi.fn() });
+    expect(renderToStaticMarkup(context)).toContain('What wash volume?');
+    expect(nodes(context).some((node) => node.props.className === 'chat-question-preview')).toBe(
+      false,
+    );
+    expect(
+      nodes(context).some(
+        (node) => node.type === 'summary' && node.props.children === 'Full question',
+      ),
+    ).toBe(false);
+  });
   it('collapses only historical recorded answers and keeps stale review enforced inside Revisit', async () => {
     fixture.record = record(9, "I don't know");
     const historical = tree(false, true);
