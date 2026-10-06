@@ -80,7 +80,7 @@ export function ReadinessBlock({
     : failing.length > 0
       ? { text: `${failing.length} to fix`, tone: 'warn-ink' }
       : unchecked > 0
-        ? { text: 'needs your evidence review', tone: 'warn-ink' }
+        ? { text: 'needs your review', tone: 'warn-ink' }
         : { text: 'ready to confirm', tone: 'ok-ink' };
   const words = (parts: ReadinessSection[]) => parts.map((s) => s.title.toLowerCase()).join(', ');
   const all = readiness.sections.length;
@@ -155,10 +155,11 @@ export function ReadinessBlock({
         {unchecked > 0 && (
           <p>
             {unchecked}{' '}
-            {unchecked === 1 ? 'value with evidence needs' : 'values with evidence need'} your
-            review.{' '}
+            {unchecked === 1
+              ? 'value needs checking against its source.'
+              : 'values need checking against their sources.'}{' '}
             <Link to="/records/$id" params={{ id: record.id }} search={{ tab: 'fields' }}>
-              Review evidence in All fields
+              Review values and sources
             </Link>
           </p>
         )}

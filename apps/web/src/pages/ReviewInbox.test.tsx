@@ -49,10 +49,10 @@ function html(unchecked: number) {
 it('counts unchecked evidence values rather than distinct sources while keeping the existing record-review route', () => {
   const markup = html(5);
   expect(markup).toContain('4 parts to confirm');
-  expect(markup).toContain('5 values with evidence to review');
+  expect(markup).toContain('5 values to check');
   expect(markup).not.toContain('5 sources');
   expect(markup).toContain('href="/records/doc_fixture"');
   expect(markup).not.toContain('Confirm ready ones');
-  expect(html(1)).toContain('1 value with evidence to review');
-  expect(html(0)).not.toContain('with evidence to review');
+  expect(html(1)).toContain('1 value to check');
+  expect(html(0)).not.toContain('values to check');
 });
