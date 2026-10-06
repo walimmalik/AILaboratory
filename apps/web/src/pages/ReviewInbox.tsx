@@ -637,7 +637,7 @@ function DraftRow({
         {item.unchecked > 0 && (
           <span className="agent-ink">
             {' '}
-            · {item.unchecked} {item.unchecked === 1 ? 'source' : 'sources'} to check
+            · {item.unchecked} {item.unchecked === 1 ? 'value' : 'values'} with evidence to review
           </span>
         )}
         {item.blocking?.[0] && (

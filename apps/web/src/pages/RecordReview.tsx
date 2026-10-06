@@ -69,6 +69,7 @@ export function ReadinessBlock({
     onSuccess: invalidate,
   });
   const warnings = readiness.checks.filter((c) => !c.passed && c.severity !== 'blocker').length;
+  const unchecked = record.status === 'archived' ? 0 : readiness.unchecked.length;
   // The header already says "confirmed"; here, only what is left.
   const state = !draft
     ? readiness.ready
@@ -76,10 +77,10 @@ export function ReadinessBlock({
         ? { text: `${warnings} recommended`, tone: 'warn-ink' }
         : { text: '✓ confirmed', tone: 'ok-ink' }
       : { text: 'changed since it was confirmed', tone: 'warn-ink' }
-    : readiness.ready
-      ? { text: 'ready to confirm', tone: 'ok-ink' }
-      : failing.length > 0
-        ? { text: `${failing.length} to fix`, tone: 'warn-ink' }
+    : failing.length > 0
+      ? { text: `${failing.length} to fix`, tone: 'warn-ink' }
+      : unchecked > 0
+        ? { text: 'needs your evidence review', tone: 'warn-ink' }
         : { text: 'ready to confirm', tone: 'ok-ink' };
   const words = (parts: ReadinessSection[]) => parts.map((s) => s.title.toLowerCase()).join(', ');
   const all = readiness.sections.length;
@@ -151,6 +152,16 @@ export function ReadinessBlock({
           </div>
         )}
         {confirm.error && <p className="error-text">{confirm.error.message}</p>}
+        {unchecked > 0 && (
+          <p>
+            {unchecked}{' '}
+            {unchecked === 1 ? 'value with evidence needs' : 'values with evidence need'} your
+            review.{' '}
+            <Link to="/records/$id" params={{ id: record.id }} search={{ tab: 'fields' }}>
+              Review evidence in All fields
+            </Link>
+          </p>
+        )}
         <details className="tech">
           <summary>technical details</summary>
           {readiness.sections.length > 0 && (

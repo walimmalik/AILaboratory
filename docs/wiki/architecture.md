@@ -35,6 +35,8 @@ An operation's public half is a contract in `packages/schema/src/operations` (ID
 
 Adding a capability: a contract, an implementation registered in `createRegistry`, tests for valid input, invalid input and permission, and a line in the module's skill. A new registry is first a record kind with sections and checks (ADR 0023); a calculation is a calculator operation with a line in the calculators skill (ADR 0024).
 
+Draft evidence review continues from Review to the record Overview: both count values with unchecked evidence, and Overview links to their evidence in **All fields**. The count does not mean separate source files. Existing blockers, edit warnings and confirmation rules still apply; see [web app](../architecture/web-app.md).
+
 ## Modules built so far
 
 | Module | Doc |
