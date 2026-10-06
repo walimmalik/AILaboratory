@@ -69,6 +69,8 @@ The Responses adapter stores ordered output with its protocol, endpoint and mode
 
 Live evaluation establishes observed saved work, not scientific validation or a reliability guarantee. Tool exposure and context-size optimization are a separate measured step in plan 004g.
 
+A Responses request whose deadline expires before headers or while reading the body reports the model timeout and leaves the conversation failed, available for another ask. Timeout classification requires the request signal's timeout reason; transport diagnostics remain sanitized. The 180-second deadline is unchanged and requests are not automatically retried.
+
 ## Operations and doors
 
 | Operation | |
