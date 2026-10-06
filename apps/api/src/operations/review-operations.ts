@@ -7,7 +7,7 @@ import {
   reviewList,
 } from '@ailab/schema';
 import { and, count, eq, inArray, ne } from 'drizzle-orm';
-import { conversationTitles } from '../assistant/store.ts';
+import { conversationTitles, requestTitles } from '../assistant/store.ts';
 import type { Db } from '../db/client.ts';
 import { recordLinks, records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
@@ -215,14 +215,7 @@ export const reviewOperations = [
         ),
         ...notices,
       ].filter((item) => !input.mine || item.for === undefined || item.for === me);
-      const makers = new Map(drafts.map((d) => [d.id, d.createdBy]));
-      const items = await grouped(deps.db, ctx, listed, (item) =>
-        item.type === 'draft'
-          ? makers.get(item.record.id)
-          : item.type === 'change'
-            ? item.proposal.proposedBy
-            : undefined,
-      );
+      const items = await grouped(deps.db, ctx, listed, new Map(drafts.map((d) => [d.id, d])));
       items.sort(byUrgency);
       // Counts come first, so an agent whose view of a long result is cut still has the totals.
       return {
@@ -241,15 +234,21 @@ export const reviewOperations = [
 ];
 
 /**
- * Puts items one agent made in one conversation in a group named after it (review 2026-10-01
- * item 16), when there are two or more: an ask that drafted five documents is read as one.
+ * Drafts group by their saved request, including a single draft. Proposals keep their existing
+ * session grouping and threshold; neither grouping changes review eligibility or authority.
  */
 async function grouped(
   db: Db,
   ctx: RecordContext,
   items: ReviewItem[],
-  maker: (item: ReviewItem) => Actor | undefined,
+  drafts: Map<string, RecordEnvelope>,
 ): Promise<ReviewItem[]> {
+  const maker = (item: ReviewItem) =>
+    item.type === 'draft'
+      ? drafts.get(item.record.id)?.createdBy
+      : item.type === 'change'
+        ? item.proposal.proposedBy
+        : undefined;
   const session = (item: ReviewItem) => {
     const actor = maker(item);
     return actor && sessionOf(actor);
@@ -261,7 +260,26 @@ async function grouped(
   }
   const shared = [...sizes].filter(([, n]) => n > 1).map(([id]) => id);
   const titles = await conversationTitles(db, ctx, shared);
+  const requests = await requestTitles(
+    db,
+    ctx,
+    [...drafts.values()].flatMap((draft) =>
+      draft.origin?.type === 'user_message' ? [draft.origin] : [],
+    ),
+  );
   return items.map((item) => {
+    if (item.type === 'draft') {
+      const origin = drafts.get(item.record.id)?.origin;
+      if (origin?.type !== 'user_message') return item;
+      const key = JSON.stringify([origin.conversation, origin.message]);
+      return {
+        ...item,
+        group: {
+          id: `request:${key}`,
+          title: requests.get(key) ?? 'Saved request (text unavailable)',
+        },
+      };
+    }
     const id = session(item);
     if (!id || !shared.includes(id)) return item;
     const agent = maker(item);

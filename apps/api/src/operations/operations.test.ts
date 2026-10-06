@@ -9,10 +9,12 @@ import {
   recordsReadiness,
   reviewList,
 } from '@ailab/schema';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { appendMessage, createConversation } from '../assistant/store.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { records, recordVersions, users } from '../db/schema.ts';
+import { labs, records, recordVersions, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { memoryKinds } from '../memory/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
@@ -1062,9 +1064,8 @@ describe('review inbox', () => {
       message: 'Check the color',
     });
     expect(counts.notices).toBe(1);
-    const group = { id: 'cnv_test', title: 'Work by Claude in one session' };
     for (const id of [first.id, second.id])
-      expect(items.find((i) => i.type === 'draft' && i.record.id === id)).toMatchObject({ group });
+      expect(items.find((i) => i.type === 'draft' && i.record.id === id)?.group).toBeUndefined();
     expect(
       items.find((i) => i.type === 'draft' && i.record.id === plain.id)?.group,
     ).toBeUndefined();
@@ -1073,6 +1074,195 @@ describe('review inbox', () => {
     expect(mine.items.some((i) => i.type === 'draft' && i.record.id === theirs.id)).toBe(false);
     expect(mine.items.some((i) => i.type === 'notice')).toBe(true);
     expect(() => reviewList.output.parse({ items, counts })).not.toThrow();
+  });
+
+  it('groups drafts by separate saved requests, retaining the original across continuation and edits', async () => {
+    const conversation = await createConversation(db, person, {
+      title: 'First chat title',
+      agentName: 'Claude',
+      provider: 'test',
+      model: 'test',
+    });
+    const request = await appendMessage(db, conversation.id, {
+      role: 'user',
+      text: '  Make A1 and A2\nfrom the source draft  ',
+    });
+    const separate = await appendMessage(db, conversation.id, {
+      role: 'user',
+      text: 'Make B1 as a separate request',
+    });
+    if (
+      request.role !== 'user' ||
+      separate.role !== 'user' ||
+      request.origin?.type !== 'user_message' ||
+      separate.origin?.type !== 'user_message'
+    )
+      throw new Error('Expected user requests');
+    const firstCtx = {
+      ...agent,
+      origin: request.origin,
+      actor: { ...agent.actor, sessionRef: conversation.id } as Actor,
+    };
+    const first = await create(firstCtx, { label: 'A1' });
+    const second = await create(firstCtx, { label: 'A2' });
+    const third = await create({ ...firstCtx, origin: separate.origin }, { label: 'B1' });
+    const reply = await createConversation(db, person, {
+      title: 'Reply chat',
+      agentName: 'Claude',
+      provider: 'test',
+      model: 'test',
+    });
+    const continued = await create(
+      { ...firstCtx, actor: { ...agent.actor, sessionRef: reply.id } as Actor },
+      { label: 'Contextual continuation' },
+    );
+    await run({ ...agent, origin: separate.origin }, 'records.update', {
+      id: first.id,
+      expectedVersion: 1,
+      label: 'A1 edited later',
+    });
+    const result = await run<{
+      items: ReviewItem[];
+      counts: { total: number; drafts: { widget: number } };
+    }>(person, 'review.list', {});
+    expect(result.counts).toMatchObject({ total: 4, drafts: { widget: 4 } });
+    const drafts = result.items.filter((item) => item.type === 'draft');
+    expect(drafts.map((item) => item.record.id).sort()).toEqual(
+      [first.id, second.id, third.id, continued.id].sort(),
+    );
+    const firstGroup = drafts.find((item) => item.record.id === first.id)?.group;
+    expect(firstGroup?.title).toBe('Make A1 and A2 from the source draft');
+    for (const record of [second, continued])
+      expect(drafts.find((item) => item.record.id === record.id)?.group).toEqual(firstGroup);
+    const separateGroup = drafts.find((item) => item.record.id === third.id)?.group;
+    expect(separateGroup?.title).toBe('Make B1 as a separate request');
+    expect(separateGroup?.id).not.toBe(firstGroup?.id);
+    for (const draft of drafts) expect(draft).toMatchObject({ batchable: false, assumed: 2 });
+    expect(drafts[0]?.record.id).toBe(first.id);
+    const limited = await run<{ items: ReviewItem[] }>(person, 'review.list', {
+      kind: 'widget',
+      mine: true,
+      limit: 1,
+    });
+    expect(limited.items).toEqual(result.items.slice(0, 1));
+  });
+
+  it('uses only exact user-message labels authorized for this org, lab and person', async () => {
+    const own = await createConversation(db, person, {
+      title: 'Wrong conversation title',
+      agentName: 'Claude',
+      provider: 'test',
+      model: 'test',
+    });
+    const message = await appendMessage(db, own.id, {
+      role: 'user',
+      text: 'Authorized request text',
+    });
+    const otherLab = 'lab_01J9ZS4K8D6W3M5T7V9X1Y2Z3B';
+    await db.insert(labs).values({ id: otherLab, orgId: person.orgId, name: 'Other lab' });
+    const otherCtx = { ...person, labId: otherLab };
+    const foreign = await createConversation(db, otherCtx, {
+      title: 'Foreign title',
+      agentName: 'Claude',
+      provider: 'test',
+      model: 'test',
+    });
+    const foreignMessage = await appendMessage(db, foreign.id, {
+      role: 'user',
+      text: 'FOREIGN PRIVATE TEXT',
+    });
+    const samId = 'usr_01J9ZS4K8D6W3M5T7V9X1Y2Z3B';
+    await db.insert(users).values({ id: samId, orgId: person.orgId, displayName: 'Sam' });
+    const sam = await createConversation(
+      db,
+      { ...person, actor: { type: 'user', userId: samId } },
+      { title: 'Sam title', agentName: 'Claude', provider: 'test', model: 'test' },
+    );
+    const samMessage = await appendMessage(db, sam.id, {
+      role: 'user',
+      text: 'SAME LAB PRIVATE TEXT',
+    });
+    const assistant = await appendMessage(db, own.id, {
+      role: 'assistant',
+      text: 'NOT A USER REQUEST',
+      toolCalls: [],
+      model: 'test',
+    });
+    if (
+      message.role !== 'user' ||
+      foreignMessage.role !== 'user' ||
+      samMessage.role !== 'user' ||
+      message.origin?.type !== 'user_message' ||
+      foreignMessage.origin?.type !== 'user_message' ||
+      samMessage.origin?.type !== 'user_message'
+    )
+      throw new Error('Expected user requests');
+    const known = await create({ ...agent, origin: message.origin });
+    const unavailable = [];
+    for (const origin of [
+      foreignMessage.origin,
+      samMessage.origin,
+      { type: 'user_message' as const, conversation: own.id, message: foreignMessage.id },
+      { type: 'user_message' as const, conversation: own.id, message: assistant.id },
+      { type: 'user_message' as const, conversation: own.id, message: 'missing-message' },
+    ]) {
+      unavailable.push(await create({ ...agent, origin }));
+    }
+    const { items } = await run<{ items: ReviewItem[] }>(person, 'review.list', {});
+    expect(
+      items.find((item) => item.type === 'draft' && item.record.id === known.id)?.group?.title,
+    ).toBe('Authorized request text');
+    for (const record of unavailable)
+      expect(
+        items.find((item) => item.type === 'draft' && item.record.id === record.id)?.group?.title,
+      ).toBe('Saved request (text unavailable)');
+    expect(JSON.stringify(items)).not.toMatch(
+      /FOREIGN PRIVATE|SAME LAB PRIVATE|NOT A USER REQUEST|Wrong conversation title/,
+    );
+    const asAgent = await run<{ items: ReviewItem[] }>(agent, 'review.list', {});
+    expect(asAgent.items).toEqual(items);
+  });
+
+  it('keeps absent and unknown draft origins individual while preserving proposal session groups', async () => {
+    const conversation = await createConversation(db, person, {
+      title: 'Existing proposal conversation',
+      agentName: 'Claude',
+      provider: 'test',
+      model: 'test',
+    });
+    const ctx = { ...agent, actor: { ...agent.actor, sessionRef: conversation.id } as Actor };
+    const unknown = await create(ctx);
+    const historical = await create(ctx);
+    await db.update(records).set({ origin: null }).where(eq(records.id, historical.id));
+    const active = await create(person, { status: 'active' });
+    for (const label of ['Proposed first edit', 'Proposed second edit']) {
+      expect(
+        (
+          await registry.execute(ctx, 'records.update', {
+            id: active.id,
+            expectedVersion: 1,
+            label,
+          })
+        ).status,
+      ).toBe('proposed');
+    }
+    const { items, counts } = await run<{
+      items: ReviewItem[];
+      counts: { total: number; changes: number };
+    }>(person, 'review.list', {});
+    expect(counts).toMatchObject({ total: 4, changes: 2 });
+    for (const record of [unknown, historical])
+      expect(
+        items.find((item) => item.type === 'draft' && item.record.id === record.id)?.group,
+      ).toBeUndefined();
+    const changes = items.filter((item) => item.type === 'change');
+    expect(changes).toHaveLength(2);
+    for (const change of changes)
+      expect(change.group).toEqual({
+        id: conversation.id,
+        title: 'Existing proposal conversation',
+      });
+    expect(changes.map((item) => item.tier)).toEqual(['needs_you', 'needs_you']);
   });
 
   it('is empty when nothing waits, and refuses unknown input', async () => {

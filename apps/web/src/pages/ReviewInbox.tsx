@@ -412,8 +412,8 @@ function kindWords(kind: string): string {
 }
 
 /**
- * Items in runs: those one agent made in one conversation sit together under its title, in the
- * order the first of them comes; the rest stay where they are.
+ * Items with the server's group identity sit together in the order the first member comes;
+ * draft requests and proposal conversations have distinct server-owned grouping rules.
  */
 function inGroups<T extends ReviewItem>(
   items: T[],
@@ -542,7 +542,8 @@ function DraftTable({ items, me }: { items: DraftItem[]; me: ReturnType<typeof u
                     <td colSpan={4} className="group-cell">
                       {run.group.title}{' '}
                       <span className="muted">
-                        · {run.items.length} drafts from one conversation
+                        · {run.items.length} {run.items.length === 1 ? 'draft' : 'drafts'} from this
+                        request
                       </span>
                     </td>
                   </tr>,
