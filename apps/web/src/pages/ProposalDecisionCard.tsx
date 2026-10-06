@@ -4,10 +4,12 @@ import {
   type Proposal,
   proposalsApprove,
   proposalsReject,
+  Quantity,
   RecordEnvelope,
   type ReviewItem,
   ScientificQuestion,
   SopDefaultDecisionPreview,
+  SopDilutionDecisionPreview,
   SopInputDecisionPreview,
   SopMaterial,
   SopMaterialDecisionPreview,
@@ -16,6 +18,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tansta
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
+import { exactInstructionsSearch } from '../lib/exact-source.ts';
 import { actorLabel, formatValue, formatWhen } from '../lib/format.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
@@ -55,7 +58,9 @@ export function supportedDecision(proposal: Proposal) {
   const input = SopInputDecisionPreview.safeParse(proposal.preview);
   if (input.success) return input.data;
   const material = SopMaterialDecisionPreview.safeParse(proposal.preview);
-  return material.success ? material.data : undefined;
+  if (material.success) return material.data;
+  const dilution = SopDilutionDecisionPreview.safeParse(proposal.preview);
+  return dilution.success ? dilution.data : undefined;
 }
 
 /** Publish the returned persisted proposal immediately to both views, before refetching. */
@@ -235,6 +240,23 @@ export function ProposalDecisionCard({
         savedMaterial.data.default === undefined))
       ? question.data
       : undefined;
+  const savedFinal =
+    preview.type === 'sop_dilution_final_volume'
+      ? Quantity.safeParse(variables.find((v) => v.name === preview.completion.variable)?.value)
+      : undefined;
+  const resolved =
+    preview.type === 'sop_dilution_final_volume' &&
+    question?.success &&
+    question.data.disposition.status === 'resolved' &&
+    question.data.disposition.proposal === shown.id &&
+    question.data.disposition.action.sop === preview.target.id &&
+    question.data.disposition.action.question === preview.question.id &&
+    JSON.stringify(question.data.disposition.action.completion) ===
+      JSON.stringify(preview.completion) &&
+    savedFinal?.success &&
+    JSON.stringify(savedFinal.data) === JSON.stringify(preview.completion.value)
+      ? question.data
+      : undefined;
   const blocked =
     busy ||
     decide.isPending ||
@@ -252,7 +274,7 @@ export function ProposalDecisionCard({
   return (
     <article
       className="proposal decision-card"
-      aria-label={`${preview.type === 'sop_volume_default' ? 'Default change' : preview.type === 'sop_experiment_input' ? 'Experiment input decision' : 'Experiment material decision'}: ${preview.target.name}`}
+      aria-label={`${preview.type === 'sop_volume_default' ? 'Default change' : preview.type === 'sop_dilution_final_volume' ? 'Dilution final volume decision' : preview.type === 'sop_experiment_input' ? 'Experiment input decision' : 'Experiment material decision'}: ${preview.target.name}`}
     >
       <p>
         <Link to="/records/$id" params={{ id: preview.target.id }}>
@@ -261,6 +283,8 @@ export function ProposalDecisionCard({
       </p>
       {preview.type === 'sop_volume_default' ? (
         <VolumeDecisionDetails preview={preview} />
+      ) : preview.type === 'sop_dilution_final_volume' ? (
+        <DilutionDecisionDetails preview={preview} />
       ) : (
         <ObligationDecisionDetails preview={preview} />
       )}
@@ -315,7 +339,26 @@ export function ProposalDecisionCard({
               {saved.data.status === 'draft' ? 'still draft' : saved.data.status}.
             </span>
           )}{' '}
-          {preview.type !== 'sop_volume_default' &&
+          {preview.type === 'sop_dilution_final_volume' && (
+            <span>
+              {resolved ? (
+                <>
+                  Resolved selected method question: {resolved.question} Recorded final volume:{' '}
+                  {formatValue(
+                    variables.find((v) => v.name === preview.completion.variable)?.value,
+                  )}
+                  .{' '}
+                  {saved.success && saved.data.status === 'draft'
+                    ? 'SOP still draft; final confirmation is separate.'
+                    : ''}
+                </>
+              ) : (
+                'The saved method resolution is unavailable.'
+              )}
+            </span>
+          )}
+          {(preview.type === 'sop_experiment_input' ||
+            preview.type === 'sop_experiment_material') &&
             (accepted ? (
               <span>
                 {preview.type === 'sop_experiment_input'
@@ -372,7 +415,6 @@ export function ProposalDecisionCard({
 
 function VolumeDecisionDetails({ preview }: { preview: SopDefaultDecisionPreview }) {
   const checks = preview.after.readiness.checks;
-  const evidence = preview.confirmation.evidence;
   return (
     <>
       <p>
@@ -385,60 +427,7 @@ function VolumeDecisionDetails({ preview }: { preview: SopDefaultDecisionPreview
         values. The SOP stays draft; final confirmation is separate. This does not establish
         scientific validity.
       </p>
-      <details>
-        <summary>Values included in this review</summary>
-        {evidence.variables && (
-          <p>
-            Section origin: <EvidenceText evidence={evidence.variables} />.
-          </p>
-        )}
-        {preview.confirmation.assumed.includes('variables') && (
-          <p className="agent-ink">The Values section includes unverified estimates.</p>
-        )}
-        {preview.confirmation.unchecked.includes('variables') && (
-          <p>The Values section has a source to check.</p>
-        )}
-        <ul>
-          {preview.confirmation.section.after.variables.map((variable) => {
-            const path = `/variables/${variable.name}`;
-            const e = evidence[path];
-            return (
-              <li key={variable.name}>
-                <strong>{variable.label}</strong>: {formatValue(variable.value)} ·{' '}
-                {variable.kind === 'default'
-                  ? 'planning default'
-                  : variable.kind === 'record'
-                    ? 'from a record'
-                    : variable.kind === 'computed'
-                      ? 'calculated'
-                      : 'input'}
-                {variable.note && <span> · {variable.note}</span>}
-                {preview.confirmation.assumed.includes(path) && (
-                  <span className="agent-ink"> · unverified estimate</span>
-                )}
-                {preview.confirmation.unchecked.includes(path) && (
-                  <span> · source needs checking</span>
-                )}
-                {e && (
-                  <span>
-                    {' '}
-                    · <EvidenceText evidence={e} />
-                  </span>
-                )}
-                <details>
-                  <summary>Technical value details</summary>
-                  <pre>{JSON.stringify(variable, null, 2)}</pre>
-                  {e && <pre>{JSON.stringify(e, null, 2)}</pre>}
-                </details>
-              </li>
-            );
-          })}
-        </ul>
-        <details className="tech">
-          <summary>Section evidence details</summary>
-          <pre>{JSON.stringify(evidence, null, 2)}</pre>
-        </details>
-      </details>
+      <ValuesReview preview={preview} />
       <details>
         <summary>Checks and remaining questions ({preview.remainingQuestions} open)</summary>
         <ul>
@@ -460,6 +449,108 @@ function VolumeDecisionDetails({ preview }: { preview: SopDefaultDecisionPreview
               {q.question} · {q.status} ·{' '}
               {q.stage === 'method' ? 'method' : q.stage === 'experiment' ? 'experiment' : 'run'}
             </li>
+          ))}
+        </ul>
+      </details>
+    </>
+  );
+}
+
+function DilutionDecisionDetails({ preview }: { preview: SopDilutionDecisionPreview }) {
+  const me = useMe();
+  const c = preview.completion;
+  const label =
+    preview.confirmation.section.after.variables.find((v) => v.name === c.variable)?.label ??
+    'Final volume';
+  const after = preview.calculation.after;
+  return (
+    <>
+      <p>
+        <strong>{label}</strong>: Missing → {formatValue(c.value)}
+      </p>
+      <p>
+        <strong>{preview.step.title}</strong> ·{' '}
+        <a href={`/records/${preview.target.id}#sop-question-${preview.question.id}`}>
+          {preview.question.question}
+        </a>
+      </p>
+      <p>{preview.reason}</p>
+      <p>
+        Only this selected method question will be resolved. Applying reviews the whole{' '}
+        {preview.confirmation.section.title} section, including its other values. The SOP stays
+        draft; final confirmation is separate.
+      </p>
+      <p>
+        Source-number agreement and dilution arithmetic are checked. By applying, you accept that
+        this retained quotation supplies this final volume. This does not establish full assay
+        validity or physical feasibility.
+      </p>
+      {preview.warnings.map((warning) => (
+        <p className="warn-ink" key={warning}>
+          {warning}
+        </p>
+      ))}
+      <details>
+        <summary>Instructions and dilution calculation</summary>
+        <p>
+          {c.source.title}
+          {c.source.printedRevision && ` · ${c.source.printedRevision}`} ·{' '}
+          <Link
+            to="/library/instructions"
+            search={exactInstructionsSearch(c.source, { passage: c.passage })}
+          >
+            Open retained passage
+          </Link>
+        </p>
+        <p>
+          {preview.passage.heading.join(' / ')}
+          {preview.passage.page && ` · page ${preview.passage.page}`}
+        </p>
+        <blockquote className="text">{preview.passage.text}</blockquote>
+        <p className="text">Selected quotation: {c.quote}</p>
+        <p>Dilution factor unchanged: {c.factor.value}.</p>
+        {preview.calculation.before.status === 'missing' && (
+          <p>Before: calculation waits for the missing final volume.</p>
+        )}
+        {after.status === 'calculated' ? (
+          <p>
+            Calculated sample: {formatValue(after.sample)} · Diluent: {formatValue(after.diluent)} ·
+            Recomposed volume: {formatValue(after.recomposed)} · Final volume:{' '}
+            {formatValue(after.final)}.
+          </p>
+        ) : (
+          <p>Calculation is unavailable.</p>
+        )}
+        <p>Saved responses</p>
+        {preview.question.responses.length ? (
+          <ol>
+            {preview.question.responses.map((response) => (
+              <li key={`${response.at}-${response.version}`}>
+                <p className="text">{response.text}</p>
+                <span className="muted">
+                  Recorded by {actorLabel(response.by, me)} · {formatWhen(response.at)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">No response recorded.</p>
+        )}
+      </details>
+      <ValuesReview preview={preview} />
+      <details>
+        <summary>Checks and remaining questions ({preview.remainingQuestions} open)</summary>
+        <ul>
+          {preview.after.readiness.checks.map((check) => (
+            <li key={check.id}>
+              {check.passed ? 'Pass' : 'Needs attention'}: {check.label}
+              {check.message && ` · ${check.message}`} · {check.source}
+            </li>
+          ))}
+        </ul>
+        <ul>
+          {preview.after.readiness.missing.map((missing) => (
+            <li key={missing}>{missing}</li>
           ))}
         </ul>
       </details>
@@ -599,5 +690,69 @@ function ObligationDecisionDetails({
         ))}
       </details>
     </>
+  );
+}
+
+function ValuesReview({
+  preview,
+}: {
+  preview: SopDefaultDecisionPreview | SopDilutionDecisionPreview;
+}) {
+  const evidence = preview.confirmation.evidence;
+  return (
+    <details>
+      <summary>Values included in this review</summary>
+      {evidence.variables && (
+        <p>
+          Section origin: <EvidenceText evidence={evidence.variables} />.
+        </p>
+      )}
+      {preview.confirmation.assumed.includes('variables') && (
+        <p className="agent-ink">The Values section includes unverified estimates.</p>
+      )}
+      {preview.confirmation.unchecked.includes('variables') && (
+        <p>The Values section has a source to check.</p>
+      )}
+      <ul>
+        {preview.confirmation.section.after.variables.map((variable) => {
+          const path = `/variables/${variable.name}`;
+          const e = evidence[path];
+          return (
+            <li key={variable.name}>
+              <strong>{variable.label}</strong>: {formatValue(variable.value)} ·{' '}
+              {variable.kind === 'default'
+                ? 'planning default'
+                : variable.kind === 'record'
+                  ? 'from a record'
+                  : variable.kind === 'computed'
+                    ? 'calculated'
+                    : 'input'}
+              {variable.note && <span> · {variable.note}</span>}
+              {preview.confirmation.assumed.includes(path) && (
+                <span className="agent-ink"> · unverified estimate</span>
+              )}
+              {preview.confirmation.unchecked.includes(path) && (
+                <span> · source needs checking</span>
+              )}
+              {e && (
+                <span>
+                  {' '}
+                  · <EvidenceText evidence={e} />
+                </span>
+              )}
+              <details>
+                <summary>Technical value details</summary>
+                <pre>{JSON.stringify(variable, null, 2)}</pre>
+                {e && <pre>{JSON.stringify(e, null, 2)}</pre>}
+              </details>
+            </li>
+          );
+        })}
+      </ul>
+      <details className="tech">
+        <summary>Section evidence details</summary>
+        <pre>{JSON.stringify(evidence, null, 2)}</pre>
+      </details>
+    </details>
   );
 }
