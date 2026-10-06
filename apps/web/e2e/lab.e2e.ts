@@ -285,9 +285,7 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
   const volume = page.getByRole('region', { name: 'Volume' });
 
   // What the agent assumed is named on the Overview, with one Confirm.
-  await expect(
-    readiness.getByText(/One value remains unverified: color/),
-  ).toBeVisible();
+  await expect(readiness.getByText(/One value remains unverified: color/)).toBeVisible();
   await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
   // All fields says once per part where its values came from (plan 004f N7).
