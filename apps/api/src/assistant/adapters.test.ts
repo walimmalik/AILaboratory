@@ -3,6 +3,7 @@ import { AnthropicModel } from './anthropic.ts';
 import { modelFromEnv } from './config.ts';
 import { ModelError, type ModelRequest } from './model.ts';
 import { OpenAiCompatibleModel } from './openai-compatible.ts';
+import { OpenAiResponsesModel } from './responses.ts';
 
 const request: ModelRequest = {
   system: 'You are the lab assistant.',
@@ -46,6 +47,63 @@ function fakeFetch(reply: unknown, status = 200) {
   }) as typeof globalThis.fetch;
   return { fetch, sent };
 }
+
+it.each(['chat-completions', 'responses', 'anthropic'])(
+  'sends a read-only summary with tool history and no offered tools through %s',
+  async (provider) => {
+    const { fetch, sent } = fakeFetch(
+      provider === 'chat-completions'
+        ? { choices: [{ finish_reason: 'stop', message: { content: 'Summary.' } }] }
+        : provider === 'responses'
+          ? {
+              status: 'completed',
+              output: [
+                {
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text: 'Summary.' }],
+                },
+              ],
+            }
+          : {
+              id: 'msg_1',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-5-5',
+              stop_reason: 'end_turn',
+              stop_sequence: null,
+              usage: { input_tokens: 10, output_tokens: 10 },
+              content: [{ type: 'text', text: 'Summary.' }],
+            },
+    );
+    const options = {
+      provider: 'openai-compatible',
+      baseUrl: 'https://example.org/v1',
+      apiKey: 'test',
+      model: 'test',
+      fetch,
+    };
+    const model =
+      provider === 'responses'
+        ? new OpenAiResponsesModel(options)
+        : provider === 'chat-completions'
+          ? new OpenAiCompatibleModel(options)
+          : new AnthropicModel({ apiKey: 'test', model: 'claude-opus-5-5', fetch });
+    expect(await model.complete({ ...request, tools: [] })).toMatchObject({
+      text: 'Summary.',
+      stop: 'end',
+      toolCalls: [],
+    });
+    const body = sent[0]?.body;
+    expect(body?.tools ?? []).toEqual([]);
+    expect(body).not.toHaveProperty('tool_choice');
+    // The provider still receives the preceding call and its committed outcome.
+    const history = JSON.stringify(body?.messages ?? body?.input);
+    expect(history).toContain('call_1');
+    expect(history).toContain('records_get');
+    expect(history).toContain('done');
+  },
+);
 
 describe('OpenAI-compatible (OpenRouter)', () => {
   const make = (fetch: typeof globalThis.fetch) =>

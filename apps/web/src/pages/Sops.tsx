@@ -564,6 +564,7 @@ function whereWords(a: SopAttributes, path: string): string {
   const i = Number(index);
   const tail = rest.filter((t) => Number.isNaN(Number(t))).join(' ');
   if (section === 'steps') {
+    if (index === '-') return 'A new step';
     const step = a.steps[i];
     const param = rest[0] === 'parameters' ? step?.parameters?.[Number(rest[1])]?.name : undefined;
     return `Step ${i + 1}${step?.title ? ` (${step.title})` : ''}${param ? `, ${param}` : tail ? `, ${tail}` : ''}`;

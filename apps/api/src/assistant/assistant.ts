@@ -138,13 +138,13 @@ export class Assistant {
       };
       const memory = await memoryNote(deps, ctx, ask);
       const system = `${await systemPrompt(db, ctx, conversationId)}${await personEdits(deps, ctx, conversationId)}${memory.text}${await pageNote(deps, ctx, ask?.role === 'user' ? ask.page : undefined)}${await pendingNote(deps, ctx, conversationId)}`;
-      const terminal = async (text: string) => {
-        const message = await appendMessage(db, conversationId, {
-          role: 'assistant',
-          text,
-          toolCalls: [],
-          model: model.model,
-        });
+      const terminal = async (text: string, raw?: unknown) => {
+        const message = await appendMessage(
+          db,
+          conversationId,
+          { role: 'assistant', text, toolCalls: [], model: model.model },
+          raw === undefined ? undefined : { provider: model.provider, model: model.model, raw },
+        );
         this.publish(conversationId, { type: 'message', message });
       };
       for (let step = 0; step < MAX_STEPS; step++) {
@@ -236,12 +236,30 @@ export class Assistant {
           return await finish('idle');
         }
       }
-      await terminal(
-        `I reached the limit of ${MAX_STEPS} steps. Review the work so far and tell me the next step to take.`,
-      );
+      // Re-read committed outcomes, including the last action turn's results. This request has
+      // no tools, and its response has no execution path even if the provider returns calls.
+      const rows = await messageRows(db, conversationId);
+      const names = toolsFor(registry, namespacesOf(rows, deps)).operationOf.keys();
+      let summary = `I reached the action limit of ${MAX_STEPS} turns. Completed changes remain saved. Review the saved work and unresolved questions before sending a new request.`;
+      let raw: unknown;
+      try {
+        const turn = await model.complete({
+          system: `${system}\n\nThe action limit has been reached. This request is ONLY a final read-only summary of the persisted history. No tools are available and no more actions will run. Distinguish actual saved work from failed or not-executed calls, unresolved scientific questions, and remaining work. Do not claim the task is complete or promise continuation or future actions.`,
+          messages: toModelMessages(rows, model, new Set(names)),
+          tools: [],
+          signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
+        });
+        if (turn.stop === 'end' && turn.text.trim() && !turn.toolCalls.length) {
+          summary = turn.text;
+          raw = turn.raw;
+        }
+      } catch {
+        // A failed summary must not obscure the action limit or echo provider diagnostics.
+      }
+      await terminal(summary, raw);
       await finish(
         'failed',
-        `The assistant stopped after ${MAX_STEPS} steps without finishing. Tell it how to continue.`,
+        'The assistant action limit was reached; completed changes remain saved.',
       );
     } catch (error) {
       if (!(error instanceof ModelError)) console.error('assistant run failed', error);
