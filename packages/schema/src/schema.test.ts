@@ -104,6 +104,8 @@ describe('json schema', () => {
       'RecordVersion',
       'ScientificDecisionMetadata',
       'ScientificQuestion',
+      'SopDefaultDecisionPreview',
+      'SopDefaultEdit',
     ]);
   });
 });
