@@ -11,7 +11,7 @@ vi.mock('@tanstack/react-router', () => ({
     <a href={`/records/${params.id}`}>{children}</a>
   ),
 }));
-function html(unchecked: number) {
+function html(unchecked: number, drafts?: { id: string; group?: { id: string; title: string } }[]) {
   const client = new QueryClient();
   const item: Extract<ReviewItem, { type: 'draft' }> = {
     type: 'draft',
@@ -36,9 +36,26 @@ function html(unchecked: number) {
     unchecked,
     ready: false,
   };
+  const items = drafts?.map((draft, index) => ({
+    ...item,
+    group: draft.group,
+    record: {
+      ...item.record,
+      id: draft.id,
+      name: `DOC-${String(index + 3).padStart(4, '0')}`,
+      label: draft.id,
+    },
+  })) ?? [item];
   client.setQueryData(reviewQuery.queryKey, {
-    items: [item],
-    counts: { total: 1, changes: 0, mentions: 0, notices: 0, needsYou: 0, drafts: { document: 1 } },
+    items,
+    counts: {
+      total: items.length,
+      changes: 0,
+      mentions: 0,
+      notices: 0,
+      needsYou: 0,
+      drafts: { document: items.length },
+    },
   });
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
@@ -55,4 +72,38 @@ it('counts unchecked evidence values rather than distinct sources while keeping 
   expect(markup).not.toContain('Confirm ready ones');
   expect(html(1)).toContain('1 value to check');
   expect(html(0)).not.toContain('values to check');
+});
+
+it('labels a shared request and a separate single draft without grouping unknown origins or granting a group confirmation', () => {
+  const first = { id: 'request:first', title: 'Create A1 and A2' };
+  const second = { id: 'request:second', title: 'Create B1 separately' };
+  const markup = html(1, [
+    { id: 'doc_a1', group: first },
+    { id: 'doc_b1', group: second },
+    { id: 'doc_a2', group: first },
+    { id: 'doc_unknown1' },
+    { id: 'doc_unknown2' },
+    {
+      id: 'doc_unavailable',
+      group: { id: 'request:unavailable', title: 'Saved request (text unavailable)' },
+    },
+  ]);
+  expect(markup.match(/Create A1 and A2/g)).toHaveLength(1);
+  expect(markup).toContain('2 drafts from this request');
+  expect(markup).toContain('Create B1 separately');
+  expect(markup.match(/1 draft from this request/g)).toHaveLength(2);
+  expect(markup).toContain('Saved request (text unavailable)');
+  expect(markup).not.toContain('from one conversation');
+  expect(markup.match(/class="group-cell"/g)).toHaveLength(3);
+  for (const id of [
+    'doc_a1',
+    'doc_a2',
+    'doc_b1',
+    'doc_unknown1',
+    'doc_unknown2',
+    'doc_unavailable',
+  ]) {
+    expect(markup).toContain(`href="/records/${id}"`);
+  }
+  expect(markup).not.toContain('Confirm all');
 });

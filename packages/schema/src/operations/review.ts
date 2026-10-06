@@ -28,7 +28,7 @@ const addressed = {
     .object({ id: z.string(), title: z.string() })
     .optional()
     .describe(
-      'Items one agent made in one conversation, listed together; set when there are two or more',
+      'Drafts with the same saved user-message origin, including a single draft: title is the scoped request excerpt or says its text is unavailable. Unknown draft origins stay individual. Proposed changes retain conversation grouping when two or more items share a session. Grouping grants no confirmation authority',
     ),
   due: z.iso.date().optional().describe('The date it has to be decided by'),
   blocking: z

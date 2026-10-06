@@ -1,5 +1,10 @@
 import { newId } from '@ailab/domain';
-import type { AssistantMessage, Conversation, ConversationSummary } from '@ailab/schema';
+import type {
+  AssistantMessage,
+  Conversation,
+  ConversationSummary,
+  OriginatingIntent,
+} from '@ailab/schema';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { conversationMessages, conversations } from '../db/schema.ts';
@@ -144,8 +149,8 @@ export async function listConversations(
 }
 
 /**
- * The titles of these conversations in the lab, whoever had them: Review names the conversation
- * an agent's drafts came from (review 2026-10-01 item 16).
+ * The titles of these conversations in the lab, whoever had them: Review's existing proposed-change
+ * conversation groups (review 2026-10-01 item 16).
  */
 export async function conversationTitles(
   db: Db,
@@ -158,6 +163,47 @@ export async function conversationTitles(
     .from(conversations)
     .where(and(eq(conversations.labId, ctx.labId), inArray(conversations.id, ids)));
   return new Map(rows.map((r) => [r.id, r.title]));
+}
+
+/** Review request excerpts, only from the caller's own conversations in this org and lab. */
+export async function requestTitles(
+  db: Db,
+  ctx: RecordContext,
+  origins: Extract<OriginatingIntent, { type: 'user_message' }>[],
+): Promise<Map<string, string>> {
+  if (origins.length === 0) return new Map();
+  const wanted = new Set(
+    origins.map((origin) => JSON.stringify([origin.conversation, origin.message])),
+  );
+  const rows = await db
+    .select({
+      conversation: conversationMessages.conversationId,
+      message: conversationMessages.id,
+      text: sql<string | null>`${conversationMessages.body}->>'text'`,
+    })
+    .from(conversationMessages)
+    .innerJoin(conversations, eq(conversations.id, conversationMessages.conversationId))
+    .where(
+      and(
+        eq(conversations.orgId, ctx.orgId),
+        eq(conversations.labId, ctx.labId),
+        eq(conversations.userId, personOf(ctx)),
+        eq(conversationMessages.role, 'user'),
+        eq(sql<string>`${conversationMessages.body}->>'role'`, 'user'),
+        inArray(conversationMessages.conversationId, [
+          ...new Set(origins.map((origin) => origin.conversation)),
+        ]),
+        inArray(conversationMessages.id, [...new Set(origins.map((origin) => origin.message))]),
+      ),
+    );
+  const titles = new Map<string, string>();
+  for (const row of rows) {
+    const key = JSON.stringify([row.conversation, row.message]);
+    if (!wanted.has(key)) continue;
+    const text = (row.text ?? '').replace(/\s+/g, ' ').trim();
+    if (text) titles.set(key, text.length > 120 ? `${text.slice(0, 120)}…` : text);
+  }
+  return titles;
 }
 
 export async function getConversation(
