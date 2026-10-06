@@ -31,6 +31,8 @@ An SOP (`SOP-0001`) is confirmed in seven scientific sections: overview, materia
 
 Writes are refused when names repeat or a step, parameter, layout, timing rule or question refers to something the SOP doesn't have, or a unit or linked record is unknown. Readiness blocks on no steps, broken formulas, timing that isn't a time and unresolved method questions, and warns about later-stage obligations and steps without a citation when the SOP has a source.
 
+Generic updates to an exact-source SOP validate the candidate attributes with the same actionable `invalid_attributes` refusal as ordinary records, including unsupported fields and malformed known fields. Invalid input leaves the saved version and question history unchanged, and rolls back earlier writes in the same change set. This error classification grants no source-adoption or question-resolution authority.
+
 An SOP links the records it names: its source document (`digitized_from`), role defaults (`uses`), prerequisite SOPs (`requires`), solution recipes (`made_with`, which must be products) and every other document it cites (`cites`, which must be library documents). A draft that an SOP links to can't be deleted.
 
 `sops.calculate` works out an SOP's variables for a run: given inputs replace defaults, record variables use their typical value until bound, and each result says where it came from (`input`, `default`, `typical`, `computed`, `missing`). Each input is given once, in a known unit of the same kind as the variable's default and limits (a plain number where those are plain numbers), and within its `min` and `max`; anything else is refused. A formula that uses a name no variable declares is reported as an error, not as missing.
