@@ -295,7 +295,7 @@ async function lockedPreview(
   throw new OperationError('unavailable', 'Validation dependencies changed; prepare again');
 }
 
-/** Private staging only: no operation registration calls this producer. */
+/** Bounded producer for the existing-question selector of review.prepare_decision. */
 export async function prepareSopInputDecision(
   deps: Deps,
   ctx: RecordContext,

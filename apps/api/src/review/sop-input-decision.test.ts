@@ -137,14 +137,13 @@ describe('private existing experiment-input decision producer', () => {
     expect(await db.select().from(recordVersions)).toEqual(before.history);
     expect(await db.select().from(activity)).toEqual(before.activity);
     expect(deliveries).toEqual([]);
-    // Stage 1 cannot be invoked through public preparation or approval.
+    // Public response/correction input cannot forge the internal disposition action.
     await expect(
-      f.registry.execute(f.agent, 'review.prepare_decision', f.input),
-    ).rejects.toMatchObject({ code: 'invalid_input' });
-    await expect(
-      f.registry.execute(f.person, 'proposals.approve', {
-        id: proposal.id,
-        expectedPreview: proposal.decision?.previewIdentity.digest,
+      f.registry.execute(f.person, 'sops.answer_question', {
+        sop: f.target.id,
+        expectedVersion: f.target.version,
+        question: 'count',
+        action: { type: 'defer', proposal: proposal.id },
       }),
     ).rejects.toMatchObject({ code: 'invalid_input' });
   });

@@ -5,7 +5,7 @@ import { QuestionDispositionRequest } from './scientific-decisions.ts';
 import { DecisionReadiness } from './sop-default-decision.ts';
 import { ScientificQuestion, SopId, SopVariable } from './sops.ts';
 
-/** Private staged producer input; not a registered preparation capability yet. */
+/** The existing-question selector of review.prepare_decision; the server owns its obligation. */
 export const SopInputDecision = z.strictObject({
   sop: SopId,
   expectedVersion: z.number().int().positive(),

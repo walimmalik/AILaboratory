@@ -1,4 +1,10 @@
-import { activityList, proposalsApprove, proposalsList, proposalsReject } from '@ailab/schema';
+import {
+  activityList,
+  proposalsApprove,
+  proposalsList,
+  proposalsReject,
+  ScientificDecisionMetadata,
+} from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
 import { conversations } from '../db/schema.ts';
 import type { RecordContext } from '../records/service.ts';
@@ -76,7 +82,10 @@ export const proposalOperations = [
             'invalid_input',
             'Review this decision and pass the exact preview digest before applying it',
           );
-        if (row.decision.scope.type === 'question_disposition') {
+        const metadata = ScientificDecisionMetadata.safeParse(row.decision);
+        if (!metadata.success)
+          throw new OperationError('invalid_input', 'Unsupported scientific decision metadata');
+        if (metadata.data.scope.type === 'question_disposition') {
           const result = await revalidateSopInputDecision(deps, ctx, row.id, input.expectedPreview);
           if (result.status !== 'unchanged')
             return { ...result.proposal, previewStatus: result.status };
