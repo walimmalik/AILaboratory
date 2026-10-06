@@ -83,9 +83,7 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
     // say both; otherwise a missing control silently becomes solvent in the backfill below.
     const solventOnly = new Set(['neutral_control', 'blank', 'buffer']);
     const incomplete = wells.filter(
-      (w) =>
-        (!w.subject || !w.concentration) &&
-        (!!w.concentration || !solventOnly.has(w.role)),
+      (w) => (!w.subject || !w.concentration) && (!!w.concentration || !solventOnly.has(w.role)),
     );
     if (incomplete.length)
       throw new OperationError(
