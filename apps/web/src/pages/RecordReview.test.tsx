@@ -88,7 +88,9 @@ it('omits empty and archived cues and preserves confirmed or changed states', ()
   expect(empty).toContain('ready to confirm');
   expect(empty).not.toContain('Review values and sources');
   const estimated = html({ ...readiness, unchecked: [], assumed: ['notes'] });
-  expect(estimated.match(/One value was/g)).toHaveLength(1);
+  expect(estimated.match(/One value remains/g)).toHaveLength(1);
+  expect(estimated).toContain('unverified:');
+  expect(estimated).not.toContain('without a source');
   expect(estimated).not.toContain('Review values and sources');
   const confirmed = html(
     { ...readiness, ready: true, sections: [], unchecked: [] },

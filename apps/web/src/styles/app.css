@@ -2774,6 +2774,11 @@ span.row-actions {
   margin: 0;
   font-size: 12px;
   max-width: 110ch;
+  overflow-wrap: anywhere;
+}
+.all-fields .source-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .record-page .part .values {
   display: grid;

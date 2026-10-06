@@ -37,6 +37,8 @@ Adding a capability: a contract, an implementation registered in `createRegistry
 
 Draft source checking continues from Review to the record Overview: Review counts **values to check**, and Overview asks the person to check them against their sources. **Review values and sources** opens **All fields**. The count does not mean separate source files. Existing blockers, edit warnings and confirmation rules still apply; see [web app](../architecture/web-app.md). Copied-source validation remains strict; its unconfirmed-source refusal now explains truthful unverified draft recovery, without treating a reuse request as stated values; see [core records](../architecture/core-records.md#draft-and-confirm).
 
+All fields shows saved explanation notes for unverified values too. Short notes appear beside the field group; long notes expand under **Note about …**. An explanation preserves origin information without verifying the value or turning text references into source links.
+
 ## Modules built so far
 
 | Module | Doc |

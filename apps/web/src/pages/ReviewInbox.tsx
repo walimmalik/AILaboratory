@@ -778,8 +778,8 @@ function StepChanges({ step, created }: { step: Step; created: Set<string> }) {
       <ItemDiff kind={after.kind} before={before} after={after} changes={changes} isNew={!id} />
       {estimates > 0 && (
         <p className="agent-ink">
-          Confirming verifies {estimates} {estimates === 1 ? 'value' : 'values'} the agent entered
-          without a source.
+          Confirming accepts {estimates} unverified {estimates === 1 ? 'value' : 'values'} entered
+          by the agent.
         </p>
       )}
       {id && current.data && current.data.version >= after.version && (
