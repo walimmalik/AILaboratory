@@ -7,6 +7,23 @@ import { SCIENTIFIC_INTAKE_PROMPT } from './scientific-intake.ts';
 const modules = ['sops', 'assays', 'labware', 'reagents', 'inventory', 'campaigns', 'entities'];
 
 describe('scientific intake content contract (004g SG-04)', () => {
+  it('bounds persisted drafting without manufacturing blockers or stopping at a successful chunk', () => {
+    for (const text of [SCIENTIFIC_INTAKE_PROMPT, findSkill('sops')?.text ?? '']) {
+      for (const requirement of [
+        'coherent',
+        'genuine',
+        'same turn',
+        'saving one chunk is not a reason to hand back',
+        'question history',
+        'readiness',
+        'specific limitation',
+      ])
+        expect(text).toContain(requirement);
+    }
+    // The operation regression separately verifies source/history/blockers through append;
+    // this instruction contract is not evidence of live model adherence.
+  });
+
   it('serves the current source skills without stale generated content or fictional operations', () => {
     for (const module of modules) {
       const source = readFileSync(
