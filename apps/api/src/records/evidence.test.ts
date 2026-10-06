@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { createTestDb } from '../db/testing.ts';
+import { sop } from '../sops/kinds.ts';
 import { saveCalculation } from './calculations.ts';
 import { RecordError } from './errors.ts';
 import { KindRegistry } from './kinds.ts';
@@ -27,7 +28,7 @@ beforeEach(async () => {
   };
   service = new RecordService(
     db,
-    new KindRegistry().register(widget).register(protocol).register(layoutPlan),
+    new KindRegistry().register(widget).register(protocol).register(layoutPlan).register(sop),
   );
 });
 afterEach(() => close());
@@ -367,5 +368,101 @@ describe('checked calculations (ADR 0049)', () => {
     expect(one).toBe(two);
     expect(three).not.toBe(one);
     expect(one).toMatch(/^calc_[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+
+  it('checks calculated evidence for a SOP variable against the whole keyed variable', async () => {
+    const output = {
+      variables: [
+        { ok: true, name: 'day2_volume', quantity: { value: '5', unit: 'mL' } },
+        { ok: true, name: 'dilution_factor', number: '10' },
+        { ok: true, name: 'culture_count', number: '16' },
+        { ok: true, name: 'overnight_volume', quantity: { value: '5', unit: 'mL' } },
+        {
+          ok: true,
+          name: 'day1_transfer',
+          quantity: { value: '0.5', unit: 'mL' },
+        },
+      ],
+    };
+    const calculation = await saveCalculation(
+      db,
+      person,
+      'sops.evaluate',
+      { variables: [{ name: 'day1_transfer', expression: 'day2_volume / dilution_factor' }] },
+      output,
+    );
+    const evidence = {
+      '/variables/day1_transfer': {
+        source: 'calculated' as const,
+        calculation,
+        output: '/variables/4/quantity',
+      },
+    };
+    const base = { materials: [], steps: [] };
+
+    const computedError = await refused(
+      service.create(agent, {
+        kind: 'sop',
+        label: 'Dilution',
+        attributes: {
+          ...base,
+          variables: [
+            {
+              name: 'day1_transfer',
+              label: 'Culture per dilution',
+              kind: 'computed',
+              expression: 'day2_volume / dilution_factor',
+              unit: 'mL',
+            },
+          ],
+        },
+        evidence,
+      }),
+    );
+    expect(computedError.message).toContain(
+      '/variables/day1_transfer is marked calculated by sops.evaluate, but that calculation did not give this value at /variables/4/quantity',
+    );
+
+    const defaultError = await refused(
+      service.create(agent, {
+        kind: 'sop',
+        label: 'Fixed dilution',
+        attributes: {
+          ...base,
+          variables: [
+            {
+              name: 'day1_transfer',
+              label: 'Culture per dilution',
+              kind: 'default',
+              value: { value: '0.5', unit: 'mL' },
+            },
+          ],
+        },
+        evidence,
+      }),
+    );
+    expect(defaultError.message).toContain('did not give this value at /variables/4/quantity');
+
+    const draft = await service.create(agent, {
+      kind: 'sop',
+      label: 'Reviewable dilution formula',
+      attributes: {
+        ...base,
+        variables: [
+          {
+            name: 'day1_transfer',
+            label: 'Culture per dilution',
+            kind: 'computed',
+            expression: 'day2_volume / dilution_factor',
+            unit: 'mL',
+          },
+        ],
+      },
+    });
+    expect(draft.status).toBe('draft');
+    expect(draft.attributes.variables).toMatchObject([
+      { name: 'day1_transfer', kind: 'computed', expression: 'day2_volume / dilution_factor' },
+    ]);
+    expect(draft.evidence['/variables/day1_transfer']?.source).toBe('assumed');
   });
 });

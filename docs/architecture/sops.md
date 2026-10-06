@@ -23,6 +23,8 @@ A formula reads named variables and numbers with units: `n_samples * replicates 
 
 `sops.evaluate` takes a set of variables, each with a value (a decimal string, a quantity or a list) or a formula, and an optional unit for a formula's result. It evaluates them in dependency order and returns each value, or why it has none: an error, the variables it waits for, or the circle it is in.
 
+Calculated evidence checks equality with the entire saved field or keyed item. For an SOP, `/variables/<name>` identifies the variable definition, not its evaluated quantity. A calculator's quantity output cannot attest that whole definition, including a default containing the same quantity. Keep computed formulas as formulas; evaluation checks their results without marking their definitions calculated. Cite the actual source of the definition when available, otherwise retain its assumed status for review. The SOP skill explains this distinction; neither nested evidence paths nor relaxed equality are introduced.
+
 ## The SOP record (012a, ADR 0037)
 
 An SOP (`SOP-0001`) is confirmed in seven scientific sections: overview, materials and solutions, variables, procedure, plate layout, analysis and timing windows. Questions are shown separately and gate readiness; their IDs, responses and disposition bookkeeping are not assumed scientific values or an extra confirmation section. Anything can cite library passages.
