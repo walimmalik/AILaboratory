@@ -40,6 +40,8 @@ See [library architecture](../architecture/library.md#exact-instruction-referenc
 
 ## Digital SOPs (plan 012)
 
+An [internal staged producer](../architecture/sops.md#staged-volume-default-decision-producer) can preview one uncited same-unit volume default with exact checks, dependencies and the full Values section review scope. It is not a callable preparation capability: paired approval, shared Apply UI and assistant pause are still pending, and no scientific question is resolved by it.
+
 [Plan 012](../plans/012-digital-sops.md). An SOP as a structured, versioned design document. The record (`SOP-0001`, [ADR 0037](../decisions/0037-sop-record.md)) and formulas are built; see [sops.md](../architecture/sops.md).
 
 - **Sections**: overview, materials, solutions, variables, procedure, layout requirements, analysis, timing rules. Our own schema; LabOP is an import path and a benchmark reference.

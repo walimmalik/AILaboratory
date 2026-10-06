@@ -474,6 +474,25 @@ export class RecordService {
     }
   }
 
+  /** Internal SOP decision locks, held by the caller through its eventual commit or rollback. */
+  async lockSopDecisionRecords(
+    ctx: RecordContext,
+    ids: readonly string[],
+  ): Promise<RecordEnvelope[]> {
+    if (!isTransaction(this.db))
+      throw new RecordError('invalid_state', 'SOP decision locks require the caller transaction');
+    const ordered = [...new Set(ids)].sort();
+    if (ordered.length > 64)
+      throw new RecordError(
+        'invalid_input',
+        'This limited SOP decision supports at most 64 read records',
+      );
+    const locked: RecordEnvelope[] = [];
+    for (const id of ordered)
+      locked.push(toEnvelope(await findRecord(this.db, ctx, id, { forUpdate: true })));
+    return locked;
+  }
+
   /** Draft → active. */
   async activate(ctx: RecordContext, id: string, input: TransitionInput): Promise<RecordEnvelope> {
     return this.#change(
