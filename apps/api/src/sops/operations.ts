@@ -24,6 +24,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { checkCitations } from './citations.ts';
+import { assertDilutionInputs } from './dilution-completion.ts';
 import { createExactSopDraft, updateSourceCheckedSop } from './exact-source-write.ts';
 import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
@@ -131,6 +132,7 @@ export const sopOperations = [
         given.set(name, value);
       }
       const pinned = new Map<string, number>();
+      assertDilutionInputs(a, given);
       for (const b of input.bindings ?? []) if (b.version) pinned.set(b.record, b.version);
       const fetch = async (id: string) => {
         const version = pinned.get(id);

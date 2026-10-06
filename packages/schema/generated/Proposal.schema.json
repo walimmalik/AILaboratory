@@ -632,6 +632,182 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "completion": {
+                          "description": "Only the guarded private dilution owner may produce these accepted facts",
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "dilution_final_volume"
+                            },
+                            "step": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_-]+$"
+                            },
+                            "variable": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "factor": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9]\\d*)(\\.\\d+)?$"
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "sample": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "expression": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "expression"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "diluent": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "expression": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "expression"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "value": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9]\\d*)(\\.\\d+)?$"
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "source": {
+                              "type": "object",
+                              "properties": {
+                                "document": {
+                                  "type": "string",
+                                  "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "file": {
+                                  "type": "string",
+                                  "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "description": "The sha256 of the bytes, lowercase hex"
+                                },
+                                "parse": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "type": "string",
+                                      "const": "parsed"
+                                    },
+                                    "snapshot": {
+                                      "type": "string",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "description": "Content digest identifying the immutable converted-text snapshot"
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "snapshot"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "printedRevision": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "document",
+                                "version",
+                                "file",
+                                "sha256",
+                                "parse",
+                                "title"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "passage": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "quote": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "associationDigest": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$",
+                              "description": "The sha256 of the bytes, lowercase hex"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "step",
+                            "variable",
+                            "factor",
+                            "sample",
+                            "diluent",
+                            "value",
+                            "source",
+                            "passage",
+                            "quote",
+                            "associationDigest"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -1229,6 +1405,182 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "completion": {
+                          "description": "Only the guarded private dilution owner may produce these accepted facts",
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "dilution_final_volume"
+                            },
+                            "step": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_-]+$"
+                            },
+                            "variable": {
+                              "type": "string",
+                              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                            },
+                            "factor": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9]\\d*)(\\.\\d+)?$"
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "sample": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "expression": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "expression"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "diluent": {
+                              "type": "object",
+                              "properties": {
+                                "variable": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                                },
+                                "expression": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "variable",
+                                "expression"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "value": {
+                              "type": "object",
+                              "properties": {
+                                "value": {
+                                  "type": "string",
+                                  "pattern": "^-?(0|[1-9]\\d*)(\\.\\d+)?$"
+                                },
+                                "unit": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "value",
+                                "unit"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "source": {
+                              "type": "object",
+                              "properties": {
+                                "document": {
+                                  "type": "string",
+                                  "pattern": "^doc_[0-9A-HJKMNP-TV-Z]{26}$"
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "file": {
+                                  "type": "string",
+                                  "pattern": "^fil_[0-9A-HJKMNP-TV-Z]{26}$"
+                                },
+                                "sha256": {
+                                  "type": "string",
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "description": "The sha256 of the bytes, lowercase hex"
+                                },
+                                "parse": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "type": "string",
+                                      "const": "parsed"
+                                    },
+                                    "snapshot": {
+                                      "type": "string",
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "description": "Content digest identifying the immutable converted-text snapshot"
+                                    }
+                                  },
+                                  "required": [
+                                    "status",
+                                    "snapshot"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "printedRevision": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "document",
+                                "version",
+                                "file",
+                                "sha256",
+                                "parse",
+                                "title"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "passage": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "quote": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "associationDigest": {
+                              "type": "string",
+                              "pattern": "^[0-9a-f]{64}$",
+                              "description": "The sha256 of the bytes, lowercase hex"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "step",
+                            "variable",
+                            "factor",
+                            "sample",
+                            "diluent",
+                            "value",
+                            "source",
+                            "passage",
+                            "quote",
+                            "associationDigest"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [

@@ -27,12 +27,17 @@ import {
   type RecordVersion,
   type RelatedResult,
   type SectionReview,
+  SopAttributes,
 } from '@ailab/schema';
 import { and, asc, desc, eq, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
+import {
+  assertDilutionCompletionEvidence,
+  assertDilutionCompletionFacts,
+} from '../sops/dilution-completion.ts';
 import { assertSopExactSourceWrite } from '../sops/exact-source-write.ts';
 import { assertQuestionDispositionWrite } from '../sops/input-decision-authority.ts';
 import { checkCalculated } from './calculations.ts';
@@ -711,6 +716,8 @@ export class RecordService {
     if (kind.kind === 'sop') {
       assertSopExactSourceWrite(db, ctx, current?.id ?? '', current?.attributes, attributes);
       assertQuestionDispositionWrite(ctx, current?.id ?? '', current?.attributes, attributes);
+      if (SopAttributes.safeParse(attributes).success)
+        assertDilutionCompletionFacts(attributes as SopAttributes);
     }
     if (!kind.related) return {};
     const result = await kind.related(attributes, {
@@ -831,6 +838,12 @@ export class RecordService {
       const kind = this.kinds.get(current.kind);
       if (operation === 'update' || operation === 'restore') await assertSopEditable(tx, current);
       const changes = await apply(current, kind, tx);
+      if (kind.kind === 'sop')
+        assertDilutionCompletionEvidence(
+          current.attributes as Partial<SopAttributes>,
+          current.evidence,
+          changes.evidence ?? current.evidence,
+        );
       const [row] = await tx
         .update(records)
         .set({

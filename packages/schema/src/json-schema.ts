@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { Actor } from './actor.ts';
+import { DilutionCompletion } from './dilution-completion.ts';
 import { ExactSourceCitation, ExactSourceReference } from './library.ts';
 import { ActivityEntry, OperationErrorBody, Proposal, ProposalReceipt } from './operation.ts';
 import { Quantity } from './quantity.ts';
 import { RecordEnvelope, RecordLink, RecordVersion } from './record.ts';
 import { ScientificDecisionMetadata } from './scientific-decisions.ts';
 import { SopDefaultDecisionPreview, SopDefaultEdit } from './sop-default-decision.ts';
+import { SopDilutionDecision, SopDilutionDecisionPreview } from './sop-dilution-decision.ts';
 import { SopInputDecision, SopInputDecisionPreview } from './sop-input-decision.ts';
 import { SopMaterialDecisionPreview } from './sop-material-decision.ts';
 import { ScientificQuestion } from './sops.ts';
@@ -14,6 +16,7 @@ import { ScientificQuestion } from './sops.ts';
 export const publishedSchemas = {
   ActivityEntry,
   Actor,
+  DilutionCompletion,
   ExactSourceCitation,
   ExactSourceReference,
   OperationErrorBody,
@@ -27,6 +30,8 @@ export const publishedSchemas = {
   ScientificQuestion,
   SopDefaultDecisionPreview,
   SopDefaultEdit,
+  SopDilutionDecision,
+  SopDilutionDecisionPreview,
   SopInputDecision,
   SopInputDecisionPreview,
   SopMaterialDecisionPreview,

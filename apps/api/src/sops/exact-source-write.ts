@@ -72,6 +72,31 @@ async function withWrite<T>(
   }
 }
 
+/** Private prepared dilution owner composes exact citation and question witnesses for one write. */
+export async function withPreparedDilutionSourceWrite<T>(
+  deps: Deps,
+  ctx: RecordContext,
+  current: Awaited<ReturnType<RecordService['get']>>,
+  candidate: SopAttributes,
+  write: (scoped: RecordContext, attributes: SopAttributes) => Promise<T>,
+) {
+  if (
+    ctx.via !== 'sops.answer_question' ||
+    !candidate.source?.exact ||
+    stable(current.attributes.source) !== stable(candidate.source)
+  )
+    throw new OperationError(
+      'forbidden',
+      'Prepared dilution must preserve its established exact instructions',
+    );
+  const { attributes, result } = await canonicalizeSopExactSource(deps, ctx, candidate);
+  if (result.status !== 'checked')
+    throw new OperationError('invalid_input', 'The dilution needs checked exact text');
+  return withWrite(deps, ctx, current.id, current.attributes, attributes, (scoped) =>
+    write(scoped, attributes),
+  );
+}
+
 /** Owning draft creation validates the selected edition inside the caller transaction. */
 export async function createExactSopDraft(
   deps: Deps,

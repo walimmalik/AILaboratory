@@ -93,6 +93,7 @@ describe('json schema', () => {
     expect(Object.keys(schemas).sort()).toEqual([
       'ActivityEntry',
       'Actor',
+      'DilutionCompletion',
       'ExactSourceCitation',
       'ExactSourceReference',
       'OperationErrorBody',
@@ -106,6 +107,8 @@ describe('json schema', () => {
       'ScientificQuestion',
       'SopDefaultDecisionPreview',
       'SopDefaultEdit',
+      'SopDilutionDecision',
+      'SopDilutionDecisionPreview',
       'SopInputDecision',
       'SopInputDecisionPreview',
       'SopMaterialDecisionPreview',

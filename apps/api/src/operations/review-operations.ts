@@ -14,6 +14,7 @@ import { recordLinks, records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { prepareSopDefaultDecision } from '../review/sop-default-decision.ts';
+import { prepareSopDilutionDecision } from '../review/sop-dilution-decision.ts';
 import {
   prepareSopInputDecision,
   prepareSopMaterialDecision,
@@ -82,6 +83,10 @@ export const reviewOperations = [
     touches: (input) => [input.sop],
     outcome: () => 'proposed',
     run: async (ctx, input, deps) => {
+      if ('type' in input && input.type === 'dilution_final_volume')
+        return reviewPrepareDecision.output.parse(
+          await prepareSopDilutionDecision(deps, ctx, input),
+        );
       if (!('question' in input))
         return reviewPrepareDecision.output.parse(
           await prepareSopDefaultDecision(deps, ctx, input),

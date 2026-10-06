@@ -5,6 +5,7 @@ import { defineContract, Proposal } from '../operation.ts';
 import { RecordStatus } from '../record.ts';
 import { ScientificDecisionMetadata } from '../scientific-decisions.ts';
 import { SopDefaultDecisionPreview, SopDefaultEdit } from '../sop-default-decision.ts';
+import { SopDilutionDecision, SopDilutionDecisionPreview } from '../sop-dilution-decision.ts';
 import { SopInputDecision, SopInputDecisionPreview } from '../sop-input-decision.ts';
 import { SopMaterialDecisionPreview } from '../sop-material-decision.ts';
 
@@ -12,14 +13,15 @@ export const reviewPrepareDecision = defineContract({
   id: 'review.prepare_decision',
   verbs: { done: 'prepared a draft SOP decision', intent: 'prepare a draft SOP decision' },
   summary:
-    'Prepare one bounded decision on a never-confirmed draft SOP: an existing uncited positive same-unit scalar volume default without bounds or a linked open method question, OR acceptance of one existing open experiment question bound to its declared input or no-default material role. The server derives the binding and obligation; never supply a material choice, stage, condition or actor. Do not mix the selectors. Returns a pending proposal and pauses assistant work. Apply only through proposals.approve with the shown digest; the SOP remains draft and final confirmation is separate. Acceptance does not resolve the question or validate material compatibility: the explicit input or material choice is still required for every experiment',
+    'Prepare one bounded decision on a never-confirmed draft SOP: an existing uncited positive same-unit scalar volume default; acceptance of one open experiment input/material-role obligation; OR dilution_final_volume to complete one missing unbounded final-volume default from the identical persisted exact quotation on its method question and serial dilution step. The server derives associations, literal source-number agreement and calculator arithmetic; dilution acceptance is a human field-relationship decision, not full assay validation. Do not mix selectors or supply operation/path/actor/source authority. Returns a pending proposal and pauses assistant work. Apply only through proposals.approve with the shown digest; the preview discloses whole Values review when changed, the SOP remains draft and final confirmation is separate. Experiment obligations still require explicit downstream choices',
   effect: 'write',
-  input: z.union([SopDefaultEdit, SopInputDecision]),
+  input: z.union([SopDefaultEdit, SopInputDecision, SopDilutionDecision]),
   output: Proposal.extend({
     preview: z.discriminatedUnion('type', [
       SopDefaultDecisionPreview,
       SopInputDecisionPreview,
       SopMaterialDecisionPreview,
+      SopDilutionDecisionPreview,
     ]),
     decision: ScientificDecisionMetadata,
   }),
