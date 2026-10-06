@@ -59,6 +59,53 @@ function action(
     },
   ];
 }
+
+function storedExport() {
+  const plan = { id: `tfp_${'0'.repeat(26)}`, name: 'TFP-0001', version: 3 };
+  const file = (digit: string, filename: string) => ({
+    id: `fil_${digit.repeat(26)}`,
+    kind: 'file',
+    name: `FIL-000${digit}`,
+    label: filename,
+    orgId: `org_${'0'.repeat(26)}`,
+    labId: `lab_${'0'.repeat(26)}`,
+    status: 'active',
+    version: 1,
+    attributes: {
+      sha256: 'a'.repeat(64),
+      size: 2450,
+      mediaType: 'text/csv',
+      originalName: filename,
+      source: { from: 'export', record: plan.id, version: 3 },
+    },
+    evidence: {},
+    reviews: {},
+    createdAt: at,
+    updatedAt: at,
+    createdBy: { type: 'user', userId: `usr_${'0'.repeat(26)}` },
+    updatedBy: { type: 'user', userId: `usr_${'0'.repeat(26)}` },
+  });
+  return {
+    plan,
+    files: [
+      {
+        group: 'dose',
+        format: 'echo_pick_list',
+        filename: 'dose.csv',
+        file: file('1', 'dose.csv'),
+        rows: 4,
+      },
+      {
+        group: 'backfill',
+        format: 'worklist',
+        filename: 'backfill.csv',
+        file: file('2', 'backfill.csv'),
+        rows: 4,
+      },
+    ],
+    skipped: [],
+  };
+}
 function html(messages: AssistantMessage[], review?: ReviewItem[], running = false) {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
@@ -93,6 +140,26 @@ function visible(markup: string) {
 }
 
 describe('assistant transcript presentation', () => {
+  it('keeps both stored transfer export downloads visible and hides failed or malformed results', () => {
+    const output = storedExport();
+    const markup = visible(
+      html([
+        user('ask', 'Export the confirmed plan'),
+        ...action('export', 'transfers.export', output),
+        ...action('failed-export', 'transfers.export', output, 'failed'),
+        ...action('malformed-export', 'transfers.export', {
+          ...output,
+          plan: { ...output.plan, version: 'wrong' },
+        }),
+      ]),
+    );
+    expect(markup).toContain('dose.csv');
+    expect(markup).toContain('backfill.csv');
+    expect(markup.match(/href="\/api\/v1\/files\/fil_[12]+\?download=1"/g)).toHaveLength(2);
+    expect(markup.match(/>Download</g)).toHaveLength(2);
+    expect(markup).not.toContain('>Copy</');
+  });
+
   it('uses turn grouping to compact older saved responses while keeping the latest unsaved response actionable', () => {
     const client = new QueryClient();
     const record = {

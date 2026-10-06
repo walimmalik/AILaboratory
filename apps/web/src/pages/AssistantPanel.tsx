@@ -19,7 +19,7 @@ import {
   selectedQuestion,
   selectionForMessage,
 } from '../lib/chat-question.ts';
-import { fileOf } from '../lib/files.ts';
+import { filesOf } from '../lib/files.ts';
 import {
   describeToolStep,
   formatWhen,
@@ -290,7 +290,7 @@ function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
         (result &&
           (result.outcome === 'failed' ||
             result.outcome === 'proposed' ||
-            (result.outcome === 'done' && fileOf(call.operationId, output))));
+            (result.outcome === 'done' && filesOf(call.operationId, output).length > 0)));
       if (needsAttention) entries.push(entry);
       else addWork(entry);
     }
@@ -571,10 +571,10 @@ function Step({
     ? describeToolStep(result)
     : { text: `${operationIntent(call.operationId)}…`, tone: 'muted' };
   // A done step's result is the operation's {status, output}.
-  const file =
+  const files =
     result?.outcome === 'done'
-      ? fileOf(call.operationId, (result.result as { output?: unknown } | undefined)?.output)
-      : undefined;
+      ? filesOf(call.operationId, (result.result as { output?: unknown } | undefined)?.output)
+      : [];
   const proposedMemory =
     call.operationId === 'memory.propose' && result?.outcome === 'done'
       ? (result.result as { output?: RecordEnvelope } | undefined)?.output
@@ -596,7 +596,9 @@ function Step({
           <Link to="/review">review</Link>
         </>
       )}
-      {file && <FileCard file={file} />}
+      {files.map((file) => (
+        <FileCard key={'id' in file ? `${file.id}-${file.group}` : file.name} file={file} />
+      ))}
       {proposedMemory && <RememberCard proposed={proposedMemory} />}
       <details className="tech">
         <summary>technical details</summary>

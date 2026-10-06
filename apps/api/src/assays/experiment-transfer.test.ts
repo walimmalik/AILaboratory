@@ -202,6 +202,16 @@ describe('one FICTIONAL experiment design to Echo transfer', () => {
 
     const readiness = await run<Readiness>('person', 'records.readiness', { id: draft.plan.id });
     expect(readiness.checks.filter((check) => !check.passed)).toEqual([]);
+    const live = await run<{ checks: { id: string; passed: boolean; problems: string[] }[] }>(
+      'person',
+      'transfers.check',
+      { id: draft.plan.id },
+    );
+    for (const id of ['instruments_now', 'sources_enough'])
+      expect(live.checks.find((check) => check.id === id)).toMatchObject({
+        passed: true,
+        problems: [],
+      });
     const confirmed = await confirmFixtureRecord(run, draft.plan);
     expect(confirmed.status).toBe('active');
     const exported = await run<{
