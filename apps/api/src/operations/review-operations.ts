@@ -14,6 +14,7 @@ import { recordLinks, records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { prepareSopDefaultDecision } from '../review/sop-default-decision.ts';
+import { prepareSopInputDecision } from '../review/sop-input-decision.ts';
 import { listProposals } from './proposal-store.ts';
 import { implement } from './registry.ts';
 
@@ -76,7 +77,11 @@ export const reviewOperations = [
     touches: (input) => [input.sop],
     outcome: () => 'proposed',
     run: async (ctx, input, deps) =>
-      reviewPrepareDecision.output.parse(await prepareSopDefaultDecision(deps, ctx, input)),
+      reviewPrepareDecision.output.parse(
+        await ('question' in input
+          ? prepareSopInputDecision(deps, ctx, input)
+          : prepareSopDefaultDecision(deps, ctx, input)),
+      ),
   }),
   implement(reviewList, {
     run: async (ctx, input, deps) => {

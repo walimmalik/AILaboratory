@@ -5,16 +5,17 @@ import { defineContract, Proposal } from '../operation.ts';
 import { RecordStatus } from '../record.ts';
 import { ScientificDecisionMetadata } from '../scientific-decisions.ts';
 import { SopDefaultDecisionPreview, SopDefaultEdit } from '../sop-default-decision.ts';
+import { SopInputDecision, SopInputDecisionPreview } from '../sop-input-decision.ts';
 
 export const reviewPrepareDecision = defineContract({
   id: 'review.prepare_decision',
-  verbs: { done: 'prepared a draft volume decision', intent: 'prepare a draft volume decision' },
+  verbs: { done: 'prepared a draft SOP decision', intent: 'prepare a draft SOP decision' },
   summary:
-    'Prepare one existing uncited positive scalar volume default on a never-confirmed draft SOP, in exactly the same unit, without bounds or a linked open method question. Returns a pending proposal and pauses assistant work. A person reviews the full affected Values section and applies through proposals.approve; SOP remains draft and final confirmation is separate',
+    'Prepare one bounded decision on a never-confirmed draft SOP: an existing uncited positive same-unit scalar volume default without bounds or a linked open method question, OR acceptance of one existing open experiment/input question without changing its stage, binding, method or required input. Do not mix the selectors. Returns a pending proposal and pauses assistant work. Apply only through proposals.approve with the shown digest; the SOP remains draft and final confirmation is separate. Accepting an experiment input does not resolve the question: it is still required for every experiment',
   effect: 'write',
-  input: SopDefaultEdit,
+  input: z.union([SopDefaultEdit, SopInputDecision]),
   output: Proposal.extend({
-    preview: SopDefaultDecisionPreview,
+    preview: z.discriminatedUnion('type', [SopDefaultDecisionPreview, SopInputDecisionPreview]),
     decision: ScientificDecisionMetadata,
   }),
 });
