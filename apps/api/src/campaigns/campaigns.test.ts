@@ -27,8 +27,11 @@ import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import {
   executeSopInputDecision,
+  executeSopMaterialDecision,
   prepareSopInputDecision,
+  prepareSopMaterialDecision,
   revalidateSopInputDecision,
+  revalidateSopMaterialDecision,
 } from '../review/sop-input-decision.ts';
 import { sopKinds } from '../sops/kinds.ts';
 import { campaignKinds } from './kinds.ts';
@@ -531,6 +534,138 @@ describe('experiment stages and runs', () => {
       expect(retained.attributes).toEqual(sop.attributes);
     },
   );
+  it('retains an actually accepted pinned material obligation until an explicit permitted confirmed binding is supplied', async () => {
+    const campaign = await activeCampaign();
+    let draft = await run(agent, 'sops.draft', {
+      label: 'Explicit assay reagent choice',
+      materials: [
+        {
+          role: 'reagent',
+          label: 'Assay reagent',
+          type: 'reagent',
+          requirements: 'Scientist must review suitability for this assay.',
+        },
+      ],
+      variables: [],
+      steps: [
+        {
+          id: 'read',
+          action: 'manual',
+          text: 'Review the selected reagent before work.',
+          uses: ['reagent'],
+        },
+      ],
+      questions: [
+        {
+          id: 'reagent',
+          question: 'Which assay reagent will the experiment use?',
+          about: { material: 'reagent' },
+          stage: {
+            stage: 'experiment',
+            reason: 'Each experiment chooses',
+            binding: { type: 'material_role', role: 'reagent' },
+          },
+        },
+      ],
+    });
+    const deps = { db, kinds, registry };
+    const proposal = await prepareSopMaterialDecision(deps, agent, {
+      sop: draft.id,
+      expectedVersion: draft.version,
+      question: 'reagent',
+      reason: 'Require an explicit experiment choice',
+    });
+    draft = await registry.transaction(db, async (tx) => {
+      const checked = await revalidateSopMaterialDecision(
+        { ...deps, db: tx },
+        person,
+        proposal.id,
+        proposal.decision?.previewIdentity.digest ?? '',
+      );
+      if (checked.status !== 'unchanged') throw new Error('Expected unchanged material obligation');
+      return executeSopMaterialDecision({ ...deps, db: tx }, checked.authorization);
+    });
+    expect(draft.attributes.questions).toMatchObject([
+      { disposition: { status: 'deferred', acceptedBy: person.actor } },
+    ]);
+    const sop = await confirm(draft),
+      permitted = await subject();
+    expect(sop.status).toBe('active');
+    expect(permitted.status).toBe('active');
+    let experiment = await run(person, 'experiments.draft', {
+      label: 'Explicit material test',
+      campaign: campaign.id,
+      question: 'Compare chosen reagent',
+      subjects: [{ record: permitted.id }],
+      protocol: [{ id: 'read', sop: { id: sop.id, version: sop.version } }],
+    });
+    const readiness = await run<Readiness>(person, 'records.readiness', { id: experiment.id });
+    expect(readiness.checks.find((c) => c.id === 'sop_obligations')).toMatchObject({
+      passed: false,
+      severity: 'blocker',
+    });
+    expect(
+      (
+        await run<{ parts: { problems: string[] }[] }>(person, 'experiments.calculate', {
+          id: experiment.id,
+        })
+      ).parts[0]?.problems.join(),
+    ).toContain('Which assay reagent');
+    for (const binding of [
+      { role: 'reagent', record: newId('prd'), version: 1 },
+      { role: 'reagent', record: permitted.id },
+      { role: 'reagent', record: permitted.id, version: 999 },
+    ])
+      await expect(
+        registry.execute(person, 'experiments.bind_protocol', {
+          id: experiment.id,
+          expectedVersion: experiment.version,
+          part: 'read',
+          bindings: [binding],
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_attributes' });
+    // A real wrong-kind record may be drafted, but remains a scientific blocker.
+    experiment = await run(person, 'experiments.bind_protocol', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      part: 'read',
+      bindings: [{ role: 'reagent', record: campaign.id }],
+    });
+    expect(
+      (await run<Readiness>(person, 'records.readiness', { id: experiment.id })).checks.find(
+        (c) => c.id === 'bindings_fit',
+      ),
+    ).toMatchObject({ passed: false, severity: 'blocker' });
+    expect(
+      (
+        await run<{ parts: { problems: string[] }[] }>(person, 'experiments.calculate', {
+          id: experiment.id,
+        })
+      ).parts[0]?.problems.length,
+    ).toBeGreaterThan(0);
+    experiment = await run(person, 'experiments.bind_protocol', {
+      id: experiment.id,
+      expectedVersion: experiment.version,
+      part: 'read',
+      bindings: [{ role: 'reagent', record: permitted.id, version: permitted.version }],
+    });
+    const boundReadiness = await run<Readiness>(person, 'records.readiness', { id: experiment.id });
+    expect(boundReadiness.checks.find((c) => c.id === 'sop_obligations')?.passed).toBe(true);
+    expect(boundReadiness.checks.find((c) => c.id === 'bindings_fit')?.passed).toBe(true);
+    expect(boundReadiness.checks.find((c) => c.id === 'protocol_confirmed')?.passed).toBe(true);
+    expect(
+      (
+        await run<{ parts: { problems: string[] }[] }>(person, 'experiments.calculate', {
+          id: experiment.id,
+        })
+      ).parts[0]?.problems,
+    ).toEqual([]);
+    expect((experiment.attributes as ExperimentAttributes).protocol[0]?.sop).toEqual({
+      id: sop.id,
+      version: sop.version,
+    });
+    expect(await run(person, 'records.get', { id: sop.id })).toEqual(sop);
+  });
   it('plans only a confirmed, ready design; runs pin the design version; where_used finds them', async () => {
     const campaign = await activeCampaign();
     const sop = await confirmedSop();

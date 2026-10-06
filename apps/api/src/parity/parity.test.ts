@@ -32,7 +32,7 @@ const noScreen: Record<string, string> = {
   'sops.ask_question':
     'A person asks the assistant to add a scientific question, then records their response on the SOP page; direct question-authoring controls belong to 004g SG-05',
   'review.prepare_decision':
-    'A person asks the assistant to prepare one bounded draft SOP volume-default or existing experiment-input decision, then reviews the persisted preview and applies or rejects it through the shared chat/Review card; no standalone preparation form',
+    'A person asks the assistant to prepare one bounded draft SOP volume-default or existing experiment input/material-role decision, then reviews the persisted preview and applies or rejects it through the shared chat/Review card; no standalone preparation form',
   'platemaps.draft': draftedByAsking,
   'layouts.draft': draftedByAsking,
   'workcells.draft': draftedByAsking,

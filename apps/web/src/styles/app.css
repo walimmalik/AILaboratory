@@ -747,6 +747,9 @@ details.others {
 .decision-card p {
   margin: 0;
 }
+.decision-card .text {
+  white-space: pre-wrap;
+}
 .decision-card {
   min-width: 0;
   overflow-wrap: anywhere;

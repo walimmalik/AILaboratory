@@ -9,6 +9,8 @@ import {
   ScientificQuestion,
   SopDefaultDecisionPreview,
   SopInputDecisionPreview,
+  SopMaterial,
+  SopMaterialDecisionPreview,
 } from '@ailab/schema';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -51,7 +53,9 @@ export function supportedDecision(proposal: Proposal) {
   const parsed = SopDefaultDecisionPreview.safeParse(proposal.preview);
   if (parsed.success) return parsed.data;
   const input = SopInputDecisionPreview.safeParse(proposal.preview);
-  return input.success ? input.data : undefined;
+  if (input.success) return input.data;
+  const material = SopMaterialDecisionPreview.safeParse(proposal.preview);
+  return material.success ? material.data : undefined;
 }
 
 /** Publish the returned persisted proposal immediately to both views, before refetching. */
@@ -199,7 +203,7 @@ export function ProposalDecisionCard({
       ? variables.find((v) => v.name === preview.variable.name)?.value
       : undefined;
   const question =
-    preview.type === 'sop_experiment_input' &&
+    preview.type !== 'sop_volume_default' &&
     saved.success &&
     saved.data.id === preview.target.id &&
     saved.data.kind === 'sop' &&
@@ -208,14 +212,27 @@ export function ProposalDecisionCard({
           .map((q) => ScientificQuestion.safeParse(q))
           .find((q) => q.success && q.data.id === preview.question.id)
       : undefined;
+  const savedMaterial =
+    preview.type === 'sop_experiment_material' &&
+    saved.success &&
+    Array.isArray(saved.data.attributes.materials)
+      ? saved.data.attributes.materials
+          .map((m) => SopMaterial.safeParse(m))
+          .find((m) => m.success && m.data.role === preview.material.role)
+      : undefined;
   const accepted =
     question?.success &&
     question.data.disposition.status === 'deferred' &&
     question.data.disposition.proposal === shown.id &&
     question.data.disposition.action.obligation.stage === 'experiment' &&
-    question.data.disposition.action.obligation.binding.type === 'input' &&
-    preview.type === 'sop_experiment_input' &&
-    question.data.disposition.action.obligation.binding.variable === preview.input.name
+    ((preview.type === 'sop_experiment_input' &&
+      question.data.disposition.action.obligation.binding.type === 'input' &&
+      question.data.disposition.action.obligation.binding.variable === preview.input.name) ||
+      (preview.type === 'sop_experiment_material' &&
+        question.data.disposition.action.obligation.binding.type === 'material_role' &&
+        question.data.disposition.action.obligation.binding.role === preview.material.role &&
+        savedMaterial?.success &&
+        savedMaterial.data.default === undefined))
       ? question.data
       : undefined;
   const blocked =
@@ -235,7 +252,7 @@ export function ProposalDecisionCard({
   return (
     <article
       className="proposal decision-card"
-      aria-label={`${preview.type === 'sop_volume_default' ? 'Default change' : 'Experiment input decision'}: ${preview.target.name}`}
+      aria-label={`${preview.type === 'sop_volume_default' ? 'Default change' : preview.type === 'sop_experiment_input' ? 'Experiment input decision' : 'Experiment material decision'}: ${preview.target.name}`}
     >
       <p>
         <Link to="/records/$id" params={{ id: preview.target.id }}>
@@ -245,7 +262,7 @@ export function ProposalDecisionCard({
       {preview.type === 'sop_volume_default' ? (
         <VolumeDecisionDetails preview={preview} />
       ) : (
-        <InputDecisionDetails preview={preview} />
+        <ObligationDecisionDetails preview={preview} />
       )}
       {!decide.isPending && (
         <DecisionPreviewNotice notice={notice ?? previewNotice(shown)} proposal={shown} />
@@ -298,17 +315,22 @@ export function ProposalDecisionCard({
               {saved.data.status === 'draft' ? 'still draft' : saved.data.status}.
             </span>
           )}{' '}
-          {preview.type === 'sop_experiment_input' &&
+          {preview.type !== 'sop_volume_default' &&
             (accepted ? (
               <span>
-                Accepted as an experiment input: {accepted.question} Still required for every
-                experiment.{' '}
+                {preview.type === 'sop_experiment_input'
+                  ? 'Accepted as an experiment input'
+                  : 'Accepted as an experiment material choice'}
+                : {accepted.question} {preview.consequence}{' '}
                 {saved.success && saved.data.status === 'draft'
                   ? 'SOP still draft; final confirmation is separate.'
                   : ''}
               </span>
             ) : (
-              <span>The saved input acceptance is unavailable.</span>
+              <span>
+                The saved {preview.type === 'sop_experiment_input' ? 'input' : 'material-choice'}{' '}
+                acceptance is unavailable.
+              </span>
             ))}{' '}
           <Link to="/records/$id" params={{ id: preview.target.id }}>
             Open saved SOP
@@ -445,50 +467,88 @@ function VolumeDecisionDetails({ preview }: { preview: SopDefaultDecisionPreview
   );
 }
 
-function InputDecisionDetails({ preview }: { preview: SopInputDecisionPreview }) {
+function ObligationDecisionDetails({
+  preview,
+}: {
+  preview: SopInputDecisionPreview | SopMaterialDecisionPreview;
+}) {
   const me = useMe();
-  const input = preview.input;
+  const input = preview.type === 'sop_experiment_input' ? preview.input : undefined;
   const obligation = preview.acceptance.action.obligation;
   return (
     <>
       <p>
-        <strong>Accept as an experiment input</strong>
+        <strong>
+          {preview.type === 'sop_experiment_input'
+            ? 'Accept as an experiment input'
+            : 'Accept as an experiment material choice'}
+        </strong>
       </p>
       <p className="text">{preview.question.question}</p>
+      {preview.type === 'sop_experiment_material' && (
+        <p>
+          No actual material is selected by this decision. The declared requirements still need
+          checking against the eventual choice.
+        </p>
+      )}
       <p>
         <strong>{preview.consequence}</strong> The method and its section reviews stay unchanged.
         The SOP stays draft; final confirmation is separate.
       </p>
       <p>{preview.reason}</p>
       <details>
-        <summary>Question, responses and required input</summary>
-        <p>
-          Experiment input: <strong>{input.label}</strong>. The existing experiment stage and input
-          binding stay unchanged.
-        </p>
+        <summary>Question, responses and required {input ? 'input' : 'material choice'}</summary>
         <p className="text">{obligation.condition}</p>
         <p>Stage reason: {preview.question.stage.reason}</p>
-        {input.value !== undefined && (
-          <p>
-            Existing default: {formatValue(input.value)}. An explicit value is still required for
-            each experiment.
-          </p>
+        {preview.type === 'sop_experiment_material' && (
+          <>
+            <p>
+              Material role: <strong>{preview.material.label}</strong> ·{' '}
+              {preview.material.type === 'entity' ? 'biological entity' : preview.material.type}.
+              The existing experiment stage and material-role binding stay unchanged.
+            </p>
+            {preview.material.requirements ? (
+              <p className="text">Declared requirements: {preview.material.requirements}</p>
+            ) : (
+              <p className="muted">No additional requirements declared.</p>
+            )}
+            {preview.material.cite?.map((c) => (
+              <p key={`${c.document}-${c.passage}-${c.page}-${c.quote}`}>
+                Material source passage: {c.quote}
+                {c.page && ` · page ${c.page}`}
+              </p>
+            ))}
+          </>
         )}
-        {input.unit && <p>Unit: {input.unit}</p>}
-        {input.min !== undefined && <p>Minimum: {formatValue(input.min)}</p>}
-        {input.max !== undefined && <p>Maximum: {formatValue(input.max)}</p>}
-        {input.note && <p className="text">{input.note}</p>}
-        {input.drawsFrom && <p>Draws from: {input.drawsFrom}</p>}
-        {input.readFrom && (
-          <p>
-            Read from: {input.readFrom.role} · {input.readFrom.field}
-          </p>
+        {input && (
+          <>
+            <p>
+              Experiment input: <strong>{input.label}</strong>. The existing experiment stage and
+              input binding stay unchanged.
+            </p>
+            {input.value !== undefined && (
+              <p>
+                Existing default: {formatValue(input.value)}. An explicit value is still required
+                for each experiment.
+              </p>
+            )}
+            {input.unit && <p>Unit: {input.unit}</p>}
+            {input.min !== undefined && <p>Minimum: {formatValue(input.min)}</p>}
+            {input.max !== undefined && <p>Maximum: {formatValue(input.max)}</p>}
+            {input.note && <p className="text">{input.note}</p>}
+            {input.drawsFrom && <p>Draws from: {input.drawsFrom}</p>}
+            {input.readFrom && (
+              <p>
+                Read from: {input.readFrom.role} · {input.readFrom.field}
+              </p>
+            )}
+            {input.cite?.map((c) => (
+              <p key={`${c.document}-${c.passage}-${c.page}-${c.quote}`}>
+                Input source passage: {c.quote}
+              </p>
+            ))}
+          </>
         )}
-        {input.cite?.map((c) => (
-          <p key={`${c.document}-${c.passage}-${c.page}-${c.quote}`}>
-            Input source passage: {c.quote}
-          </p>
-        ))}
         {preview.question.suggestion && (
           <p className="agent-ink">Suggested answer (assumed): {preview.question.suggestion}</p>
         )}
@@ -514,7 +574,7 @@ function InputDecisionDetails({ preview }: { preview: SopInputDecisionPreview })
         )}
         <p>
           Prepared from an open question. Acceptance defers the obligation to each experiment; it
-          does not supply its value.
+          {input ? ' does not supply its value.' : ' does not select a material.'}
         </p>
       </details>
       <details>

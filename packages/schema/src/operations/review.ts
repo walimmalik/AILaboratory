@@ -6,16 +6,21 @@ import { RecordStatus } from '../record.ts';
 import { ScientificDecisionMetadata } from '../scientific-decisions.ts';
 import { SopDefaultDecisionPreview, SopDefaultEdit } from '../sop-default-decision.ts';
 import { SopInputDecision, SopInputDecisionPreview } from '../sop-input-decision.ts';
+import { SopMaterialDecisionPreview } from '../sop-material-decision.ts';
 
 export const reviewPrepareDecision = defineContract({
   id: 'review.prepare_decision',
   verbs: { done: 'prepared a draft SOP decision', intent: 'prepare a draft SOP decision' },
   summary:
-    'Prepare one bounded decision on a never-confirmed draft SOP: an existing uncited positive same-unit scalar volume default without bounds or a linked open method question, OR acceptance of one existing open experiment/input question without changing its stage, binding, method or required input. Do not mix the selectors. Returns a pending proposal and pauses assistant work. Apply only through proposals.approve with the shown digest; the SOP remains draft and final confirmation is separate. Accepting an experiment input does not resolve the question: it is still required for every experiment',
+    'Prepare one bounded decision on a never-confirmed draft SOP: an existing uncited positive same-unit scalar volume default without bounds or a linked open method question, OR acceptance of one existing open experiment question bound to its declared input or no-default material role. The server derives the binding and obligation; never supply a material choice, stage, condition or actor. Do not mix the selectors. Returns a pending proposal and pauses assistant work. Apply only through proposals.approve with the shown digest; the SOP remains draft and final confirmation is separate. Acceptance does not resolve the question or validate material compatibility: the explicit input or material choice is still required for every experiment',
   effect: 'write',
   input: z.union([SopDefaultEdit, SopInputDecision]),
   output: Proposal.extend({
-    preview: z.discriminatedUnion('type', [SopDefaultDecisionPreview, SopInputDecisionPreview]),
+    preview: z.discriminatedUnion('type', [
+      SopDefaultDecisionPreview,
+      SopInputDecisionPreview,
+      SopMaterialDecisionPreview,
+    ]),
     decision: ScientificDecisionMetadata,
   }),
 });

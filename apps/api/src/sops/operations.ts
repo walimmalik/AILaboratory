@@ -229,7 +229,9 @@ export const sopOperations = [
       if (input.action.type === 'correct' && question.disposition.status === 'deferred')
         throw new OperationError(
           'invalid_input',
-          'This accepted experiment input needs reconsideration before correcting its question wording; responses may still be added.',
+          question.stage.stage === 'experiment' && question.stage.binding.type === 'material_role'
+            ? 'This accepted experiment material obligation needs reconsideration before correcting its question wording; responses may still be added.'
+            : 'This accepted experiment input needs reconsideration before correcting its question wording; responses may still be added.',
         );
       const changed: ScientificQuestion =
         input.action.type === 'correct'
