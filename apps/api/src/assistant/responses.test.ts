@@ -332,16 +332,74 @@ describe('OpenAI Responses', () => {
     await expect(make(fetch).complete(request)).rejects.toThrow('duplicate function call ID');
   });
 
-  it('does not expose echoed secrets from transport or provider failures', async () => {
-    const { fetch } = fakeFetch([{ error: { message: 'echo sk-test-secret' } }], 401);
-    await expect(make(fetch).complete(request)).rejects.toThrow('HTTP 401');
-    const transport = (async () => {
-      throw new Error('echo sk-test-secret');
+  it.each(['headers', 'body'])(
+    'recognizes the request deadline while reading %s',
+    async (phase) => {
+      const signal = AbortSignal.timeout(5);
+      const fetch = (async (_url, init) => {
+        expect(init?.signal).toBe(signal);
+        if (phase === 'headers') {
+          return new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+          });
+        }
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              signal.addEventListener('abort', () => controller.error(signal.reason), {
+                once: true,
+              });
+            },
+          }),
+        );
+      }) as typeof globalThis.fetch;
+      await expect(make(fetch).complete({ ...request, signal })).rejects.toMatchObject({
+        name: 'TimeoutError',
+        message: 'The Responses request timed out.',
+      });
+    },
+  );
+
+  it('sanitizes even the reason of a confirmed timeout', async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException('echo sk-test-secret', 'TimeoutError'));
+    const fetch = (async () => {
+      throw controller.signal.reason;
     }) as typeof globalThis.fetch;
-    const error = await make(transport)
-      .complete(request)
-      .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ModelError);
-    expect((error as Error).message).not.toContain('sk-test-secret');
+    await expect(
+      make(fetch).complete({ ...request, signal: controller.signal }),
+    ).rejects.toMatchObject({
+      name: 'TimeoutError',
+      message: 'The Responses request timed out.',
+    });
   });
+
+  it.each(['headers', 'body'])(
+    'does not expose echoed secrets from %s or provider failures',
+    async (phase) => {
+      const { fetch } = fakeFetch([{ error: { message: 'echo sk-test-secret' } }], 401);
+      await expect(make(fetch).complete(request)).rejects.toThrow('HTTP 401');
+      const transport = (async () => {
+        // A timeout-shaped diagnostic alone does not establish a request deadline.
+        const error = new DOMException('echo sk-test-secret', 'TimeoutError');
+        if (phase === 'headers') throw error;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(error);
+            },
+          }),
+        );
+      }) as typeof globalThis.fetch;
+      const cancellation = new AbortController();
+      cancellation.abort(new DOMException('echo sk-test-secret', 'AbortError'));
+      for (const signal of [new AbortController().signal, cancellation.signal]) {
+        const error = await make(transport)
+          .complete({ ...request, signal })
+          .catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(ModelError);
+        expect((error as Error).message).not.toContain('sk-test-secret');
+      }
+    },
+  );
 });

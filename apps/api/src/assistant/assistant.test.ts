@@ -38,6 +38,7 @@ import {
   toolsFor,
 } from './assistant.ts';
 import { type ChatModel, ModelError, type ModelRequest, type ModelTurn } from './model.ts';
+import { OpenAiResponsesModel } from './responses.ts';
 import { SCIENTIFIC_INTAKE_PROMPT } from './scientific-intake.ts';
 import { ScriptedModel } from './scripted.ts';
 import { createConversation, getConversation, messageRows, updateConversation } from './store.ts';
@@ -1310,6 +1311,62 @@ describe('assistant.ask', () => {
     const again = await ask(registry, assistant, 'Hi again', { conversationId: failed.id });
     expect(again.status).toBe('idle');
     expect(again.error).toBeUndefined();
+  });
+
+  it('reports a Responses deadline and can continue the failed conversation', async () => {
+    const timeout = AbortSignal.timeout.bind(AbortSignal);
+    const deadline = vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => timeout(5));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let calls = 0;
+    const fetch = (async (_url, init) => {
+      if (++calls === 1) {
+        const signal = init?.signal;
+        if (!signal) throw new Error('Missing model deadline');
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              signal.addEventListener('abort', () => controller.error(signal.reason), {
+                once: true,
+              });
+            },
+          }),
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [{ type: 'output_text', text: 'Back.' }],
+            },
+          ],
+        }),
+      );
+    }) as typeof globalThis.fetch;
+    try {
+      const model = new OpenAiResponsesModel({
+        provider: 'openai-compatible',
+        baseUrl: 'https://example.org/v1',
+        model: 'test',
+        apiKey: 'sk-test-secret',
+        fetch,
+      });
+      const { assistant, registry } = setup(model);
+      const failed = await ask(registry, assistant, 'Hi');
+      expect(failed.status).toBe('failed');
+      expect(failed.error).toBe('The model did not answer within 180 seconds.');
+      deadline.mockRestore();
+      const again = await ask(registry, assistant, 'Hi again', { conversationId: failed.id });
+      expect(again.status).toBe('idle');
+      expect(again.error).toBeUndefined();
+      expect(again.messages.at(-1)).toMatchObject({ role: 'assistant', text: 'Back.' });
+      expect(calls).toBe(2);
+    } finally {
+      deadline.mockRestore();
+      log.mockRestore();
+    }
   });
 
   it(`stops after ${MAX_STEPS} steps`, async () => {
