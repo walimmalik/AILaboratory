@@ -6,13 +6,15 @@ import {
   proposalsReject,
   RecordEnvelope,
   type ReviewItem,
+  ScientificQuestion,
   SopDefaultDecisionPreview,
+  SopInputDecisionPreview,
 } from '@ailab/schema';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
-import { formatValue, formatWhen } from '../lib/format.ts';
+import { actorLabel, formatValue, formatWhen } from '../lib/format.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
 import { useMe } from '../session.ts';
 
@@ -45,8 +47,11 @@ function EvidenceText({ evidence: e }: { evidence: DecisionEvidence }) {
 }
 
 export function supportedDecision(proposal: Proposal) {
+  if (!proposal.decision) return undefined;
   const parsed = SopDefaultDecisionPreview.safeParse(proposal.preview);
-  return proposal.decision && parsed.success ? parsed.data : undefined;
+  if (parsed.success) return parsed.data;
+  const input = SopInputDecisionPreview.safeParse(proposal.preview);
+  return input.success ? input.data : undefined;
 }
 
 /** Publish the returned persisted proposal immediately to both views, before refetching. */
@@ -114,7 +119,7 @@ export function DecisionPreviewNotice({
 }) {
   return retainedPreviewNotice(notice, proposal) ? (
     <p className="warn-ink" role="status">
-      Nothing was applied. The preview changed; review these values and click Apply decision again.
+      Nothing was applied. The preview changed; review this decision and click Apply decision again.
     </p>
   ) : null;
 }
@@ -189,7 +194,30 @@ export function ProposalDecisionCard({
     saved.success && Array.isArray(saved.data.attributes.variables)
       ? (saved.data.attributes.variables as { name: string; value?: unknown }[])
       : [];
-  const savedValue = variables.find((v) => v.name === preview.variable.name)?.value;
+  const savedValue =
+    preview.type === 'sop_volume_default'
+      ? variables.find((v) => v.name === preview.variable.name)?.value
+      : undefined;
+  const question =
+    preview.type === 'sop_experiment_input' &&
+    saved.success &&
+    saved.data.id === preview.target.id &&
+    saved.data.kind === 'sop' &&
+    Array.isArray(saved.data.attributes.questions)
+      ? saved.data.attributes.questions
+          .map((q) => ScientificQuestion.safeParse(q))
+          .find((q) => q.success && q.data.id === preview.question.id)
+      : undefined;
+  const accepted =
+    question?.success &&
+    question.data.disposition.status === 'deferred' &&
+    question.data.disposition.proposal === shown.id &&
+    question.data.disposition.action.obligation.stage === 'experiment' &&
+    question.data.disposition.action.obligation.binding.type === 'input' &&
+    preview.type === 'sop_experiment_input' &&
+    question.data.disposition.action.obligation.binding.variable === preview.input.name
+      ? question.data
+      : undefined;
   const blocked =
     busy ||
     decide.isPending ||
@@ -204,18 +232,127 @@ export function ProposalDecisionCard({
     decide.mutate(approve);
   };
   const pending = shown.status === 'pending';
-  const checks = preview.after.readiness.checks;
-  const evidence = preview.confirmation.evidence;
   return (
     <article
       className="proposal decision-card"
-      aria-label={`Default change: ${preview.target.name}`}
+      aria-label={`${preview.type === 'sop_volume_default' ? 'Default change' : 'Experiment input decision'}: ${preview.target.name}`}
     >
       <p>
         <Link to="/records/$id" params={{ id: preview.target.id }}>
           {preview.target.label} · {preview.target.name}
         </Link>
       </p>
+      {preview.type === 'sop_volume_default' ? (
+        <VolumeDecisionDetails preview={preview} />
+      ) : (
+        <InputDecisionDetails preview={preview} />
+      )}
+      {!decide.isPending && (
+        <DecisionPreviewNotice notice={notice ?? previewNotice(shown)} proposal={shown} />
+      )}
+      {pending && (
+        <div className="decide">
+          <input
+            className="field"
+            aria-label="Decision note"
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <button
+            className="btn primary"
+            type="button"
+            disabled={blocked}
+            onClick={() => apply(true)}
+          >
+            Apply decision
+          </button>
+          <button
+            className="btn danger"
+            type="button"
+            disabled={blocked}
+            onClick={() => apply(false)}
+          >
+            Reject
+          </button>
+        </div>
+      )}
+      {pending && conversation && (!me || (checkProducer && !producer.data)) && (
+        <p className="muted">Waiting to check whether the assistant has finished.</p>
+      )}
+      {pending && checkProducer && producer.error && (
+        <p className="error-text">
+          Could not check the assistant.{' '}
+          <button type="button" className="link-btn" onClick={() => void producer.refetch()}>
+            Try again
+          </button>
+        </p>
+      )}
+      {shown.status === 'approved' && shown.receipt && (
+        <p role="status">
+          Decision applied · saved {formatWhen(shown.receipt.committedAt)}.
+          {saved.success && preview.type === 'sop_volume_default' && (
+            <span>
+              {' '}
+              Recorded {preview.variable.label.toLowerCase()}: {formatValue(savedValue)} ·{' '}
+              {saved.data.status === 'draft' ? 'still draft' : saved.data.status}.
+            </span>
+          )}{' '}
+          {preview.type === 'sop_experiment_input' &&
+            (accepted ? (
+              <span>
+                Accepted as an experiment input: {accepted.question} Still required for every
+                experiment.{' '}
+                {saved.success && saved.data.status === 'draft'
+                  ? 'SOP still draft; final confirmation is separate.'
+                  : ''}
+              </span>
+            ) : (
+              <span>The saved input acceptance is unavailable.</span>
+            ))}{' '}
+          <Link to="/records/$id" params={{ id: preview.target.id }}>
+            Open saved SOP
+          </Link>
+        </p>
+      )}
+      {shown.status === 'approved' && !shown.receipt && (
+        <p className="warn-ink">The saved result is unavailable.</p>
+      )}
+      {shown.status === 'rejected' && <p role="status">Decision rejected.</p>}
+      {shown.status === 'failed' && (
+        <p className="error-text">Could not apply: {shown.error?.message}</p>
+      )}
+      {pending && decide.error && (
+        <p className="error-text">
+          {decide.error instanceof ApiError
+            ? decide.error.message
+            : 'Could not save the decision. Check the saved proposal before trying again.'}
+        </p>
+      )}
+      <details className="tech">
+        <summary>Technical details</summary>
+        <pre>
+          {JSON.stringify(
+            {
+              id: shown.id,
+              decision: shown.decision,
+              preview: shown.preview,
+              receipt: shown.receipt,
+            },
+            null,
+            2,
+          )}
+        </pre>
+      </details>
+    </article>
+  );
+}
+
+function VolumeDecisionDetails({ preview }: { preview: SopDefaultDecisionPreview }) {
+  const checks = preview.after.readiness.checks;
+  const evidence = preview.confirmation.evidence;
+  return (
+    <>
       <p>
         <strong>{preview.variable.label}</strong>: {formatValue(preview.variable.before)} →{' '}
         {formatValue(preview.variable.after)}
@@ -304,86 +441,103 @@ export function ProposalDecisionCard({
           ))}
         </ul>
       </details>
-      {!decide.isPending && (
-        <DecisionPreviewNotice notice={notice ?? previewNotice(shown)} proposal={shown} />
-      )}
-      {pending && (
-        <div className="decide">
-          <input
-            className="field"
-            aria-label="Decision note"
-            placeholder="Note (optional)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <button
-            className="btn primary"
-            type="button"
-            disabled={blocked}
-            onClick={() => apply(true)}
-          >
-            Apply decision
-          </button>
-          <button
-            className="btn danger"
-            type="button"
-            disabled={blocked}
-            onClick={() => apply(false)}
-          >
-            Reject
-          </button>
-        </div>
-      )}
-      {pending && conversation && (!me || (checkProducer && !producer.data)) && (
-        <p className="muted">Waiting to check whether the assistant has finished.</p>
-      )}
-      {pending && checkProducer && producer.error && (
-        <p className="error-text">
-          Could not check the assistant.{' '}
-          <button type="button" className="link-btn" onClick={() => void producer.refetch()}>
-            Try again
-          </button>
+    </>
+  );
+}
+
+function InputDecisionDetails({ preview }: { preview: SopInputDecisionPreview }) {
+  const me = useMe();
+  const input = preview.input;
+  const obligation = preview.acceptance.action.obligation;
+  return (
+    <>
+      <p>
+        <strong>Accept as an experiment input</strong>
+      </p>
+      <p className="text">{preview.question.question}</p>
+      <p>
+        <strong>{preview.consequence}</strong> The method and its section reviews stay unchanged.
+        The SOP stays draft; final confirmation is separate.
+      </p>
+      <p>{preview.reason}</p>
+      <details>
+        <summary>Question, responses and required input</summary>
+        <p>
+          Experiment input: <strong>{input.label}</strong>. The existing experiment stage and input
+          binding stay unchanged.
         </p>
-      )}
-      {shown.status === 'approved' && shown.receipt && (
-        <p role="status">
-          Decision applied · saved {formatWhen(shown.receipt.committedAt)}.
-          {saved.success && (
-            <span>
-              {' '}
-              Recorded {preview.variable.label.toLowerCase()}: {formatValue(savedValue)} ·{' '}
-              {saved.data.status === 'draft' ? 'still draft' : saved.data.status}.
-            </span>
-          )}{' '}
-          <Link to="/records/$id" params={{ id: preview.target.id }}>
-            Open saved SOP
-          </Link>
+        <p className="text">{obligation.condition}</p>
+        <p>Stage reason: {preview.question.stage.reason}</p>
+        {input.value !== undefined && (
+          <p>
+            Existing default: {formatValue(input.value)}. An explicit value is still required for
+            each experiment.
+          </p>
+        )}
+        {input.unit && <p>Unit: {input.unit}</p>}
+        {input.min !== undefined && <p>Minimum: {formatValue(input.min)}</p>}
+        {input.max !== undefined && <p>Maximum: {formatValue(input.max)}</p>}
+        {input.note && <p className="text">{input.note}</p>}
+        {input.drawsFrom && <p>Draws from: {input.drawsFrom}</p>}
+        {input.readFrom && (
+          <p>
+            Read from: {input.readFrom.role} · {input.readFrom.field}
+          </p>
+        )}
+        {input.cite?.map((c) => (
+          <p key={`${c.document}-${c.passage}-${c.page}-${c.quote}`}>
+            Input source passage: {c.quote}
+          </p>
+        ))}
+        {preview.question.suggestion && (
+          <p className="agent-ink">Suggested answer (assumed): {preview.question.suggestion}</p>
+        )}
+        {preview.question.passages?.map((c) => (
+          <p key={`${c.document}-${c.passage}-${c.page}-${c.quote}`}>
+            Question source passage: {c.quote}
+          </p>
+        ))}
+        <p>Saved responses</p>
+        {preview.question.responses.length === 0 ? (
+          <p className="muted">No response recorded.</p>
+        ) : (
+          <ol>
+            {preview.question.responses.map((response) => (
+              <li key={`${response.at}-${response.version}`}>
+                <p className="text">{response.text}</p>
+                <span className="muted">
+                  Recorded by {actorLabel(response.by, me)} · {formatWhen(response.at)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+        <p>
+          Prepared from an open question. Acceptance defers the obligation to each experiment; it
+          does not supply its value.
         </p>
-      )}
-      {shown.status === 'approved' && !shown.receipt && (
-        <p className="warn-ink">The saved result is unavailable.</p>
-      )}
-      {shown.status === 'rejected' && <p role="status">Decision rejected.</p>}
-      {shown.status === 'failed' && (
-        <p className="error-text">Could not apply: {shown.error?.message}</p>
-      )}
-      {pending && decide.error && (
-        <p className="error-text">
-          {decide.error instanceof ApiError
-            ? decide.error.message
-            : 'Could not save the decision. Check the saved proposal before trying again.'}
-        </p>
-      )}
-      <details className="tech">
-        <summary>Technical details</summary>
-        <pre>
-          {JSON.stringify(
-            { id: shown.id, decision: shown.decision, receipt: shown.receipt },
-            null,
-            2,
-          )}
-        </pre>
       </details>
-    </article>
+      <details>
+        <summary>Checks before and after this decision</summary>
+        {(['before', 'after'] as const).map((phase) => (
+          <div key={phase}>
+            <p>{phase === 'before' ? 'Before acceptance' : 'After acceptance'}</p>
+            <ul>
+              {preview[phase].readiness.checks.map((c) => (
+                <li key={c.id}>
+                  {c.passed ? 'Pass' : 'Needs attention'}: {c.label}
+                  {c.message && ` · ${c.message}`} · {c.source}
+                </li>
+              ))}
+            </ul>
+            <ul>
+              {preview[phase].readiness.missing.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </details>
+    </>
   );
 }

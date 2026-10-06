@@ -25,6 +25,11 @@ import { ActivityBus, createRegistry, type OperationRegistry } from '../operatio
 import { reagentKinds } from '../reagents/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
+import {
+  executeSopInputDecision,
+  prepareSopInputDecision,
+  revalidateSopInputDecision,
+} from '../review/sop-input-decision.ts';
 import { sopKinds } from '../sops/kinds.ts';
 import { campaignKinds } from './kinds.ts';
 
@@ -428,10 +433,11 @@ describe('experiment stages and runs', () => {
     expect(history.versions.find((v) => v.version === sop.version)?.snapshot).toEqual(snapshot);
     expect((await run(person, 'records.get', { id: sop.id })).attributes).toEqual(sop.attributes);
   });
-  it('enforces the pinned SOP question obligation at experiment readiness, calculation and run start', async () => {
-    const campaign = await activeCampaign();
-    const sop = await confirm(
-      await run(person, 'sops.draft', {
+  it.each(['open', 'deferred'] as const)(
+    'enforces a pinned %s SOP input obligation at experiment readiness, calculation and run start',
+    async (disposition) => {
+      const campaign = await activeCampaign();
+      let sopDraft = await run(person, 'sops.draft', {
         label: 'Late sample count',
         materials: [],
         variables: [
@@ -450,56 +456,81 @@ describe('experiment stages and runs', () => {
             },
           },
         ],
-      }),
-    );
-    const experiment = await run(person, 'experiments.draft', {
-      label: 'Counts',
-      campaign: campaign.id,
-      question: 'Compare samples',
-      subjects: [{ record: (await subject()).id }],
-      protocol: [{ id: 'read', sop: { id: sop.id, version: sop.version } }],
-    });
-    expect(
-      (await run<Readiness>(person, 'records.readiness', { id: experiment.id })).checks.find(
-        (c) => c.id === 'sop_obligations',
-      ),
-    ).toMatchObject({ passed: false, severity: 'blocker' });
-    expect(
-      (
-        await run<{ ready: boolean; parts: { problems: string[] }[] }>(
-          person,
-          'experiments.calculate',
-          { id: experiment.id },
-        )
-      ).parts[0]?.problems.join(),
-    ).toContain('How many samples?');
-    await expect(
-      registry.execute(person, 'runs.start', {
-        experiment: experiment.id,
+      });
+      if (disposition === 'deferred') {
+        const deps = { db, kinds, registry };
+        const proposal = await prepareSopInputDecision(deps, agent, {
+          sop: sopDraft.id,
+          expectedVersion: sopDraft.version,
+          question: 'count',
+          reason: 'Every experiment chooses its sample count',
+        });
+        sopDraft = await registry.transaction(db, async (tx) => {
+          const checked = await revalidateSopInputDecision(
+            { ...deps, db: tx },
+            person,
+            proposal.id,
+            proposal.decision?.previewIdentity.digest ?? '',
+          );
+          if (checked.status !== 'unchanged')
+            throw new Error('Expected unchanged input acceptance');
+          return executeSopInputDecision({ ...deps, db: tx }, checked.authorization);
+        });
+        expect(sopDraft.status).toBe('draft');
+        expect(sopDraft.attributes.questions).toMatchObject([
+          { disposition: { status: 'deferred' } },
+        ]);
+      }
+      const sop = await confirm(sopDraft);
+      const experiment = await run(person, 'experiments.draft', {
+        label: 'Counts',
+        campaign: campaign.id,
+        question: 'Compare samples',
+        subjects: [{ record: (await subject()).id }],
+        protocol: [{ id: 'read', sop: { id: sop.id, version: sop.version } }],
+      });
+      expect(
+        (await run<Readiness>(person, 'records.readiness', { id: experiment.id })).checks.find(
+          (c) => c.id === 'sop_obligations',
+        ),
+      ).toMatchObject({ passed: false, severity: 'blocker' });
+      expect(
+        (
+          await run<{ ready: boolean; parts: { problems: string[] }[] }>(
+            person,
+            'experiments.calculate',
+            { id: experiment.id },
+          )
+        ).parts[0]?.problems.join(),
+      ).toContain('How many samples?');
+      await expect(
+        registry.execute(person, 'runs.start', {
+          experiment: experiment.id,
+          expectedVersion: experiment.version,
+        }),
+      ).rejects.toMatchObject({ code: 'invalid_state' });
+      const bound = await run(person, 'experiments.bind_protocol', {
+        id: experiment.id,
         expectedVersion: experiment.version,
-      }),
-    ).rejects.toMatchObject({ code: 'invalid_state' });
-    const bound = await run(person, 'experiments.bind_protocol', {
-      id: experiment.id,
-      expectedVersion: experiment.version,
-      part: 'read',
-      inputs: [{ name: 'count', value: '24' }],
-    });
-    const confirmed = await confirm(bound);
-    const planned = await run(person, 'experiments.set_stage', {
-      id: confirmed.id,
-      expectedVersion: confirmed.version,
-      stage: 'planned',
-    });
-    const started = await run(person, 'runs.start', {
-      experiment: planned.id,
-      expectedVersion: planned.version,
-    });
-    expect(started.kind).toBe('run');
-    expect((await run(person, 'records.get', { id: sop.id })).attributes.questions).toEqual(
-      sop.attributes.questions,
-    );
-  });
+        part: 'read',
+        inputs: [{ name: 'count', value: '24' }],
+      });
+      const confirmed = await confirm(bound);
+      const planned = await run(person, 'experiments.set_stage', {
+        id: confirmed.id,
+        expectedVersion: confirmed.version,
+        stage: 'planned',
+      });
+      const started = await run(person, 'runs.start', {
+        experiment: planned.id,
+        expectedVersion: planned.version,
+      });
+      expect(started.kind).toBe('run');
+      const retained = await run(person, 'records.get', { id: sop.id });
+      expect(retained.version).toBe(sop.version);
+      expect(retained.attributes).toEqual(sop.attributes);
+    },
+  );
   it('plans only a confirmed, ready design; runs pin the design version; where_used finds them', async () => {
     const campaign = await activeCampaign();
     const sop = await confirmedSop();

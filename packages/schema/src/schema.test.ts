@@ -106,6 +106,8 @@ describe('json schema', () => {
       'ScientificQuestion',
       'SopDefaultDecisionPreview',
       'SopDefaultEdit',
+      'SopInputDecision',
+      'SopInputDecisionPreview',
     ]);
   });
 });

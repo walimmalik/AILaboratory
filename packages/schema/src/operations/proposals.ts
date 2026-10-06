@@ -17,7 +17,7 @@ export const proposalsApprove = defineContract({
   id: 'proposals.approve',
   verbs: { done: 'confirmed a proposed change', intent: 'confirm a proposed change' },
   summary:
-    'Apply a proposed change (people only). Prepared draft-volume decisions require the digest shown in expectedPreview. Changed meaning returns the same pending proposal with previewStatus refreshed; an old token returns previewStatus stale. Neither applies the change: review the returned preview and click again with its current digest. Approved retries return the durable receipt',
+    'Apply a proposed change (people only). Prepared draft-volume or existing experiment-input decisions require the digest shown in expectedPreview. Accepting an experiment input preserves its required downstream value and leaves the SOP draft. Changed meaning returns the same pending proposal with previewStatus refreshed; an old token returns previewStatus stale. Neither applies the change: review the returned preview and click again with its current digest. Approved retries return the durable receipt',
   effect: 'write',
   input: z.strictObject({
     id: ProposalId,
