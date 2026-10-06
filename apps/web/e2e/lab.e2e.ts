@@ -286,14 +286,14 @@ test('an agent drafts a record, a person reviews it, and one Confirm activates i
 
   // What the agent assumed is named on the Overview, with one Confirm.
   await expect(
-    readiness.getByText(/One value was entered by an agent without a source: color/),
+    readiness.getByText(/One value remains unverified: color/),
   ).toBeVisible();
   await expect(readiness.getByText(/2 parts to confirm/)).toBeVisible();
 
   // All fields says once per part where its values came from (plan 004f N7).
   await page.getByRole('link', { name: /^All fields/ }).click();
   await expect(
-    appearance.getByText(/Color entered by E2E agent with no source given, unverified/),
+    appearance.getByText(/Color entered by E2E agent, unverified \(marked ◦\)/),
   ).toBeVisible();
   await expect(
     volume.getByText(/Volume from the datasheet \(Vendor sheet, p\. 2\), according to E2E agent/),
