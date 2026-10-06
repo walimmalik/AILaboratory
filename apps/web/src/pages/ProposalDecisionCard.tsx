@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { formatValue, formatWhen } from '../lib/format.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
+import { useMe } from '../session.ts';
 
 function EvidenceText({ evidence: e }: { evidence: DecisionEvidence }) {
   const words = {
@@ -126,6 +127,7 @@ export function ProposalDecisionCard({
   busy?: boolean;
 }) {
   const client = useQueryClient();
+  const me = useMe();
   const [note, setNote] = useState('');
   const [notice, setNotice] = useState<PreviewNotice>();
   const lock = useRef(false);
@@ -134,9 +136,15 @@ export function ProposalDecisionCard({
   const decided = useQuery({ ...decidedProposalsQuery, enabled: false }).data;
   const origin = proposal.decision?.origin;
   const conversation = origin?.type === 'user_message' ? origin.conversation : undefined;
+  // Chats are person-private; another lab reviewer relies on the approval operation's guard.
+  const preparingPerson =
+    proposal.proposedBy.type === 'agent'
+      ? proposal.proposedBy.onBehalfOf
+      : proposal.proposedBy.userId;
+  const checkProducer = !!conversation && me?.user.id === preparingPerson;
   const producer = useQuery({
     ...conversationQuery(conversation ?? ''),
-    enabled: !!conversation && proposal.status === 'pending',
+    enabled: checkProducer && proposal.status === 'pending',
     refetchInterval: (q) => (q.state.data?.status === 'running' ? 1000 : false),
   });
   const decide = useMutation({
@@ -185,8 +193,10 @@ export function ProposalDecisionCard({
   const blocked =
     busy ||
     decide.isPending ||
-    !!producer.error ||
-    (!!conversation && (!producer.data || producer.data.status === 'running'));
+    (!!conversation &&
+      (!me ||
+        (checkProducer &&
+          (!!producer.error || !producer.data || producer.data.status === 'running'))));
   const apply = (approve: boolean) => {
     if (blocked || lock.current) return;
     lock.current = true;
@@ -324,10 +334,10 @@ export function ProposalDecisionCard({
           </button>
         </div>
       )}
-      {pending && conversation && !producer.data && (
+      {pending && conversation && (!me || (checkProducer && !producer.data)) && (
         <p className="muted">Waiting to check whether the assistant has finished.</p>
       )}
-      {pending && producer.error && (
+      {pending && checkProducer && producer.error && (
         <p className="error-text">
           Could not check the assistant.{' '}
           <button type="button" className="link-btn" onClick={() => void producer.refetch()}>

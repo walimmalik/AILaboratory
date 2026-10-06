@@ -1,4 +1,6 @@
+import { ApiError } from '@ailab/client';
 import {
+  type Me,
   type Proposal,
   proposalsApprove,
   type ReviewItem,
@@ -10,6 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 import { api } from '../api.ts';
 import { conversationQuery, decidedProposalsQuery, reviewQuery } from '../queries.ts';
+import { meQuery } from '../session.ts';
 import { ConversationMessages } from './AssistantPanel.tsx';
 import {
   DecisionPreviewNotice,
@@ -76,6 +79,16 @@ it('retains refreshed/stale response feedback through same-digest automatic refe
 });
 const id = 'sop_00000000000000000000000000';
 const quantity = (value: string) => ({ value, unit: 'uL' });
+function signIn(client: QueryClient, userId = 'usr_00000000000000000000000000') {
+  const me: Me = {
+    actor: { type: 'user', userId },
+    orgId: 'org_test',
+    labId: 'lab_test',
+    user: { id: userId, displayName: 'Reviewer', email: null },
+    lab: { id: 'lab_test', name: 'Lab' },
+  };
+  client.setQueryData(meQuery.queryKey, () => me);
+}
 const readiness = {
   recordId: id,
   version: 1,
@@ -327,6 +340,7 @@ it('Review waits for the actual producing conversation, not just the visible pan
   const conversation = 'cnv_00000000000000000000000000';
   p.decision.origin = { type: 'user_message', conversation, message: 'ask' };
   const client = new QueryClient();
+  signIn(client);
   client.setQueryData(conversationQuery(conversation).queryKey, {
     id: conversation,
     status: 'running',
@@ -353,6 +367,62 @@ it('Review waits for the actual producing conversation, not just the visible pan
     messages: [],
   });
   expect(render(<ProposalDecisionCard proposal={p} />, client)).not.toContain('disabled=""');
+});
+
+it('allows a different lab reviewer despite the private-chat refusal, while preserving own loading and transient-error gates', () => {
+  const p = proposal();
+  if (!p.decision) throw new Error('Fixture requires metadata');
+  const conversation = 'cnv_00000000000000000000000000';
+  p.decision.origin = { type: 'user_message', conversation, message: 'ask' };
+  const client = new QueryClient({
+    defaultOptions: { queries: { retryOnMount: false, retry: false } },
+  });
+  expect(render(<ProposalDecisionCard proposal={p} />, client).match(/disabled=""/g)).toHaveLength(
+    2,
+  );
+  signIn(client);
+  expect(render(<ProposalDecisionCard proposal={p} />, client).match(/disabled=""/g)).toHaveLength(
+    2,
+  );
+  const query = client
+    .getQueryCache()
+    .build(client, { queryKey: conversationQuery(conversation).queryKey });
+  query.setState({
+    status: 'error',
+    error: new ApiError(404, {
+      code: 'not_found',
+      message: 'Private conversation is not available',
+    }),
+  });
+  const ownRefusal = render(<ProposalDecisionCard proposal={p} />, client);
+  expect(ownRefusal.match(/disabled=""/g)).toHaveLength(2);
+  expect(ownRefusal).toContain('Could not check the assistant');
+  signIn(client, 'usr_11111111111111111111111111');
+  const otherReviewer = render(<ProposalDecisionCard proposal={p} />, client);
+  expect(otherReviewer).not.toContain('disabled=""');
+  expect(otherReviewer).not.toContain('Could not check the assistant');
+  expect(otherReviewer).not.toContain('Waiting to check');
+  expect(otherReviewer).toContain('Apply decision');
+  expect(otherReviewer).toContain('Reject');
+  signIn(client);
+  client.setQueryData(conversationQuery(conversation).queryKey, {
+    id: conversation,
+    title: 'Planning default',
+    status: 'idle',
+    agentName: 'Test',
+    provider: 'test',
+    model: 'test',
+    createdAt: at,
+    updatedAt: at,
+    messages: [],
+  });
+  query.setState({
+    status: 'error',
+    error: new ApiError(503, { code: 'unavailable', message: 'Network unavailable' }),
+  });
+  const transientError = render(<ProposalDecisionCard proposal={p} />, client);
+  expect(transientError.match(/disabled=""/g)).toHaveLength(2);
+  expect(transientError).toContain('Try again');
 });
 
 it('chat binds the shared card to the persisted proposal, including the durable decided state', () => {
