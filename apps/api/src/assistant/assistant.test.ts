@@ -1215,7 +1215,8 @@ describe('assistant.ask', () => {
     );
     const { assistant, registry } = setup(model);
     const conversation = await ask(registry, assistant, 'Check forever');
-    expect(model.requests).toHaveLength(MAX_STEPS);
+    expect(model.requests).toHaveLength(MAX_STEPS + 1);
+    expect(model.requests.at(-1)?.tools).toEqual([]);
     expect(conversation.status).toBe('failed');
     expect(conversation.messages.at(-1)).toMatchObject({
       text: expect.stringContaining(`limit of ${MAX_STEPS}`),
@@ -1369,19 +1370,189 @@ describe('assistant.ask', () => {
     }
   });
 
-  it(`stops after ${MAX_STEPS} steps`, async () => {
-    const loop = (): Promise<ModelTurn> =>
-      Promise.resolve({
-        text: '',
-        toolCalls: [{ id: newId('call'), name: 'records_list', input: {} }],
-        stop: 'tool_use',
-      });
-    const model = new FakeModel(Array.from({ length: MAX_STEPS + 2 }, () => loop));
+  it(`summarizes saved and failed outcomes after ${MAX_STEPS} action turns without extending execution`, async () => {
+    const raw = { summary: 'provider reply' };
+    const summaryText =
+      'Saved the draft. One call failed; scientific questions and remaining work still need review.';
+    const turns: ModelTurn[] = Array.from({ length: MAX_STEPS }, (_, index) => ({
+      text: '',
+      toolCalls: [
+        {
+          id: `call_${index}`,
+          name: index === 0 ? 'records_create' : index === 1 ? 'unknown_operation' : 'records_list',
+          input: index === 0 ? { kind: 'widget', label: 'Saved before limit', attributes } : {},
+        },
+      ],
+      stop: 'tool_use',
+    }));
+    turns.push({
+      text: summaryText,
+      toolCalls: [],
+      stop: 'end',
+      raw,
+    });
+    const model = new FakeModel(turns);
     const { assistant, registry } = setup(model);
-    const conversation = await ask(registry, assistant, 'List forever');
+    const execute = vi.spyOn(registry, 'execute');
+    const conversation = await ask(registry, assistant, 'Create a draft and investigate');
     expect(conversation.status).toBe('failed');
-    expect(model.requests).toHaveLength(MAX_STEPS);
+    expect(conversation.error).toBe(
+      'The assistant action limit was reached; completed changes remain saved.',
+    );
+    expect(model.requests).toHaveLength(MAX_STEPS + 1);
+    expect(model.requests.slice(0, MAX_STEPS).every((request) => request.tools.length > 0)).toBe(
+      true,
+    );
+    const summary = model.requests.at(-1);
+    expect(summary?.tools).toEqual([]);
+    expect(summary?.system).toContain('ONLY a final read-only summary');
+    expect(summary?.system).toContain(
+      'failed or not-executed calls, unresolved scientific questions',
+    );
+    expect(summary?.messages.at(-1)).toMatchObject({
+      role: 'tool',
+      toolCallId: `call_${MAX_STEPS - 1}`,
+      isError: false,
+      content: expect.stringContaining('Saved before limit'),
+    });
+    expect(summary?.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', toolCallId: 'call_1', isError: true }),
+    );
+    expect(conversation.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      text: summaryText,
+      toolCalls: [],
+    });
+    expect((await messageRows(db, conversation.id)).at(-1)?.providerRaw).toEqual(raw);
+    expect(
+      execute.mock.calls.filter(([, operation]) => operation === 'records.create'),
+    ).toHaveLength(1);
+    expect(execute.mock.calls.filter(([, operation]) => operation === 'records.list')).toHaveLength(
+      MAX_STEPS - 2,
+    );
+    execute.mockRestore();
+    expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+      records: [expect.objectContaining({ label: 'Saved before limit', version: 1 })],
+    });
   });
+
+  it('pauses for a proposal on the last action turn without requesting a summary', async () => {
+    const model = new FakeModel(
+      Array.from(
+        { length: MAX_STEPS - 1 },
+        (): ModelTurn => ({ text: 'Investigating.', toolCalls: [], stop: 'continue' }),
+      ),
+    );
+    const { assistant, registry } = setup(model);
+    const record = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'widget',
+        label: 'Active stock',
+        attributes,
+        status: 'active',
+      }),
+    )) as RecordEnvelope;
+    model.turns.push({
+      text: 'Prepared a change.',
+      toolCalls: [
+        {
+          id: 'proposal',
+          name: 'records_update',
+          input: { id: record.id, expectedVersion: record.version, label: 'Proposed stock' },
+        },
+        {
+          id: 'later',
+          name: 'records_create',
+          input: { kind: 'widget', label: 'Must not save', attributes },
+        },
+      ],
+      stop: 'tool_use',
+    });
+    const conversation = await ask(registry, assistant, 'Change the stock');
+    expect(model.requests).toHaveLength(MAX_STEPS);
+    expect(model.requests.every((request) => request.tools.length > 0)).toBe(true);
+    expect(conversation.status).toBe('idle');
+    expect(conversation.messages.at(-1)).toMatchObject({
+      text: expect.stringContaining('ready for your review'),
+    });
+    expect(conversation.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', toolCallId: 'proposal', outcome: 'proposed' }),
+    );
+    expect(conversation.messages).toContainEqual(
+      expect.objectContaining({ role: 'tool', toolCallId: 'later', outcome: 'failed' }),
+    );
+    expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+      records: [expect.objectContaining({ label: 'Active stock', version: 1 })],
+    });
+  });
+
+  it.each([
+    ['exception', new ModelError('Provider diagnostic must not appear')],
+    ['timeout', new DOMException('Provider diagnostic must not appear', 'TimeoutError')],
+    ['empty', { text: '  ', toolCalls: [], stop: 'end' }],
+    ['refusal', { text: 'Discard this answer', toolCalls: [], stop: 'refusal' }],
+    ['truncated', { text: 'Discard this answer', toolCalls: [], stop: 'max_tokens' }],
+    ['commentary', { text: 'Discard this answer', toolCalls: [], stop: 'continue' }],
+    [
+      'tool use',
+      {
+        text: 'Discard this answer',
+        toolCalls: [
+          {
+            id: 'forbidden',
+            name: 'records_create',
+            input: { kind: 'widget', label: 'Must not save', attributes },
+          },
+        ],
+        stop: 'tool_use',
+      },
+    ],
+    [
+      'final with call',
+      {
+        text: 'Discard this answer',
+        toolCalls: [
+          {
+            id: 'forbidden',
+            name: 'records_create',
+            input: { kind: 'widget', label: 'Must not save', attributes },
+          },
+        ],
+        stop: 'end',
+      },
+    ],
+  ] satisfies [string, ModelTurn | Error][])(
+    'uses the deterministic action-limit fallback for %s without execution or retry',
+    async (_case, summary) => {
+      const model = new FakeModel([
+        ...Array.from(
+          { length: MAX_STEPS },
+          (): ModelTurn => ({ text: 'Still investigating.', toolCalls: [], stop: 'continue' }),
+        ),
+        summary,
+      ]);
+      const { assistant, registry } = setup(model);
+      const conversation = await ask(registry, assistant, 'Investigate');
+      expect(model.requests).toHaveLength(MAX_STEPS + 1);
+      expect(model.requests.at(-1)?.tools).toEqual([]);
+      expect(conversation.status).toBe('failed');
+      expect(conversation.error).toBe(
+        'The assistant action limit was reached; completed changes remain saved.',
+      );
+      expect(conversation.messages.at(-1)).toMatchObject({
+        role: 'assistant',
+        toolCalls: [],
+        text: `I reached the action limit of ${MAX_STEPS} turns. Completed changes remain saved. Review the saved work and unresolved questions before sending a new request.`,
+      });
+      expect(conversation.messages).not.toContainEqual(
+        expect.objectContaining({ text: 'Discard this answer' }),
+      );
+      expect((await messageRows(db, conversation.id)).at(-1)?.providerRaw).toBeNull();
+      expect(await output(registry.execute(person, 'records.list', {}))).toMatchObject({
+        records: [],
+      });
+    },
+  );
 
   it('refuses a new message while the last one is being answered', async () => {
     let release: (turn: ModelTurn) => void = () => undefined;
