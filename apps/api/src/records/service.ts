@@ -988,7 +988,7 @@ async function checkCopiedEvidence(
     if (version.snapshot.status !== 'active' && !links) {
       throw new RecordError(
         'invalid_input',
-        `${key} is marked copied from ${source.name} version ${from.version}, which was ${version.snapshot.status}, not confirmed; copy from a confirmed version`,
+        `${key} is marked copied from ${source.name} version ${from.version}, which was ${version.snapshot.status}, not confirmed; copy from a confirmed version. Values reused from an unconfirmed draft may stay assumed/unverified, with the actual draft source noted. A request to reuse a draft is not the person stating its literal values; do not relabel them as stated.`,
       );
     }
     if (!from.path) continue;
