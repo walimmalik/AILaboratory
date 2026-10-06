@@ -4,7 +4,7 @@ import type {
   OperationResult,
   RecordId as RecordIdType,
 } from '@ailab/schema';
-import { RecordId } from '@ailab/schema';
+import { Proposal, RecordId } from '@ailab/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Assistant } from '../assistant/assistant.ts';
@@ -266,17 +266,22 @@ export class OperationRegistry {
           recordIds,
           nameHints: nameHints(output),
           ...(options.approvedProposalId ? { proposalId: options.approvedProposalId } : {}),
+          ...(id === 'review.prepare_decision' ? { proposalId: Proposal.parse(output).id } : {}),
           input,
           durationMs: Date.now() - started,
         });
         const effects = this.#committed.get(tx);
         effects?.push(() => operation.after?.(ctx, input, output, { ...deps, db: this.deps.db }));
         // Only a person's top-level write; nested calls arrive with their outer write.
-        if (ctx.actor.type === 'user' && db === this.deps.db)
+        if (ctx.actor.type === 'user' && db === this.deps.db && id !== 'review.prepare_decision')
           for (const listener of this.#listeners)
             effects?.push(() => listener(ctx, recordIds, { ...deps, db: this.deps.db }));
         return output;
       });
+      // This known producer stores its own authoritative preview. Both people and agents must
+      // receive the existing proposed result so the assistant pauses subsequent tool calls.
+      if (id === 'review.prepare_decision')
+        return { status: 'proposed', proposal: Proposal.parse(output) };
       return { status: 'done', output };
     } catch (error) {
       if (operation.ledger === false) throw error;
@@ -307,6 +312,11 @@ export class OperationRegistry {
     if (id === 'changes.apply') {
       throw new OperationError('invalid_input', 'A change set cannot hold another change set');
     }
+    if (id === 'review.prepare_decision')
+      throw new OperationError(
+        'invalid_input',
+        'Prepare a decision as its own operation so the pending proposal pauses subsequent work',
+      );
     const input = this.#accept(operation, ctx, rawInput);
     const output = await this.#run(operation, ctx, input, { ...this.deps, db });
     // A calculator inside a set keeps its result under a handle too, so a later step can mark a

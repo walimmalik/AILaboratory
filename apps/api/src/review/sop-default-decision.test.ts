@@ -104,9 +104,6 @@ describe('staged SOP volume-default decision producer', () => {
     expect(await db.select().from(recordVersions)).toEqual(beforeHistory);
     expect(await db.select().from(activity)).toEqual(beforeActivity);
     expect(deliveries).toEqual([]);
-    await expect(
-      f.registry.execute(f.agent, 'review.prepare_decision', f.edit),
-    ).rejects.toMatchObject({ code: 'unknown_operation' });
   });
 
   it('normalizes all new human evidence while retaining history and unchanged meaning for a different applying person', async () => {
@@ -441,12 +438,12 @@ describe('staged SOP volume-default decision producer', () => {
     ).rejects.toMatchObject({ code: 'invalid_state' });
   });
 
-  it('retains ordinary approval refusal and lets caller rollback a refreshed pending preview', async () => {
+  it('requires a shown preview token and lets caller rollback a refreshed pending preview', async () => {
     const f = await defaultDecisionFixture(db);
     const proposal = await prepareSopDefaultDecision(f, f.agent, f.edit);
     await expect(
       f.registry.execute(f.person, 'proposals.approve', { id: proposal.id }),
-    ).rejects.toMatchObject({ code: 'unavailable' });
+    ).rejects.toMatchObject({ code: 'invalid_input' });
     const snapshot = (await listProposals(db, f.person))[0];
     await f.service.update(f.agent, f.target.id, {
       expectedVersion: f.target.version,

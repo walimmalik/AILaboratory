@@ -1,5 +1,6 @@
 import { newId } from '@ailab/domain';
 import type { RecordEnvelope, SopAttributes } from '@ailab/schema';
+import type { Assistant } from '../assistant/assistant.ts';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
 import { labwareKinds } from '../labware/kinds.ts';
@@ -10,7 +11,11 @@ import { KindRegistry } from '../records/kinds.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { sop } from '../sops/kinds.ts';
 
-export async function defaultDecisionFixture(db: Db, method: typeof sop = sop) {
+export async function defaultDecisionFixture(
+  db: Db,
+  method: typeof sop = sop,
+  assistant?: Assistant,
+) {
   const tenant = await createTenant(db, { orgName: 'Decisions', labName: 'Lab', userName: 'Wali' });
   const person: RecordContext = {
     actor: { type: 'user', userId: tenant.userId },
@@ -26,7 +31,7 @@ export async function defaultDecisionFixture(db: Db, method: typeof sop = sop) {
   for (const kind of [...labwareKinds, ...reagentKinds, ...libraryKinds, method])
     kinds.register(kind);
   const bus = new ActivityBus();
-  const registry = createRegistry(db, kinds, bus);
+  const registry = createRegistry(db, kinds, bus, assistant);
   const service = new RecordService(db, kinds);
   const product = await service.create(agent, {
     kind: 'product',

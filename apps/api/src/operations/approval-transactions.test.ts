@@ -332,7 +332,7 @@ describe('commit-aligned approval transactions', () => {
     expect(live.map((entry) => entry.outcome)).toEqual(['failed', 'failed']);
   });
 
-  it('round-trips decision metadata and refuses its not-yet-implemented apply path', async () => {
+  it('round-trips decision metadata and refuses scientific decisions outside the supported SOP default', async () => {
     const proposal = await propose();
     const decision = {
       origin: { type: 'unknown' as const },
@@ -348,10 +348,13 @@ describe('commit-aligned approval transactions', () => {
       listed.status === 'done' && (listed.output as { proposals: Proposal[] }).proposals,
     ).toEqual([{ ...proposal, decision }]);
     await expect(
-      registry.execute(person, 'proposals.approve', { id: proposal.id }),
+      registry.execute(person, 'proposals.approve', {
+        id: proposal.id,
+        expectedPreview: decision.previewIdentity.digest,
+      }),
     ).rejects.toMatchObject({
-      code: 'unavailable',
-      message: expect.stringContaining('remains pending'),
+      code: 'invalid_input',
+      message: expect.stringContaining('not a supported pending SOP default decision'),
     });
     expect(await stored()).toEqual([]);
     expect(await registry.execute(person, 'proposals.list', { status: 'pending' })).toEqual(listed);

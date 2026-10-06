@@ -12,7 +12,7 @@ import { RecordChange } from './operations/records.ts';
 import { Quantity } from './quantity.ts';
 import { SopId, SopName, SopVariable } from './sops.ts';
 
-/** Staged producer contract only. No callable preparation operation is registered yet. */
+/** The only supported review.prepare_decision edit; the server owns preview and dependency facts. */
 export const SopDefaultEdit = z.strictObject({
   sop: SopId,
   expectedVersion: z.number().int().positive(),

@@ -1,6 +1,8 @@
 import { activityList, proposalsApprove, proposalsList, proposalsReject } from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
 import { conversations } from '../db/schema.ts';
+import type { RecordContext } from '../records/service.ts';
+import { revalidateSopDefaultDecision } from '../review/sop-default-decision.ts';
 import { listActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
 import { decideProposal, findProposal, listProposals, toProposal } from './proposal-store.ts';
@@ -22,7 +24,12 @@ export const proposalOperations = [
     // The records the applied run touched, not the proposal's preview, whose new records were
     // rolled back and got other IDs when they were made for real.
     touches: (_input, output) => output?.receipt?.recordIds ?? [],
-    outcome: (output) => (output.status === 'approved' ? 'approved' : 'failed'),
+    outcome: (output) =>
+      output.status === 'approved'
+        ? 'approved'
+        : output.status === 'pending'
+          ? 'proposed'
+          : 'failed',
     run: async (ctx, input, deps) => {
       const row = await findProposal(deps.db, ctx, input.id, { forUpdate: true });
       if (row.status === 'approved') {
@@ -50,26 +57,33 @@ export const proposalOperations = [
             'The assistant is still working on this change. Wait for its turn to finish before applying it.',
           );
       }
-      if (row.decision) {
-        throw new OperationError(
-          'unavailable',
-          'Applying prepared scientific decisions is not available yet; this proposal remains pending',
-        );
-      }
       // The approver reviewed the change, so it confirms the sections it touches (ADR 0021).
-      const agentCtx = {
+      let agentCtx: RecordContext = {
         ...ctx,
         actor: row.proposedBy.type === 'agent' ? row.proposedBy : ctx.actor,
         approvedBy: ctx.actor,
         // Ordinary proposals have no stored preparation origin; never borrow the approver's request.
-        origin: { type: 'unknown' as const },
+        origin: row.decision?.origin ?? { type: 'unknown' as const },
       };
+      let operationInput = row.input;
+      if (row.decision) {
+        if (!input.expectedPreview)
+          throw new OperationError(
+            'invalid_input',
+            'Review this decision and pass the exact preview digest before applying it',
+          );
+        const result = await revalidateSopDefaultDecision(deps, ctx, row.id, input.expectedPreview);
+        if (result.status !== 'unchanged')
+          return { ...result.proposal, previewStatus: result.status };
+        agentCtx = result.executionContext;
+        operationInput = result.prepared.input;
+      }
       let ran: Awaited<ReturnType<typeof deps.registry.execute>>;
       try {
         ran = await deps.registry.execute(
           agentCtx,
           row.operationId,
-          row.input,
+          operationInput,
           { approvedProposalId: row.id },
           deps.db,
         );
@@ -89,7 +103,7 @@ export const proposalOperations = [
         reason: input.reason,
         receipt: {
           output: ran.output,
-          recordIds: deps.registry.touchedBy(row.operationId, row.input, ran.output),
+          recordIds: deps.registry.touchedBy(row.operationId, operationInput, ran.output),
           ...(ran.calculation ? { calculation: ran.calculation } : {}),
           committedAt: new Date().toISOString(),
         },

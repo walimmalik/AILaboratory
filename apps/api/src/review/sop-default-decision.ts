@@ -388,7 +388,7 @@ export async function lockedSopDefaultPreview(
   );
 }
 
-/** Internal only: creates one existing proposal row; no callable operation is exposed in stage one. */
+/** Bounded producer used by review.prepare_decision; stores one existing proposal row. */
 export async function prepareSopDefaultDecision(
   deps: Deps,
   ctx: RecordContext,
@@ -406,7 +406,7 @@ export async function prepareSopDefaultDecision(
   });
 }
 
-/** Stage-one seam for the sole future approval consumer. Caller must retain its transaction through execution/receipt. */
+/** Sole approval consumer keeps this transaction open through execution and durable receipt. */
 export async function revalidateSopDefaultDecision(
   deps: Deps,
   applying: RecordContext,

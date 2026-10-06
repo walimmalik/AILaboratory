@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Sha256 } from '../files.ts';
 import { ActivityEntry, defineContract, Proposal, ProposalStatus } from '../operation.ts';
 
 const ProposalId = z.string().regex(/^prp_[0-9A-HJKMNP-TV-Z]{26}$/);
@@ -21,13 +22,9 @@ export const proposalsApprove = defineContract({
   input: z.strictObject({
     id: ProposalId,
     reason: z.string().min(1).optional(),
-    expectedPreview: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/)
-      .optional()
-      .describe(
-        'The exact decision.previewIdentity.digest shown to the person; required for a pending prepared decision',
-      ),
+    expectedPreview: Sha256.optional().describe(
+      'The exact decision.previewIdentity.digest shown to the person; required for a pending prepared decision',
+    ),
   }),
   output: Proposal.extend({
     previewStatus: z
