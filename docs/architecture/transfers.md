@@ -97,6 +97,12 @@ A plan's `decks` hold one layout per Flex group: `{group, sites: [{slot, plate} 
 - **Tips (016c-2, T5)**: `groupTips(a, group, method)` follows a format's fixed tip handling, else the group's rule; `transfers.check` totals count tips that way. `worklist_tips` (warning): a per-source method reusing a tip that touched liquid already in a well, or a group rule the method doesn't follow (`tipClashes`).
 - **Seed**: `seed/worklist-formats.yaml` (loader `transfers/seed.ts`) drafts the mock formats with their example files, evidence assumed; a format whose instrument kind isn't there yet waits.
 
-## Not yet
+## Reviewing a transfer plan
 
-Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, deck layouts for other instruments (Hamilton carriers come with 016c), the 2D deck view (016d), configuration changes a layout needs proposed with their time cost (T6), liquid classes in Opentrons protocols, 96-channel and column-wise 8-channel protocols, FeliX worklists, screens (016d).
+The transfer plan's Overview shows its saved liquid movements, grouped by instrument step: source plate and well, destination plate and well, and volume with its unit. Source containers and destination maps link back to their records. The table displays saved calculated quantities; it does not calculate new volumes in the browser. Scientific notes remain visible, and the existing readiness and confirmation operations remain authoritative. Export produces instrument instructions, not evidence that any liquid moved.
+
+Live instrument-limit checks compare quantities by value and compatible unit, independent of JSON field order or equivalent unit spelling after storage. A real limit change remains a warning.
+
+## Remaining work
+
+Chained intermediates (an intermediate made from another) for points below 1000-fold. Intermediate plates as plate maps (the plan names their wells I1, I2… itself), `transfers.set_method`, deck layouts for other instruments (Hamilton carriers come with 016c), the 2D deck view (016d), configuration changes a layout needs proposed with their time cost (T6), liquid classes in Opentrons protocols, 96-channel and column-wise 8-channel protocols, FeliX worklists, and the remaining editing and execution screens (016d).

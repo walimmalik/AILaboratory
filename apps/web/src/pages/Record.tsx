@@ -41,6 +41,7 @@ import { fieldLabel, ReadinessBlock } from './RecordReview.tsx';
 import { SinceYouLooked } from './SinceYouLooked.tsx';
 import { SopPage } from './SopPage.tsx';
 import { StatusChip } from './StatusChip.tsx';
+import { TransferPlanBlocks } from './TransferPlan.tsx';
 import { LinkedName, renderValue } from './Value.tsx';
 
 /**
@@ -318,6 +319,7 @@ function KindBlocks({
       {r.kind === 'assay_template' && <AssayTemplateBlocks record={r} />}
       {r.kind === 'layout' && <LayoutBlocks record={r} />}
       {r.kind === 'plate_map' && <PlateMapBlocks record={r} />}
+      {r.kind === 'transfer_plan' && <TransferPlanBlocks record={r} />}
       {r.kind === 'run' && <RunBlocks record={r} />}
       {r.kind === 'set' && <SetBlocks record={r} />}
       {r.kind === 'container' && <ContainerBlocks record={r} />}

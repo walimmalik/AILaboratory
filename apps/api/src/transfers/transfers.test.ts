@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type {
   Actor,
+  InstrumentKindAttributes,
   Quantity,
   Readiness,
   RecordEnvelope,
@@ -529,6 +530,46 @@ describe('transfer plans', () => {
     };
     return { echo, flex, pp, assay, src, other, draft };
   }
+
+  it('checks saved instrument limits by quantity and warns when a limit really changes', async () => {
+    const { echo, draft } = await setup();
+    const plan = await run<RecordEnvelope>(agent, 'transfers.draft', draft);
+    const instrumentCheck = async () =>
+      (await run<Checked>(agent, 'transfers.check', { id: plan.id })).checks.find(
+        (check) => check.id === 'instruments_now',
+      );
+
+    expect(await instrumentCheck()).toMatchObject({ passed: true, problems: [] });
+
+    const kindId = (echo.attributes as { kind: string }).kind;
+    const setMaximum = async (max: Quantity) => {
+      const kind = await run<RecordEnvelope>(person, 'records.get', { id: kindId });
+      const attributes = kind.attributes as InstrumentKindAttributes;
+      await run(person, 'records.update', {
+        id: kind.id,
+        expectedVersion: kind.version,
+        attributes: {
+          ...attributes,
+          capabilities: attributes.capabilities?.map((capability) => ({
+            ...capability,
+            limits: {
+              ...capability.limits,
+              volume: { ...capability.limits?.volume, max },
+            },
+          })),
+        },
+      });
+    };
+
+    await setMaximum(nL('10000'));
+    expect(await instrumentCheck()).toMatchObject({ passed: true, problems: [] });
+
+    await setMaximum(nL('1000'));
+    expect((await instrumentCheck())?.problems).toEqual([
+      "Echo: compound into the assay plate: Echo 1's limits changed since the plan was worked out",
+      'Echo: compound into the assay plate: 4 transfers no longer fit',
+    ]);
+  });
 
   it('drafts a plan with its instrument limits, checks it, and reserves its sources once confirmed', async () => {
     const { echo, pp, assay, src, draft } = await setup();

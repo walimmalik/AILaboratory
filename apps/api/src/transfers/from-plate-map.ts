@@ -271,7 +271,7 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
 
     const instrument = input.instrument;
     const out = deviceOut(device);
-    const code = 'Worked out by transfers.draft_from_plate_map';
+    const code = 'Calculated from the plate map';
     const groups: TransferGroup[] = [];
     if (optimized.intermediates.length) {
       groups.push(
