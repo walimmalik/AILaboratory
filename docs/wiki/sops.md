@@ -42,6 +42,8 @@ New source-linked SOP drafts explicitly select one retained Library edition. The
 
 ## Digital SOPs (plan 012)
 
+The [private source-backed dilution producer](../architecture/sops.md#scientific-decisions-contract-foundation-004g--sg-01) can preview completing one omitted final-volume default tied to an existing method question, declared dilution formulas and an exact retained quotation. It checks literal source-number agreement and calculator arithmetic, discloses full Values review effects, and preserves accepted facts against invalidating edits/overrides. Public preparation/Apply and UI are not enabled for this scope yet. This is neither full assay validation nor resolution of other method conflicts; confirmation and hardware work remain separate.
+
 The [bounded paired backend](../architecture/sops.md#draft-volume-default-decision-preparation-and-apply) prepares one uncited positive same-unit volume default on a never-confirmed draft with exact checks, dependencies and the full Values section review scope. Preparation returns a pending proposal and pauses assistant mutations. People-only Apply requires the shown preview digest; changed meaning stays pending for another click, while success has a durable receipt and leaves the SOP draft with unrelated questions open. People inspect the persisted preview and Apply or Reject it in the shared chat/Review card; final SOP confirmation stays separate. This does not resolve scientific questions or validate the method.
 
 [Plan 012](../plans/012-digital-sops.md). An SOP as a structured, versioned design document. The record (`SOP-0001`, [ADR 0037](../decisions/0037-sop-record.md)) and formulas are built; see [sops.md](../architecture/sops.md).

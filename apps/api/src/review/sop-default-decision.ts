@@ -65,14 +65,17 @@ const complete = (phase: SopReadinessCapture) => {
     );
   return phase;
 };
-const evidenceIdentity = (evidence: FieldEvidence, applyingPerson = false): DecisionEvidence => {
+export const evidenceIdentity = (
+  evidence: FieldEvidence,
+  applyingPerson = false,
+): DecisionEvidence => {
   const { at: _at, ...identity } = evidence;
   return {
     ...identity,
     by: applyingPerson && evidence.by.type === 'user' ? 'applying_person' : evidence.by,
   };
 };
-const decisionReadiness = (
+export const decisionReadiness = (
   state: Readiness,
   simulatedEvidence: ReadonlySet<string> = new Set(),
 ): DecisionReadiness => ({

@@ -13,6 +13,7 @@ import {
   type SopAttributes,
 } from '@ailab/schema';
 import { checkPin, type PinReport, stable, waitingOn } from '../records/pins.ts';
+import { assertDilutionInputs } from '../sops/dilution-completion.ts';
 import { inputProblem } from '../sops/inputs.ts';
 import { obligationOf } from '../sops/questions.ts';
 
@@ -287,6 +288,11 @@ export const experiment = defineKind({
           const problem = inputProblem(variable, i.value);
           if (problem) invalid.push(`${where}: ${problem}`);
         }
+      }
+      try {
+        assertDilutionInputs(sop, new Map((p.inputs ?? []).map((i) => [i.name, i.value])));
+      } catch (error) {
+        invalid.push(`${where}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     if (invalid.length) return { invalid };

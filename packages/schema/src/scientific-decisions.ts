@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Actor, UserActor } from './actor.ts';
+import { DilutionCompletion } from './dilution-completion.ts';
 import { Sha256 } from './files.ts';
 import { RecordId, recordIdOf } from './ids.ts';
 import { ExactSourceReference, SourceParseIdentity } from './library.ts';
@@ -107,6 +108,9 @@ export const QuestionDispositionRequest = z.discriminatedUnion('type', [
     reason: z.string().min(1),
     basis: ScientificBasis,
     affected: z.array(RecordVersionDependency).min(1),
+    completion: DilutionCompletion.optional().describe(
+      'Only the guarded private dilution owner may produce these accepted facts',
+    ),
   }),
   z.strictObject({
     type: z.literal('defer'),
