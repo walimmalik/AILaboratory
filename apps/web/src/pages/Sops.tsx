@@ -1,5 +1,6 @@
 import {
   type Citation,
+  ExactSourceReference,
   type RecordEnvelope,
   type ReviewFinding,
   type ScientificQuestion,
@@ -17,6 +18,7 @@ import { Link } from '@tanstack/react-router';
 import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
 import { api } from '../api.ts';
 import { useAssistant } from '../assistant.tsx';
+import { exactInstructionsSearch } from '../lib/exact-source.ts';
 import { formatValue } from '../lib/format.ts';
 import { currentQuestions, questionDiscussion, stepQuestions } from '../lib/sop-questions.ts';
 import { fieldWords, sopTerms } from '../lib/sop-text.ts';
@@ -247,7 +249,7 @@ function ProcedureBlock({ record }: { record: RecordEnvelope }) {
                     </p>
                   )}
                   <StepClarification record={record} questions={stepQuestions(questions, s.id)} />
-                  <Cites cites={s.cite} />
+                  <Cites cites={s.cite} source={a.source} />
                 </li>
               ))}
             </ol>
@@ -341,8 +343,46 @@ function StepClarification({
 }
 
 /** A step's source passages, folded away: page and quote. */
-export function Cites({ cites }: { cites: Citation[] | undefined }) {
+function savedExactSource(source: SopAttributes['source']) {
+  const parsed = ExactSourceReference.safeParse(source?.exact);
+  return parsed.success && parsed.data.document === source?.document ? parsed.data : undefined;
+}
+
+export function InstructionsUsed({ source }: { source: SopAttributes['source'] }) {
+  if (!source) return null;
+  const exact = savedExactSource(source);
+  if (!exact)
+    return (
+      <p className="muted">
+        {source.exact
+          ? 'The saved instructions link is invalid; text could not be checked.'
+          : 'Edition not established; text is unchecked.'}{' '}
+        <SourceName id={source.document} />
+      </p>
+    );
+  return (
+    <p>
+      Instructions used: <strong>{exact.title}</strong>
+      {exact.printedRevision && ` · ${exact.printedRevision}`}{' '}
+      <Link to="/library/instructions" search={exactInstructionsSearch(exact)}>
+        Open instructions
+      </Link>
+      {exact.parse.status === 'unavailable' && (
+        <span className="warn-ink"> · Text could not be checked.</span>
+      )}
+    </p>
+  );
+}
+
+export function Cites({
+  cites,
+  source,
+}: {
+  cites: Citation[] | undefined;
+  source?: SopAttributes['source'];
+}) {
   if (!cites?.length) return null;
+  const exact = savedExactSource(source);
   return (
     <details className="cites no-print">
       <summary className="cite-toggle">
@@ -350,7 +390,28 @@ export function Cites({ cites }: { cites: Citation[] | undefined }) {
       </summary>
       {cites.map((c) => (
         <blockquote key={`${c.document}-${c.passage ?? ''}-${c.quote}`}>
-          “{c.quote}” <SourceName id={c.document} />
+          “{c.quote}”{' '}
+          {exact?.parse.status === 'parsed' && c.document === exact.document && c.passage ? (
+            <Link
+              to="/library/instructions"
+              search={exactInstructionsSearch(exact, { passage: c.passage })}
+            >
+              Open cited passage
+            </Link>
+          ) : (
+            <>
+              <SourceName id={c.document} />
+              <span className="muted">
+                {' '}
+                ·{' '}
+                {exact?.parse.status === 'unavailable'
+                  ? 'Text could not be checked'
+                  : exact && c.document === exact.document
+                    ? 'Passage not established; unchecked'
+                    : 'Edition not established; unchecked'}
+              </span>
+            </>
+          )}
           {c.page ? `, p. ${c.page}` : ''}
         </blockquote>
       ))}
@@ -362,7 +423,7 @@ function SourceName({ id }: { id: string }) {
   const { data } = useQuery(recordQuery(id));
   return (
     <Link to="/records/$id" params={{ id }} className="muted">
-      {data ? data.label : id}
+      {data ? data.label : 'Document record'}
     </Link>
   );
 }
@@ -460,7 +521,7 @@ function Question({ record, id }: { record: RecordEnvelope; id: string }) {
         {q.about?.step && <span className="muted"> · step {q.about.step}</span>}
       </p>
       {q.suggestion && <p className="question-line agent-ink">Suggested: {q.suggestion}</p>}
-      <Cites cites={q.passages} />
+      <Cites cites={q.passages} source={of(record).source} />
       <p className="muted">
         {q.stage.stage === 'method'
           ? 'Method question'
@@ -548,11 +609,14 @@ function SourceChecksBlock({ record }: { record: RecordEnvelope }) {
         )}
       </header>
       <div className="body">
+        <InstructionsUsed source={a.source} />
         {citations.data && (
           <p className={problems.length ? 'error-text' : 'muted'}>
-            {citations.data.matches} of {citations.data.citations.length} quotes are in the passage
-            they cite
-            {problems.length > 0 && `; ${problems.length} to fix`}.
+            {citations.data.sourceStatus === 'unbound'
+              ? 'Edition not established; quotes are unchecked.'
+              : citations.data.sourceStatus === 'unavailable'
+                ? 'Text could not be checked; quotes are unchecked.'
+                : `${citations.data.matches} of ${citations.data.citations.length} quotes were found in the cited passages of the instructions used${problems.length > 0 ? `; ${problems.length} unchecked` : ''}. This checks the words, not scientific validity.`}
           </p>
         )}
         {problems.length > 0 && (
@@ -561,11 +625,9 @@ function SourceChecksBlock({ record }: { record: RecordEnvelope }) {
               <li key={`${c.where}-${c.quote}`}>
                 {c.where}: “{c.quote}”{' '}
                 <span className="muted">
-                  {c.result === 'not_found'
-                    ? 'is not in the document'
-                    : c.result === 'found_elsewhere'
-                      ? 'is in a different passage'
-                      : 'the document has no text yet'}
+                  {c.uncheckedReason === 'edition_not_established'
+                    ? 'edition not established; unchecked'
+                    : 'text could not be checked; unchecked'}
                 </span>
               </li>
             ))}

@@ -4,8 +4,10 @@ import { z } from 'zod';
 import type { ChatModel, ModelMessage, ModelTool, ModelToolCall } from '../assistant/model.ts';
 import { OperationError } from '../operations/errors.ts';
 import type { OperationDeps } from '../operations/registry.ts';
+import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { type Passage, passagesOf } from './citations.ts';
+import { citationsOf, type Passage } from './citations.ts';
+import { readSopExactSource } from './exact-source.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 
 /**
@@ -148,6 +150,11 @@ export async function suggestSop(
   if (record.kind !== 'sop')
     throw new OperationError('invalid_input', `${record.name} is not an SOP`);
   const a = workingOf(input.attributes ?? record.attributes);
+  if (stable(a.source) !== stable((record.attributes as SopAttributes).source))
+    throw new OperationError(
+      'invalid_input',
+      'Preserve the saved instructions; unsaved source substitution is not supported',
+    );
 
   const variable = input.value ? a.variables.find((v) => v.name === input.value) : undefined;
   if (input.value && !variable)
@@ -155,7 +162,8 @@ export async function suggestSop(
   const step = input.step ? a.steps.find((s) => s.id === input.step) : undefined;
   if (input.step && !step)
     throw new OperationError('invalid_input', `${record.name} has no step ${input.step}`);
-  const passages = a.source ? await passagesOf(deps, ctx, a.source.document) : undefined;
+  const checked = await readSopExactSource(deps, ctx, a as SopAttributes);
+  const passages = checked.status === 'checked' ? checked.passages : undefined;
   if (input.steps && !passages?.length) {
     throw new OperationError(
       'invalid_state',
@@ -186,7 +194,12 @@ export async function suggestSop(
           null,
           1,
         ),
-        source ? `Source document, passage ids in brackets:\n${source}` : 'No source text.',
+        source
+          ? `Exact saved instructions, passage ids in brackets:\n${source}`
+          : 'Text could not be checked; the source edition is not established or no checked text was selected. Do not use current instructions or call stored quotes checked evidence.',
+        checked.status !== 'unbound' && checked.warnings.length
+          ? `Conversion limitations: ${checked.warnings.join('; ')}`
+          : '',
         ask,
       ].join('\n\n'),
     },
@@ -288,7 +301,53 @@ export async function suggestSop(
       continue;
     }
     try {
-      return handle(call);
+      const suggestion = handle(call);
+      const next = {
+        ...a,
+        variables: suggestion.variable
+          ? a.variables.map((v) => (v.name === suggestion.variable?.name ? suggestion.variable : v))
+          : a.variables,
+        steps: suggestion.steps
+          ? input.steps
+            ? suggestion.steps
+            : [
+                ...a.steps.filter((s) => !suggestion.steps?.some((n) => n.id === s.id)),
+                ...suggestion.steps,
+              ]
+          : a.steps,
+      } as SopAttributes;
+      const verified = await readSopExactSource(deps, ctx, next);
+      if (
+        verified.status !== 'checked' &&
+        stable(citationsOf(next)) !== stable(citationsOf(a as SopAttributes))
+      )
+        throw new Error('Edition not established; new source claims cannot be checked');
+      // Return canonical pages/quotes in every suggested item; no record is written.
+      if (verified.status === 'checked') {
+        const items = [
+          ...(suggestion.steps ?? []).map((step) => ({
+            where: `step ${step.id}`,
+            cite: step.cite,
+          })),
+          ...(suggestion.variable
+            ? [{ where: `variable ${suggestion.variable.name}`, cite: suggestion.variable.cite }]
+            : []),
+        ];
+        for (const item of items)
+          for (const cite of item.cite ?? []) {
+            const mapped = verified.citations.find(
+              (c) =>
+                c.where === item.where &&
+                c.cite.passage === cite.passage &&
+                c.cite.quote.replace(/\s+/g, ' ').trim() === cite.quote.replace(/\s+/g, ' ').trim(),
+            );
+            if (mapped) {
+              delete cite.page;
+              Object.assign(cite, mapped.cite);
+            }
+          }
+      }
+      return suggestion;
     } catch (error) {
       problem = error instanceof Error ? error.message : String(error);
       messages.push({

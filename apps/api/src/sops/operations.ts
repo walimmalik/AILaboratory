@@ -24,6 +24,7 @@ import { OperationError } from '../operations/errors.ts';
 import { implement } from '../operations/registry.ts';
 import { RecordService } from '../records/service.ts';
 import { checkCitations } from './citations.ts';
+import { createExactSopDraft, updateSourceCheckedSop } from './exact-source-write.ts';
 import { type InputValue, inputProblem } from './inputs.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 import { obligationOf, operationalSop, stageProblem } from './questions.ts';
@@ -65,26 +66,37 @@ export const sopOperations = [
   }),
   implement(sopsDraft, {
     agentPolicy: 'direct',
-    run: async (ctx, { label, evidence, reason, ...attributes }, deps) =>
-      new RecordService(deps.db, deps.kinds).create(ctx, {
+    run: async (ctx, { label, evidence, reason, ...input }, deps) => {
+      const { questions, ...sections } = input;
+      const attributes: SopAttributes = {
+        ...sections,
+        ...(questions
+          ? {
+              questions: questions.map((q) => ({
+                ...q,
+                responses: [],
+                disposition: { status: 'open' as const },
+              })),
+            }
+          : {}),
+      };
+      if (attributes.source?.exact)
+        return (
+          await createExactSopDraft(deps, ctx, {
+            label,
+            attributes,
+            ...(evidence ? { evidence } : {}),
+            reason: reason ?? `Drafted the SOP ${label}`,
+          })
+        ).record;
+      return new RecordService(deps.db, deps.kinds).create(ctx, {
         kind: 'sop',
         label,
         attributes,
-        ...(attributes.questions
-          ? {
-              attributes: {
-                ...attributes,
-                questions: attributes.questions.map((q) => ({
-                  ...q,
-                  responses: [],
-                  disposition: { status: 'open' },
-                })),
-              },
-            }
-          : {}),
         ...(evidence ? { evidence } : {}),
         reason: reason ?? `Drafted the SOP ${label}`,
-      }),
+      });
+    },
   }),
   implement(sopsCalculate, {
     run: async (ctx, input, deps) => {
@@ -271,7 +283,8 @@ export const sopOperations = [
         throw new OperationError('invalid_input', `${record.name} is not an SOP`);
       await service.assertSopEditable(ctx, record.id);
       const a = operationalSop(record.attributes);
-      return service.update(ctx, record.id, {
+      return updateSourceCheckedSop(deps, ctx, {
+        sop: record.id,
         expectedVersion: input.expectedVersion,
         attributes: {
           ...a,
@@ -290,13 +303,16 @@ export const sopOperations = [
       if (record.kind !== 'sop') {
         throw new OperationError('invalid_input', `${record.name} is not an SOP`);
       }
-      const { citations } = await checkCitations(deps, ctx, record.attributes as SopAttributes);
+      const { citations, source } = await checkCitations(
+        deps,
+        ctx,
+        record.attributes as SopAttributes,
+      );
       return {
         citations,
         matches: citations.filter((c) => c.result === 'matches').length,
-        problems: citations.filter(
-          (c) => c.result === 'not_found' || c.result === 'found_elsewhere',
-        ).length,
+        problems: citations.filter((c) => c.result === 'unchecked').length,
+        sourceStatus: source.status,
       };
     },
   }),

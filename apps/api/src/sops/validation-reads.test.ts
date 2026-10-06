@@ -123,12 +123,20 @@ async function fixture(ctx = agent) {
   const drafted = await createRegistry(db, kinds, new ActivityBus()).execute(ctx, 'sops.draft', {
     label: 'Coat',
     ...attributes,
+    source: undefined,
+    steps: attributes.steps.map(({ cite: _cite, ...step }) => step),
     questions: attributes.questions?.map(
       ({ responses: _responses, disposition: _disposition, ...question }) => question,
     ),
   });
   if (drafted.status !== 'done') throw new Error('SOP draft did not execute');
-  const target = drafted.output as RecordEnvelope;
+  // The old unbound fixture is established before exposure, never through public source creation.
+  const target = { ...(drafted.output as RecordEnvelope), attributes };
+  await db.update(records).set({ attributes }).where(eq(records.id, target.id));
+  await db
+    .update(recordVersions)
+    .set({ snapshot: target })
+    .where(eq(recordVersions.recordId, target.id));
   return {
     product,
     lot,

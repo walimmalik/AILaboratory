@@ -1,4 +1,4 @@
-import { newId } from '@ailab/domain';
+import { itemPath, keyedItems, keyOf, newId } from '@ailab/domain';
 import {
   type Actor,
   Citation,
@@ -17,8 +17,15 @@ import type { ChatModel, ModelMessage, ModelTool, ModelToolCall } from '../assis
 import { sopReviews } from '../db/schema.ts';
 import { OperationError } from '../operations/errors.ts';
 import type { OperationDeps } from '../operations/registry.ts';
+import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
-import { checkCitations, type Passage, passagesOf } from './citations.ts';
+import { checkCitations, type Passage } from './citations.ts';
+import {
+  canonicalizeSopExactSource,
+  readSopExactSource,
+  SopExactSourceCache,
+} from './exact-source.ts';
+import { updateSourceCheckedSop } from './exact-source-write.ts';
 import { sop as sopKind } from './kinds.ts';
 import { operationalSop } from './questions.ts';
 
@@ -155,11 +162,11 @@ function brief(
       ? `Readiness checks failing:\n- ${failing.join('\n- ')}`
       : 'All readiness checks pass.',
     problems.length
-      ? `Citations whose quote is not in the cited passage:\n- ${problems.map((c) => `${c.where}: "${c.quote}" ${c.result.replace('_', ' ')}${c.foundIn ? ` (in ${c.foundIn})` : ''}`).join('\n- ')}`
+      ? `Citations whose text could not be checked:\n- ${problems.map((c) => `${c.where}: "${c.quote}"; ${c.uncheckedReason === 'edition_not_established' ? 'Edition not established' : 'Text could not be checked'}`).join('\n- ')}`
       : 'Every cited quote is in its passage.',
     text
       ? `Source document ${a.source?.document}, passage ids in brackets:\n${text}`
-      : 'The source document has no text; check the draft against its own citations only.',
+      : 'Instructions could not be checked. No exact checked text is available; do not use current text or treat stored quotations as verified evidence.',
   ].join('\n\n');
 }
 
@@ -206,8 +213,9 @@ export async function reviewSop(
     agentName: reviewerName,
     onBehalfOf: ctx.actor.type === 'user' ? ctx.actor.userId : ctx.actor.onBehalfOf,
   };
-  const reviewerCtx: RecordContext = { ...ctx, actor: reviewer, via: 'sops.review' };
-  const texts = new Map<string, Passage[] | undefined>();
+  const { approvedBy: _approval, ...unconfirmed } = ctx;
+  const reviewerCtx: RecordContext = { ...unconfirmed, actor: reviewer, via: 'sops.review' };
+  const cache = new SopExactSourceCache();
   const earlier = await roundsOf(deps, ctx, record.id);
   const rounds: SopReviewRound[] = [];
   const limit = input.rounds ?? 2;
@@ -229,20 +237,23 @@ export async function reviewSop(
             .filter((c) => !c.passed)
             .map((c) => `${c.label} (${c.severity}): ${c.message ?? ''}`)
         : [];
-    const { citations } = await checkCitations(deps, ctx, a, texts);
-    if (a.source && !texts.has(a.source.document)) {
-      texts.set(a.source.document, await passagesOf(deps, ctx, a.source.document));
-    }
-    const source = a.source ? texts.get(a.source.document) : undefined;
+    const { citations, source: checkedSource } = await checkCitations(deps, ctx, a, cache);
+    const source = checkedSource.status === 'checked' ? checkedSource.passages : undefined;
 
     let working: SopAttributes = a;
     const findings: ReviewFinding[] = [];
+    const fixes: AcceptedFix[] = [];
     const refused: SopReviewRound['refused'] = [];
     let summary: string | undefined;
     let asked = 0;
     const messages: ModelMessage[] = [
       { role: 'user', text: brief(record, a, failing, citations, source) },
     ];
+    if (checkedSource.status !== 'unbound' && checkedSource.warnings.length)
+      messages.push({
+        role: 'user',
+        text: `Conversion limitations for these selected instructions: ${checkedSource.warnings.join('; ')}. Text occurrence does not establish scientific validity or human confirmation.`,
+      });
 
     const handle = async (call: ModelToolCall): Promise<string> => {
       if (call.name === 'sop_finish') {
@@ -266,19 +277,29 @@ export async function reviewSop(
         };
         const next = { ...working, questions: [...(working.questions ?? []), question] };
         await accept(next);
+        const savedQuestion = working.questions?.at(-1) ?? question;
         findings.push({
           type: 'question',
           path: `/questions/${(next.questions?.length ?? 1) - 1}`,
-          after: question,
+          after: savedQuestion,
           reason: parsed.data.suggestion ? `Suggests: ${parsed.data.suggestion}` : 'Needs a person',
-          ...(parsed.data.passages?.[0] ? { cite: parsed.data.passages[0] } : {}),
+          ...(savedQuestion.passages?.[0] ? { cite: savedQuestion.passages[0] } : {}),
         });
         return `Asked as question ${question.id}.`;
       }
       if (call.name === 'sop_fix') {
         const parsed = FixInput.safeParse(call.input);
         if (!parsed.success) throw new Error(issues(parsed.error));
-        const { path, value, remove, reason, cite } = parsed.data;
+        const { path, value, remove, reason } = parsed.data;
+        let cite = parsed.data.cite;
+        if (cite) {
+          const checked = await readSopExactSource(deps, ctx, working, cache, [
+            { where: 'review fix', cite },
+          ]);
+          if (checked.status !== 'checked')
+            throw new Error('No established checked edition supports this citation');
+          cite = checked.citations.at(-1)?.cite;
+        }
         if (!remove && value === undefined) throw new Error('Give a value, or remove: true');
         const tokens = tokensOf(path);
         if (tokens[0] === 'questions')
@@ -288,6 +309,8 @@ export async function reviewSop(
         }
         const before = at(working, tokens);
         await accept(changed(working, tokens, value, remove === true));
+        const attribution = captureFix(working, tokens, remove === true, reason, cite);
+        if (attribution) fixes.push(attribution);
         findings.push({
           type: 'fix',
           path,
@@ -312,7 +335,15 @@ export async function reviewSop(
         reservedPrefixes: [],
       });
       if (related?.invalid?.length) throw new Error(related.invalid.join('; '));
-      working = parsed.data;
+      if (stable(parsed.data.source) !== stable(a.source))
+        throw new Error('Preserve the saved source; adoption is a separate decision');
+      const canonical = await canonicalizeSopExactSource(deps, ctx, parsed.data);
+      if (
+        canonical.result.status !== 'checked' &&
+        stable(canonical.result.citations) !== stable(checkedSource.citations)
+      )
+        throw new Error('Edition not established; new source claims cannot be checked');
+      working = canonical.attributes;
     };
 
     let continuing = false;
@@ -375,10 +406,11 @@ export async function reviewSop(
 
     const fromVersion = record.version;
     if (findings.length > 0) {
-      record = await service.update(reviewerCtx, record.id, {
+      record = await updateSourceCheckedSop(deps, reviewerCtx, {
+        sop: record.id,
         expectedVersion: record.version,
         attributes: working,
-        evidence: evidenceOf(findings),
+        evidence: evidenceOf(fixes, working),
         reason:
           input.reason ??
           `Review round ${earlier.length + n}: ${count(findings, 'fix')} fixes, ${count(findings, 'question')} questions`,
@@ -409,17 +441,54 @@ export async function reviewSop(
 const count = (findings: ReviewFinding[], type: ReviewFinding['type']) =>
   findings.filter((f) => f.type === type).length;
 
-/** Each changed field credited to the reviewer: stated when a fix cites the source, assumed otherwise. */
-function evidenceOf(findings: ReviewFinding[]): Record<string, EvidenceInput> {
+type AcceptedFix = {
+  field: string;
+  target: string;
+  key?: string;
+  facts: string;
+  reason: string;
+  cite?: ReviewFinding['cite'];
+};
+
+/** Capture the canonical item now: later appends and removals can change pointer indices. */
+function captureFix(
+  after: SopAttributes,
+  tokens: Tokens,
+  removed: boolean,
+  reason: string,
+  cite: ReviewFinding['cite'],
+): AcceptedFix | undefined {
+  const field = tokens[0] as string;
+  const value = (after as unknown as Record<string, unknown>)[field];
+  if (value === undefined) return undefined;
+  const spec = sopKind.items?.[field];
+  if (spec && tokens.length > 1) {
+    // A removed item no longer has facts to attribute; do not select its shifted successor.
+    if (removed && tokens.length === 2) return undefined;
+    const index = tokens[1] === '-' && Array.isArray(value) ? value.length - 1 : Number(tokens[1]);
+    const item = Array.isArray(value) ? value[index] : undefined;
+    const key = keyOf(item, spec);
+    if (key === undefined) return undefined;
+    return { field, target: itemPath(field, key), key, facts: stable(item), reason, cite };
+  }
+  // Whole keyed sections cannot establish citation-backed evidence for every item.
+  return { field, target: field, facts: stable(value), reason, ...(spec ? {} : { cite }) };
+}
+
+/** Only surviving canonical facts receive attribution, and mixed changes remain unchecked. */
+function evidenceOf(fixes: AcceptedFix[], after: SopAttributes): Record<string, EvidenceInput> {
   const out: Record<string, EvidenceInput> = {};
-  for (const f of findings) {
-    const field = tokensOf(f.path)[0] as string;
-    if (field === 'questions') continue;
-    if (out[field]?.source === 'stated') continue;
-    out[field] = {
-      source: f.cite && f.type === 'fix' ? 'stated' : 'assumed',
+  const unchecked = new Set(fixes.filter((f) => !f.cite).map((f) => f.target));
+  for (const f of fixes) {
+    const value = (after as unknown as Record<string, unknown>)[f.field];
+    const spec = sopKind.items?.[f.field];
+    const current = f.key !== undefined && spec ? keyedItems(value, spec).get(f.key) : value;
+    if (current === undefined || stable(current) !== f.facts) continue;
+    const stated = f.cite !== undefined && !unchecked.has(f.target);
+    out[f.target] = {
+      source: stated ? 'stated' : 'assumed',
       note: `Reviewer: ${f.reason}`.slice(0, 500),
-      ...(f.cite ? { reference: f.cite.document } : {}),
+      ...(stated && f.cite ? { reference: f.cite.document } : {}),
     };
   }
   return out;

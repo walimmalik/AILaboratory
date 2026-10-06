@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EvidenceInput } from '../design.ts';
 import { RecordId } from '../ids.ts';
+import { ExactSourceCitation, ExactSourceReference } from '../library.ts';
 import { defineContract } from '../operation.ts';
 import { DecimalString, Quantity } from '../quantity.ts';
 import { RecordEnvelope } from '../record.ts';
@@ -79,7 +80,7 @@ export const sopsDraft = defineContract({
   id: 'sops.draft',
   verbs: { done: 'drafted an SOP', intent: 'draft an SOP' },
   summary:
-    'Draft a digital SOP: materials by role (with requirements and a default record), variables (inputs, defaults, values read from records, formulas), typed steps in plain lab language, plate layout needs, timing windows and open questions, each citing the library passage it came from. A person confirms it section by section',
+    'Draft a digital SOP: materials, variables, typed steps, layout, timing and open questions. A source-linked draft requires one explicitly selected source.exact from library.read/search; every citation names that same document, an exact passage and its literal quote. The server canonicalizes source metadata/pages and validates quotations with whitespace-only matching. Unavailable exact text may attach source-only without citations. Source-free authored drafts remain valid. A person confirms it separately',
   effect: 'write',
   input: z.strictObject({
     label: z
@@ -87,6 +88,7 @@ export const sopsDraft = defineContract({
       .min(1)
       .describe('Its title, e.g. "Human IL-6 sandwich ELISA (DuoSet), 96-well"'),
     ...SopAttributes.shape,
+    source: SopAttributes.shape.source.unwrap().extend({ exact: ExactSourceReference }).optional(),
     questions: z.array(QuestionDraft).optional(),
     evidence: z
       .record(z.string(), EvidenceInput)
@@ -216,24 +218,28 @@ export const CitationCheck = z.object({
   passage: z.string().optional(),
   quote: z.string(),
   result: z
-    .enum(['matches', 'found_elsewhere', 'not_found', 'unparsed'])
+    .enum(['matches', 'unchecked'])
     .describe(
-      'matches: the quote is in the cited passage; found_elsewhere: in another passage of the document (see foundIn); not_found: nowhere in its text; unparsed: the document has no text yet',
+      'matches: literal quotation occurs in its exact retained passage, allowing whitespace normalization only; unchecked: no established edition or no checked text was selected. This is not scientific support or approval',
     ),
-  foundIn: z.string().optional().describe('The passage that has it, when found elsewhere'),
+  exact: ExactSourceCitation.optional().describe('The actual root and verified passage/page/quote'),
+  uncheckedReason: z.enum(['edition_not_established', 'text_unavailable']).optional(),
 });
 
 export const sopsCheckCitations = defineContract({
   id: 'sops.check_citations',
   verbs: { done: 'checked the citations of', intent: 'check the citations of' },
   summary:
-    "Check that every quote an SOP cites is really in its library document: in the cited passage, elsewhere in the document, or nowhere. Spacing and case don't matter; any other difference does",
+    'Check saved SOP quotations against their exact retained passages. Whitespace alone is normalized; no case folding, elsewhere matching or current-text fallback. Old unbound editions and unavailable selections stay unchecked. Missing/corrupt/inaccessible pinned evidence refuses the check; matched text is not scientific validity or confirmation',
   effect: 'read',
   input: z.strictObject({ sop: SopId }),
   output: z.object({
     citations: z.array(CitationCheck),
     matches: z.number().int(),
-    problems: z.number().int().describe('Citations not found or pointing at the wrong passage'),
+    problems: z.number().int().describe('Citations whose text could not be checked'),
+    sourceStatus: z
+      .enum(['checked', 'unavailable', 'unbound'])
+      .describe('Applies even when no citations are present'),
   }),
 });
 
@@ -241,7 +247,7 @@ export const sopsReview = defineContract({
   id: 'sops.review',
   verbs: { done: 'reviewed the SOP', intent: 'review the SOP' },
   summary:
-    'Run the AI review cycle on a draft SOP: a reviewer model checks every step and value against its cited passages and readiness checks, fixes what the source settles (each fix a tracked change with its reason and passage) and asks an open question where the source is unclear. Stops when a round finds nothing or after `rounds`. Never confirms anything; a person still does',
+    'Run the AI review cycle on a draft SOP against its saved exact instructions and readiness checks. Every resulting citation is validated against that retained edition; missing evidence refuses, with no current-text fallback. Older unbound instructions stay unchecked. Fixes are tracked with reasons/passages and unclear issues stay open questions. Never replaces the source, resolves questions or confirms a section; matching text is not scientific validity. Stops when a round finds nothing or after rounds',
   effect: 'write',
   input: z.strictObject({
     sop: SopId,
@@ -271,7 +277,7 @@ export const sopsSuggest = defineContract({
   id: 'sops.suggest',
   verbs: { done: 'asked for a suggestion on', intent: 'ask for a suggestion on' },
   summary:
-    "Ask the assistant to fill in part of an SOP while it is edited: one value (a formula over the SOP's values, a number, or a material's field), one step's settings and what it uses, a new step from a sentence, or every step drafted from the source document. Give exactly one of value, step, newStep or steps. The answer is checked (formulas with the calculator, steps against the SOP's materials and values) and returned as a suggestion marked as assumed; it changes nothing",
+    'Ask the assistant to fill in one value, step, new step from a sentence, or all steps from the saved exact instructions. Give exactly one of value, step, newStep or steps. Unsaved source substitution is refused. Formulas, references and every resulting citation are checked; unavailable/unbound text is never current-text proof. Suggestions remain assumed and write nothing. Saving through records.update revalidates exact citations with the unchanged source; no scientific confirmation or question resolution',
   effect: 'read',
   input: z
     .strictObject({

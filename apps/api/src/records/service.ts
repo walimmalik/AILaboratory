@@ -33,6 +33,7 @@ import { PgTransaction } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { Db } from '../db/client.ts';
 import { nameCounters, recordLinks, records, recordVersions } from '../db/schema.ts';
+import { assertSopExactSourceWrite } from '../sops/exact-source-write.ts';
 import { assertQuestionDispositionWrite } from '../sops/input-decision-authority.ts';
 import { checkCalculated } from './calculations.ts';
 import { RecordError } from './errors.ts';
@@ -707,8 +708,10 @@ export class RecordService {
     refuse = true,
     capture?: SopReadCapture,
   ): Promise<RelatedResult> {
-    if (kind.kind === 'sop')
+    if (kind.kind === 'sop') {
+      assertSopExactSourceWrite(db, ctx, current?.id ?? '', current?.attributes, attributes);
       assertQuestionDispositionWrite(ctx, current?.id ?? '', current?.attributes, attributes);
+    }
     if (!kind.related) return {};
     const result = await kind.related(attributes, {
       get: async (id) => {
