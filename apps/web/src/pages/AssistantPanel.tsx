@@ -4,6 +4,7 @@ import {
   type Conversation,
   MAX_ATTACHMENT_CHARS,
   operationContracts,
+  type Proposal,
   type RecordEnvelope,
   type ReviewItem,
 } from '@ailab/schema';
@@ -31,6 +32,7 @@ import {
   assistantSetupQuery,
   conversationQuery,
   conversationsQuery,
+  decidedProposalsQuery,
   recordQuery,
   reviewQuery,
 } from '../queries.ts';
@@ -38,6 +40,7 @@ import { RememberCard, UsedMemories } from './AssistantMemory.tsx';
 import { ChatQuestionResponse, SelectedQuestionContext } from './ChatQuestion.tsx';
 import { ChatSourceContext } from './ChatSource.tsx';
 import { FileCard } from './FileCard.tsx';
+import { ProposalDecisionCard, supportedDecision } from './ProposalDecisionCard.tsx';
 
 /** The assistant, docked on the right: one conversation at a time, its steps shown as it works. */
 export function AssistantPanel() {
@@ -195,6 +198,7 @@ function Transcript({
   const end = useRef<HTMLDivElement>(null);
   const count = conversation?.messages.length ?? 0;
   const review = useQuery({ ...reviewQuery, enabled: Boolean(conversation) }).data?.items;
+  const decided = useQuery({ ...decidedProposalsQuery, enabled: Boolean(conversation) }).data;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages arrive or work starts.
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
@@ -225,6 +229,7 @@ function Transcript({
         agentName={conversation.agentName}
         running={running}
         review={review}
+        decided={decided}
         conversationId={conversation.id}
         onContinue={(selection) =>
           assistant.send(CONTINUE_QUESTION_MESSAGE, {
@@ -302,6 +307,7 @@ type ConversationMessagesProps = {
   agentName: string;
   running: boolean;
   review: ReviewItem[] | undefined;
+  decided?: Proposal[] | undefined;
   conversationId?: string;
   onContinue?: (selection: QuestionSelection) => Promise<boolean>;
   onRecorded?: (previous: QuestionSelection, updated: RecordEnvelope) => void;
@@ -336,6 +342,7 @@ function ConversationTurn({
   agentName,
   running,
   review,
+  decided,
   conversationId,
   onContinue,
   onRecorded,
@@ -355,7 +362,15 @@ function ConversationTurn({
     <>
       {entries.map((entry) => (
         <Fragment key={entry.id}>
-          {entry.id === handoffBefore && <WaitingLine messages={messages} review={review} />}
+          {entry.id === handoffBefore && (
+            <WaitingLine
+              messages={messages}
+              review={review}
+              decided={decided}
+              busy={conversationBusy}
+              producing={running}
+            />
+          )}
           {entry.type === 'message' ? (
             <Message
               message={entry.message}
@@ -397,7 +412,15 @@ function ConversationTurn({
           )}
         </Fragment>
       ))}
-      {!running && !handoffBefore && <WaitingLine messages={messages} review={review} />}
+      {!handoffBefore && (
+        <WaitingLine
+          messages={messages}
+          review={review}
+          decided={decided}
+          busy={conversationBusy}
+          producing={running}
+        />
+      )}
     </>
   );
 }
@@ -409,9 +432,15 @@ function ConversationTurn({
 function WaitingLine({
   messages,
   review,
+  decided,
+  busy,
+  producing,
 }: {
   messages: AssistantMessage[];
   review: ReviewItem[] | undefined;
+  decided: Proposal[] | undefined;
+  busy: boolean;
+  producing: boolean;
 }) {
   const steps = messages.filter((m): m is ToolMessage => m.role === 'tool');
   if (!review || steps.length === 0) return null;
@@ -427,12 +456,22 @@ function WaitingLine({
             : item.about.id,
     ),
   );
-  const drafts = turn.drafts.flatMap((d) => {
+  const drafts = (producing ? [] : turn.drafts).flatMap((d) => {
     const item = review.find((item) => item.type === 'draft' && item.record.id === d.id);
     return item?.type === 'draft' ? [item] : [];
   });
   const changes = turn.changes.filter((id) => waitingIds.has(id)).length;
-  if (drafts.length === 0 && changes === 0) return null;
+  const decisions = [
+    ...new Map(
+      [...review.flatMap((i) => (i.type === 'change' ? [i.proposal] : [])), ...(decided ?? [])].map(
+        (p) => [p.id, p],
+      ),
+    ).values(),
+  ].filter((p) => turn.changes.includes(p.id) && supportedDecision(p));
+  const ordinaryChanges = producing
+    ? 0
+    : changes - decisions.filter((p) => waitingIds.has(p.id)).length;
+  if (drafts.length === 0 && changes === 0 && decisions.length === 0) return null;
   return (
     <li className="waiting">
       {drafts.map((item) => (
@@ -451,9 +490,14 @@ function WaitingLine({
           </div>
         </div>
       ))}
-      {changes > 0 && (
+      {decisions.map((p) => (
+        <ProposalDecisionCard key={p.id} proposal={p} busy={busy} />
+      ))}
+      {ordinaryChanges > 0 && (
         <Link to="/review">
-          {changes === 1 ? 'Review 1 proposed change' : `Review ${changes} proposed changes`}
+          {ordinaryChanges === 1
+            ? 'Review 1 proposed change'
+            : `Review ${ordinaryChanges} proposed changes`}
         </Link>
       )}
     </li>

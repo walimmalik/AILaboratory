@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Sha256 } from '../files.ts';
 import { ActivityEntry, defineContract, Proposal, ProposalStatus } from '../operation.ts';
 
 const ProposalId = z.string().regex(/^prp_[0-9A-HJKMNP-TV-Z]{26}$/);
@@ -15,10 +16,22 @@ export const proposalsList = defineContract({
 export const proposalsApprove = defineContract({
   id: 'proposals.approve',
   verbs: { done: 'confirmed a proposed change', intent: 'confirm a proposed change' },
-  summary: "Approve an agent's proposed change and apply it (people only)",
+  summary:
+    'Apply a proposed change (people only). Prepared draft-volume decisions require the digest shown in expectedPreview. Changed meaning returns the same pending proposal with previewStatus refreshed; an old token returns previewStatus stale. Neither applies the change: review the returned preview and click again with its current digest. Approved retries return the durable receipt',
   effect: 'write',
-  input: z.object({ id: ProposalId, reason: z.string().min(1).optional() }),
-  output: Proposal,
+  input: z.strictObject({
+    id: ProposalId,
+    reason: z.string().min(1).optional(),
+    expectedPreview: Sha256.optional().describe(
+      'The exact decision.previewIdentity.digest shown to the person; required for a pending prepared decision',
+    ),
+  }),
+  output: Proposal.extend({
+    previewStatus: z
+      .enum(['stale', 'refreshed'])
+      .optional()
+      .describe('Only returned while still pending: no scientific change was applied'),
+  }),
 });
 
 export const proposalsReject = defineContract({

@@ -25,6 +25,7 @@ export * from './record.ts';
 export * from './relations.ts';
 export * from './scientific-decisions.ts';
 export * from './session.ts';
+export * from './sop-default-decision.ts';
 export * from './sops.ts';
 export * from './transfers.ts';
 export * from './workcells.ts';

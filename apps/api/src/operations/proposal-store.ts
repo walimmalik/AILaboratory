@@ -1,5 +1,11 @@
 import { newId } from '@ailab/domain';
-import type { Actor, OperationErrorBody, Proposal, ProposalReceipt } from '@ailab/schema';
+import type {
+  Actor,
+  OperationErrorBody,
+  Proposal,
+  ProposalReceipt,
+  ScientificDecisionMetadata,
+} from '@ailab/schema';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { proposals } from '../db/schema.ts';
@@ -11,7 +17,13 @@ type Row = typeof proposals.$inferSelect;
 export async function createProposal(
   db: Db,
   ctx: RecordContext,
-  input: { operationId: string; input: unknown; preview: unknown; reason?: string | undefined },
+  input: {
+    operationId: string;
+    input: unknown;
+    preview: unknown;
+    reason?: string | undefined;
+    decision?: ScientificDecisionMetadata;
+  },
 ): Promise<Proposal> {
   const [row] = await db
     .insert(proposals)
@@ -22,6 +34,7 @@ export async function createProposal(
       operationId: input.operationId,
       input: input.input ?? {},
       preview: input.preview ?? null,
+      decision: input.decision ?? null,
       status: 'pending',
       proposedBy: ctx.actor,
       proposedAt: new Date(),
@@ -29,6 +42,24 @@ export async function createProposal(
     })
     .returning();
   if (!row) throw new Error('Expected a proposal row');
+  return toProposal(row);
+}
+
+/** Refreshes exact prepared facts without deciding or replacing the pending proposal. */
+export async function refreshPendingDecision(
+  db: Db,
+  ctx: RecordContext,
+  id: string,
+  prepared: { input: unknown; preview: unknown; decision: ScientificDecisionMetadata },
+): Promise<Proposal> {
+  const [row] = await db
+    .update(proposals)
+    .set(prepared)
+    .where(
+      and(eq(proposals.id, id), eq(proposals.labId, ctx.labId), eq(proposals.status, 'pending')),
+    )
+    .returning();
+  if (!row) throw new OperationError('invalid_state', 'The prepared decision is no longer pending');
   return toProposal(row);
 }
 
