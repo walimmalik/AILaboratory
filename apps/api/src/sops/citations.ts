@@ -1,6 +1,7 @@
 import type { Citation, CitationCheck, SopAttributes } from '@ailab/schema';
 import type { z } from 'zod';
 import type { Db } from '../db/client.ts';
+import { OperationError } from '../operations/errors.ts';
 import type { OperationRegistry } from '../operations/registry.ts';
 import type { RecordContext } from '../records/service.ts';
 
@@ -64,6 +65,11 @@ export async function checkCitations(
   citations: z.infer<typeof CitationCheck>[];
   texts: Map<string, Passage[] | undefined>;
 }> {
+  if (a.source?.exact)
+    throw new OperationError(
+      'invalid_input',
+      'Exact SOP source checking is not yet available through this operation',
+    );
   const cited = citationsOf(a);
   for (const document of new Set(cited.map((c) => c.cite.document))) {
     if (!texts.has(document)) texts.set(document, await passagesOf(deps, ctx, document));

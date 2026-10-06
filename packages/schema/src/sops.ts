@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { RecordId, recordIdOf } from './ids.ts';
-import { DocumentId } from './library.ts';
+import { DocumentId, ExactSourceReference } from './library.ts';
 import { DecimalString, Quantity } from './quantity.ts';
 import { QuestionDisposition, QuestionResponse, QuestionStage } from './scientific-decisions.ts';
 
@@ -279,7 +279,13 @@ export const SopAttributes = z.strictObject({
   safety: z.array(z.string().min(1)).optional(),
   assays: z.array(z.string().min(1)).optional().describe('e.g. ["ELISA"]'),
   source: z
-    .strictObject({ document: DocumentId, revision: z.string().min(1).optional() })
+    .strictObject({
+      document: DocumentId,
+      revision: z.string().min(1).optional(),
+      exact: ExactSourceReference.optional().describe(
+        'The explicitly selected immutable instructions; absence means the edition is not established. Server-owned, not writable through generic record operations',
+      ),
+    })
     .optional()
     .describe('The library document it was built from'),
   derivedFrom: SopId.optional().describe('The SOP this one changes (G7)'),

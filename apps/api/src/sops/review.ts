@@ -19,6 +19,7 @@ import { OperationError } from '../operations/errors.ts';
 import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { checkCitations, type Passage, passagesOf } from './citations.ts';
+import { refuseUnintegratedExactSource } from './exact-source-write.ts';
 import { sop as sopKind } from './kinds.ts';
 import { operationalSop } from './questions.ts';
 
@@ -189,6 +190,7 @@ export async function reviewSop(
     throw new OperationError('invalid_input', `${record.name} is not an SOP`);
   await service.assertSopEditable(ctx, record.id);
   operationalSop(record.attributes);
+  refuseUnintegratedExactSource(record.attributes as SopAttributes);
   if (record.status !== 'draft') {
     throw new OperationError(
       'invalid_state',

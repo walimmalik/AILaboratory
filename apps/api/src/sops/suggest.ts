@@ -6,6 +6,7 @@ import { OperationError } from '../operations/errors.ts';
 import type { OperationDeps } from '../operations/registry.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { type Passage, passagesOf } from './citations.ts';
+import { refuseUnintegratedExactSource } from './exact-source-write.ts';
 import { sopVariableDefinitions } from './kinds.ts';
 
 /**
@@ -148,6 +149,9 @@ export async function suggestSop(
   if (record.kind !== 'sop')
     throw new OperationError('invalid_input', `${record.name} is not an SOP`);
   const a = workingOf(input.attributes ?? record.attributes);
+  refuseUnintegratedExactSource(record.attributes as SopAttributes);
+  if (a.source?.exact)
+    throw new OperationError('invalid_input', 'Exact working-source substitution is not supported');
 
   const variable = input.value ? a.variables.find((v) => v.name === input.value) : undefined;
   if (input.value && !variable)
