@@ -17,7 +17,7 @@ export const proposalsApprove = defineContract({
   id: 'proposals.approve',
   verbs: { done: 'confirmed a proposed change', intent: 'confirm a proposed change' },
   summary:
-    'Apply a proposed change (people only). Prepared draft-volume or existing experiment input/material-role decisions require the digest shown in expectedPreview. Accepting an experiment obligation preserves its required explicit downstream value/material choice, without selecting a material or validating prose compatibility, and leaves the SOP draft. Changed meaning returns the same pending proposal with previewStatus refreshed; an old token returns previewStatus stale. Neither applies the change: review the returned preview and click again with its current digest. Approved retries return the durable receipt',
+    'Apply a proposed change (people only). Prepared draft-volume, experiment input/material-role or bounded exact-source dilution final-volume decisions require the digest shown in expectedPreview. Dilution completion accepts the shown quotation-to-field relationship and literal source-number/arithmetic checks, changes only its missing default/citation/evidence and selected question, and reviews the disclosed whole Values section; it does not validate the full assay. Experiment obligations still require explicit downstream choices. The SOP remains draft. Changed meaning returns the same pending proposal with previewStatus refreshed; an old token returns previewStatus stale. Neither applies the change: review the returned preview and click again with its current digest. Approved retries return the durable receipt',
   effect: 'write',
   input: z.strictObject({
     id: ProposalId,

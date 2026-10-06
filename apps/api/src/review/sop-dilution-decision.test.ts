@@ -184,7 +184,7 @@ describe('private source-backed dilution completion', () => {
     expect(await tables()).toEqual(beforeRestore);
   });
 
-  it('uses actual retained iGEM assertions, evaluator waits/values and rollback-only Values effects with no scientific leakage or public scope', async () => {
+  it('uses actual retained iGEM assertions, evaluator waits/values and rollback-only Values effects with no scientific leakage', async () => {
     const f = await dilutionDecisionFixture(db),
       before = await tables(),
       delivery: unknown[] = [];
@@ -230,15 +230,6 @@ describe('private source-backed dilution completion', () => {
         ),
       ),
     ).rejects.toMatchObject({ code: 'forbidden' });
-    await expect(
-      f.registry.execute(f.person, 'review.prepare_decision', f.input),
-    ).rejects.toMatchObject({ code: 'invalid_input' });
-    await expect(
-      f.registry.execute(f.person, 'proposals.approve', {
-        id: p.id,
-        expectedPreview: p.decision?.previewIdentity.digest,
-      }),
-    ).rejects.toMatchObject({ code: 'invalid_input' });
     expect((await f.service.get(f.person, f.target.id)).version).toBe(1);
     if (process.env.DILUTION_PREVIEW_OUT)
       await writeFile(

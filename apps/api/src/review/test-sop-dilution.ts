@@ -6,6 +6,7 @@ import type {
   RecordEnvelope,
   SopAttributes,
 } from '@ailab/schema';
+import type { Assistant } from '../assistant/assistant.ts';
 import { createTenant } from '../auth.ts';
 import { campaignKinds } from '../campaigns/kinds.ts';
 import type { Db } from '../db/client.ts';
@@ -17,7 +18,7 @@ import { KindRegistry } from '../records/kinds.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { sopKinds } from '../sops/kinds.ts';
 
-export async function dilutionDecisionFixture(db: Db) {
+export async function dilutionDecisionFixture(db: Db, assistant?: Assistant) {
   const tenant = await createTenant(db, { orgName: 'Dilutions', labName: 'Lab', userName: 'A' });
   const person: RecordContext = {
     orgId: tenant.orgId,
@@ -45,7 +46,7 @@ export async function dilutionDecisionFixture(db: Db) {
   if (!quote) throw new Error('Actual source step seven missing');
   let text = quote;
   const bus = new ActivityBus();
-  const registry = createRegistry(db, kinds, bus, undefined, {
+  const registry = createRegistry(db, kinds, bus, assistant, {
     files: {
       put: (value) => bytes.put(value),
       get: (hash) =>

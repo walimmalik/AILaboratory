@@ -4,12 +4,17 @@ import {
   proposalsList,
   proposalsReject,
   ScientificDecisionMetadata,
+  SopDilutionDecisionPreview,
   SopMaterialDecisionPreview,
 } from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
 import { conversations } from '../db/schema.ts';
 import type { RecordContext } from '../records/service.ts';
 import { revalidateSopDefaultDecision } from '../review/sop-default-decision.ts';
+import {
+  executeSopDilutionDecision,
+  revalidateSopDilutionDecision,
+} from '../review/sop-dilution-decision.ts';
 import {
   executeSopInputDecision,
   executeSopMaterialDecision,
@@ -89,6 +94,32 @@ export const proposalOperations = [
         if (!metadata.success)
           throw new OperationError('invalid_input', 'Unsupported scientific decision metadata');
         if (metadata.data.scope.type === 'question_disposition') {
+          if (metadata.data.scope.disposition.type === 'resolve') {
+            const dilution = SopDilutionDecisionPreview.safeParse(row.preview);
+            if (
+              !dilution.success ||
+              metadata.data.scope.disposition.completion?.type !== 'dilution_final_volume'
+            )
+              throw new OperationError(
+                'invalid_input',
+                'Unsupported scientific question resolution',
+              );
+            const result = await revalidateSopDilutionDecision(
+              deps,
+              ctx,
+              row.id,
+              input.expectedPreview,
+            );
+            if (result.status !== 'unchanged')
+              return { ...result.proposal, previewStatus: result.status };
+            const output = await executeSopDilutionDecision(deps, result.authorization);
+            return decideProposal(deps.db, row.id, {
+              status: 'approved',
+              decidedBy: ctx.actor,
+              reason: input.reason,
+              receipt: { output, recordIds: [output.id], committedAt: new Date().toISOString() },
+            });
+          }
           const material = SopMaterialDecisionPreview.safeParse(row.preview);
           if (material.success) {
             const action = metadata.data.scope.disposition;

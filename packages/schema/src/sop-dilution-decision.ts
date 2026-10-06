@@ -7,7 +7,7 @@ import { QuestionDispositionRequest } from './scientific-decisions.ts';
 import { SopDefaultDecisionPreview } from './sop-default-decision.ts';
 import { ScientificQuestion, SopId, SopStep } from './sops.ts';
 
-/** Private stage-one selector; no registered operation accepts it yet. */
+/** One strictly bounded alternative of the existing public decision preparation contract. */
 export const SopDilutionDecision = z.strictObject({
   type: z.literal('dilution_final_volume'),
   sop: SopId,

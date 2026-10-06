@@ -335,7 +335,7 @@ async function lockedPreview(
   throw new OperationError('unavailable', 'Dilution dependencies changed during preparation');
 }
 
-/** Private stage-one producer only. Existing public preparation/approval intentionally refuse this scope. */
+/** Bounded owning producer; public preparation and approval dispatch only its exact typed scope. */
 export async function prepareSopDilutionDecision(deps: Deps, ctx: RecordContext, raw: unknown) {
   const parsed = SopDilutionDecision.safeParse(raw);
   if (!parsed.success) throw new OperationError('invalid_input', parsed.error.message);
