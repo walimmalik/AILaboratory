@@ -253,6 +253,165 @@ const elisa = {
 };
 
 describe('sops.draft', () => {
+  it('keeps a genuine source blocker, exact edition and response history through coherent saved step appends', async () => {
+    const { file } = await run<{ file: RecordEnvelope }>(person, 'files.upload', {
+      name: 'partial-method.md',
+      mediaType: 'text/markdown',
+      text: '# Method\nUse a tube.\n\nWorksheet: use a plate.\n\nRead at 450 nm.\n\nWait 2 min.\n\nMix gently.\n\nIncubate 3 min.',
+    });
+    const doc = await run<RecordEnvelope>(person, 'library.add', {
+      label: 'Conflicting vessel method',
+      type: 'sop',
+      license: { name: 'CC BY 4.0', sharePolicy: 'shareable' },
+      files: [{ file: file.id, role: 'original' }],
+    });
+    await run(person, 'library.parse', { document: doc.id });
+    const { source } = await run<{ source: ExactSourceReference }>(person, 'library.read', {
+      document: doc.id,
+    });
+    const { passages } = await run<{ passages: { id: string; text: string; page?: number }[] }>(
+      person,
+      'library.read',
+      { source, section: 0 },
+    );
+    const cite = (i: number) => {
+      const passage = passages[i];
+      if (!passage) throw new Error('Expected retained source passage');
+      return { document: doc.id, passage: passage.id, page: passage.page, quote: passage.text };
+    };
+    let current = await run<RecordEnvelope>(person, 'sops.draft', {
+      label: 'Partial source method, vessel unresolved',
+      source: { document: doc.id, exact: source },
+      materials: [],
+      variables: [],
+      steps: [],
+      questions: [
+        {
+          id: 'vessel',
+          question: 'Which vessel is supported: tube or plate?',
+          stage: { stage: 'method', reason: 'The instructions conflict about the vessel' },
+          passages: [cite(0), cite(1)],
+        },
+      ],
+    });
+    current = await run<RecordEnvelope>(person, 'sops.answer_question', {
+      sop: current.id,
+      expectedVersion: current.version,
+      question: 'vessel',
+      action: { type: 'response', text: "I don't know" },
+    });
+    const originalQuestions = current.attributes.questions;
+    const referencedUpdate = (inspected: RecordEnvelope, step: SopAttributes['steps'][number]) => ({
+      steps: [
+        { operation: 'records.get', input: { id: inspected.id } },
+        {
+          operation: 'records.update',
+          input: {
+            id: inspected.id,
+            // Literal inspected version: $1.version would accept a concurrently changed index list.
+            expectedVersion: inspected.version,
+            attributes: {
+              ...Object.fromEntries(
+                Object.keys(inspected.attributes).map((field) => [field, `$1.attributes.${field}`]),
+              ),
+              steps: [
+                ...(inspected.attributes as SopAttributes).steps.map(
+                  (_, index) => `$1.attributes.steps.${index}`,
+                ),
+                step,
+              ],
+            },
+          },
+        },
+      ],
+    });
+    const steps: SopAttributes['steps'] = [
+      {
+        id: 'read',
+        action: 'read',
+        title: 'Read',
+        text: 'Read at 450 nm.',
+        parameters: [{ name: 'wavelength', quantity: q('450', 'nm') }],
+        cite: [cite(2)],
+      },
+      {
+        id: 'wait',
+        action: 'wait',
+        title: 'Wait',
+        text: 'Wait 2 min.',
+        parameters: [{ name: 'duration', quantity: q('2', 'min') }],
+        cite: [cite(3)],
+      },
+    ];
+    for (const step of steps) {
+      const prior = current.attributes as SopAttributes;
+      await run(person, 'changes.apply', referencedUpdate(current, step));
+      current = await run<RecordEnvelope>(person, 'records.get', { id: current.id });
+      expect(current.attributes.source).toEqual({ document: doc.id, exact: source });
+      expect(current.attributes.questions).toEqual(originalQuestions);
+      expect((current.attributes as SopAttributes).steps).toEqual([...prior.steps, step]);
+      expect(await run(person, 'sops.check_citations', { sop: current.id })).toMatchObject({
+        sourceStatus: 'checked',
+        problems: 0,
+      });
+      const ready = await run<Readiness>(person, 'records.readiness', { id: current.id });
+      expect(ready.checks.find((check) => check.id === 'questions_answered')).toMatchObject({
+        passed: false,
+        severity: 'blocker',
+      });
+      expect(current.status).toBe('draft');
+      await expect(
+        registry.execute(person, 'records.activate', {
+          id: current.id,
+          expectedVersion: current.version,
+        }),
+      ).rejects.toMatchObject({ code: 'not_ready' });
+    }
+    expect(
+      (current.attributes as SopAttributes).steps.map((step) => [step.id, step.action]),
+    ).toEqual([
+      ['read', 'read'],
+      ['wait', 'wait'],
+    ]);
+    const inspected = current;
+    const concurrentStep: SopAttributes['steps'][number] = {
+      id: 'mix',
+      action: 'mix',
+      text: 'Mix gently.',
+      cite: [cite(4)],
+    };
+    current = await run<RecordEnvelope>(person, 'records.update', {
+      id: current.id,
+      expectedVersion: current.version,
+      attributes: {
+        ...current.attributes,
+        steps: [...(current.attributes as SopAttributes).steps, concurrentStep],
+      },
+    });
+    const beforeStaleAttempt = current;
+    await expect(
+      registry.execute(
+        person,
+        'changes.apply',
+        referencedUpdate(inspected, {
+          id: 'incubate',
+          action: 'incubate',
+          text: 'Incubate 3 min.',
+          parameters: [{ name: 'duration', quantity: q('3', 'min') }],
+          cite: [cite(5)],
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'version_conflict' });
+    current = await run<RecordEnvelope>(person, 'records.get', { id: current.id });
+    expect(current).toEqual(beforeStaleAttempt);
+    expect(current.attributes.questions).toEqual(originalQuestions);
+    expect((current.attributes as SopAttributes).steps.map((step) => step.id)).toEqual([
+      'read',
+      'wait',
+      'mix',
+    ]);
+  });
+
   it('retains a cited unfinished wash before read and keeps its method question blocking acceptance', async () => {
     const sourceText =
       '# Procedure\nWash the plate. Use 300 uL wash buffer per well.\n\nAlternate worksheet: use 350 uL wash buffer per well.\n\nRead absorbance at 450 nm.';
