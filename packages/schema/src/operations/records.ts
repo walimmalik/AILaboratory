@@ -25,7 +25,7 @@ export const recordsCreate = defineContract({
   summary:
     'Create a record of a registered kind, as a draft unless status is "active" (kinds with sections always start as drafts)',
   effect: 'write',
-  input: z.object({
+  input: z.strictObject({
     kind: z.string().min(1),
     label: z.string(),
     attributes: z.record(z.string(), z.unknown()),
@@ -100,7 +100,7 @@ export const recordsUpdate = defineContract({
   verbs: { done: 'edited', intent: 'edit' },
   summary: "Change a record's label or attributes",
   effect: 'write',
-  input: z.object({
+  input: z.strictObject({
     ...Target,
     label: z.string().optional(),
     attributes: z
@@ -197,7 +197,7 @@ export const recordsRestore = defineContract({
   verbs: { done: 'restored an earlier version of', intent: 'restore an earlier version of' },
   summary: 'Write a new version with the label and attributes of an earlier version',
   effect: 'write',
-  input: z.object({ ...Target, version: z.number().int().positive() }),
+  input: z.strictObject({ ...Target, version: z.number().int().positive() }),
   output: RecordEnvelope,
 });
 

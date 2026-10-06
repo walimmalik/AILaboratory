@@ -12,11 +12,13 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
-import { users } from '../db/schema.ts';
+import { records, recordVersions, users } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
+import { memoryKinds } from '../memory/kinds.ts';
 import { KindRegistry } from '../records/kinds.ts';
 import type { RecordContext } from '../records/service.ts';
 import { gadget, widget } from '../records/test-kinds.ts';
+import { operationSchemas } from './describe.ts';
 import {
   ActivityBus,
   createRegistry,
@@ -158,6 +160,112 @@ const create = (ctx: RecordContext, extra: Record<string, unknown> = {}) =>
     attributes,
     ...extra,
   });
+
+describe('creation origin across direct operation boundaries', () => {
+  const origin = {
+    type: 'user_message' as const,
+    conversation: 'cnv_00000000000000000000000001',
+    message: 'request-a',
+  };
+  it('persists the same trusted root for generic, specialized and direct change-set creates', async () => {
+    for (const kind of memoryKinds) registry.deps.kinds.register(kind);
+    const caller = { ...agent, origin };
+    const generic = await create(caller);
+    const specialized = await run<RecordEnvelope>(caller, 'memory.propose', {
+      statement: 'A test-only convention',
+      kind: 'convention',
+      strength: 'note',
+      appliesTo: { to: 'lab' },
+      source: { from: 'conversation' },
+    });
+    const set = await run<{ results: { output: RecordEnvelope }[] }>(caller, 'changes.apply', {
+      steps: [
+        { operation: 'records.create', input: { kind: 'widget', label: 'First', attributes } },
+        { operation: 'records.create', input: { kind: 'widget', label: 'Second', attributes } },
+      ],
+    });
+    for (const record of [generic, specialized, ...set.results.map((r) => r.output)]) {
+      expect(record.origin).toEqual(origin);
+      expect((await run<RecordEnvelope>(person, 'records.get', { id: record.id })).origin).toEqual(
+        origin,
+      );
+    }
+  });
+
+  it('rolls back created rows and their origin-bearing history on a later failing direct step', async () => {
+    await expect(
+      registry.execute({ ...agent, origin }, 'changes.apply', {
+        steps: [
+          {
+            operation: 'records.create',
+            input: { kind: 'widget', label: 'Rolled back', attributes },
+          },
+          {
+            operation: 'records.update',
+            input: { id: '$1.id', expectedVersion: 999, label: 'Fails' },
+          },
+        ],
+      }),
+    ).rejects.toBeDefined();
+    expect(await db.select().from(records)).toEqual([]);
+    expect(await db.select().from(recordVersions)).toEqual([]);
+  });
+
+  it('refuses public origin claims in generic/specialized creates, updates and restore', async () => {
+    for (const kind of memoryKinds) registry.deps.kinds.register(kind);
+    const record = await create({ ...agent, origin });
+    const payloads = [
+      ['records.create', { kind: 'widget', label: 'Forged', attributes, origin }],
+      [
+        'memory.propose',
+        {
+          statement: 'Forged',
+          kind: 'convention',
+          strength: 'note',
+          appliesTo: { to: 'lab' },
+          source: { from: 'conversation' },
+          origin,
+        },
+      ],
+      ['records.update', { id: record.id, expectedVersion: 1, label: 'Forged', origin }],
+      ['records.restore', { id: record.id, expectedVersion: 1, version: 1, origin }],
+      ['changes.apply', { steps: [], origin }],
+    ] as const;
+    for (const id of ['records.create', 'records.update', 'records.restore']) {
+      const input = operationSchemas(registry.get(id).contract).input;
+      expect(input.additionalProperties).toBe(false);
+      expect(input.properties).not.toHaveProperty('origin');
+    }
+    for (const [operation, input] of payloads)
+      expect((await refused(registry.execute(person, operation, input))).code).toBe(
+        'invalid_input',
+      );
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: record.id })).origin).toEqual(
+      origin,
+    );
+  });
+
+  it('keeps delayed ordinary proposal creation unknown despite an unrelated approver request', async () => {
+    const result = await registry.execute({ ...agent, origin }, 'records.create', {
+      kind: 'gadget',
+      label: 'Delayed create',
+      attributes: { color: 'teal' },
+      status: 'active',
+    });
+    if (result.status !== 'proposed') throw new Error('Expected ordinary proposal');
+    const approved = await run<Proposal>(
+      { ...person, origin: { ...origin, message: 'approver-request-b' } },
+      'proposals.approve',
+      { id: result.proposal.id },
+    );
+    const created = approved.receipt?.output as RecordEnvelope;
+    expect(created.origin).toEqual({ type: 'unknown' });
+    expect(created.createdBy).toEqual(agent.actor);
+    expect((await run<RecordEnvelope>(person, 'records.get', { id: created.id })).origin).toEqual({
+      type: 'unknown',
+    });
+  });
+});
 
 async function ledger() {
   return (

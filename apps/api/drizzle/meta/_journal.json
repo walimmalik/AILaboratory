@@ -127,6 +127,13 @@
       "when": 1791231127758,
       "tag": "0017_third_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791248383467,
+      "tag": "0018_dashing_the_renegades",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import {
   Actor,
   DecimalString,
   Quantity,
+  RecordEnvelope,
   RecordId,
   RecordName,
   recordIdOf,
@@ -10,6 +11,40 @@ import {
 } from './index.ts';
 
 const ulid = '01J9Z3K8Q4ABCDEFGHJKMNPQRS';
+
+describe('record creation provenance', () => {
+  it('reads old absent origins and new known/unknown origins, rejecting unsupported claims', () => {
+    const envelope = {
+      id: `wdg_${ulid}`,
+      kind: 'widget',
+      name: 'WDG-0001',
+      label: 'Widget',
+      orgId: `org_${ulid}`,
+      labId: `lab_${ulid}`,
+      status: 'draft',
+      version: 1,
+      attributes: {},
+      evidence: {},
+      reviews: {},
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+      createdBy: { type: 'user', userId: `usr_${ulid}` },
+      updatedBy: { type: 'user', userId: `usr_${ulid}` },
+    };
+    expect(RecordEnvelope.parse(envelope)).not.toHaveProperty('origin');
+    for (const origin of [
+      { type: 'unknown' },
+      { type: 'user_message', conversation: `cnv_${ulid}`, message: 'message-a' },
+    ])
+      expect(RecordEnvelope.parse({ ...envelope, origin }).origin).toEqual(origin);
+    expect(
+      RecordEnvelope.safeParse({
+        ...envelope,
+        origin: { type: 'conversation', conversation: `cnv_${ulid}` },
+      }).success,
+    ).toBe(false);
+  });
+});
 
 describe('ids', () => {
   it('accepts prefixed ULIDs and rejects others', () => {

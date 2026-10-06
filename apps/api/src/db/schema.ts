@@ -8,6 +8,7 @@ import type {
   MemoryDraft,
   MemoryObservationEntry,
   OperationErrorBody,
+  OriginatingIntent,
   ProposalReceipt,
   Quantity,
   ReadinessSummary,
@@ -113,6 +114,8 @@ export const records = pgTable(
     readiness: jsonb('readiness').$type<ReadinessSummary>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     createdBy: jsonb('created_by').$type<Actor>().notNull(),
+    /** Immutable trusted creation request; old rows remain null (unknown). */
+    origin: jsonb('origin').$type<OriginatingIntent>(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
     updatedBy: jsonb('updated_by').$type<Actor>().notNull(),
   },

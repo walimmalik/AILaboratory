@@ -61,6 +61,8 @@ export const proposalOperations = [
         ...ctx,
         actor: row.proposedBy.type === 'agent' ? row.proposedBy : ctx.actor,
         approvedBy: ctx.actor,
+        // Ordinary proposals have no stored preparation origin; never borrow the approver's request.
+        origin: { type: 'unknown' as const },
       };
       let ran: Awaited<ReturnType<typeof deps.registry.execute>>;
       try {

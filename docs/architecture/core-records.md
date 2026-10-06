@@ -47,6 +47,14 @@ ID and name prefixes are unique across kinds; a kind that names records with mor
 
 Errors are `RecordError` with a `code` (`not_found`, `unknown_kind`, `invalid_attributes`, `invalid_input`, `invalid_state`, `version_conflict`, `invalid_link`, `linked`, `not_ready`) and a message written for a person or an agent to act on.
 
+## Creation origin (004g SG-03 foundation)
+
+The optional envelope `origin: OriginatingIntent` is immutable creation provenance, not the latest edit's request or approval authority. Direct generic and specialized creation copy the trusted `RecordContext.origin` once, or stamp `{type: "unknown"}` when none is known. Direct `changes.apply` passes that same context into each create and returns the stamped envelopes within its existing transaction; a failed step rolls back the records and their history together. Public operation inputs cannot assign this metadata. The top-level inputs of `records.create`, `records.update` and `records.restore` now refuse unsupported keys, including an origin claim, rather than silently discarding them; kind attributes keep their existing validation. Actor `sessionRef` is not a user-message root.
+
+Existing scoped record reads, lists and version snapshots expose the field. Edits, confirmation, archive/unarchive and restore retain the current record's creation origin, including when the restored snapshot has no origin. The additive nullable column leaves old rows and historical snapshots untouched; absence means unknown, and later edits do not backfill it from their editor's request.
+
+Ordinary delayed proposals do not store a trusted preparation-origin contract. Their approval execution explicitly uses unknown origin rather than the approver's unrelated request; a rolled-back preview is not durable record creation provenance. Persisting preparation origin and deriving supporting-confirmation scope remain a later slice. This producer does not add intent grouping, scientific decision Apply, source adoption or accepted-method revision behavior.
+
 ## Reading History
 
 The record History tab is a connected, chronological timeline (004f-6, [ADR 0063](../decisions/0063-areas-and-record-pages.md)). It reads the existing full snapshots from `records.history` and, for containers, physical events from `inventory.history`; no new audit store or inferred events are introduced. Each entry keeps its actor, timestamp and exact version. An agent remains credited as the writer; section confirmations in the snapshot separately name the person who confirmed them. A section confirmation that leaves the record a draft says so, rather than calling the whole method confirmed.

@@ -198,6 +198,7 @@ export class RecordService {
           reviews,
           createdAt: at,
           createdBy: ctx.actor,
+          origin: ctx.origin ?? { type: 'unknown' },
           updatedAt: at,
           updatedBy: ctx.actor,
         })
@@ -1224,6 +1225,7 @@ function toEnvelope(row: RecordRow): RecordEnvelope {
     reviews: row.reviews,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
+    ...(row.origin === null ? {} : { origin: row.origin }),
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
     ...(row.summary ? { summary: row.summary } : {}),
