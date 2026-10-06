@@ -108,8 +108,11 @@ describe('one FICTIONAL experiment design to Echo transfer', () => {
     expect(wells.filter((well) => well.subject && well.concentration)).toHaveLength(6);
     for (const compound of fixture.compounds)
       expect(wells.filter((well) => well.subject === compound.id)).toHaveLength(2);
-    expect(wells.filter((well) => well.role === 'neutral_control')).toHaveLength(2);
-    for (const well of wells.filter((w) => w.subject))
+    const vehicleWells = wells.filter((well) => well.role === 'neutral_control');
+    expect(vehicleWells).toHaveLength(2);
+    expect(vehicleWells.every((well) => well.subject === fixture.solventLot.id)).toBe(true);
+    expect(vehicleWells.every((well) => well.concentration === undefined)).toBe(true);
+    for (const well of wells.filter((w) => w.role === 'compound' || w.role === 'positive_control'))
       expect(well.concentration).toEqual(FICTIONAL_TARGET);
 
     const activeExperiment = await confirmFixtureRecord(run, experiment);

@@ -79,13 +79,13 @@ export const draftFromPlateMap = implement(transfersDraftFromPlateMap, {
     const wells = plates.flatMap((p) =>
       p.wells.filter((w) => w.role !== 'empty').map((w) => ({ ...w, plate: p.plate })),
     );
-    // Solvent-only wells need neither a compound nor a dose. Every other occupied well must
+    // Solvent-only wells need no dose, even when their solvent is named. Every other occupied well must
     // say both; otherwise a missing control silently becomes solvent in the backfill below.
     const solventOnly = new Set(['neutral_control', 'blank', 'buffer']);
     const incomplete = wells.filter(
       (w) =>
         (!w.subject || !w.concentration) &&
-        (!!w.subject || !!w.concentration || !solventOnly.has(w.role)),
+        (!!w.concentration || !solventOnly.has(w.role)),
     );
     if (incomplete.length)
       throw new OperationError(
