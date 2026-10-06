@@ -386,8 +386,7 @@ export function startTransferPlanning(
   map: RecordEnvelope,
 ) {
   const message =
-    `Plan liquid transfers for [${map.label}](/records/${map.id}) in ` +
-    `[${experiment.label}](/records/${experiment.id}). ` +
+    `Plan liquid transfers for ${map.label} in ${experiment.label}. ` +
     'Read both designs and check any existing transfer plans before drafting; if a design has changed or a plan already covers these wells, explain what remains. ' +
     'Check the actual source containers and wells, stock concentrations, final well volume, solvent limits and suitable instrument. ' +
     'Ask me about missing facts instead of guessing. Use the lab calculators to work out feasible volumes and show any uncertainty. ' +

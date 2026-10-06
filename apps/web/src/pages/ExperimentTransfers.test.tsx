@@ -114,8 +114,8 @@ describe('experiment transfer handoff', () => {
       fresh: true,
       context: { record: { id: confirmedMap.id, name: confirmedMap.name, version: 3 } },
     });
-    expect(message).toContain('[Assay plate](/records/pmp_test)');
-    expect(message).toContain('[Dose response](/records/exp_test)');
+    expect(message).toContain('Assay plate in Dose response');
+    expect(message).not.toContain('/records/');
     expect(message).toContain('check any existing transfer plans before drafting');
     expect(message).toContain(
       'source containers and wells, stock concentrations, final well volume',
