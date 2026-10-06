@@ -24,7 +24,7 @@ describe('existing experiment input decision selector', () => {
     for (const changed of [{ expectedVersion: 0 }, { reason: '  ' }, { question: '' }])
       expect(SopInputDecision.safeParse({ ...input, ...changed }).success).toBe(false);
   });
-  it('advertises and enforces two strict nonoverlapping preparation selectors', () => {
+  it('advertises and enforces all three strict nonoverlapping preparation selectors', () => {
     const volume = {
       sop: input.sop,
       expectedVersion: input.expectedVersion,
@@ -32,9 +32,26 @@ describe('existing experiment input decision selector', () => {
       value: { value: '80', unit: 'uL' },
       reason: 'Choose default',
     };
+    const dilution = {
+      type: 'dilution_final_volume',
+      sop: input.sop,
+      expectedVersion: input.expectedVersion,
+      question: 'final-volume',
+      value: { value: '5', unit: 'mL' },
+      passage: 'retained-step-seven',
+      reason: 'Complete retained transcription',
+    };
     expect(reviewPrepareDecision.input.parse(input)).toEqual(input);
     expect(reviewPrepareDecision.input.parse(volume)).toEqual(volume);
+    expect(reviewPrepareDecision.input.parse(dilution)).toEqual(dilution);
     expect(reviewPrepareDecision.input.safeParse({ ...input, ...volume }).success).toBe(false);
+    expect(
+      reviewPrepareDecision.input.safeParse({ ...dilution, variable: volume.variable }).success,
+    ).toBe(false);
+    for (const selector of [input, volume, dilution])
+      expect(
+        reviewPrepareDecision.input.safeParse({ ...selector, approvedBy: 'Sam' }).success,
+      ).toBe(false);
     expect(
       reviewPrepareDecision.input.safeParse({
         sop: input.sop,
@@ -43,13 +60,19 @@ describe('existing experiment input decision selector', () => {
       }).success,
     ).toBe(false);
     const schema = z.toJSONSchema(reviewPrepareDecision.input) as {
-      anyOf: { required: string[]; additionalProperties: boolean }[];
+      anyOf: {
+        required: string[];
+        additionalProperties: boolean;
+        properties: Record<string, { const?: unknown }>;
+      }[];
     };
-    expect(schema.anyOf).toHaveLength(2);
+    expect(schema.anyOf).toHaveLength(3);
     expect(schema.anyOf.map((s) => s.required)).toEqual([
       ['sop', 'expectedVersion', 'variable', 'value', 'reason'],
       ['sop', 'expectedVersion', 'question', 'reason'],
+      ['type', 'sop', 'expectedVersion', 'question', 'value', 'passage', 'reason'],
     ]);
+    expect(schema.anyOf[2]?.properties.type?.const).toBe('dilution_final_volume');
     expect(schema.anyOf.every((s) => s.additionalProperties === false)).toBe(true);
   });
 });
