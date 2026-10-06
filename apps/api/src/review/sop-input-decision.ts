@@ -526,7 +526,7 @@ export function revalidateSopInputDecision(
 export function executeSopInputDecision(deps: Deps, authorization: SopInputAuthorization) {
   return executeSopObligationDecision(deps, authorization, 'input');
 }
-/** Private stage: these functions have no operation or approval consumer registration. */
+/** Material path uses the existing question selector and held approval transaction. */
 export function prepareSopMaterialDecision(deps: Deps, ctx: RecordContext, raw: unknown) {
   return prepareSopObligationDecision(deps, ctx, raw, 'material');
 }

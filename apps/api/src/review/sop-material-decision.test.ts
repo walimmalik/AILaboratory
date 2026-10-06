@@ -41,7 +41,7 @@ async function tables() {
 }
 
 describe('private declared experiment-material decision producer', () => {
-  it('captures whole material/question and real indirect reads with no scientific/history/activity/delivery leakage; public paths refuse', async () => {
+  it('captures whole material/question and real indirect reads with no scientific/history/activity/delivery leakage; direct actions refuse', async () => {
     const f = await materialDecisionFixture(db),
       before = await tables();
     const delivery: unknown[] = [];
@@ -80,12 +80,11 @@ describe('private declared experiment-material decision producer', () => {
     expect(await tables()).toEqual(before);
     expect(delivery).toEqual([]);
     await expect(
-      f.registry.execute(f.agent, 'review.prepare_decision', f.input),
-    ).rejects.toMatchObject({ code: 'invalid_input' });
-    await expect(
-      f.registry.execute(f.person, 'proposals.approve', {
-        id: p.id,
-        expectedPreview: p.decision?.previewIdentity.digest,
+      f.registry.execute(f.person, 'sops.answer_question', {
+        sop: f.target.id,
+        expectedVersion: f.target.version,
+        question: 'plate',
+        action: { type: 'defer', proposal: p.id },
       }),
     ).rejects.toMatchObject({ code: 'invalid_input' });
     expect(await f.service.get(f.person, f.target.id)).toEqual(f.target);

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { SopInputDecisionPreview } from './sop-input-decision.ts';
 import { SopMaterial } from './sops.ts';
 
-/** Private material-role preview; no caller-selected material or public consumer yet. */
+/** Server-owned whole material-role preview; no selected material or compatibility claim. */
 export const SopMaterialDecisionPreview = SopInputDecisionPreview.omit({
   type: true,
   input: true,

@@ -4,6 +4,7 @@ import {
   proposalsList,
   proposalsReject,
   ScientificDecisionMetadata,
+  SopMaterialDecisionPreview,
 } from '@ailab/schema';
 import { and, eq } from 'drizzle-orm';
 import { conversations } from '../db/schema.ts';
@@ -11,7 +12,9 @@ import type { RecordContext } from '../records/service.ts';
 import { revalidateSopDefaultDecision } from '../review/sop-default-decision.ts';
 import {
   executeSopInputDecision,
+  executeSopMaterialDecision,
   revalidateSopInputDecision,
+  revalidateSopMaterialDecision,
 } from '../review/sop-input-decision.ts';
 import { listActivity } from './activity.ts';
 import { OperationError, toErrorBody } from './errors.ts';
@@ -86,6 +89,35 @@ export const proposalOperations = [
         if (!metadata.success)
           throw new OperationError('invalid_input', 'Unsupported scientific decision metadata');
         if (metadata.data.scope.type === 'question_disposition') {
+          const material = SopMaterialDecisionPreview.safeParse(row.preview);
+          if (material.success) {
+            const action = metadata.data.scope.disposition;
+            if (
+              action.type !== 'defer' ||
+              action.obligation.stage !== 'experiment' ||
+              action.obligation.binding.type !== 'material_role' ||
+              action.obligation.binding.role !== material.data.material.role
+            )
+              throw new OperationError(
+                'invalid_input',
+                'Unsupported experiment-material decision scope',
+              );
+            const result = await revalidateSopMaterialDecision(
+              deps,
+              ctx,
+              row.id,
+              input.expectedPreview,
+            );
+            if (result.status !== 'unchanged')
+              return { ...result.proposal, previewStatus: result.status };
+            const output = await executeSopMaterialDecision(deps, result.authorization);
+            return decideProposal(deps.db, row.id, {
+              status: 'approved',
+              decidedBy: ctx.actor,
+              reason: input.reason,
+              receipt: { output, recordIds: [output.id], committedAt: new Date().toISOString() },
+            });
+          }
           const result = await revalidateSopInputDecision(deps, ctx, row.id, input.expectedPreview);
           if (result.status !== 'unchanged')
             return { ...result.proposal, previewStatus: result.status };

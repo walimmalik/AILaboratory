@@ -60,6 +60,14 @@ Explain the server preview as **Accept as an experiment input** and **Still requ
 
 Preparation returns the existing pending proposal and pauses the assistant; stop and wait. Only a person applies through `proposals.approve` with the displayed digest, using the same refreshed/stale/new-click rules above. Actual accepting person, original proposer/request and durable receipt are retained. The SOP remains draft; final SOP confirmation is separate. A deferred question may receive ordinary responses, but wording correction requires reconsideration. Never remove the question, convert/delete its bound input or relabel it to evade refusal.
 
+## Accept one existing experiment material obligation
+
+Use the same strict question selector for review.prepare_decision: {sop, expectedVersion, question, reason}. Read the current SOP first. The server derives material_role only from an existing open experiment-stage question targeting its declared role without a default; never supply a role, chosen material, stage, condition, actor or arbitrary operation. Input/volume paths remain unchanged; mixed selectors and unsupported scientific scopes refuse.
+
+Explain the exact whole material definition, including declared type, requirements and citations, and question/history/checks in the returned preview. **Still requires an explicit material choice for the experiment.** Acceptance changes only the selected disposition and leaves the SOP draft. It does not choose a record, validate prose requirements/compatibility, resolve a method question, confirm supporting records, adopt a source or confirm the SOP. Preserve other methods, evidence, reviews and questions.
+
+Preparation returns proposed and pauses: stop and wait for the person. Only a person applies using the displayed digest through proposals.approve; refreshed/stale stays pending and needs a new click. Report saved acceptance only from its durable actual receipt, retaining real acceptor and original proposer/request. After separate SOP confirmation, the experiment still requires an explicit permitted correctly pinned material binding. Never relabel/delete/default the role or rewrite accepted wording to evade reconsideration; ordinary responses remain allowed.
+
 ## Digitizing a library document
 
 1. `library.read` the document's outline, then each section (`section`), or `library.search` for what you need. Note each passage's `id`.

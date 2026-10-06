@@ -1,10 +1,15 @@
 import type { RecordEnvelope, SopAttributes } from '@ailab/schema';
+import type { Assistant } from '../assistant/assistant.ts';
 import type { Db } from '../db/client.ts';
 import { sop } from '../sops/kinds.ts';
 import { defaultDecisionFixture } from './test-sop-default.ts';
 
-export async function materialDecisionFixture(db: Db, method: typeof sop = sop) {
-  const f = await defaultDecisionFixture(db, method);
+export async function materialDecisionFixture(
+  db: Db,
+  method: typeof sop = sop,
+  assistant?: Assistant,
+) {
+  const f = await defaultDecisionFixture(db, method, assistant);
   let target = await f.draft({
     ...f.target.attributes,
     materials: [

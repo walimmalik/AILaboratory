@@ -14,7 +14,12 @@ import { recordLinks, records } from '../db/schema.ts';
 import { mentionsWaiting } from '../library/mentions.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 import { prepareSopDefaultDecision } from '../review/sop-default-decision.ts';
-import { prepareSopInputDecision } from '../review/sop-input-decision.ts';
+import {
+  prepareSopInputDecision,
+  prepareSopMaterialDecision,
+} from '../review/sop-input-decision.ts';
+import { operationalSop } from '../sops/questions.ts';
+import { OperationError } from './errors.ts';
 import { listProposals } from './proposal-store.ts';
 import { implement } from './registry.ts';
 
@@ -76,12 +81,26 @@ export const reviewOperations = [
     agentPolicy: 'direct',
     touches: (input) => [input.sop],
     outcome: () => 'proposed',
-    run: async (ctx, input, deps) =>
-      reviewPrepareDecision.output.parse(
-        await ('question' in input
-          ? prepareSopInputDecision(deps, ctx, input)
-          : prepareSopDefaultDecision(deps, ctx, input)),
-      ),
+    run: async (ctx, input, deps) => {
+      if (!('question' in input))
+        return reviewPrepareDecision.output.parse(
+          await prepareSopDefaultDecision(deps, ctx, input),
+        );
+      const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.sop);
+      const stage = operationalSop(record.attributes).questions?.find(
+        (q) => q.id === input.question,
+      )?.stage;
+      if (stage?.stage !== 'experiment')
+        throw new OperationError(
+          'invalid_input',
+          'Choose an existing experiment input or material-role question',
+        );
+      const prepare =
+        stage.binding.type === 'material_role'
+          ? prepareSopMaterialDecision
+          : prepareSopInputDecision;
+      return reviewPrepareDecision.output.parse(await prepare(deps, ctx, input));
+    },
   }),
   implement(reviewList, {
     run: async (ctx, input, deps) => {
