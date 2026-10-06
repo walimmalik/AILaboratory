@@ -85,6 +85,8 @@ A `document` (`doc_`, `DOC-0001`) is a source as published: an SOP, vendor manua
 | `library.add` | Drafts a document with its files and metadata | direct (drafts) |
 | `library.add_revision` | A new revision's file becomes the original | direct on drafts, proposed on confirmed |
 
+`library.add` evidence keys address present document attributes with values, such as `doi` when supplied. The top-level `label` is the document's published title, so `label` and `title` cannot be evidence keys; the record service continues to reject them.
+
 Editing uses `records.update`; confirming uses review, section by section.
 
 ## Text and search (011b-1, ADR 0034)
