@@ -1,6 +1,7 @@
 import {
   PageContext,
   type RecordEnvelope,
+  ReviewFinding,
   type ScientificQuestion,
   type SopAttributes,
 } from '@ailab/schema';
@@ -63,9 +64,9 @@ const record = (data: Record<string, unknown> = attributes()): RecordEnvelope =>
   createdBy: user,
   updatedBy: user,
 });
-function html(sop = record()) {
+function html(sop = record(), client = new QueryClient()) {
   return renderToStaticMarkup(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <SopBlocks record={sop} />
     </QueryClientProvider>,
   );
@@ -73,6 +74,40 @@ function html(sop = record()) {
 const procedure = (markup: string) => markup.slice(0, markup.indexOf('</section>') + 10);
 
 describe('unfinished SOP steps', () => {
+  it('labels a reviewer append as a new step while retaining numbered existing-step parameters', () => {
+    const sop = record(attributes([]));
+    const client = new QueryClient();
+    client.setQueryData(['record', sop.id, 'sop', 'reviews'], {
+      rounds: [
+        {
+          id: 'round-one',
+          round: 1,
+          findings: [
+            ReviewFinding.parse({
+              type: 'fix',
+              path: '/steps/-',
+              after: { id: 'wait', action: 'wait', text: 'Wait 2 min.' },
+              reason: 'Retain the source wait instruction',
+            }),
+            ReviewFinding.parse({
+              type: 'fix',
+              path: '/steps/1/parameters/0/quantity',
+              before: { value: '400', unit: 'nm' },
+              after: { value: '450', unit: 'nm' },
+              reason: 'Use the stated wavelength',
+            }),
+          ],
+        },
+      ],
+    });
+    const markup = html(sop, client);
+    expect(markup).toContain('A new step:');
+    expect(markup).toContain('Retain the source wait instruction');
+    expect(markup).toContain('Step 2 (Read), wavelength:');
+    expect(markup).toContain('Use the stated wavelength');
+    expect(markup).not.toContain('Step NaN');
+  });
+
   it('retains the ordered action, known settings and printable clarification', () => {
     const markup = html();
     const bench = procedure(markup);
