@@ -27,6 +27,7 @@ export * from './scientific-decisions.ts';
 export * from './session.ts';
 export * from './sop-default-decision.ts';
 export * from './sop-input-decision.ts';
+export * from './sop-material-decision.ts';
 export * from './sops.ts';
 export * from './transfers.ts';
 export * from './workcells.ts';

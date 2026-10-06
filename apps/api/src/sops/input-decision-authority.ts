@@ -29,6 +29,7 @@ async function withInputDecisionWrite<T>(
   proposal: string,
   record: RecordEnvelope,
   attributes: SopAttributes,
+  kind: 'input' | 'material',
   write: (scoped: RecordContext) => Promise<T>,
 ): Promise<T> {
   const transactionBound: boolean = db instanceof PgTransaction;
@@ -52,27 +53,15 @@ async function withInputDecisionWrite<T>(
   const question = old.questions?.find((q) => q.id === action.question);
   const changed = attributes.questions?.find((q) => q.id === action.question);
   const acceptance = changed?.disposition;
-  if (
-    question?.stage.stage !== 'experiment' ||
-    question.stage.binding.type !== 'input' ||
-    stageProblem(old, question)
-  )
+  const facts =
+    kind === 'input'
+      ? selectedSopInputDecision(record, action)
+      : selectedSopMaterialDecision(record, action);
+  if (stable(action) !== stable(facts.action))
     throw new OperationError(
       'forbidden',
-      'Only an existing experiment-input question can receive this scope',
+      'The obligation must name its unchanged declared binding',
     );
-  const binding = question.stage.binding;
-  const input = old.variables.find((v) => v.name === binding.variable);
-  if (
-    input?.kind !== 'input' ||
-    stable(action.obligation) !==
-      stable({
-        stage: 'experiment',
-        binding: question.stage.binding,
-        condition: `Supply an explicit value for ${input.label} before the experiment is ready.`,
-      })
-  )
-    throw new OperationError('forbidden', 'The obligation must name its unchanged declared input');
   if (
     action.sop !== record.id ||
     action.expectedVersion !== record.version ||
@@ -97,7 +86,7 @@ async function withInputDecisionWrite<T>(
   if (stable(expected) !== stable(attributes))
     throw new OperationError(
       'forbidden',
-      'Input acceptance may change only its selected disposition',
+      'Obligation acceptance may change only its selected disposition',
     );
   const scoped = { ...ctx, via: 'sops.answer_question' };
   scopes.set(scoped, {
@@ -127,7 +116,7 @@ export function assertQuestionDispositionWrite(
   if (was?.some((q) => q.disposition?.status === 'deferred' && !now?.some((n) => n.id === q.id)))
     throw new OperationError(
       'forbidden',
-      'An accepted experiment-input obligation cannot be removed; it needs reconsideration.',
+      'An accepted experiment obligation cannot be removed; it needs reconsideration.',
     );
   for (const q of now ?? []) {
     const prior = was?.find((p) => p.id === q.id);
@@ -147,7 +136,7 @@ export function assertQuestionDispositionWrite(
       if (stable(old) !== stable(changed))
         throw new OperationError(
           'invalid_input',
-          'This accepted experiment input needs reconsideration before its question wording or scope changes; responses may still be added.',
+          'This accepted experiment obligation needs reconsideration before its question wording or scope changes; responses may still be added.',
         );
     }
   }
@@ -183,12 +172,47 @@ export function selectedSopInputDecision(record: RecordEnvelope, input: SopInput
   return { attributes, question, variable, action };
 }
 
+/** The role and condition are derived only from the persisted open question. */
+export function selectedSopMaterialDecision(record: RecordEnvelope, input: SopInputDecision) {
+  if (record.kind !== 'sop' || record.status !== 'draft')
+    refuse('Choose a never-confirmed draft SOP');
+  const attributes = operationalSop(record.attributes);
+  const question = attributes.questions?.find((q) => q.id === input.question);
+  if (
+    question?.disposition.status !== 'open' ||
+    question.stage.stage !== 'experiment' ||
+    question.stage.binding.type !== 'material_role' ||
+    stageProblem(attributes, question)
+  )
+    refuse(
+      'Choose one existing open experiment question bound to its declared material role without a default',
+    );
+  const binding = question.stage.binding;
+  const material = attributes.materials.find((m) => m.role === binding.role);
+  if (!material || material.default)
+    refuse('The selected material role no longer permits an explicit choice');
+  const action: Defer = {
+    type: 'defer',
+    sop: record.id,
+    expectedVersion: record.version,
+    question: question.id,
+    reason: input.reason,
+    obligation: {
+      stage: 'experiment',
+      binding,
+      condition: `Choose ${material.label} explicitly for each experiment.`,
+    },
+  };
+  return { attributes, question, material, action };
+}
+
 /** This private owning mutation never trusts a public proposal ID, via or approvedBy alone. */
-export async function applyPreparedSopInputDecision(
+async function applyPreparedSopObligationDecision(
   deps: { db: Db; kinds: KindRegistry },
   ctx: RecordContext,
   id: string,
   action: Defer,
+  kind: 'input' | 'material',
 ) {
   const transactionBound: boolean = deps.db instanceof PgTransaction;
   if (!transactionBound)
@@ -212,7 +236,10 @@ export async function applyPreparedSopInputDecision(
   const service = new RecordService(deps.db, deps.kinds);
   const record = await service.get(ctx, action.sop);
   await service.assertSopEditable(ctx, record.id);
-  const facts = selectedSopInputDecision(record, action);
+  const facts =
+    kind === 'input'
+      ? selectedSopInputDecision(record, action)
+      : selectedSopMaterialDecision(record, action);
   if (record.version !== action.expectedVersion || stable(facts.action) !== stable(action))
     throw new OperationError('version_conflict', 'The prepared question or input has changed');
   const attributes = {
@@ -233,11 +260,30 @@ export async function applyPreparedSopInputDecision(
         : q,
     ),
   };
-  return withInputDecisionWrite(deps.db, ctx, id, record, attributes, (scoped) =>
+  return withInputDecisionWrite(deps.db, ctx, id, record, attributes, kind, (scoped) =>
     service.update(scoped, record.id, {
       expectedVersion: action.expectedVersion,
       attributes,
       reason: action.reason,
     }),
   );
+}
+
+/** Public input consumer keeps its existing input-only eligibility. */
+export function applyPreparedSopInputDecision(
+  deps: { db: Db; kinds: KindRegistry },
+  ctx: RecordContext,
+  id: string,
+  action: Defer,
+) {
+  return applyPreparedSopObligationDecision(deps, ctx, id, action, 'input');
+}
+/** Private material owner; still requires the exact pending row and scoped write. */
+export function applyPreparedSopMaterialDecision(
+  deps: { db: Db; kinds: KindRegistry },
+  ctx: RecordContext,
+  id: string,
+  action: Defer,
+) {
+  return applyPreparedSopObligationDecision(deps, ctx, id, action, 'material');
 }

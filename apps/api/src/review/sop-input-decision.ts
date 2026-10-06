@@ -8,6 +8,7 @@ import {
   type ScientificDecisionMetadata,
   SopInputDecision,
   SopInputDecisionPreview,
+  SopMaterialDecisionPreview,
 } from '@ailab/schema';
 import { PgTransaction } from 'drizzle-orm/pg-core';
 import type { Db } from '../db/client.ts';
@@ -25,7 +26,9 @@ import { type RecordContext, RecordService } from '../records/service.ts';
 import type { SopReadinessCapture } from '../records/sop-read-capture.ts';
 import {
   applyPreparedSopInputDecision,
+  applyPreparedSopMaterialDecision,
   selectedSopInputDecision,
+  selectedSopMaterialDecision,
 } from '../sops/input-decision-authority.ts';
 
 interface Deps {
@@ -39,17 +42,28 @@ export interface PreparedSopInput {
   preview: SopInputDecisionPreview;
   decision: ScientificDecisionMetadata;
 }
+export interface PreparedSopMaterial {
+  input: Defer;
+  preview: SopMaterialDecisionPreview;
+  decision: ScientificDecisionMetadata;
+}
+type PreparedObligation = PreparedSopInput | PreparedSopMaterial;
+type BindingKind = 'input' | 'material';
+export interface SopMaterialAuthorization {
+  readonly type: 'sop_material_authorization';
+}
 /** Opaque authorization is local to the exact held transaction; it is never serialized. */
 export interface SopInputAuthorization {
   readonly type: 'sop_input_authorization';
 }
 const authorizations = new WeakMap<
-  SopInputAuthorization,
+  SopInputAuthorization | SopMaterialAuthorization,
   {
     db: Db;
     ctx: RecordContext;
     proposal: string;
-    prepared: PreparedSopInput;
+    prepared: PreparedObligation;
+    kind: BindingKind;
   }
 >();
 export type SopInputRefresh =
@@ -59,6 +73,14 @@ export type SopInputRefresh =
       proposal: Proposal;
       prepared: PreparedSopInput;
       authorization: SopInputAuthorization;
+    };
+export type SopMaterialRefresh =
+  | { status: 'stale' | 'refreshed'; proposal: Proposal }
+  | {
+      status: 'unchanged';
+      proposal: Proposal;
+      prepared: PreparedSopMaterial;
+      authorization: SopMaterialAuthorization;
     };
 
 function refuse(message: string): never {
@@ -101,7 +123,7 @@ function omitTime<T extends { at: string }>(fact: T): Omit<T, 'at'> {
   const { at: _at, ...identity } = fact;
   return identity;
 }
-export function sopInputMeaningDigest(preview: SopInputDecisionPreview) {
+function obligationMeaningDigest(preview: SopInputDecisionPreview | SopMaterialDecisionPreview) {
   const checks = (phase: typeof preview.before) => ({
     status: phase.readiness.status,
     ready: phase.readiness.ready,
@@ -131,7 +153,9 @@ export function sopInputMeaningDigest(preview: SopInputDecisionPreview) {
       stable({
         target,
         question: preview.question,
-        input: preview.input,
+        ...(preview.type === 'sop_experiment_input'
+          ? { input: preview.input }
+          : { material: preview.material }),
         reason: preview.reason,
         acceptance: { ...preview.acceptance, action },
         before: checks(preview.before),
@@ -151,7 +175,7 @@ export function sopInputMeaningDigest(preview: SopInputDecisionPreview) {
     .digest('hex');
 }
 class PreviewRollback extends Error {
-  constructor(readonly prepared: PreparedSopInput) {
+  constructor(readonly prepared: PreparedObligation) {
     super('Input decision rollback');
   }
 }
@@ -161,8 +185,12 @@ async function previewPhase(
   proposal: Proposal,
   record: RecordEnvelope,
   input: SopInputDecision,
-): Promise<PreparedSopInput> {
-  const facts = selectedSopInputDecision(record, input);
+  kind: BindingKind,
+): Promise<PreparedObligation> {
+  const facts =
+    kind === 'input'
+      ? selectedSopInputDecision(record, input)
+      : selectedSopMaterialDecision(record, input);
   const action = facts.action;
   try {
     await deps.db.transaction(async (tx) => {
@@ -184,12 +212,9 @@ async function previewPhase(
           : { type: 'user' as const, userId: ctx.actor.onBehalfOf };
       const { approvedBy: _approval, ...unapproved } = ctx;
       const simulated = { ...unapproved, actor: witness };
-      const updated = await applyPreparedSopInputDecision(
-        { ...deps, db: tx },
-        simulated,
-        proposal.id,
-        action,
-      );
+      const owningWrite =
+        kind === 'input' ? applyPreparedSopInputDecision : applyPreparedSopMaterialDecision;
+      const updated = await owningWrite({ ...deps, db: tx }, simulated, proposal.id, action);
       const after = complete(await local.captureSopReadiness(simulated, record.id));
       const { questions: _old, ...methodBefore } = record.attributes;
       const { questions: _new, ...methodAfter } = updated.attributes;
@@ -210,11 +235,9 @@ async function previewPhase(
           throw new OperationError('unavailable', 'A validation dependency changed between phases');
         identities.set(r.id, r.version);
       }
-      const preview = SopInputDecisionPreview.parse({
-        type: 'sop_experiment_input',
+      const common = {
         target: { id: record.id, name: record.name, label: record.label, version: record.version },
         question: facts.question,
-        input: facts.variable,
         reason: input.reason,
         acceptance: {
           status: 'deferred',
@@ -229,13 +252,26 @@ async function previewPhase(
         },
         after: { target: after.target, reads: after.reads, readiness: decisionReadiness(after) },
         changedPath: `/questions/${facts.question.id}/disposition`,
-        consequence: 'Still required for every experiment.',
         methodChanges: 'none',
         sectionConfirmations: 'unchanged',
         resultingStatus: 'draft',
         finalConfirmation: 'separate',
         scientificValidation: 'not_claimed',
-      });
+      };
+      const preview =
+        'variable' in facts
+          ? SopInputDecisionPreview.parse({
+              ...common,
+              type: 'sop_experiment_input',
+              input: facts.variable,
+              consequence: 'Still required for every experiment.',
+            })
+          : SopMaterialDecisionPreview.parse({
+              ...common,
+              type: 'sop_experiment_material',
+              material: facts.material,
+              consequence: 'Still requires an explicit material choice for the experiment.',
+            });
       const decision: ScientificDecisionMetadata = {
         origin: proposal.decision?.origin ?? { type: 'unknown' },
         reads: [...identities]
@@ -245,11 +281,15 @@ async function previewPhase(
         sources: [],
         scope: { type: 'question_disposition', disposition: action },
         previewIdentity: {
-          digest: sopInputMeaningDigest(preview),
+          digest: obligationMeaningDigest(preview),
           preparedAt: new Date().toISOString(),
         },
       };
-      throw new PreviewRollback({ input: action, preview, decision });
+      throw new PreviewRollback(
+        preview.type === 'sop_experiment_input'
+          ? { input: action, preview, decision }
+          : { input: action, preview, decision },
+      );
     });
   } catch (error) {
     if (error instanceof PreviewRollback) return error.prepared;
@@ -263,6 +303,7 @@ async function lockedPreview(
   ctx: RecordContext,
   proposal: Proposal,
   input: SopInputDecision,
+  kind: BindingKind,
   refresh = false,
 ) {
   transaction(deps.db);
@@ -273,10 +314,17 @@ async function lockedPreview(
     throw new OperationError('version_conflict', 'The SOP changed before preparation');
   const locked = new Map([[record.id, record.version]]);
   for (let attempt = 0; attempt < 3; attempt++) {
-    const prepared = await previewPhase(deps, ctx, proposal, record, {
-      ...input,
-      expectedVersion: record.version,
-    });
+    const prepared = await previewPhase(
+      deps,
+      ctx,
+      proposal,
+      record,
+      {
+        ...input,
+        expectedVersion: record.version,
+      },
+      kind,
+    );
     const needed = prepared.decision.reads.filter((r) => !locked.has(r.id));
     if (locked.size + needed.length > 64)
       refuse('The limited input decision supports at most 64 read records');
@@ -296,10 +344,11 @@ async function lockedPreview(
 }
 
 /** Bounded producer for the existing-question selector of review.prepare_decision. */
-export async function prepareSopInputDecision(
+async function prepareSopObligationDecision(
   deps: Deps,
   ctx: RecordContext,
   raw: unknown,
+  kind: BindingKind,
 ): Promise<Proposal> {
   const parsed = SopInputDecision.safeParse(raw);
   if (!parsed.success) refuse(parsed.error.message);
@@ -307,7 +356,10 @@ export async function prepareSopInputDecision(
     const local = new RecordService(tx, deps.kinds);
     const [record] = await local.lockSopDecisionRecords(ctx, [parsed.data.sop]);
     if (!record) throw new Error('Expected SOP');
-    const { action } = selectedSopInputDecision(record, parsed.data);
+    const { action } =
+      kind === 'input'
+        ? selectedSopInputDecision(record, parsed.data)
+        : selectedSopMaterialDecision(record, parsed.data);
     const decision: ScientificDecisionMetadata = {
       origin: ctx.origin ?? { type: 'unknown' },
       reads: [],
@@ -329,23 +381,27 @@ export async function prepareSopInputDecision(
       decision,
       reason: action.reason,
     });
-    const prepared = await lockedPreview({ ...deps, db: tx }, ctx, proposal, parsed.data);
+    const prepared = await lockedPreview({ ...deps, db: tx }, ctx, proposal, parsed.data, kind);
     return refreshPendingDecision(tx, ctx, proposal.id, prepared);
   });
 }
 
 /** Future approval caller must keep this transaction open through owning write and receipt. */
-export async function revalidateSopInputDecision(
+async function revalidateSopObligationDecision(
   deps: Deps,
   applying: RecordContext,
   id: string,
   expectedPreview: string,
-): Promise<SopInputRefresh> {
+  kind: BindingKind,
+): Promise<SopInputRefresh | SopMaterialRefresh> {
   transaction(deps.db);
   if (applying.actor.type !== 'user')
     throw new OperationError('forbidden', 'A person applies this decision');
   const row = await findProposal(deps.db, applying, id, { forUpdate: true });
-  const preview = SopInputDecisionPreview.safeParse(row.preview);
+  const preview =
+    kind === 'input'
+      ? SopInputDecisionPreview.safeParse(row.preview)
+      : SopMaterialDecisionPreview.safeParse(row.preview);
   const metadata = Metadata.safeParse(row.decision);
   if (
     row.status !== 'pending' ||
@@ -361,7 +417,7 @@ export async function revalidateSopInputDecision(
     d = metadata.data;
   if (d.scope.type !== 'question_disposition') refuse('Unsupported decision scope');
   if (
-    d.previewIdentity.digest !== sopInputMeaningDigest(p) ||
+    d.previewIdentity.digest !== obligationMeaningDigest(p) ||
     stable(row.input) !== stable(p.acceptance.action) ||
     stable(d.scope.disposition) !== stable(row.input) ||
     stable(d.writes) !==
@@ -388,20 +444,45 @@ export async function revalidateSopInputDecision(
       question: p.question.id,
       reason: p.reason,
     },
+    kind,
     true,
   );
   const proposal = await refreshPendingDecision(deps.db, ctx, id, prepared);
   if (prepared.decision.previewIdentity.digest !== d.previewIdentity.digest)
     return { status: 'refreshed', proposal };
-  const authorization: SopInputAuthorization = Object.freeze({ type: 'sop_input_authorization' });
-  authorizations.set(authorization, { db: deps.db, ctx, proposal: id, prepared });
-  return { status: 'unchanged', proposal, prepared, authorization };
+  if (kind === 'input' && prepared.preview.type === 'sop_experiment_input') {
+    const authorization: SopInputAuthorization = Object.freeze({ type: 'sop_input_authorization' });
+    authorizations.set(authorization, { db: deps.db, ctx, proposal: id, prepared, kind });
+    return {
+      status: 'unchanged',
+      proposal,
+      prepared: { ...prepared, preview: prepared.preview },
+      authorization,
+    };
+  }
+  if (kind === 'material' && prepared.preview.type === 'sop_experiment_material') {
+    const authorization: SopMaterialAuthorization = Object.freeze({
+      type: 'sop_material_authorization',
+    });
+    authorizations.set(authorization, { db: deps.db, ctx, proposal: id, prepared, kind });
+    return {
+      status: 'unchanged',
+      proposal,
+      prepared: { ...prepared, preview: prepared.preview },
+      authorization,
+    };
+  }
+  throw new Error('Prepared binding changed');
 }
 
 /** No public caller accepts this authorization; it is single-use and bound to the held transaction. */
-export async function executeSopInputDecision(deps: Deps, authorization: SopInputAuthorization) {
+async function executeSopObligationDecision(
+  deps: Deps,
+  authorization: SopInputAuthorization | SopMaterialAuthorization,
+  kind: BindingKind,
+) {
   const scope = authorizations.get(authorization);
-  if (!scope || scope.db !== deps.db)
+  if (!scope || scope.db !== deps.db || scope.kind !== kind)
     throw new OperationError(
       'forbidden',
       'No matching transaction-bound input decision authorization',
@@ -413,5 +494,56 @@ export async function executeSopInputDecision(deps: Deps, authorization: SopInpu
     stable(row.preview) !== stable(scope.prepared.preview)
   )
     throw new OperationError('forbidden', 'The prepared decision authorization changed');
-  return applyPreparedSopInputDecision(deps, scope.ctx, scope.proposal, scope.prepared.input);
+  const owningWrite =
+    kind === 'input' ? applyPreparedSopInputDecision : applyPreparedSopMaterialDecision;
+  return owningWrite(deps, scope.ctx, scope.proposal, scope.prepared.input);
+}
+
+export function sopInputMeaningDigest(preview: SopInputDecisionPreview) {
+  return obligationMeaningDigest(preview);
+}
+export function sopMaterialMeaningDigest(preview: SopMaterialDecisionPreview) {
+  return obligationMeaningDigest(preview);
+}
+/** Existing public input path stays input-only. */
+export function prepareSopInputDecision(deps: Deps, ctx: RecordContext, raw: unknown) {
+  return prepareSopObligationDecision(deps, ctx, raw, 'input');
+}
+export function revalidateSopInputDecision(
+  deps: Deps,
+  ctx: RecordContext,
+  id: string,
+  expectedPreview: string,
+): Promise<SopInputRefresh> {
+  return revalidateSopObligationDecision(
+    deps,
+    ctx,
+    id,
+    expectedPreview,
+    'input',
+  ) as Promise<SopInputRefresh>;
+}
+export function executeSopInputDecision(deps: Deps, authorization: SopInputAuthorization) {
+  return executeSopObligationDecision(deps, authorization, 'input');
+}
+/** Private stage: these functions have no operation or approval consumer registration. */
+export function prepareSopMaterialDecision(deps: Deps, ctx: RecordContext, raw: unknown) {
+  return prepareSopObligationDecision(deps, ctx, raw, 'material');
+}
+export function revalidateSopMaterialDecision(
+  deps: Deps,
+  ctx: RecordContext,
+  id: string,
+  expectedPreview: string,
+): Promise<SopMaterialRefresh> {
+  return revalidateSopObligationDecision(
+    deps,
+    ctx,
+    id,
+    expectedPreview,
+    'material',
+  ) as Promise<SopMaterialRefresh>;
+}
+export function executeSopMaterialDecision(deps: Deps, authorization: SopMaterialAuthorization) {
+  return executeSopObligationDecision(deps, authorization, 'material');
 }

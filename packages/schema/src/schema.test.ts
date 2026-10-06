@@ -108,6 +108,7 @@ describe('json schema', () => {
       'SopDefaultEdit',
       'SopInputDecision',
       'SopInputDecisionPreview',
+      'SopMaterialDecisionPreview',
     ]);
   });
 });
