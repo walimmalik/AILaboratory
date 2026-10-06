@@ -308,6 +308,52 @@
         }
       ]
     },
+    "origin": {
+      "description": "Server-owned originating request at creation; immutable, not approval authority. Absent historical origin is unknown",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "user_message"
+            },
+            "conversation": {
+              "type": "string",
+              "pattern": "^cnv_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "conversation",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "changeSet": {
+              "description": "Known original change-set boundary only",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
     "updatedAt": {
       "type": "string",
       "format": "date-time",

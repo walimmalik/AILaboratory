@@ -55,6 +55,8 @@ Exact instructions context retains the selected document version, file digest an
 
 Chat from the exact instructions reader uses its current validated URL selection for panel replies and fresh asks. The composer and saved human messages expose that source association. Remembered SOP question context is suspended on the reader and restored afterward; explicit decision-context actions there are refused rather than mixed with the source.
 
+New direct drafts durably retain the trusted originating request as immutable record creation provenance, including direct change sets. Existing record reads and history expose it; later edits, confirmation and restore preserve it. Old absent origins and ordinary delayed proposal creation remain unknown, never inferred from a conversation or approver. Request association does not grant approval authority or deliver supporting-record grouping, decision Apply or source adoption. See [creation origin](../architecture/core-records.md#creation-origin-004g-sg-03-foundation).
+
 ## Auth and tenancy
 
 Email and password sign-in with an HttpOnly session cookie for the web app; hashed bearer tokens for agents and scripts, issued with `pnpm --filter @ailab/api token --agent "<name>"`. Every call runs in a context of actor, org and lab. SSO can replace the password step later.

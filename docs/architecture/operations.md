@@ -60,6 +60,8 @@ Approving (`proposals.approve`, people only) runs the stored input as the propos
 
 The optional typed `decision` metadata is SG-01 foundation for that later path: existing conversation/message intent, read/write record versions and affected paths, exact source references, preview identity and bounded operation/question/confirmation scopes. Nullable metadata and receipt columns preserve existing proposal rows. These contracts do not enable decision preparation or new Apply UI behavior.
 
+Direct creates retain trusted creation origin on their record envelopes, including direct change-set results. Ordinary delayed proposal approval stamps new records with unknown origin because this path has no stored preparation-origin contract; it never uses the approver's current request. Existing proposer, approver and receipt semantics are unchanged. See [core records](core-records.md#creation-origin-004g-sg-03-foundation).
+
 Code that composes registry writes must keep their outer boundary in `registry.transaction(db, callback)` and pass its transaction to nested `execute` calls. A supplied transaction not owned by the registry is refused: returning from an unknown savepoint cannot establish that the caller's outer transaction committed. Record-service transactions that do not compose registry calls remain ordinary database transactions.
 
 **Skills** (ADR 0054). `pnpm generate` bundles `skills/<module>/SKILL.md` into `apps/api/src/skills/skills.generated.json`; `skills.list` and `skills.get` serve them, MCP lists each as the resource `skill://<module>`, and a test fails when an operation is named in no skill.

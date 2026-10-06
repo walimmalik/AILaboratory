@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Actor } from './actor.ts';
 import { FieldEvidence, ReadinessSummary, SectionReview } from './design.ts';
 import { RecordId, RecordName } from './ids.ts';
+import { OriginatingIntent } from './scientific-decisions.ts';
 
 export const RecordStatus = z.enum(['draft', 'active', 'archived']);
 export type RecordStatus = z.infer<typeof RecordStatus>;
@@ -26,6 +27,10 @@ export function recordEnvelope<A extends z.ZodType>(attributes: A) {
     reviews: z.record(z.string(), SectionReview),
     createdAt: z.iso.datetime(),
     createdBy: Actor,
+    /** Immutable creation provenance. Absence on older records means unknown, never inferred. */
+    origin: OriginatingIntent.optional().describe(
+      'Server-owned originating request at creation; immutable, not approval authority. Absent historical origin is unknown',
+    ),
     updatedAt: z.iso.datetime(),
     updatedBy: Actor,
     /** The kind's one-line summary of the record, stored at write time (ADR 0050). */

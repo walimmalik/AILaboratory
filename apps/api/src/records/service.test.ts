@@ -1,8 +1,10 @@
 import { convert } from '@ailab/domain';
-import type { Actor, Quantity } from '@ailab/schema';
+import type { Actor, OriginatingIntent, Quantity } from '@ailab/schema';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTenant } from '../auth.ts';
 import type { Db } from '../db/client.ts';
+import { recordVersions } from '../db/schema.ts';
 import { createTestDb } from '../db/testing.ts';
 import { RecordError } from './errors.ts';
 import { KindRegistry } from './kinds.ts';
@@ -41,6 +43,71 @@ beforeEach(async () => {
   service = new RecordService(db, new KindRegistry().register(widget));
 });
 afterEach(() => close());
+
+describe('immutable creation origin', () => {
+  const origin: OriginatingIntent = {
+    type: 'user_message',
+    conversation: 'cnv_00000000000000000000000001',
+    message: 'request-a',
+  };
+  it('survives reads, edits, confirmations, archive and restore including a snapshot with no origin', async () => {
+    const initial = await service.create(
+      { ...agentCtx, origin },
+      { kind: 'widget', label: 'Initial', attributes: attrs('blue') },
+    );
+    const editor = { ...ctx, origin: { ...origin, message: 'request-b' } };
+    const withoutOrigin = { ...initial };
+    delete withoutOrigin.origin;
+    await db
+      .update(recordVersions)
+      .set({ snapshot: withoutOrigin })
+      .where(eq(recordVersions.recordId, initial.id));
+    let current = await service.update(editor, initial.id, {
+      expectedVersion: 1,
+      label: 'Edited',
+      attributes: attrs('red'),
+    });
+    current = await service.restore(editor, initial.id, {
+      expectedVersion: current.version,
+      version: 1,
+    });
+    expect(current.origin).toEqual(origin);
+    expect(current.attributes).toEqual(initial.attributes);
+    current = await service.restore(editor, initial.id, {
+      expectedVersion: current.version,
+      version: 2,
+    });
+    current = await service.confirmAll(editor, initial.id, { expectedVersion: current.version });
+    expect(current.status).toBe('active');
+    current = await service.archive(editor, initial.id, { expectedVersion: current.version });
+    current = await service.unarchive(editor, initial.id, { expectedVersion: current.version });
+    const restarted = new RecordService(db, new KindRegistry().register(widget));
+    expect((await restarted.get(ctx, initial.id)).origin).toEqual(origin);
+    expect((await restarted.list(ctx))[0]?.origin).toEqual(origin);
+    expect((await restarted.getVersion(ctx, initial.id, 2)).snapshot.origin).toEqual(origin);
+    expect((await restarted.getVersion(ctx, initial.id, 1)).snapshot).not.toHaveProperty('origin');
+    for (const version of (await restarted.history(ctx, initial.id)).filter((v) => v.version > 1))
+      expect(version.snapshot.origin).toEqual(origin);
+    expect(current.createdBy).toEqual(initial.createdBy);
+    await expectError(
+      restarted.get({ ...ctx, labId: 'lab_00000000000000000000000002' }, initial.id),
+      'not_found',
+    );
+  });
+
+  it('stamps unknown when only an actor/session is known and never treats an edit as creation', async () => {
+    const initial = await service.create(
+      { ...agentCtx, actor: { ...agentCtx.actor, sessionRef: origin.conversation } as Actor },
+      { kind: 'widget', label: 'Unknown root', attributes: attrs('blue') },
+    );
+    expect(initial.origin).toEqual({ type: 'unknown' });
+    const changed = await service.update({ ...ctx, origin }, initial.id, {
+      expectedVersion: 1,
+      label: 'Still unknown',
+    });
+    expect(changed.origin).toEqual({ type: 'unknown' });
+  });
+});
 
 describe('create and read', () => {
   it('creates a draft with a readable name and version 1', async () => {

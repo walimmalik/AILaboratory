@@ -126,6 +126,106 @@ class FakeModel implements ChatModel {
 }
 
 describe('assistant.ask', () => {
+  it('durably stamps distinct actual fresh-request roots on drafts in one conversation', async () => {
+    const { assistant, registry } = setup();
+    const first = await ask(registry, assistant, createWidget('First request draft'));
+    const second = await ask(registry, assistant, createWidget('Second request draft'), {
+      conversationId: first.id,
+    });
+    const roots = second.messages.filter((message) => message.role === 'user');
+    const made = (await output(registry.execute(person, 'records.list', { kind: 'widget' }))) as {
+      records: RecordEnvelope[];
+    };
+    const a = made.records.find((record) => record.label === 'First request draft');
+    const b = made.records.find((record) => record.label === 'Second request draft');
+    expect(a?.origin).toEqual(roots[0]?.origin);
+    expect(b?.origin).toEqual(roots[1]?.origin);
+    expect(a?.origin?.type).toBe('user_message');
+    expect(a?.origin).not.toEqual(b?.origin);
+    expect(a?.createdBy).toEqual(b?.createdBy);
+    if (!a || !b) throw new Error('Expected both drafts');
+    const restarted = setup();
+    for (const record of [a, b])
+      expect(
+        await output(restarted.registry.execute(person, 'records.get', { id: record.id })),
+      ).toMatchObject({ origin: record.origin });
+  });
+
+  it('persists the validated open-question reply root while a fresh ask creates a distinct root', async () => {
+    const model = new FakeModel([]);
+    const { assistant, registry } = setup(model);
+    registry.deps.kinds.register(
+      defineKind({
+        kind: 'sop',
+        idPrefix: 'sop',
+        namePrefix: 'SOP',
+        nameWidth: 4,
+        attributes: z.strictObject({ questions: z.array(ScientificQuestion) }),
+      }),
+    );
+    const method = (await output(
+      registry.execute(person, 'records.create', {
+        kind: 'sop',
+        label: 'Question method',
+        attributes: {
+          questions: [
+            {
+              id: 'wash',
+              question: 'Which wash source applies?',
+              stage: { stage: 'method', reason: 'Conflicting sources' },
+              responses: [],
+              disposition: { status: 'open' },
+            },
+          ],
+        },
+      }),
+    )) as RecordEnvelope;
+    const page = {
+      path: `/records/${method.id}`,
+      record: { id: method.id, name: method.name, version: method.version },
+      activeQuestion: { id: 'wash', stage: 'method' },
+    };
+    model.turns.push({
+      text: '',
+      toolCalls: [{ id: 'read-method', name: 'records_get', input: { id: method.id } }],
+      stop: 'tool_use',
+    });
+    const original = await ask(registry, assistant, 'Investigate this open wash question', {
+      page,
+    });
+    const root = original.messages[0];
+    if (root?.role !== 'user') throw new Error('Expected actual root message');
+    const createTurn = (label: string): ModelTurn => ({
+      text: '',
+      toolCalls: [
+        { id: label, name: 'records_create', input: { kind: 'widget', label, attributes } },
+      ],
+      stop: 'tool_use',
+    });
+    model.turns.push(createTurn('Supporting draft'));
+    const reply = await ask(registry, assistant, 'Continue with a supporting draft', {
+      page,
+      replyTo: { conversation: original.id, message: root.id },
+    });
+    model.turns.push(createTurn('Unrelated fresh draft'));
+    const fresh = await ask(registry, assistant, 'A separate fresh request', {
+      page,
+      conversationId: reply.id,
+    });
+    const newRoot = fresh.messages.findLast((message) => message.role === 'user');
+    const made = (await output(registry.execute(person, 'records.list', { kind: 'widget' }))) as {
+      records: RecordEnvelope[];
+    };
+    expect(made.records.find((record) => record.label === 'Supporting draft')?.origin).toEqual(
+      root.origin,
+    );
+    expect(made.records.find((record) => record.label === 'Unrelated fresh draft')?.origin).toEqual(
+      newRoot?.origin,
+    );
+    expect(newRoot?.origin).not.toEqual(root.origin);
+    expect(reply.messages[0]).toMatchObject({ origin: root.origin });
+  });
+
   it('cleans up running status after a preflight read fails', async () => {
     const model = new FakeModel([]);
     const { assistant, registry } = setup(model);
