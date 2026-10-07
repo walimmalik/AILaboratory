@@ -214,6 +214,7 @@ export function ExperimentWorkspace({
                         readiness.sections.map((part) => [part.id, part.title]),
                       )}
                       onFix={(section) => {
+                        if (editing && editing !== section) return;
                         if (section === 'subjects') onDetails();
                         else {
                           setEditorSection(section);
@@ -509,59 +510,66 @@ export function ExperimentWorkspace({
         </p>
       )}
       {view.panel === 'design' && readiness && (
-        <details
-          open={Boolean(editing) || editorOpen}
-          onToggle={(event) => {
-            if (editing && !event.currentTarget.open) event.currentTarget.open = true;
-            else setEditorOpen(event.currentTarget.open);
-          }}
-          className="workspace-editor"
-        >
-          <summary>Edit saved design</summary>
-          {(editorOpen || editing) && (
-            <>
-              <nav className="actions" aria-label="Choose a design section">
-                {readiness.sections
-                  .filter((section) => section.id !== 'subjects')
-                  .map((section) => (
-                    <button
-                      key={section.id}
-                      className="btn"
-                      type="button"
-                      disabled={Boolean(editing) && editing !== section.id}
-                      aria-pressed={(editing ?? editorSection) === section.id}
-                      onClick={() => setEditorSection(section.id)}
-                    >
-                      {section.title}
-                    </button>
-                  ))}
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={Boolean(editing)}
-                  onClick={onDetails}
-                >
-                  Materials and all design details
-                </button>
-              </nav>
-              {(editing ?? editorSection) !== 'subjects' && (
-                <AllFields
-                  record={record}
-                  readiness={readiness}
-                  renderValue={renderValue}
-                  editing={editing}
-                  onEdit={onEdit}
-                  onlySection={editing ?? editorSection}
-                  onSaved={(updated) => {
-                    flushSync(() => onEdit(undefined));
-                    queryClient.setQueryData(recordQuery(updated.id).queryKey, updated);
-                    open(view, updated.version);
-                  }}
-                />
-              )}
-            </>
+        <>
+          {editing && (
+            <p className="warn-ink" role="status">
+              Save or cancel your current edits before opening another design section.
+            </p>
           )}
-        </details>
+          <details
+            open={Boolean(editing) || editorOpen}
+            onToggle={(event) => {
+              if (editing && !event.currentTarget.open) event.currentTarget.open = true;
+              else setEditorOpen(event.currentTarget.open);
+            }}
+            className="workspace-editor"
+          >
+            <summary>Edit saved design</summary>
+            {(editorOpen || editing) && (
+              <>
+                <nav className="actions" aria-label="Choose a design section">
+                  {readiness.sections
+                    .filter((section) => section.id !== 'subjects')
+                    .map((section) => (
+                      <button
+                        key={section.id}
+                        className="btn"
+                        type="button"
+                        disabled={Boolean(editing) && editing !== section.id}
+                        aria-pressed={(editing ?? editorSection) === section.id}
+                        onClick={() => setEditorSection(section.id)}
+                      >
+                        {section.title}
+                      </button>
+                    ))}
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={Boolean(editing)}
+                    onClick={onDetails}
+                  >
+                    Materials and all design details
+                  </button>
+                </nav>
+                {(editing ?? editorSection) !== 'subjects' && (
+                  <AllFields
+                    record={record}
+                    readiness={readiness}
+                    renderValue={renderValue}
+                    editing={editing}
+                    onEdit={onEdit}
+                    onlySection={editing ?? editorSection}
+                    onSaved={(updated) => {
+                      flushSync(() => onEdit(undefined));
+                      queryClient.setQueryData(recordQuery(updated.id).queryKey, updated);
+                      open(view, updated.version);
+                    }}
+                  />
+                )}
+              </>
+            )}
+          </details>
+        </>
       )}
     </div>
   );

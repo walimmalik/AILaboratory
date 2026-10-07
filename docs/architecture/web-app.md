@@ -136,7 +136,7 @@ Full-record navigation is secondary and carries an exact return-workspace link. 
 specialist plate/transfer editing and exports remain there; richer contextual preparation
 editors and material search belong to later workspace slices.
 
-A record editor blocks route changes, assistant Open view links and browser back until its
+Readiness shortcuts also preserve an open editor: another section cannot replace unsaved values; save/cancel guidance remains visible. A record editor blocks route changes, assistant Open view links and browser back until its
 owner saves or cancels; reload also uses the native unsaved-work guard. The design editor
 stays mounted during workspace refetches and read errors. The assistant carries only the
 successfully validated selection matching the current URL and experiment version. Successful
