@@ -104,6 +104,20 @@ describe('diffRecords', () => {
 });
 
 describe('describeToolStep', () => {
+  it('never infers a workspace result count or navigation from unchecked root record summaries', () => {
+    expect(
+      describeToolStep({
+        operationId: 'experiments.workspace',
+        outcome: 'done',
+        result: {
+          output: {
+            experiment: { id: 'exp_1', name: 'EXP-0001' },
+            campaign: { id: 'cam_1', name: 'CAM-0001' },
+          },
+        },
+      }),
+    ).toEqual({ text: 'Experiment view response could not be checked', tone: 'crit-ink' });
+  });
   it('names the record a step made, and marks proposals and failures', () => {
     expect(
       describeToolStep({

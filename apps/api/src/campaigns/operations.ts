@@ -26,6 +26,8 @@ import { RecordError } from '../records/errors.ts';
 import { stable } from '../records/pins.ts';
 import { type RecordContext, RecordService } from '../records/service.ts';
 
+import { workspaceOperations } from './workspace.ts';
+
 type PlanBlocker = z.infer<typeof experimentsPlanCheck.output>['blockers'][number];
 
 /**
@@ -145,6 +147,7 @@ export async function calculateExperiment(
 
 /** Campaign and experiment operations (plan 013a, 013b). */
 export const campaignOperations = [
+  ...workspaceOperations,
   implement(campaignsDraft, {
     agentPolicy: 'direct',
     run: async (ctx, { label, evidence, reason, ...attributes }, deps) =>

@@ -19,6 +19,7 @@ import * as review from './review.ts';
 import * as skills from './skills.ts';
 import * as sops from './sops.ts';
 import * as transfers from './transfers.ts';
+import * as workspace from './workspace.ts';
 
 const isContract = (value: unknown): value is OperationContract =>
   typeof value === 'object' &&
@@ -54,6 +55,7 @@ export const operationContracts: ReadonlyMap<string, OperationContract> = new Ma
     skills,
     sops,
     transfers,
+    workspace,
   ]
     .flatMap((module) => Object.values(module).filter(isContract))
     .map((contract) => [contract.id, contract]),

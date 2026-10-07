@@ -25,7 +25,12 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  * values the person changed; if the record changes meanwhile, the editor says so and can load the
  * new values, keeping the person's own.
  */
-export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: () => void) {
+export function useFieldEdits(
+  record: RecordEnvelope,
+  fields: string[],
+  onDone: () => void,
+  onSaved?: (updated: RecordEnvelope) => void | Promise<void>,
+) {
   // The version the person started from. Saving is checked against it, so a change someone else
   // makes while the editor is open is never silently written over.
   const [base, setBase] = useState(record);
@@ -82,13 +87,16 @@ export function useFieldEdits(record: RecordEnvelope, fields: string[], onDone: 
         ...(Object.keys(evidence).length > 0 ? { evidence } : {}),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
+      // Acknowledged save belongs to this editor. Close it and notify its host before
+      // background reads can replace the shown record or report a stale workspace.
+      onDone();
+      await onSaved?.(updated);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['record', record.id] }),
         queryClient.invalidateQueries({ queryKey: ['review'] }),
         queryClient.invalidateQueries({ queryKey: ['records'] }),
       ]);
-      onDone();
     },
   });
   return {
@@ -288,16 +296,18 @@ export function SectionEditor({
   fields,
   notApplicable = [],
   onDone,
+  onSaved,
 }: {
   record: RecordEnvelope;
   fields: string[];
   /** Paths that don't apply to this record; left out unless they hold a value. */
   notApplicable?: string[];
   onDone: () => void;
+  onSaved?: ((updated: RecordEnvelope) => void | Promise<void>) | undefined;
 }) {
   const kinds = useQuery(kindsQuery).data;
   const definition = kinds?.find((k) => k.kind === record.kind);
-  const edits = useFieldEdits(record, fields, onDone);
+  const edits = useFieldEdits(record, fields, onDone, onSaved);
   if (!definition) return <p className="empty">Loading…</p>;
   const root = definition.attributes as JsonSchema;
   const kindOfPrefix = Object.fromEntries(kinds?.map((k) => [k.idPrefix, k.kind]) ?? []);

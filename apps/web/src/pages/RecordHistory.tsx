@@ -38,11 +38,13 @@ export function RecordHistory({
   versions,
   ledger,
   selected,
+  returnWorkspace,
 }: {
   record: RecordEnvelope;
   versions: RecordVersion[];
   ledger: InventoryEvent[];
   selected?: string | undefined;
+  returnWorkspace?: string | undefined;
 }) {
   const me = useMe();
   const assistant = useAssistant();
@@ -58,8 +60,11 @@ export function RecordHistory({
     if (selected && selectedAvailable)
       document.getElementById(`history-${selected}`)?.scrollIntoView({ block: 'nearest' });
   }, [selected, selectedAvailable]);
-  const select = (key?: string) =>
-    navigate({ search: key ? historyEntrySearch(key) : { tab: 'history' }, resetScroll: false });
+  const historySearch = (key?: string) => ({
+    ...(returnWorkspace ? { returnWorkspace } : {}),
+    ...(key ? historyEntrySearch(key) : { tab: 'history' }),
+  });
+  const select = (key?: string) => navigate({ search: historySearch(key), resetScroll: false });
   return (
     <section className="block record-history" aria-label="History">
       <header>
@@ -68,7 +73,7 @@ export function RecordHistory({
           <Link
             to="/records/$id"
             params={{ id: record.id }}
-            search={historyEntrySearch(newest.key)}
+            search={historySearch(newest.key)}
             resetScroll={false}
             onClick={() =>
               document.getElementById(`history-${newest.key}`)?.scrollIntoView({ block: 'nearest' })
@@ -175,7 +180,7 @@ export function RecordHistory({
                           <Link
                             to="/records/$id"
                             params={{ id: record.id }}
-                            search={historyEntrySearch(entry.key)}
+                            search={historySearch(entry.key)}
                             resetScroll={false}
                             aria-label={
                               version

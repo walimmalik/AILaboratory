@@ -34,3 +34,5 @@ export * from './sops.ts';
 export * from './transfers.ts';
 export * from './workcells.ts';
 export * from './worklists.ts';
+export * from './workspace.ts';
+export * from './workspace-url.ts';

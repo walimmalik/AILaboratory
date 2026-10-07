@@ -88,6 +88,19 @@ const KIND_NAMESPACES: Record<string, string[]> = {
 /** The namespaces of the page a message was sent from. */
 export function pageNamespaces(page: PageContext | undefined, kinds: KindRegistry): string[] {
   if (!page) return [];
+  if (page.workspace)
+    return [
+      'campaigns',
+      'experiments',
+      'runs',
+      'sets',
+      'assays',
+      'sops',
+      'platemaps',
+      'layouts',
+      'transfers',
+      'worklists',
+    ];
   const record = /^\/records\/([a-z]+)_/.exec(page.path);
   if (record) {
     const kind = kinds.list().find((k) => k.idPrefix === record[1]);

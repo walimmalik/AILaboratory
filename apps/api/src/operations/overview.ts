@@ -1,4 +1,4 @@
-import { recordsOverview } from '@ailab/schema';
+import { type RecordEnvelope, recordsOverview } from '@ailab/schema';
 import { assayOverviews } from '../assays/overview.ts';
 import { campaignOverviews } from '../campaigns/overview.ts';
 import { entityOverviews } from '../entities/overview.ts';
@@ -14,8 +14,9 @@ import {
   OverviewReader,
   words,
 } from '../records/overview.ts';
-import { RecordService } from '../records/service.ts';
-import { implement } from './registry.ts';
+import { type RecordContext, RecordService } from '../records/service.ts';
+import { sopOverviews } from '../sops/overview.ts';
+import { implement, type OperationDeps } from './registry.ts';
 
 /** Kind names that are not plain words. */
 const NOUNS: Record<string, string> = { sop: 'SOP' };
@@ -31,6 +32,7 @@ const builders: Record<string, OverviewBuilder> = {
   ...memoryOverviews,
   ...platemapOverviews,
   ...reagentOverviews,
+  ...sopOverviews,
 };
 
 /**
@@ -48,7 +50,6 @@ export const FALLBACK_KINDS = new Set([
   'liquid_class_verification',
   'liquid_type',
   'set',
-  'sop',
   'transfer_plan',
   'transfer_run',
   'workcell',
@@ -57,15 +58,23 @@ export const FALLBACK_KINDS = new Set([
 
 export const overviewKinds = () => Object.keys(builders);
 
+/** Build an overview from this exact envelope, including historical pinned records. */
+export async function buildRecordOverview(
+  record: RecordEnvelope,
+  ctx: RecordContext,
+  deps: OperationDeps,
+) {
+  const build = builders[record.kind];
+  return build
+    ? build(record, new OverviewReader(ctx, deps))
+    : fallbackOverview(record, NOUNS[record.kind] ?? words(record.kind));
+}
+
 export const overviewOperations = [
   implement(recordsOverview, {
     run: async (ctx, input, deps) => {
       const record = await new RecordService(deps.db, deps.kinds).get(ctx, input.id);
-      const build = builders[record.kind];
-      const overview = build
-        ? await build(record, new OverviewReader(ctx, deps))
-        : fallbackOverview(record, NOUNS[record.kind] ?? words(record.kind));
-      return { id: record.id, ...overview };
+      return { id: record.id, ...(await buildRecordOverview(record, ctx, deps)) };
     },
   }),
 ];

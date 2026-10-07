@@ -49,3 +49,13 @@ When an SOP or bound record an experiment pins has a newer confirmed version, re
 ## Where a record was used
 
 `experiments.where_used` `{record, version?}` lists the campaigns, experiments and runs that use a record: "which runs followed SOP-0004 v3", "which experiments tested ENT-0012".
+
+## Open an experiment workspace
+
+`experiments.workspace` is read only. Give `{id, expectedVersion?, view}` whose `view` has `panel` equal to `design`, `plates` or `transfers`. Initial entry may omit `expectedVersion`; subsequent navigation uses the returned `selection`'s `version`. A successful response contains the same validated selection and `href` for browser and MCP callers. Offer `href` as **Open view**; do not say a browser displayed it merely because the operation succeeded. Opening a view confirms nothing, reserves no stock and changes no scientific records.
+
+All list pages accept `{offset, limit}` (default 0/20, maximum 50), and return exact `total` and `hasMore`. Design pages direct experiment references without expanding sets or SOP defaults. Plates pages saved maps; select `{map: {id, version, plate, wells?, relatedPage?}}` for one 1-based plate and at most 64 distinct focused wells. Transfers pages saved plans; select `{plan: {id, version, group?, groupsPage?, rowsPage?, relatedPage?}}` for group metadata and paged persisted movement rows with named endpoints. Rows need a selected group. Selected maps, plans, groups and details may be outside the visible page. W1 does not support search, addition selectors, arbitrary filters or color metrics.
+
+For a directly referenced supporting record, set `view.detail: {id, version}`. Its bounded overview uses the exact relationship pin and preserves field evidence; unpinned relationships use the current record. Secondary inventory/location/name reads are explicitly current, not a historical stock snapshot. Omission counts identify facts available through Open full record. A detail must belong to this experiment's direct references or the selected map/plan scope: the presence of an arbitrary record in the lab is insufficient.
+
+On `version_conflict`, explain that the selected science changed and ask the person to refresh explicitly; do not silently pick the latest record or another plate. Missing/foreign-lab selections refuse without revealing foreign metadata. Continue calculations, edits, confirmations and export through their owning operations and existing authority. Workspace readiness is the stored record readiness, not a new scientific validation.

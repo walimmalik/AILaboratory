@@ -24,6 +24,62 @@ const field = (name: string, note?: string): ReadinessSection['fields'][number] 
   assumed: true,
   evidence: evidence(note),
 });
+it('mounts only the chosen workspace question editor without unrelated 400-material values or snapshots', () => {
+  const subjects = Array.from({ length: 400 }, (_, index) => ({
+    record: `ent_unrelated_material_${index}`,
+  }));
+  const record = {
+    id: 'exp_fixture',
+    kind: 'experiment',
+    name: 'EXP-0001',
+    version: 3,
+    status: 'draft',
+    attributes: { question: 'Which treatment changes the response?', subjects },
+    evidence: {},
+    reviews: {},
+  } as unknown as RecordEnvelope;
+  const readiness = {
+    recordId: record.id,
+    version: 3,
+    status: 'draft',
+    ready: false,
+    missing: [],
+    checks: [],
+    assumed: [],
+    unchecked: [],
+    notApplicable: [],
+    sections: [
+      {
+        id: 'question',
+        title: 'Question',
+        state: 'needs_review',
+        fields: [{ ...field('question'), value: record.attributes.question }],
+      },
+      {
+        id: 'subjects',
+        title: 'What is tested',
+        state: 'needs_review',
+        fields: [{ ...field('subjects'), value: subjects }],
+      },
+    ],
+  } as Readiness;
+  const markup = renderToStaticMarkup(
+    <QueryClientProvider client={new QueryClient()}>
+      <AllFields
+        record={record}
+        readiness={readiness}
+        editing="question"
+        onlySection="question"
+        onEdit={() => {}}
+        renderValue={(value) => JSON.stringify(value)}
+      />
+    </QueryClientProvider>,
+  );
+  expect(markup).toContain('Question');
+  expect(markup).not.toContain('What is tested');
+  expect(markup).not.toContain('ent_unrelated_material_');
+  expect(markup).not.toContain('section-subjects');
+});
 function html(fields: ReadinessSection['fields']) {
   const confirmed = fields.every((f) => f.state === 'confirmed');
   const record = {

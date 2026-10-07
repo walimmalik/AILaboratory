@@ -260,7 +260,16 @@ const record = createRoute({
   // The tab, expanded History entry and document section are shareable and survive reload.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { tab?: string; entry?: string; section?: DocumentSection | undefined } => ({
+  ): {
+    tab?: string;
+    entry?: string;
+    section?: DocumentSection | undefined;
+    returnWorkspace?: string;
+  } & Record<string, unknown> => ({
+    ...Object.fromEntries(Object.entries(search).filter(([key]) => key.startsWith('workspace'))),
+    ...(typeof search.returnWorkspace === 'string'
+      ? { returnWorkspace: search.returnWorkspace }
+      : {}),
     ...(typeof search.tab === 'string' ? { tab: search.tab } : {}),
     ...(typeof search.entry === 'string' &&
     /^(v[1-9]\d*|iev_[0-9A-HJKMNP-TV-Z]{26})$/.test(search.entry)

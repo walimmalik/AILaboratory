@@ -28,6 +28,7 @@ import {
   waitingForYou,
 } from '../lib/format.ts';
 import { RichText } from '../lib/RichText.tsx';
+import { workspaceSearch, workspaceToolSelection } from '../lib/workspace.ts';
 import {
   assistantSetupQuery,
   conversationQuery,
@@ -290,7 +291,10 @@ function transcriptEntries(messages: AssistantMessage[]): TranscriptEntry[] {
         (result &&
           (result.outcome === 'failed' ||
             result.outcome === 'proposed' ||
-            (result.outcome === 'done' && filesOf(call.operationId, output).length > 0)));
+            (result.outcome === 'done' &&
+              (filesOf(call.operationId, output).length > 0 ||
+                (call.operationId === 'experiments.workspace' &&
+                  workspaceToolSelection(output))))));
       if (needsAttention) entries.push(entry);
       else addWork(entry);
     }
@@ -579,6 +583,10 @@ function Step({
     call.operationId === 'memory.propose' && result?.outcome === 'done'
       ? (result.result as { output?: RecordEnvelope } | undefined)?.output
       : undefined;
+  const workspace =
+    call.operationId === 'experiments.workspace' && result?.outcome === 'done'
+      ? workspaceToolSelection((result.result as { output?: unknown } | undefined)?.output)
+      : undefined;
   return (
     <li className={`step ${line.tone}`}>
       <span aria-hidden="true">{result ? '›' : '·'}</span> <span>{line.text}</span>
@@ -600,6 +608,17 @@ function Step({
         <FileCard key={'id' in file ? `${file.id}-${file.group}` : file.name} file={file} />
       ))}
       {proposedMemory && <RememberCard proposed={proposedMemory} />}
+      {workspace && (
+        <p>
+          <Link
+            to="/records/$id"
+            params={{ id: workspace.experiment }}
+            search={workspaceSearch(workspace)}
+          >
+            Open view
+          </Link>
+        </p>
+      )}
       <details className="tech">
         <summary>technical details</summary>
         <pre className="json">

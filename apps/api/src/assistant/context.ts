@@ -1,9 +1,11 @@
 import {
+  experimentsWorkspace,
   libraryRead,
   type OriginatingIntent,
   type PageContext,
   ScientificQuestion,
 } from '@ailab/schema';
+import { resolveWorkspace } from '../campaigns/workspace.ts';
 import { OperationError } from '../operations/errors.ts';
 import { findProposal, toProposal } from '../operations/proposal-store.ts';
 import type { OperationDeps } from '../operations/registry.ts';
@@ -32,6 +34,26 @@ export async function pageNote(
     notes.push(
       `Skills for this page: ${relevantSkills.map((skill) => `${skill.module} (${skill.name})`).join(', ')}. To read each relevant owning skill, call ${relevantSkills.map((skill) => `skills_get with ${JSON.stringify({ name: skill.module })}`).join('; ')} unless already read. Use these exact existing skill names, not operation namespaces.`,
     );
+  if (page.workspace) {
+    if (
+      page.selectedSource ||
+      !page.record ||
+      page.record.id !== page.workspace.experiment ||
+      page.record.version !== page.workspace.version
+    )
+      throw new OperationError(
+        'invalid_input',
+        'Workspace context needs the matching experiment and version, without selected instructions.',
+      );
+    const resolved = await resolveWorkspace(deps, ctx, {
+      id: page.workspace.experiment,
+      expectedVersion: page.workspace.version,
+      view: page.workspace.view,
+    });
+    notes.push(
+      `Current experiment workspace (server-resolved): ${JSON.stringify(experimentsWorkspace.output.parse(resolved))}. This is a bounded view; page totals describe the complete scoped collections. Use experiments.workspace to read another page or select another plate, group or related record. Open view is a read-only navigation request, never a confirmation, stock reservation or scientific change. Return its href as an Open view link; a successful read does not mean a browser displayed it. Related overview names and inventory facts are current secondary reads, even when the selected record is pinned.`,
+    );
+  }
   if (page.selectedSource) {
     const { source, passage, section } = page.selectedSource;
     const result = await deps.registry.execute(

@@ -11,16 +11,31 @@ const FROM_VALUES = [
   'avoid',
 ];
 
-/** Every `relation: '…'` a kind declares in the API's source. */
+/** Literal record links have toId; workspace presentation references have id instead. */
+function linkRelations(source: string): Set<string> {
+  const found = new Set<string>();
+  for (const object of source.matchAll(/\{[^{}]*\btoId(?:\s*:|\s*[,}])[^{}]*\}/g))
+    for (const relation of object[0].matchAll(/relation:\s*['"]([a-z_]+)['"]/g))
+      if (relation[1]) found.add(relation[1]);
+  return found;
+}
+
+/** Every persisted relation, including kind-local and shared link helpers. */
 function declaredRelations(): Set<string> {
   const found = new Set<string>();
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) walk(path);
-      else if (/\.ts$/.test(name) && !/\.test\.ts$/.test(name))
-        for (const m of readFileSync(path, 'utf8').matchAll(/relation: '([a-z_]+)'/g))
-          found.add(m[1] as string);
+      else if (/\.ts$/.test(name) && !/\.test\.ts$/.test(name)) {
+        const source = readFileSync(path, 'utf8');
+        for (const relation of linkRelations(source)) found.add(relation);
+        // The memory kind's named() helper returns id/relation intermediates; its links
+        // declaration maps them to toId/relation. Retain coverage of that owning helper.
+        if (path === join(import.meta.dirname, '..', 'memory', 'kinds.ts'))
+          for (const relation of source.matchAll(/relation:\s*['"]([a-z_]+)['"]/g))
+            if (relation[1]) found.add(relation[1]);
+      }
     }
   };
   walk(join(import.meta.dirname, '..'));
@@ -28,6 +43,19 @@ function declaredRelations(): Set<string> {
 }
 
 describe('relation words', () => {
+  it('checks persisted links and shared helpers while excluding view categories', () => {
+    const source = `
+      const detail = { id: selected, relation: 'workspace_category' };
+      defineKind({ links: a => [
+        { toId: a.record, relation: 'unsupported_link' },
+      ] });
+      const memoryLinks = a => [{ toId: a.memory, relation: 'shared_helper_relation' }];
+    `;
+    expect([...linkRelations(source)].sort()).toEqual([
+      'shared_helper_relation',
+      'unsupported_link',
+    ]);
+  });
   it('name every relation a kind declares, from both ends', () => {
     const declared = [...declaredRelations(), ...FROM_VALUES];
     expect(declared.filter((r) => !(r in RELATION_WORDS))).toEqual([]);

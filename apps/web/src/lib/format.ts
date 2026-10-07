@@ -8,6 +8,7 @@ import {
   type Proposal,
   type Quantity,
   SEED_AGENT,
+  WorkspaceProjection,
 } from '@ailab/schema';
 
 /** Reads, which the assistant's steps show in muted ink. */
@@ -272,6 +273,15 @@ export function describeToolStep(step: {
       proposed: true,
       ...(record ? { record } : {}),
     };
+  }
+  if (step.operationId === 'experiments.workspace') {
+    const workspace = WorkspaceProjection.safeParse(result.output);
+    if (!workspace.success)
+      return { text: 'Experiment view response could not be checked', tone: 'crit-ink' };
+    const panel = { design: 'Design', plates: 'Plates', transfers: 'Transfers' }[
+      workspace.data.selection.view.panel
+    ];
+    return { text: `Prepared ${panel} view`, tone: 'muted' };
   }
   const found = operationRecords(step.operationId, result.output);
   const verb = operationVerb(step.operationId);

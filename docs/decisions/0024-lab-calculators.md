@@ -28,6 +28,16 @@ First calculators, from the plans so far: unit conversion and mass-to-molar (002
 
 ## Consequences
 
+### 2026-10-07 clarification: deterministic planning and generation
+
+For the scientist experiment workspace (004h), Wali explicitly includes dose-response calculations, intermediate dilution planning, optimizers, plate layouts and worklist generators in this boundary. Extend the existing pure domain library and operation registry rather than introducing a second agent-only calculation service. Deterministic serializers/generators remain in their owning implementation modules (including the existing science service where required); exporting/storing files is a write operation, not a read calculator.
+
+The same resolved scientific inputs, ordered identities, pinned definitions, algorithm/writer versions and explicit randomization seed must reproduce the same scientific result and executable payload. Persist a chosen layout seed before preview/acceptance; deliberate re-randomization changes that input explicitly. Optimizers declare their objective, constraints, tie-breaking and actual search scope; deterministic heuristics must not claim proven global optimality. Timestamps, record IDs and receipts are separate from scientific payload reproducibility.
+
+This tightens the earlier missing-calculator fallback for authoritative workspace results: if a required function or scientific input is missing, return an explicit unsupported/missing-input result. An agent may propose an input with its evidence/assumption label, but its own arithmetic or generated worklist text cannot substitute for a calculated design, validated plan or exported instructions. Both UI and agents use the same operation result/evidence. Detailed scope and replay acceptance are in [the workspace spec](../specs/experiment-workspace.md#71-deterministic-scientific-toolkit).
+
+### Existing consequences
+
 - Every plan that adds a calculation adds it as a calculator operation, with tests for valid input, invalid input and permission, and a line in the calculators skill.
 - Evidence gains a "calculated" source alongside assumed, stated, imported and measured.
 - The in-app agent always has the calculators in its tool list, even when the operation count grows past what it sees for records.

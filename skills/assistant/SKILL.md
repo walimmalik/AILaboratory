@@ -17,3 +17,9 @@ Every fresh ask has its own server-stamped originating user-message identity, in
 The assistant pauses with a terminal review request when a tool produces a pending proposal; later calls in that batch are recorded as unexecuted. Explicit human Review approval waits until the assistant turn ends. On reload, use authoritative record/proposal state; an approved proposal's stored receipt reports what actually committed. Dedicated Apply decision cards, broader stop/resume and recovery of uncertain tool mutations are separate capabilities and must not be claimed here.
 
 Use these to pick up where the person and the assistant left off, for example to see which changes it proposed and why.
+
+## Experiment workspace context
+
+`page.workspace` identifies the experiment/version and typed Design, Plates or Transfers view alongside the matching `page.record`. The server resolves it again through the same `experiments.workspace` resolver before the model receives context. It refuses stale versions, foreign records and unrelated or invalid selections; it cannot combine workspace context with selected Library instructions. Workspace turns offer campaign, experiment, assay, SOP, plate and transfer tools. Use bounded pages to obtain more context, and read owning module skills when needed.
+
+An Open view response is read-only navigation. Present its validated `href` as an explicit link and retain the person's experiment context. Do not claim browser display, confirmation, source adoption, reservation or execution from the read. Scientific edits and people-only confirmation retain their existing operations and authority. Pinned contextual overviews describe the exact record version, with current secondary names/stock/location facts disclosed separately.

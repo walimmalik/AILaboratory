@@ -3163,3 +3163,134 @@ td.record-name .one-line {
     flex-shrink: 1;
   }
 }
+
+/* The scientist's saved experiment, with related facts alongside the work (004h W1). */
+.workspace-columns {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+.workspace-columns.with-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 340px);
+}
+.workspace-content {
+  min-width: 0;
+}
+.workspace-detail {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+.workspace-detail header {
+  align-items: start;
+  gap: 12px;
+}
+.record-page .experiment-workspace .workspace-detail h2 {
+  overflow-wrap: anywhere;
+}
+.record-page .experiment-workspace .workspace-choices > li {
+  margin: 12px 0;
+}
+.workspace-choices .btn {
+  text-align: left;
+  white-space: normal;
+}
+.workspace-choices [aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.workspace-pager {
+  margin-top: 16px;
+}
+.workspace-wells {
+  border: 0;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  overflow-x: auto;
+  margin: 20px 0;
+  padding: 4px;
+}
+.workspace-well {
+  min-height: 30px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--field);
+  color: var(--ink);
+  font: 10px var(--font-mono);
+}
+.workspace-well.role-subject {
+  background: var(--accent-soft);
+}
+.workspace-well.role-standard {
+  background: var(--warn-soft);
+}
+.workspace-well.role-positive {
+  background: var(--ink-2);
+  color: var(--panel);
+}
+.workspace-well.role-negative,
+.workspace-well.role-neutral {
+  background: var(--well-empty);
+}
+.workspace-well.role-blank {
+  border-style: dashed;
+}
+.workspace-well.chosen {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.record-page .experiment-workspace .workspace-facts > div {
+  margin: 16px 0;
+}
+.record-page .experiment-workspace .workspace-facts dt {
+  color: var(--ink-2);
+}
+.record-page .experiment-workspace .workspace-facts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.record-page .experiment-workspace .workspace-facts dd p {
+  margin: 4px 0;
+}
+.workspace-content .table-scroll {
+  overflow-x: auto;
+}
+.workspace-content form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-content input[name="plate"] {
+  width: 70px;
+}
+@media (max-width: 1000px) {
+  .workspace-columns.with-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-detail {
+    position: static;
+  }
+}
+
+.experiment-workspace {
+  display: grid;
+  gap: 16px;
+}
+.record-page .experiment-workspace .workspace-question .body {
+  gap: 6px;
+}
+.record-page .experiment-workspace .workspace-question .body > p,
+.record-page .experiment-workspace .workspace-question .body > h2 {
+  margin: 0;
+}
+.record-page .experiment-workspace .workspace-question.compact .body {
+  padding: 8px 14px;
+  gap: 3px;
+}
+.record-page .experiment-workspace .workspace-question.compact .body > h2 {
+  font: 500 14px / 1.4 var(--font-ui);
+}
+.record-page .experiment-workspace .workspace-question.compact .body > p {
+  font-size: 12px;
+}
