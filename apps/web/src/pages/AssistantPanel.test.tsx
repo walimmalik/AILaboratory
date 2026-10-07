@@ -140,6 +140,41 @@ function visible(markup: string) {
 }
 
 describe('assistant transcript presentation', () => {
+  it('shows an explicit Open view only for a successful valid workspace output', () => {
+    const id = `exp_${'0'.repeat(26)}`;
+    const record = {
+      id,
+      version: 2,
+      kind: 'experiment',
+      name: 'EXP-0001',
+      label: 'Saved experiment',
+      status: 'draft',
+    };
+    const output = {
+      panel: 'design',
+      experiment: { ...record, question: 'What changes?', stage: 'designing', subjectCount: 1 },
+      campaign: { ...record, id: `cmp_${'0'.repeat(26)}`, name: 'CMP-0001', kind: 'campaign' },
+      selection: { experiment: id, version: 2, view: { panel: 'design' } },
+      href: '/records/untrusted-model-path',
+      related: { items: [], offset: 0, limit: 20, total: 0, hasMore: false },
+    };
+    expect(visible(html(action('workspace', 'experiments.workspace', output)))).toContain(
+      'Open view',
+    );
+    const receipt = visible(html(action('workspace', 'experiments.workspace', output)));
+    expect(receipt).toContain('Prepared Design view');
+    expect(receipt).not.toContain('opened a view');
+    expect(receipt).not.toContain('2 found');
+    expect(visible(html(action('workspace', 'experiments.workspace', output)))).toContain(
+      `/records/${id}`,
+    );
+    expect(
+      visible(html(action('workspace', 'experiments.workspace', { href: '/records/evil' }))),
+    ).not.toContain('Open view');
+    expect(
+      visible(html(action('workspace', 'experiments.workspace', output, 'failed'))),
+    ).not.toContain('Open view');
+  });
   it('keeps both stored transfer export downloads visible and hides failed or malformed results', () => {
     const output = storedExport();
     const markup = visible(

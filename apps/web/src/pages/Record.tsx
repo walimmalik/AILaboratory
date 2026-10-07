@@ -8,11 +8,12 @@ import type {
   RecordEnvelope,
 } from '@ailab/schema';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { Link, useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import type { DocumentSection } from '../lib/document-search.ts';
 import { formatShortDay, formatValue, formatWhen, proposalTouches } from '../lib/format.ts';
 import { kindNoun, kindPage } from '../lib/kinds.ts';
+import { workspaceReturn } from '../lib/workspace.ts';
 import {
   historyQuery,
   ledgerQuery,
@@ -26,6 +27,7 @@ import { AllFields } from './AllFields.tsx';
 import { AssayTemplateBlocks } from './AssayDesign.tsx';
 import { DocumentBlocks } from './Documents.tsx';
 import { CampaignBlocks, ExperimentBlocks, RunBlocks, SetBlocks } from './Experiments.tsx';
+import { ExperimentWorkspace } from './ExperimentWorkspace.tsx';
 import { InstalledEquipment, InstrumentBlocks, WorkcellBlocks } from './Instruments.tsx';
 import { ContainerBlocks, EntityBlocks, WhereIsBlock } from './Inventory.tsx';
 import { kindTabs } from './KindTabs.tsx';
@@ -51,7 +53,8 @@ import { LinkedName, renderValue } from './Value.tsx';
  */
 export function RecordPage() {
   const { id } = useParams({ from: '/app/records/$id' });
-  const { tab = 'overview', entry, section } = useSearch({ from: '/app/records/$id' });
+  const search = useSearch({ from: '/app/records/$id' });
+  const { tab = 'overview', entry, section, returnWorkspace } = search;
   const navigate = useNavigate({ from: '/records/$id' });
   const record = useQuery(recordQuery(id));
   const overview = useQuery(overviewQuery(id)).data;
@@ -69,6 +72,11 @@ export function RecordPage() {
   );
   // The part open in an editor: on All fields, or the SOP editor on the Overview.
   const [editing, setEditing] = useState<string>();
+  const blocker = useBlocker({
+    shouldBlockFn: () => Boolean(editing),
+    enableBeforeUnload: Boolean(editing),
+    withResolver: true,
+  });
   const [scrollTo, setScrollTo] = useState<string>();
   useEffect(() => {
     if (!scrollTo) return;
@@ -86,6 +94,7 @@ export function RecordPage() {
   const open = (next: string) =>
     navigate({
       search: {
+        ...(returnWorkspace ? { returnWorkspace } : {}),
         ...(section === undefined ? {} : { section }),
         ...(next === 'overview' ? {} : { tab: next }),
       },
@@ -134,9 +143,27 @@ export function RecordPage() {
     },
   ];
   const current = tabs.some((t) => t.id === tab) ? tab : 'overview';
+  const workspace =
+    r.kind === 'experiment' && (search.workspace !== undefined || search.tab === undefined);
+  const returnView = workspaceReturn(returnWorkspace);
 
   return (
     <div className="record-page">
+      {blocker.status === 'blocked' && (
+        <p className="warn-ink" role="alert">
+          Save or cancel your open editor before changing views.{' '}
+          <button className="btn" type="button" onClick={blocker.reset}>
+            Keep editing
+          </button>
+        </p>
+      )}
+      {returnView && (
+        <p>
+          <Link to="/records/$id" params={{ id: returnView.id }} search={returnView.search}>
+            Return to experiment workspace
+          </Link>
+        </p>
+      )}
       <div className="page-head record-head">
         <div>
           {r.kind === 'plate_map' ? (
@@ -169,92 +196,123 @@ export function RecordPage() {
         </div>
       </div>
 
-      <nav className="tabs" aria-label="Parts of this record">
-        {tabs.map((t) => (
-          <Link
-            key={t.id}
-            to="/records/$id"
-            params={{ id }}
-            search={t.id === 'overview' ? {} : { tab: t.id }}
-            replace
-            className={t.id === current ? 'tab on' : 'tab'}
-            aria-current={t.id === current ? 'page' : undefined}
-          >
-            {t.label}
-            {t.count && <span className={t.warn ? 'count warn-ink' : 'count'}>{t.count}</span>}
-          </Link>
-        ))}
-      </nav>
-
-      {current === 'overview' && (
-        <>
-          {pending.length > 0 && (
-            <p className="agent-ink">
-              {pending.length === 1
-                ? 'An agent has proposed a change'
-                : `Agents have proposed ${pending.length} changes`}{' '}
-              to this record. <Link to="/review">Review it</Link>
-            </p>
-          )}
-          <SinceYouLooked key={r.id} record={r} />
-          {showReadiness && (
-            <ReadinessBlock
-              record={r}
-              readiness={readiness}
-              titles={
-                readiness.sections.length > 0
-                  ? Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]))
-                  : { fields: 'the fields' }
-              }
-              onFix={fix}
-              editing={editing}
-            />
-          )}
-          {overview && overview.facts.length > 0 && (
-            <KeyFacts kind={r.kind} facts={overview.facts} marked={unsourcedFields(r, readiness)} />
-          )}
-          <LabNotes record={r} />
-          {isSop && readiness ? (
-            <SopPage record={r} readiness={readiness} editing={editing} onEdit={setEditing} />
-          ) : (
-            <KindBlocks record={r} section={section} />
-          )}
-          {r.kind !== 'document' && <MentionedIn record={r} />}
-        </>
-      )}
-
-      {ownTabs.map((t) => t.id === current && <Fragment key={t.id}>{t.render(r)}</Fragment>)}
-
-      {current === 'history' &&
-        (history.error ? (
-          <p className="error-text">{history.error.message}</p>
-        ) : !history.data ? (
-          <p className="empty">Loading history…</p>
-        ) : (
-          <RecordHistory
-            key={r.id}
-            record={r}
-            versions={versions}
-            ledger={ledger}
-            selected={entry}
-          />
-        ))}
-
-      {current === 'connections' && <Connections from={from} to={to} />}
-
-      {current === 'fields' && readiness && (
-        <AllFields
+      {workspace ? (
+        <ExperimentWorkspace
           record={r}
           readiness={readiness}
-          renderValue={render}
-          editing={isSop ? undefined : editing}
-          onEdit={(part) => {
-            if (isSop && part) {
-              setEditing(part);
-              void open('overview');
-            } else setEditing(part);
-          }}
+          editing={editing}
+          onEdit={setEditing}
+          onDetails={() => void navigate({ search: { tab: 'overview' } })}
         />
+      ) : (
+        <>
+          {r.kind === 'experiment' && (
+            <p>
+              <Link
+                to="/records/$id"
+                params={{ id }}
+                search={{ workspace: 'design', workspaceVersion: r.version }}
+              >
+                Return to experiment workspace
+              </Link>
+            </p>
+          )}
+          <nav className="tabs" aria-label="Parts of this record">
+            {tabs.map((t) => (
+              <Link
+                key={t.id}
+                to="/records/$id"
+                params={{ id }}
+                search={{
+                  ...(returnWorkspace ? { returnWorkspace } : {}),
+                  ...(t.id === 'overview' ? {} : { tab: t.id }),
+                }}
+                replace
+                className={t.id === current ? 'tab on' : 'tab'}
+                aria-current={t.id === current ? 'page' : undefined}
+              >
+                {t.label}
+                {t.count && <span className={t.warn ? 'count warn-ink' : 'count'}>{t.count}</span>}
+              </Link>
+            ))}
+          </nav>
+
+          {current === 'overview' && (
+            <>
+              {pending.length > 0 && (
+                <p className="agent-ink">
+                  {pending.length === 1
+                    ? 'An agent has proposed a change'
+                    : `Agents have proposed ${pending.length} changes`}{' '}
+                  to this record. <Link to="/review">Review it</Link>
+                </p>
+              )}
+              <SinceYouLooked key={r.id} record={r} />
+              {showReadiness && (
+                <ReadinessBlock
+                  record={r}
+                  readiness={readiness}
+                  titles={
+                    readiness.sections.length > 0
+                      ? Object.fromEntries(readiness.sections.map((s) => [s.id, s.title]))
+                      : { fields: 'the fields' }
+                  }
+                  onFix={fix}
+                  editing={editing}
+                />
+              )}
+              {overview && overview.facts.length > 0 && (
+                <KeyFacts
+                  kind={r.kind}
+                  facts={overview.facts}
+                  marked={unsourcedFields(r, readiness)}
+                />
+              )}
+              <LabNotes record={r} />
+              {isSop && readiness ? (
+                <SopPage record={r} readiness={readiness} editing={editing} onEdit={setEditing} />
+              ) : (
+                <KindBlocks record={r} section={section} />
+              )}
+              {r.kind !== 'document' && <MentionedIn record={r} />}
+            </>
+          )}
+
+          {ownTabs.map((t) => t.id === current && <Fragment key={t.id}>{t.render(r)}</Fragment>)}
+
+          {current === 'history' &&
+            (history.error ? (
+              <p className="error-text">{history.error.message}</p>
+            ) : !history.data ? (
+              <p className="empty">Loading history…</p>
+            ) : (
+              <RecordHistory
+                key={r.id}
+                record={r}
+                versions={versions}
+                ledger={ledger}
+                selected={entry}
+                returnWorkspace={returnWorkspace}
+              />
+            ))}
+
+          {current === 'connections' && <Connections from={from} to={to} />}
+
+          {current === 'fields' && readiness && (
+            <AllFields
+              record={r}
+              readiness={readiness}
+              renderValue={render}
+              editing={isSop ? undefined : editing}
+              onEdit={(part) => {
+                if (isSop && part) {
+                  setEditing(part);
+                  void open('overview');
+                } else setEditing(part);
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

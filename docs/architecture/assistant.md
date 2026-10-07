@@ -96,3 +96,9 @@ A Responses request whose deadline expires before headers or while reading the b
 - No token streaming: the panel shows each step and reply as it is saved, not word by word.
 - No way to stop a run from the panel yet; the step limit and a 180 s model timeout bound it.
 - One process: the conversation stream uses an in-process bus, like the ledger.
+
+## Experiment workspace grounding (004h W1)
+
+`PageContext.workspace` accompanies the matching experiment record/version with a typed Design, Plates or Transfers selection. Before grounding each turn, the server calls the workspace resolver under the assistant caller's lab scope and selected versions; its bounded response, exact counts and validated selection replace browser-supplied scientific claims. Foreign, stale, unrelated or invalid selections refuse before model context is constructed. Workspace context cannot be combined with selected exact Library instructions.
+
+Workspace turns include campaign/experiment/assay/SOP, plate/layout and transfer/worklist namespaces. The model is instructed to use `experiments.workspace` for further bounded pages or valid selection changes and present its canonical `href` as **Open view**. A successful read is not evidence of browser display, approval, source adoption, reservation or physical execution. The person's explicit navigation and unsaved-editor guard remain browser responsibilities. Contextual detail uses exact pinned record overviews with field evidence and explicitly discloses current secondary inventory, location and naming reads.

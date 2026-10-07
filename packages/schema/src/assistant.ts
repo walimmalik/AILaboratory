@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ExactSourceReference } from './library.ts';
 import { OperationErrorBody } from './operation.ts';
 import { OriginatingIntent } from './scientific-decisions.ts';
+import { WorkspaceSelection } from './workspace.ts';
 
 export const ConversationId = z.string().regex(/^cnv_[0-9A-HJKMNP-TV-Z]{26}$/, 'must be a cnv_ ID');
 
@@ -9,7 +10,7 @@ export const ConversationId = z.string().regex(/^cnv_[0-9A-HJKMNP-TV-Z]{26}$/, '
 export const PageContext = z
   .object({
     /** The app path, e.g. "/records/wdg_…". */
-    path: z.string().max(500),
+    path: z.string().max(8000),
     title: z.string().max(200).optional(),
     /** The record the page shows, at the version the person is looking at (ADR 0055). */
     record: z
@@ -19,6 +20,8 @@ export const PageContext = z
         version: z.number().int().positive(),
       })
       .optional(),
+    /** The validated workspace selection; server revalidates scope and versions on every turn. */
+    workspace: WorkspaceSelection.optional(),
     /** The visible question; the server checks its record, version and stage. */
     activeQuestion: z
       .strictObject({
@@ -40,12 +43,27 @@ export const PageContext = z
       })
       .optional(),
   })
+  .refine(
+    (page) =>
+      !page.workspace ||
+      Boolean(
+        page.record &&
+          page.record.id === page.workspace.experiment &&
+          page.record.version === page.workspace.version,
+      ),
+    {
+      message: 'Workspace context needs the matching experiment record and version',
+      path: ['workspace'],
+    },
+  )
   .refine((page) => !page.activeQuestion || Boolean(page.record), {
     message: 'A selected question needs its record and version',
     path: ['activeQuestion'],
   })
   .refine(
-    (page) => !page.selectedSource || !(page.record || page.activeQuestion || page.proposal),
+    (page) =>
+      !page.selectedSource ||
+      !(page.record || page.activeQuestion || page.proposal || page.workspace),
     {
       message: 'Selected instructions cannot be combined with record, question or proposal context',
       path: ['selectedSource'],

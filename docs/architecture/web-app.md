@@ -113,3 +113,41 @@ the existing operations. The broader scientific Review work in 004g / SG-06 rema
 
 - Unit tests for the plain-language and diff helpers: `pnpm --filter @ailab/web test`.
 - End-to-end (Playwright, `e2e/*.e2e.ts`): sign-in, an agent proposal confirmed on the Review page with history and ledger checks, a draft opened from the Review page and confirmed section by section (the last confirm activates it), live ledger updates, and the assistant running an operation from the ask bar with the ledger linking back to the conversation. The API runs with `AGENT_PROVIDER=scripted`, a test-only model with no network. CI runs them in the `postgres` job against a real API and Postgres. The API runs with `AILAB_TEST_KINDS=1`, which registers the test-only `widget` kind until real kinds arrive (plan 007).
+
+## Saved experiment workspace (004h W1)
+
+Experiments open inside their record route with persistent **Design · Plates · Transfers**.
+`ExperimentWorkspace.tsx` reads `experiments.workspace` through `@ailab/client`. The schema's
+shared `workspaceHref` / `parseWorkspaceSelection` codec maps the validated selection to the
+`workspace*` URL keys, independent of a document's `section`. Initial entry establishes a
+versioned URL; browser back and reload revalidate that same selection. Malformed selectors
+remain visible as a recoverable error; stale selections require explicit refresh.
+
+Design shows the saved question, conditions, controls and readouts, existing readiness and
+confirmation, and an explicitly opened existing design editor. Only the chosen section mounts,
+including its technical disclosure; unrelated material lists stay on the specialist route. Scientific values are read
+from the experiment, never copied into workspace state or recalculated by the browser.
+Maps and plans, directly related materials/methods, transfer groups and saved worklist rows
+page independently. One selected plate renders canonical well coordinates, including rows
+beyond Z, with selected well details. The page never loads every generated plate into the
+workspace. Related-record facts and their saved evidence open beside the selected work;
+missing evidence stays unknown and secondary inventory/location facts are labelled current.
+Full-record navigation is secondary and carries an exact return-workspace link. Existing
+specialist plate/transfer editing and exports remain there; richer contextual preparation
+editors and material search belong to later workspace slices.
+
+Readiness shortcuts also preserve an open editor: another section cannot replace unsaved values; save/cancel guidance remains visible. A record editor blocks route changes, assistant Open view links and browser back until its
+owner saves or cancels; reload also uses the native unsaved-work guard. The design editor
+stays mounted during workspace refetches and read errors. The assistant carries only the
+successfully validated selection matching the current URL and experiment version. Successful
+`experiments.workspace` tool outputs expose **Open view**, reconstructed from the schema-valid
+selection rather than a model-supplied href. A read never automatically navigates or asserts
+that a browser displayed the view. Tests cover route refusal/round trips, stale context,
+bounded paging and related facts; integrated browser and real-assistant acceptance is separate.
+
+An acknowledged save closes its own editor before background refetches and adopts the exact
+returned record version into the same workspace selection. This receipt callback is the only
+automatic version adoption; external changes continue to require explicit refresh. Same-record
+History navigation preserves a secondary return-workspace link, including newest activity and
+individual version links. Workspace tabs use the existing link-tab styling; Plates and Transfers
+keep their campaign/question context compact above the selected work.

@@ -32,6 +32,8 @@ export function AllFields({
   renderValue,
   editing,
   onEdit,
+  onlySection,
+  onSaved,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
@@ -39,6 +41,9 @@ export function AllFields({
   /** The part open in an editor. */
   editing: string | undefined;
   onEdit: (part: string | undefined) => void;
+  /** Workspace editor: mount this section only, including its technical disclosure. */
+  onlySection?: string | undefined;
+  onSaved?: ((updated: RecordEnvelope) => void | Promise<void>) | undefined;
 }) {
   const kinds = useQuery(kindsQuery).data;
   const sections =
@@ -48,31 +53,48 @@ export function AllFields({
   return (
     <section className="block all-fields" aria-label="All fields">
       <div className="body">
-        {sections.map((section) => (
-          <Part
-            key={section.id}
-            record={record}
-            readiness={readiness}
-            section={section}
-            sectioned={readiness.sections.length > 0}
-            renderValue={renderValue}
-            editing={editing === section.id}
-            onEdit={(on) => onEdit(on ? section.id : undefined)}
-          />
-        ))}
+        {sections
+          .filter((section) => onlySection === undefined || section.id === onlySection)
+          .map((section) => (
+            <Part
+              key={section.id}
+              record={record}
+              readiness={readiness}
+              section={section}
+              sectioned={readiness.sections.length > 0}
+              renderValue={renderValue}
+              editing={editing === section.id}
+              onEdit={(on) => onEdit(on ? section.id : undefined)}
+              onSaved={onSaved}
+            />
+          ))}
         <details className="tech">
           <summary>technical details</summary>
           {readiness.sections.length > 0 && (
             <ul className="plain">
-              {readiness.sections.map((s) => (
-                <li key={s.id}>
-                  {s.title}: {s.state === 'confirmed' ? 'confirmed' : 'needs review'}
-                  {s.review && ` (last confirmed at version ${s.review.version})`}
-                </li>
-              ))}
+              {readiness.sections
+                .filter((section) => onlySection === undefined || section.id === onlySection)
+                .map((s) => (
+                  <li key={s.id}>
+                    {s.title}: {s.state === 'confirmed' ? 'confirmed' : 'needs review'}
+                    {s.review && ` (last confirmed at version ${s.review.version})`}
+                  </li>
+                ))}
             </ul>
           )}
-          <pre className="json">{JSON.stringify(record, null, 2)}</pre>
+          <pre className="json">
+            {JSON.stringify(
+              onlySection
+                ? {
+                    id: record.id,
+                    version: record.version,
+                    section: sections.find((section) => section.id === onlySection),
+                  }
+                : record,
+              null,
+              2,
+            )}
+          </pre>
         </details>
       </div>
     </section>
@@ -112,6 +134,7 @@ function Part({
   renderValue,
   editing,
   onEdit,
+  onSaved,
 }: {
   record: RecordEnvelope;
   readiness: Readiness;
@@ -121,6 +144,7 @@ function Part({
   renderValue: (value: unknown, field?: string) => ReactNode;
   editing: boolean;
   onEdit: (on: boolean) => void;
+  onSaved?: ((updated: RecordEnvelope) => void | Promise<void>) | undefined;
 }) {
   const me = useMe();
   const queryClient = useQueryClient();
@@ -176,6 +200,7 @@ function Part({
           fields={section.fields.map((f) => f.field)}
           notApplicable={readiness.notApplicable}
           onDone={() => onEdit(false)}
+          onSaved={onSaved}
         />
       ) : (
         <>

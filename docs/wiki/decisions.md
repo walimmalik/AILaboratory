@@ -8,6 +8,8 @@ Plans 006 to 019 record their decisions in the plan files; their ADRs are writte
 
 ## Architecture Decision Records
 
+Accepted by Wali on 2026-10-07: [0071](../decisions/0071-experiment-workspace.md) defines an experiment workspace over shared records with typed addition intent and output lineage; [0072](../decisions/0072-agent-workspace-presentation.md) defines supported template-driven screens and typed agent view requests. [004h](../plans/004h-scientist-experiment-workspace.md) now chooses compound/Echo first including dose-response/intermediates, then ELISA/cell, and explicit worklist eligibility while retaining confirmation/soft reservation policy. The [0024 clarification](../decisions/0024-lab-calculators.md) requires deterministic calculation, optimization, placement and worklist generation through shared operations. Product decisions are locked; contracts/implementation and per-delivery browser/live-agent acceptance remain outstanding.
+
 New on 2026-10-05: [0068](../decisions/0068-interactive-scientific-decisions.md) records Wali's choice of explicit **Apply decision** controls in chat, separate final SOP confirmation, and one task summary with approval for meaningful decisions. Implementation is specified in [004g](../plans/004g-ai-first-scientific-reconciliation.md), not yet built.
 
 [0069](../decisions/0069-working-methods-and-scientific-uncertainty.md) records the same day's choices: retain the last valid confirmed method during working edits; permit explicitly unvalidated experimental variations with a scientist's rationale; preserve history while reconciling uncertain facts before affected future use. These are accepted policies awaiting implementation.

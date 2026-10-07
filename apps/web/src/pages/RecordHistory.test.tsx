@@ -17,7 +17,19 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
-  Link: ({ children }: { children: ReactNode }) => <a href="/test">{children}</a>,
+  Link: ({
+    children,
+    search,
+    'aria-label': label,
+  }: {
+    children: ReactNode;
+    search?: { returnWorkspace?: string };
+    'aria-label'?: string;
+  }) => (
+    <a href="/test" data-return-workspace={search?.returnWorkspace} aria-label={label}>
+      {children}
+    </a>
+  ),
 }));
 vi.mock('../assistant.tsx', () => ({ useAssistant: () => ({ show: vi.fn() }) }));
 vi.mock('./RecordActions.tsx', () => ({ RestoreVersion: () => null }));
@@ -219,6 +231,19 @@ describe('scientific question history', () => {
     );
     expect(collapsed).toContain('Scientific question comparison unavailable');
     expect(collapsed).toContain('View change');
+    const returnWorkspace =
+      '/records/exp_00000000000000000000000000?workspace=plates&workspaceVersion=6&workspaceMap=pmp_00000000000000000000000000&workspaceMapVersion=2&workspacePlate=1&workspaceWells=A1';
+    const linkedHistory = renderToStaticMarkup(
+      <RecordHistory
+        record={record}
+        versions={[version]}
+        ledger={[]}
+        returnWorkspace={returnWorkspace}
+      />,
+    );
+    expect(linkedHistory).toContain('Newest activity');
+    expect(linkedHistory).toContain('Open version 1 in history');
+    expect(linkedHistory.match(/data-return-workspace=/g)).toHaveLength(2);
     const expanded = renderToStaticMarkup(
       <RecordHistory record={record} versions={[version]} ledger={[]} selected="v1" />,
     );

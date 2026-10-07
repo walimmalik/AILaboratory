@@ -27,6 +27,7 @@ import {
   selectedQuestion,
 } from './lib/chat-question.ts';
 import { validateExactInstructionsSearch } from './lib/exact-source.ts';
+import { workspaceContext } from './lib/workspace.ts';
 import { conversationQuery, conversationsQuery, recordQuery } from './queries.ts';
 
 interface QuestionChoice {
@@ -43,6 +44,7 @@ interface SendOptions {
 }
 
 interface AssistantUi {
+  setWorkspace: (selection: PageContext['workspace']) => void;
   open: boolean;
   setOpen: (open: boolean) => void;
   width: number;
@@ -123,6 +125,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const [sendError, setSendError] = useState<string>();
   const [running, setRunning] = useState(false);
   const [questionChoice, setQuestionChoice] = useState(initial.questionChoice);
+  const [workspace, setWorkspace] = useState<PageContext['workspace']>();
   const contextQuery = useQuery({
     ...conversationQuery(conversationId ?? ''),
     enabled: Boolean(conversationId),
@@ -275,6 +278,21 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       // On a record's page, say which record and version the person is looking at.
       const recordId = /^\/records\/([a-z]+_[0-9A-Z]+)/.exec(path)?.[1];
       const shown = recordId ? queryClient.getQueryData(recordQuery(recordId).queryKey) : undefined;
+      const activeWorkspace =
+        reader || options.context ? undefined : workspaceContext(workspace, shown, location.search);
+      if (
+        !options.context &&
+        shown?.kind === 'experiment' &&
+        (location.search.workspace !== undefined || location.search.tab === undefined) &&
+        !activeWorkspace
+      ) {
+        sendLock.current = false;
+        setOpen(true);
+        setSendError(
+          'Wait for this experiment view to load, or refresh its saved selection before asking about it.',
+        );
+        return false;
+      }
       setOpen(true);
       setSending(true);
       setSendError(undefined);
@@ -283,8 +301,8 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
           message,
           ...(target ? { conversationId: target } : {}),
           ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-          ...((options.replyTo ?? selected?.replyTo)
-            ? { replyTo: options.replyTo ?? selected?.replyTo }
+          ...((options.replyTo ?? (activeWorkspace ? undefined : selected?.replyTo))
+            ? { replyTo: options.replyTo ?? (activeWorkspace ? undefined : selected?.replyTo) }
             : {}),
           page: {
             path,
@@ -293,7 +311,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               ? { record: { id: shown.id, name: shown.name, version: shown.version } }
               : {}),
             ...options.context,
-            ...selected?.context,
+            ...(activeWorkspace ? { workspace: activeWorkspace } : selected?.context),
             ...(sourceSelection ? { selectedSource: sourceSelection } : {}),
           },
         });
@@ -333,11 +351,14 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       reader,
       sourceSelection,
       sourceContextError,
+      workspace,
+      location.search,
     ],
   );
 
   const value = useMemo(
     () => ({
+      setWorkspace,
       open,
       setOpen,
       width,

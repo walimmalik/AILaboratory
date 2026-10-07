@@ -19,3 +19,4 @@ export * from './review.ts';
 export * from './skills.ts';
 export * from './sops.ts';
 export * from './transfers.ts';
+export * from './workspace.ts';

@@ -41,7 +41,13 @@ beforeEach(async () => {
     labId: other.labId,
   };
   const kinds = new KindRegistry();
-  for (const kind of [...labwareKinds, ...instrumentKinds, ...inventoryKinds, ...reagentKinds]) {
+  for (const kind of [
+    ...labwareKinds,
+    ...instrumentKinds,
+    ...inventoryKinds,
+    ...reagentKinds,
+    ...sopKinds,
+  ]) {
     kinds.register(kind);
   }
   registry = createRegistry(db, kinds, new ActivityBus());
@@ -64,6 +70,71 @@ const text = (o: RecordOverview) => o.identity.map((p) => p.text).join(' · ');
 const fact = (o: RecordOverview, label: string) => o.facts.find((f) => f.label === label);
 
 describe('records.overview', () => {
+  it('shows saved SOP method values and steps without evaluating formulas or binding experiment inputs', async () => {
+    const method = await create('sop', 'Read inhibition', {
+      purpose: 'Measure inhibition by absorbance',
+      scope: 'Compound screen',
+      materials: [{ role: 'stock', label: 'Stock', type: 'reagent' }],
+      variables: [
+        {
+          name: 'target',
+          label: 'Target concentration',
+          kind: 'default',
+          value: { value: '10', unit: 'uM' },
+        },
+        { name: 'replicates', label: 'Replicates', kind: 'input', value: '2' },
+        { name: 'unselected', label: 'Assay volume', kind: 'input' },
+        {
+          name: 'stock',
+          label: 'Stock concentration',
+          kind: 'record',
+          value: { value: '10', unit: 'mM' },
+          readFrom: { role: 'stock', field: 'concentration' },
+        },
+        { name: 'computed', label: 'Calculated count', kind: 'computed', expression: '2 + 2' },
+      ],
+      steps: [
+        {
+          id: 'read',
+          action: 'read',
+          title: 'Read absorbance',
+          text: 'Read absorbance after stopping.',
+          parameters: [
+            { name: 'wavelength', quantity: { value: '450', unit: 'nm' } },
+            { name: 'target', variable: 'target' },
+          ],
+        },
+      ],
+    });
+    const seen = await overview(method.id);
+    expect(fact(seen, 'purpose')).toMatchObject({
+      value: 'Measure inhibition by absorbance',
+      field: 'purpose',
+    });
+    expect(fact(seen, 'Target concentration')).toMatchObject({
+      value: '10 µM',
+      field: '/variables/target',
+      detail: 'Saved method default; experiment inputs may override it',
+    });
+    expect(fact(seen, 'Replicates')?.detail).toContain('input default');
+    expect(fact(seen, 'Assay volume')).toMatchObject({ value: 'Not specified', tone: 'warn' });
+    expect(fact(seen, 'Stock concentration')?.detail).toContain('Typical method value');
+    expect(fact(seen, 'Calculated count')).toMatchObject({
+      value: 'Needs a calculation',
+      detail: 'Saved formula: 2 + 2',
+    });
+    expect(fact(seen, '1. Read absorbance')).toMatchObject({
+      value: 'Read absorbance after stopping.',
+      field: '/steps/read',
+    });
+    expect(fact(seen, 'Read absorbance: wavelength')).toMatchObject({
+      value: '450 nm',
+      field: '/steps/read',
+    });
+    expect(fact(seen, 'Read absorbance: target')?.value).toBe('Target concentration');
+    expect(await overview(method.id, agent)).toEqual(seen);
+  });
+
   it('says what a container is, where it is and what it holds', async () => {
     const tube = await create('labware_type', 'Cryovial 2 mL', { family: 'tube' });
     const room = await run<RecordEnvelope>(person, 'locations.create', {
