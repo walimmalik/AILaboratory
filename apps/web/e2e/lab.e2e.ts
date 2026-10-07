@@ -1187,6 +1187,16 @@ test('a person plans an experiment, runs it as a checklist and finishes the run'
 
   // Nothing to test yet: planning is not offered, and the page says why.
   await page.goto(`/records/${experiment.id}`);
+  const workspace = page.getByRole('navigation', { name: 'Experiment workspace' });
+  await expect(workspace).toBeVisible();
+  await expect(workspace.getByRole('link', { name: 'Design', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Which stimuli raise IL-6?', exact: true }),
+  ).toBeVisible();
+  await workspace.getByRole('link', { name: 'Record details', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText(
     'What is tested is not chosen yet',
   );
@@ -1203,6 +1213,8 @@ test('a person plans an experiment, runs it as a checklist and finishes the run'
   );
 
   await page.goto(`/records/${experiment.id}`);
+  await expect(workspace).toBeVisible();
+  await workspace.getByRole('link', { name: 'Record details', exact: true }).click();
   const next = page.getByRole('region', { name: 'Next step' });
   await expect(next).toContainText('Every value of the protocol works out');
   await next.getByRole('button', { name: 'Plan it' }).click();
@@ -1585,6 +1597,32 @@ test("an experiment's Overview rolls up its design, and its Transfers tab lists 
   ).output;
 
   await page.goto(`/records/${experiment.id}`);
+  const workspace = page.getByRole('navigation', { name: 'Experiment workspace' });
+  await expect(workspace.getByRole('link', { name: 'Design', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Does the design read on its own page?', exact: true }),
+  ).toBeVisible();
+  await workspace.getByRole('link', { name: 'Plates', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Plate maps', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: map.label }).click();
+  await expect(page.getByRole('heading', { name: map.label, exact: true })).toBeVisible();
+  await page
+    .getByRole('group', { name: 'Saved plate wells' })
+    .getByRole('button', { name: /^A3:/ })
+    .click();
+  await expect(page.getByRole('heading', { name: 'A3: Sample', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`[?&]workspaceMap=${map.id}(?:&|$)`));
+  await expect(page).toHaveURL(/[?&]workspaceWells=A3(?:&|$)/);
+  await workspace.getByRole('link', { name: 'Transfers', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Transfer plans', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Transfer plans pages' })).toContainText(
+    '0 shown of 0',
+  );
+  await expect(page.getByText('No saved items on this page.', { exact: true })).toBeVisible();
+  await workspace.getByRole('link', { name: 'Record details', exact: true }).click();
   const design = page.getByRole('region', { name: 'Design' });
   await expect(design).toContainText('0 of 2 confirmed');
   await expect(design.getByRole('link', { name: map.label })).toBeVisible();
@@ -1681,6 +1719,16 @@ test('a person designs an experiment from an assay template, and planning waits 
   await expect(form).toContainText('1 condition on 1 plate per run');
   await form.getByRole('button', { name: 'Draft the experiment' }).click();
 
+  // The created experiment now opens its saved workspace; wait for that completed handoff
+  // before opening the preserved specialist design rollup and planning gate.
+  const workspace = page.getByRole('navigation', { name: 'Experiment workspace' });
+  await expect(page).toHaveURL(/\/records\/exp_[0-9A-HJKMNP-TV-Z]{26}(?:\?|$)/);
+  await expect(workspace.getByRole('link', { name: 'Design', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('heading', { name: 'Saved design', exact: true })).toBeVisible();
+  await workspace.getByRole('link', { name: 'Record details', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Design' })).toContainText('0 of 2 confirmed');
   await expect(page.getByRole('button', { name: 'Plan it' })).toHaveCount(0);
 });
